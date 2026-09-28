@@ -31,8 +31,9 @@ without `runtime` (a crash mid-swap) moves it back first.
 
 ### `lib/boot-update.sh` + `systemd/omelet-update.service`
 
-The oneshot unit `install.sh` installs and **enables but never starts** — it only ever runs at the
-VM's own boot. It skips a VM installed from a ref that isn't a `runtime-vN.N.N` tag (a pinned
+The unit `install.sh` installs and **enables but never starts** — it only ever runs at the
+VM's own boot. It is `Type=exec`, not oneshot, so boot never waits for the update, and it has no
+`Wants=network-online.target` (that pulls in `systemd-networkd-wait-online`, which stalls under WSL). It skips a VM installed from a ref that isn't a `runtime-vN.N.N` tag (a pinned
 branch), reads the accepted API from `/opt/omelet/host.json` (falling back to the installed
 release's own `api` when the host never wrote one), retries fetching `get.sh` a few times in case
 the network comes up after the unit starts, then runs it with `OMELET_RUNTIME_UPDATE=1`.

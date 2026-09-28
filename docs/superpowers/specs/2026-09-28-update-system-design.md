@@ -61,9 +61,11 @@ install also gets a compatible runtime.
 
 ### Trigger
 
-`runtime/install/systemd/omelet-update.service`, a oneshot installed and enabled by `install.sh`
-next to `omelet-github.*`. `After=`/`Wants=` `network-online.target docker.service`,
-`WantedBy=multi-user.target`, a start timeout long enough for image pulls. The stack's containers
+`runtime/install/systemd/omelet-update.service`, installed and enabled by `install.sh` next to
+`omelet-github.*`. `Type=exec`, so boot (and `limactl start` or the WSL launch) never waits for
+image pulls; `After=network-online.target docker.service`, `Wants=docker.service` only —
+`Wants=network-online.target` would pull in `systemd-networkd-wait-online`, which stalls under WSL,
+so `boot-update.sh` retries its fetch instead; `WantedBy=multi-user.target`. The stack's containers
 start at boot as they do now; an update replaces them moments later.
 
 The unit runs a small script, `runtime/install/lib/boot-update.sh`:

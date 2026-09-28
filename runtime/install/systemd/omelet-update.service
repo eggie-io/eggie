@@ -1,12 +1,15 @@
 [Unit]
 Description=Update the Omelet runtime to the newest release this machine's host accepts
+# No Wants=network-online.target: it pulls in systemd-networkd-wait-online,
+# which can stall under WSL. boot-update.sh retries its fetch instead.
 After=network-online.target docker.service
 Wants=docker.service
 
 [Service]
-Type=oneshot
+# exec, not oneshot: multi-user.target, and with it limactl start or the WSL
+# boot, must not wait for image pulls.
+Type=exec
 ExecStart=/bin/bash /opt/omelet/runtime/install/lib/boot-update.sh
-TimeoutStartSec=30min
 
 [Install]
 WantedBy=multi-user.target

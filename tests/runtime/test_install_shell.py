@@ -372,3 +372,10 @@ def test_install_enables_the_boot_update_without_running_it_now():
     assert "systemctl enable omelet-update.service" in text
     assert "enable --now omelet-update" not in text
     assert "start omelet-update" not in text
+
+
+def test_the_boot_update_never_holds_up_boot():
+    # A oneshot unit orders multi-user.target after the whole update.
+    unit = (ROOT / "runtime" / "install" / "systemd" / "omelet-update.service").read_text()
+    assert "Type=exec" in unit
+    assert "Type=oneshot" not in unit

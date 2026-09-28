@@ -5,12 +5,15 @@ import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
 import { waitingPrompt } from "../../projects/prompts";
+import { publicView, tileLine } from "../../projects/public";
 import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
+import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
 import { ARROW } from "../icons";
 import { AddressRows } from "./AddressRows";
 import { AnalyzeModal } from "./AnalyzeModal";
 import { DeleteModal } from "./DeleteModal";
+import { PublicModal } from "./PublicModal";
 import { StartingBody } from "./StartingBody";
 import { Tiles } from "./Tiles";
 import { WrongBody } from "./WrongBody";
@@ -23,8 +26,10 @@ export function ProjectPage() {
   const lifecycle = useLifecycle(id);
   const forget = useDeleteProject(id);
   const navigate = useNavigate();
-  const [modal, setModal] = useState<"analyze" | "delete" | null>(null);
+  const now = useNow();
+  const [modal, setModal] = useState<"analyze" | "delete" | "public" | null>(null);
   const view = query.data ? projectView(query.data) : null;
+  const pub = query.data ? publicView(query.data.public, now) : null;
 
   // Clear a stale error notice from a previous action once the project has
   // moved to a different view (e.g. a failed Stop shouldn't still show once
@@ -60,7 +65,16 @@ export function ProjectPage() {
 
   const project = query.data;
   const primary = primaryUrl(project);
-  const tiles = <Tiles id={project.id} onAnalyze={() => setModal("analyze")} onDelete={() => setModal("delete")} />;
+  const tiles = (
+    <Tiles
+      id={project.id}
+      publicLine={tileLine(pub!)}
+      publicDisabled={pub!.kind === "unavailable"}
+      onPublic={() => setModal("public")}
+      onAnalyze={() => setModal("analyze")}
+      onDelete={() => setModal("delete")}
+    />
+  );
   const failed = lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>;
   const head = (sub?: string) => (
     <header className={s.head}>
@@ -109,7 +123,7 @@ export function ProjectPage() {
             <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Restart</Button>
           </div>
           {failed}
-          <AddressRows web={project.web} live />
+          <AddressRows web={project.web} live publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
           {tiles}
         </>
       );
@@ -123,7 +137,7 @@ export function ProjectPage() {
             <Button variant="primary" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up")}>Start</Button>
           </div>
           {failed}
-          <AddressRows web={project.web} live={false} />
+          <AddressRows web={project.web} live={false} publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
           {tiles}
         </>
       );
@@ -169,6 +183,7 @@ export function ProjectPage() {
       {body}
       <AnalyzeModal open={modal === "analyze"} onClose={() => setModal(null)} />
       <DeleteModal id={project.id} open={modal === "delete"} onClose={() => setModal(null)} />
+      <PublicModal project={project} open={modal === "public"} onClose={() => setModal(null)} />
     </section>
   );
 }

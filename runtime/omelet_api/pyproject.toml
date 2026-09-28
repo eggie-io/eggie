@@ -1,6 +1,6 @@
 [project]
 name = "omelet-api"
-version = "0.2.0"
+version = "0.3.0"
 requires-python = ">=3.12"
 dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.30", "pyyaml>=6"]
 

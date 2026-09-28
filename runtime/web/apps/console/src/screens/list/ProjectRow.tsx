@@ -4,8 +4,10 @@ import { Button, Notice, RowCard, StateBadge } from "@omelet/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
+import { publicView } from "../../projects/public";
 import { useLifecycle } from "../../projects/queries";
 import type { Project } from "../../projects/types";
+import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
 import { ARROW } from "../icons";
 import s from "./ProjectList.module.css";
@@ -15,6 +17,8 @@ export function ProjectRow({ project }: { project: Project }) {
   const view = projectView(project);
   const lifecycle = useLifecycle(project.id);
   const navigate = useNavigate();
+  const now = useNow(30_000);
+  const pub = publicView(project.public, now);
   const primary = primaryUrl(project);
   const page = `/p/${encodeURIComponent(project.id)}`;
   const look = () => navigate(page);
@@ -84,6 +88,7 @@ export function ProjectRow({ project }: { project: Project }) {
         <div className={s.who}>
           <Link className={s.name} to={page}>{project.id}</Link>
           {line}
+          {pub.kind === "on" && <span className={s.quiet}>{pub.left ? `Public · ${pub.left}` : "Public"}</span>}
         </div>
         <StateBadge state={view.badge} />
         <div className={s.actions}>{actions}</div>

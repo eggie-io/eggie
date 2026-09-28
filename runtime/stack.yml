@@ -35,9 +35,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - edge
+      - tunnel
 
   api:
-    image: ${OMELET_API_IMAGE:-ghcr.io/ihorklymchukdev/omelet-api:0.2.0}
+    image: ${OMELET_API_IMAGE:-ghcr.io/ihorklymchukdev/omelet-api:0.3.0}
     restart: always
     # No `hostname:` here -- the api service looks itself up with
     # `docker inspect $HOSTNAME` to remove root-owned project files, and
@@ -85,7 +86,7 @@ services:
   # the api service's version -- the two install as a pair. Its router is the
   # catch-all for the UI hosts, so it sits below omelet-api's priority.
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/ihorklymchukdev/omelet-web:0.2.0}
+    image: ${OMELET_WEB_IMAGE:-ghcr.io/ihorklymchukdev/omelet-web:0.3.0}
     restart: always
     networks:
       - edge
@@ -96,6 +97,25 @@ services:
       - "traefik.http.routers.omelet-web.priority=10"
       - "traefik.http.services.omelet-web.loadbalancer.server.port=8080"
 
+  # Started and stopped by the api service while a public URL is on; the
+  # installer's profile-less `up -d` never starts it. Its network is shared
+  # only with Traefik, but ports the VM publishes stay reachable via the gateway.
+  # The token's directory is mounted, not the file: docker would create a
+  # missing file mount source as a root-owned directory.
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token-file /run/omelet/token
+    volumes:
+      - /opt/omelet/tunnel:/run/omelet:ro
+    # cloudflared runs as a non-root user; the token is 0640 root:docker.
+    group_add:
+      - "${OMELET_DOCKER_GID:-999}"
+    networks:
+      - tunnel
+
 networks:
   edge:
     external: true
+  tunnel: {}

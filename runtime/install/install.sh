@@ -120,6 +120,7 @@ chmod 640 /opt/omelet/api.token
 # 7. traefik, the API and the web page, as one compose stack.
 # Always pull: this is how an API update reaches an already-provisioned VM,
 # so both the first install and every update need the network.
+# --profile tunnel: the first public URL must not wait on an image download.
 install -m 644 "$RUNTIME_DIR/stack.yml" /opt/omelet/stack.yml
 # The output is kept as well as shown. An image with no build for this VM's
 # architecture and a registry that cannot be reached fail the same way here and
@@ -129,7 +130,7 @@ install -m 644 "$RUNTIME_DIR/stack.yml" /opt/omelet/stack.yml
 # Apple Silicon, where an amd64-only image is the common case, that is the first
 # thing they hit.
 PULL_LOG="$(mktemp)"
-if ! /usr/bin/docker compose -f /opt/omelet/stack.yml pull 2>&1 | tee "$PULL_LOG"; then
+if ! /usr/bin/docker compose -f /opt/omelet/stack.yml --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
   if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
     echo "could not pull the Omelet images: one of them is not published for" >&2
     echo "this machine's architecture ($(uname -m)). The registry answered" >&2

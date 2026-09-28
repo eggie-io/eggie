@@ -85,7 +85,7 @@ The browser UI lives in `runtime/web/` (npm workspace, Node ≥ 22.22):
 
 ```bash
 cd runtime/web && npm install
-npm run dev          # Vite + an in-browser mock API; ?scenario=empty|expired|handoff-spent|old-api|down|lost-mid-use|wrong-host|uploads|full|fills-up|busy|locked|windows
+npm run dev          # Vite + an in-browser mock API; ?scenario=empty|expired|handoff-spent|old-api|down|lost-mid-use|wrong-host|uploads|full|fills-up|busy|locked|public-on|public-expiring|public-active-elsewhere|public-unavailable|github-pending|github-denied|github-expired|github-applying|github-outdated|github-reconnect|github-clone-fails|windows
 npm test             # Vitest
 npm run typecheck
 npm run build && npm run check-offline
@@ -230,6 +230,17 @@ Do not add an `if windows` anywhere else — push the difference into a provider
   `applied.json`. The UI says "ready" only when the two match; `applied.json` missing after 30 s
   means the runtime predates the feature. `POST /github/clone` passes the token to git only
   through the child's environment.
+- `runtime/omelet_api/core/public.py` — a project's temporary public URL. The service owns the
+  Cloudflare tunnel and its routing; the VM asks for a URL, keeps the token in
+  `/opt/omelet/tunnel/token` (0640, present only while a URL is on; the directory is
+  mounted read-only into the client) and starts the profile-gated `tunnel` service in `stack.yml` through compose. The service rewrites Host to the
+  project's local hostname, so overlays are unchanged; apps that build absolute URLs from Host
+  send public visitors to `*.127-0-0-1.sslip.io`. Only the console turns it on or off (POST
+  and DELETE are mounted at `/api` alone); the CLI never shows it. Nothing about it is in
+  `state.db`: the service is the record, the API keeps only a memory of it and re-reads
+  the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The
+  `tunnel` network reaches the VM through its gateway, so every port published on 0.0.0.0
+  (the api's, a project's `ports:`) is reachable from the tunnel client.
 - `runtime/web/` — the browser UI at `localhost:<edge>`, shipped as the `omelet-web` nginx image
   and routed by Traefik below the API's `/api` router — a sibling of the API inside `runtime/`,
   never nested in the Python package. `packages/ui` is the kit (tokens, fonts,
@@ -285,6 +296,9 @@ that document is written. Add a new entry here when you hit one.
   does not cover" names the residual race. Any page can also open a new window, which pywebview
   hands to `webbrowser.open` (`os.startfile` on Windows), so `_default_start` wraps it with
   `web_links_only` — http(s) only.
+- The `tunnel` service is behind a compose profile. A plain `docker compose -f stack.yml up -d`
+  or `pull` never touches it; the API's own compose calls pass `--profile tunnel`, and so must
+  anything else that means to include it.
 
 - `host/desktop/ui/index.html`'s CSP must keep `script-src 'self' 'unsafe-eval'`. pywebview
   builds every bridge method with `new Function(...)` in the api.js it injects after load, so

@@ -20,6 +20,19 @@ export interface ActiveJob {
   started_at: number;
 }
 
+export interface PublicUrl {
+  url: string;
+  service: string;
+  local_url: string;
+}
+
+export type PublicStatus =
+  | { state: "unavailable"; reason: Problem }
+  | { state: "off"; note: Problem | null }
+  | { state: "enabling" }
+  | { state: "on"; urls: PublicUrl[]; expires_at: number | null }
+  | { state: "failed"; reason: Problem };
+
 export interface Project {
   id: string;
   status: Status;
@@ -31,6 +44,7 @@ export interface Project {
   web: WebEntry[];
   first_run: boolean;
   job: ActiveJob | null;
+  public: PublicStatus;
 }
 
 export interface Discovered {

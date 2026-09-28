@@ -95,3 +95,18 @@ class Cloud:
         return self.call("DELETE",
                          f"/v1/projects/{urllib.parse.quote(cloud_id, safe='')}",
                          token=token)
+
+    def _public_url_path(self, cloud_id: str) -> str:
+        return f"/v1/tunnels/projects/{urllib.parse.quote(cloud_id, safe='')}/url"
+
+    def create_public_url(self, token: str, cloud_id: str, routes: list[dict],
+                          origin: str):
+        return self.call("POST", self._public_url_path(cloud_id), token=token,
+                         body={"origin": origin, "routes": routes})
+
+    def active_public_url(self, token: str):
+        """The account's one active URL, whichever device made it; 404 if none."""
+        return self.call("GET", "/v1/tunnels/url", token=token)
+
+    def release_public_url(self, token: str, cloud_id: str):
+        return self.call("DELETE", self._public_url_path(cloud_id), token=token)

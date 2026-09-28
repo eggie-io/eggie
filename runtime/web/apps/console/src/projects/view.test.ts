@@ -14,6 +14,7 @@ function project(over: Partial<Project> = {}): Project {
     web: [],
     first_run: false,
     job: null,
+    public: { state: "off", note: null },
     ...over,
   };
 }

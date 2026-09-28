@@ -34,6 +34,7 @@ class Account:
         self._sleep = sleep
         self._spawn = spawn
         self.on_signed_in = lambda: None
+        self.on_forget = lambda: None
         self._refresh_lock = threading.Lock()
         self._poll_lock = threading.Lock()
         # Reentrant: _refresh's invalid_grant branch calls _forget while
@@ -257,3 +258,7 @@ class Account:
                 refresh_token=None, access_expires_at=None, last_error=error,
                 sync_ok_at=None, sync_error=None)
             self._state.clear_cloud_projects()
+        try:
+            self.on_forget()
+        except Exception:
+            log.exception("the forget hook failed")

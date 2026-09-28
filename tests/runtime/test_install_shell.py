@@ -110,7 +110,13 @@ def test_the_pull_still_shows_its_progress_while_being_recorded():
 def test_install_always_pulls_before_bringing_the_stack_up():
     # Always pulling is the delivery decision: it is how an API update reaches
     # an already-bootstrapped VM. `up -d` alone would keep running a stale image.
-    assert _index_of(f"compose -f {STACK} pull") < _index_of(" up -d")
+    assert _index_of(f"compose -f {STACK} --profile tunnel pull") < _index_of(" up -d")
+
+
+def test_the_stack_comes_up_without_the_tunnel_profile():
+    # The API starts the tunnel client only while a public URL is on.
+    ups = [l for l in _commands() if f"compose -f {STACK}" in l and " up -d" in l]
+    assert ups and not any("--profile" in l for l in ups)
 
 
 def test_install_makes_opt_omelet_writable_before_the_api_starts():

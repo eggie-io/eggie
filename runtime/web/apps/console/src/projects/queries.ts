@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { DeletePreview, DeleteResult, Job, Project, ProjectList } from "./types";
+import type { DeletePreview, DeleteResult, Job, Project, ProjectList, PublicStatus } from "./types";
 
 const BUSY_MS = 3000;
 const IDLE_MS = 15_000;
@@ -15,12 +15,13 @@ export function projectPath(id: string): string {
   return `/api/projects/${encodeURIComponent(id)}`;
 }
 
+const settling = (project: Project) => project.job !== null || project.public.state === "enabling";
+
 export function useProjects() {
   return useQuery({
     queryKey: LIST,
     queryFn: () => api.get<ProjectList>("/api/projects"),
-    refetchInterval: (query) =>
-      query.state.data?.projects.some((project) => project.job !== null) ? BUSY_MS : IDLE_MS,
+    refetchInterval: (query) => (query.state.data?.projects.some(settling) ? BUSY_MS : IDLE_MS),
   });
 }
 
@@ -28,7 +29,7 @@ export function useProject(id: string) {
   return useQuery({
     queryKey: ONE(id),
     queryFn: () => api.get<Project>(projectPath(id)),
-    refetchInterval: (query) => (query.state.data?.job ? BUSY_MS : IDLE_MS),
+    refetchInterval: (query) => (query.state.data && settling(query.state.data) ? BUSY_MS : IDLE_MS),
   });
 }
 
@@ -52,6 +53,15 @@ export function useLifecycle(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (action: "up" | "down" | "restart") => api.post<{ job_id: string }>(`${projectPath(id)}/${action}`),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
+export function usePublic(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (on: boolean) =>
+      on ? api.post<PublicStatus>(`${projectPath(id)}/public`) : api.del<PublicStatus>(`${projectPath(id)}/public`),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }

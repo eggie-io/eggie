@@ -43,6 +43,7 @@ The imported distro runs as root: `vm create` rewrites `/etc/wsl.conf` to `[boot
 | `/opt/omelet/state.db` | Project state (sqlite) |
 | `/opt/omelet/projects/<id>/` | Each project; the generated Traefik overlay is at `.omelet/overlay.yml` |
 | `/opt/omelet/uploads/` | Partially uploaded files |
+| `/opt/omelet/tunnel/token` | Public-URL tunnel token; present only while a public URL is on |
 | `/opt/omelet/connect.json` | VM kind and login user, shown by the console's agent guide |
 
 ```bash

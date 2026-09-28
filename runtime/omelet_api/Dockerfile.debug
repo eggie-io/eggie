@@ -5,7 +5,7 @@
 # It has no build context of its own, so it can be built straight into the VM
 # over stdin:
 #   docker build -t omelet-api:debug - < runtime/omelet_api/Dockerfile.debug
-ARG SERVICE_IMAGE=ghcr.io/ihorklymchukdev/omelet-api:0.2.0
+ARG SERVICE_IMAGE=ghcr.io/ihorklymchukdev/omelet-api:0.3.0
 FROM ${SERVICE_IMAGE}
 
 USER root

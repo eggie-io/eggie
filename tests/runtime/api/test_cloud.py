@@ -67,6 +67,16 @@ def test_a_gateway_page_instead_of_the_service_is_unavailable(status):
         cloud.me("t")
 
 
+@pytest.mark.parametrize("status,code", [(502, "tunnel_provider_error"),
+                                         (503, "public_urls_disabled")])
+def test_a_service_error_body_on_a_gateway_status_stays_the_services_error(status, code):
+    cloud = Cloud("https://svc/api", opener=Opener((status, _error(code))))
+    with pytest.raises(CloudError) as raised:
+        cloud.create_public_url("t", "c1", [{"local_hostname": "b.d.io", "service": "web"}],
+                                "http://traefik:39080")
+    assert (raised.value.code, raised.value.status) == (code, status)
+
+
 def test_a_404_without_an_error_body_keeps_its_status():
     cloud = Cloud("https://svc/api", opener=Opener((404, b"Not Found")))
     with pytest.raises(CloudError) as raised:
@@ -112,3 +122,37 @@ def test_a_truncated_body_is_unavailable_not_a_bare_exception():
     cloud = Cloud("https://svc/api", opener=_BrokenOpener())
     with pytest.raises(CloudUnavailable):
         cloud.me("t")
+
+
+def test_turning_a_public_url_on_sends_the_routes_and_origin():
+    opener = Opener((201, json.dumps({"urls": []}).encode()))
+    cloud = Cloud("https://svc/api", opener=opener)
+    routes = [{"local_hostname": "blog.d.io", "service": "web"},
+              {"local_hostname": "api.blog.d.io", "service": "api_v2"}]
+
+    cloud.create_public_url("t", "c/1", routes, "http://traefik:39080")
+
+    request = opener.requests[0]
+    assert (request.get_method(), request.full_url) == (
+        "POST", "https://svc/api/v1/tunnels/projects/c%2F1/url")
+    assert json.loads(request.data) == {"origin": "http://traefik:39080",
+                                        "routes": routes}
+    assert request.get_header("Authorization") == "Bearer t"
+
+
+def test_a_refused_public_url_keeps_the_services_code():
+    cloud = Cloud("https://svc/api", opener=Opener(
+        (409, _error("public_url_active", "one is on"))))
+    with pytest.raises(CloudError) as raised:
+        cloud.create_public_url("t", "c1", [{"local_hostname": "blog.d.io",
+                                             "service": "web"}],
+                                "http://traefik:39080")
+    assert (raised.value.code, raised.value.status) == ("public_url_active", 409)
+
+
+def test_releasing_a_public_url_accepts_an_empty_204():
+    opener = Opener((204, b""))
+    cloud = Cloud("https://svc/api", opener=opener)
+
+    assert cloud.release_public_url("t", "c1") is None
+    assert opener.requests[0].get_method() == "DELETE"

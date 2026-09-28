@@ -8,7 +8,10 @@ release — if it does, the logic is on the wrong side of the seam (see the root
 - `install/` — `get.sh` (the entrypoint every shipped host fetches) and `install.sh`. Own CLAUDE.md.
 - `stack.yml` — the compose stack installed at `/opt/omelet/stack.yml`: `traefik` on the edge port,
   `api` (`omelet-api` image) and `web` (`omelet-web` image) on the `edge` network. Image tags are
-  overridable with `OMELET_API_IMAGE` / `OMELET_WEB_IMAGE`. `stack.debug.yml` is an override that
+  overridable with `OMELET_API_IMAGE` / `OMELET_WEB_IMAGE`. A fourth service, `tunnel`
+  (cloudflared, for public URLs), sits behind the `tunnel` compose **profile**: a plain `up -d` or
+  `pull` never touches it, so pass `--profile tunnel` when you mean to include it. The api starts
+  and stops it; `install.sh` pulls it up front. `stack.debug.yml` is an override that
   swaps in the debugpy api build; `stack.yml` itself must stay identical to what runs in production.
 - `omelet_api/` — the FastAPI service. Own CLAUDE.md.
 - `web/` — the browser console (npm workspace, `omelet-web` nginx image). Own CLAUDE.md.

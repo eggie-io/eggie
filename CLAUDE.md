@@ -29,6 +29,7 @@ Two halves, shipped and versioned independently:
 host CLI / desktop  →  ApiClient (urllib)  →  127.0.0.1:39099 → API (FastAPI in the VM)
                     →  VmProvider.exec()   →  guest: runtime bootstrap, token read
 host localhost:39080 ──────────────────────→  Traefik :39080 → projects, console (/), API (/api)
+public URL (optional) → Omelet service's Cloudflare tunnel → `tunnel` container → Traefik
 ```
 
 **The seam is a fixed contract and nothing else:** token path `/opt/omelet/api.token`, API port +

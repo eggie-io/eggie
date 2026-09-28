@@ -19,6 +19,8 @@
 .addressLabel { width: 150px; font-size: 14px; color: var(--ink-2); }
 .url { flex: 1; min-width: 0; font: 400 13.5px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
 .dim .url { color: var(--ink-3); }
+.publicLine { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-left: 162px; font-size: 13.5px; color: var(--ink-2); }
+@media (max-width: 560px) { .publicLine { padding-left: 0; } }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .tile {

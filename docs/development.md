@@ -74,9 +74,9 @@ npm run typecheck
 npm run build && npm run check-offline
 ```
 
-The dev server's mock takes `?scenario=` in the URL: `empty`, `expired`, `handoff-spent`,
-`old-api`, `down`, `lost-mid-use`, `wrong-host`, `uploads`, `full`, `fills-up`, `busy`, `locked`,
-`windows`.
+The dev server's mock takes `?scenario=<name>` in the URL to show a given state (empty list,
+expired session, uploads, public URL, GitHub connect, …). The full list is `SCENARIOS` in
+`apps/console/src/mocks/handlers.ts`.
 
 `npm run build` + `preview` shows no "Connect an agent" guides, because the Dockerfile copies them
 in. Build the image to see them (`packaging/images/build.sh --only web`).

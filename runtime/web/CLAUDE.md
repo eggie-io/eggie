@@ -9,9 +9,8 @@ screens); don't share code or assets with it.
 
 ```bash
 npm install
-npm run dev          # Vite + in-browser mock API (src/mocks/)
-                     # ?scenario=empty|expired|handoff-spent|old-api|down|lost-mid-use|wrong-host|
-                     #   uploads|full|fills-up|busy|locked|windows
+npm run dev          # Vite + in-browser mock API; ?scenario=<name> picks a state —
+                     # the list is SCENARIOS in apps/console/src/mocks/handlers.ts
 npm test             # Vitest (all workspaces)
 npx vitest run apps/console/src/projects/view.test.ts   # one file
 npm run typecheck

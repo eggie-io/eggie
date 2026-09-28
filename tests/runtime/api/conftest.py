@@ -134,6 +134,8 @@ def env(tmp_path):
         # No retry window: these tests assert on the verdict, and the window
         # itself is covered against a fake clock in test_health.py.
         ready_timeout=0.0,
+        stack_file=tmp_path / "stack.yml",
+        tunnel_token_path=tmp_path / "tunnel.token",
     )
     runner = FakeRunner()
     probe = FakeProbe()

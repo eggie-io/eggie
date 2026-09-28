@@ -68,6 +68,18 @@ and a host release. Prefer additive changes.
   `install/lib/github-apply.sh` as root, which echoes the generation into `applied.json`. "Ready"
   only when the two match; `applied.json` missing after 30 s means the runtime predates the feature.
   `POST /github/clone` passes the token to git only through the child's environment.
+- **Public URL** (`core/public.py`) — a project's temporary public URL. The Omelet service owns the
+  Cloudflare tunnel and its routing; the VM asks for a URL, keeps the token in
+  `/opt/omelet/tunnel/token` (0640, present only while a URL is on; the directory is mounted
+  read-only into the client) and starts the profile-gated `tunnel` service in `stack.yml` through
+  compose. The service rewrites Host to the project's local hostname, so overlays are unchanged;
+  apps that build absolute URLs from Host send public visitors to `*.127-0-0-1.sslip.io`. Only the
+  console turns it on or off (POST and DELETE are mounted at `/api` alone); the CLI never shows it.
+  Nothing about it is in `state.db`: the service is the record, the API keeps only a memory of it
+  and re-reads the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The `tunnel`
+  network reaches the VM through its gateway, so every port published on 0.0.0.0 (the api's, a
+  project's `ports:`) is reachable from the tunnel client. Design:
+  `docs/superpowers/specs/2026-09-24-public-url-design.md`.
 
 ## Testing
 
@@ -79,5 +91,8 @@ and a host release. Prefer additive changes.
 
 ## Things that will bite you
 
+- The `tunnel` service is behind a compose profile. A plain `docker compose -f stack.yml up -d` or
+  `pull` never touches it; the API's own compose calls pass `--profile tunnel`, and so must anything
+  else that means to include it.
 - Anything the API creates inside a project must be group-writable (`umask 002`, see `clone_argv`):
   login users are never the API's uid.

@@ -77,12 +77,23 @@ main() {
     fi
   fi
 
-  local ref
+  mkdir -p /opt/omelet
+  # The boot unit and a host-started update may run at the same moment.
+  exec 9>/opt/omelet/update.lock
+  flock 9
+
+  local ref installed="" update=0
+  [[ "${OMELET_RUNTIME_UPDATE:-}" == 1 ]] && update=1
+  [[ -s "$MARKER" ]] && installed="$(cat "$MARKER")"
   ref="$(resolve_ref "$REPO" "$MARKER")"
+  if (( update )) && [[ "$ref" == "$installed" ]]; then
+    echo "Omelet runtime $ref is already installed"
+    return 0
+  fi
   echo "installing Omelet runtime $ref"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "${tmp:-}"' EXIT
+  trap 'rm -rf "${tmp:-}"; rm -f /opt/omelet/stack.next.yml' EXIT
   if ! curl -fsSL "$REPO/archive/$ref.tar.gz" -o "$tmp/runtime.tar.gz"; then
     echo "could not download Omelet runtime $ref from $REPO" >&2
     exit 1
@@ -95,9 +106,25 @@ main() {
     echo "$ref of $REPO has no runtime/install/install.sh" >&2
     exit 1
   fi
-  # Replaced, not merged: a file dropped from the runtime must not linger.
-  mkdir -p /opt/omelet
-  rm -rf "$RUNTIME_DIR"
+  printf 'OMELET_RUNTIME_URL=%s\nOMELET_RUNTIME_REPO=%s\n' \
+    "${OMELET_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/omelet/runtime.env
+
+  # Next to /opt/omelet/.env so compose reads the docker GID the stack needs.
+  if (( update )) && [[ -n "$installed" ]]; then
+    install -m 644 "$tmp/runtime/stack.yml" /opt/omelet/stack.next.yml
+    if ! /usr/bin/docker compose -f /opt/omelet/stack.next.yml --profile tunnel pull; then
+      echo "could not download the images for Omelet runtime $ref; staying on $installed" >&2
+      exit 1
+    fi
+  fi
+
+  rm -rf "$RUNTIME_DIR.prev"
+  if (( update )) && [[ -n "$installed" && -d "$RUNTIME_DIR" ]]; then
+    mv "$RUNTIME_DIR" "$RUNTIME_DIR.prev"
+  else
+    # Replaced, not merged: a file dropped from the runtime must not linger.
+    rm -rf "$RUNTIME_DIR"
+  fi
   mv "$tmp/runtime" "$RUNTIME_DIR"
   chmod 755 "$RUNTIME_DIR"
 
@@ -105,7 +132,16 @@ main() {
   if [[ "${OMELET_RUNTIME_REPAIR:-}" == 1 ]]; then
     args+=(--repair)
   fi
-  bash "$RUNTIME_DIR/install/install.sh" "${args[@]}"
+  if ! bash "$RUNTIME_DIR/install/install.sh" "${args[@]}"; then
+    if [[ -d "$RUNTIME_DIR.prev" ]]; then
+      echo "Omelet runtime $ref did not install; going back to $installed" >&2
+      rm -rf "$RUNTIME_DIR"
+      mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
+      bash "$RUNTIME_DIR/install/install.sh" "$installed" || true
+    fi
+    exit 1
+  fi
+  rm -rf "$RUNTIME_DIR.prev"
 }
 
 # `return` only succeeds when sourced (the tests); under `bash -c` or a pipe it

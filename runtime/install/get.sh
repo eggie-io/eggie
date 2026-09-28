@@ -81,6 +81,10 @@ main() {
   # The boot unit and a host-started update may run at the same moment.
   exec 9>/opt/omelet/update.lock
   flock 9
+  # A crash between the two moves of an update leaves only runtime.prev.
+  if [[ -d "$RUNTIME_DIR.prev" && ! -d "$RUNTIME_DIR" ]]; then
+    mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
+  fi
 
   local ref installed="" update=0
   [[ "${OMELET_RUNTIME_UPDATE:-}" == 1 ]] && update=1
@@ -113,7 +117,7 @@ main() {
     echo "$ref of $REPO has no runtime/install/install.sh" >&2
     exit 1
   fi
-  printf 'OMELET_RUNTIME_URL=%s\nOMELET_RUNTIME_REPO=%s\n' \
+  printf 'OMELET_RUNTIME_URL=%q\nOMELET_RUNTIME_REPO=%q\n' \
     "${OMELET_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/omelet/runtime.env
 
   # Next to /opt/omelet/.env so compose reads the docker GID the stack needs.
@@ -139,14 +143,18 @@ main() {
   if [[ "${OMELET_RUNTIME_REPAIR:-}" == 1 ]]; then
     args+=(--repair)
   fi
-  if ! bash "$RUNTIME_DIR/install/install.sh" "${args[@]}"; then
+  local rc=0
+  bash "$RUNTIME_DIR/install/install.sh" "${args[@]}" || rc=$?
+  if (( rc )); then
     if [[ -d "$RUNTIME_DIR.prev" ]]; then
       echo "Omelet runtime $ref did not install; going back to $installed" >&2
       rm -rf "$RUNTIME_DIR"
       mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
-      bash "$RUNTIME_DIR/install/install.sh" "$installed" || true
+      if ! bash "$RUNTIME_DIR/install/install.sh" "$installed"; then
+        echo "reinstalling Omelet runtime $installed failed too" >&2
+      fi
     fi
-    exit 1
+    exit "$rc"
   fi
   rm -rf "$RUNTIME_DIR.prev"
 }

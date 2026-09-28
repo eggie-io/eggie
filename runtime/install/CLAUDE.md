@@ -21,11 +21,13 @@ source a later update reads. The whole flow — install, repair and update alike
 
 ### Update mode (`OMELET_RUNTIME_UPDATE=1`)
 
-A no-op when the resolved ref is already installed. Otherwise: stage the new tree and
+A no-op when the resolved ref is already installed, or sorts below an installed `runtime-v*` tag
+(a failed `release.json` fetch must never cause a downgrade). Otherwise: stage the new tree and
 `docker compose ... pull` its images before touching anything installed; on success, move
 `/opt/omelet/runtime` to `/opt/omelet/runtime.prev` and swap the new tree in; if `install.sh`
-then fails, restore `runtime.prev` and re-run its `install.sh` to roll back. A successful update
-deletes `runtime.prev`.
+then fails, restore `runtime.prev` and re-run its `install.sh` to roll back, exiting with the new
+`install.sh`'s code. A successful update deletes `runtime.prev`; a run that finds `runtime.prev`
+without `runtime` (a crash mid-swap) moves it back first.
 
 ### `lib/boot-update.sh` + `systemd/omelet-update.service`
 

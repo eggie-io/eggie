@@ -264,13 +264,17 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
 
 
 def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0",
-                pull_code=0, install_code=0, update=True, tags=None, unreachable_release=None):
+                pull_code=0, install_code=0, update=True, tags=None, unreachable_release=None,
+                old_install_code=0, crashed_mid_swap=False):
     """Runs get.sh against a fake /opt/omelet with runtime-v0.1.0 installed."""
     root = tmp_path / "opt-omelet"
     (root / "runtime" / "install").mkdir(parents=True)
     (root / "runtime" / "install" / "install.sh").write_text(
-        f'#!/usr/bin/env bash\necho "old install.sh $*"\necho "$1" > "{root}/runtime.version"\n')
+        f'#!/usr/bin/env bash\necho "old install.sh $*"\necho "$1" > "{root}/runtime.version"\n'
+        f'exit {old_install_code}\n')
     (root / "runtime" / "keep-me").write_text("old runtime")
+    if crashed_mid_swap:
+        (root / "runtime").rename(root / "runtime.prev")
     for kept in ("api.token", "state.db", "host.json"):
         (root / kept).write_text(kept)
     (root / "projects" / "app").mkdir(parents=True)
@@ -352,12 +356,47 @@ def test_a_successful_update_replaces_the_runtime_and_drops_the_previous_one(tmp
 
 
 def test_a_failed_install_rolls_back_to_the_previous_runtime(tmp_path):
-    result, root, _ = _update_run(tmp_path, install_code=1)
-    assert result.returncode != 0
+    result, root, _ = _update_run(tmp_path, install_code=3)
+    assert result.returncode == 3, "get.sh exits with install.sh's own code"
     assert "old install.sh runtime-v0.1.0" in result.stdout
     assert (root / "runtime" / "keep-me").exists()
     assert (root / "runtime.version").read_text().strip() == "runtime-v0.1.0"
     assert not (root / "runtime.prev").exists()
+
+
+def test_a_failed_rollback_says_so(tmp_path):
+    result, root, _ = _update_run(tmp_path, install_code=1, old_install_code=1)
+    assert result.returncode == 1
+    assert "reinstalling Omelet runtime runtime-v0.1.0 failed too" in result.stderr
+
+
+def test_a_runtime_left_only_as_runtime_prev_by_a_crash_is_restored(tmp_path):
+    result, root, _ = _update_run(tmp_path, installed="runtime-v0.2.0", latest="runtime-v0.2.0",
+                                  crashed_mid_swap=True)
+    assert result.returncode == 0, result.stderr
+    assert (root / "runtime" / "keep-me").exists()
+    assert not (root / "runtime.prev").exists()
+
+
+def test_runtime_env_values_are_quoted_so_sourcing_never_runs_them(tmp_path):
+    root = tmp_path / "opt-omelet"
+    root.mkdir()
+    script = GET.read_text().replace("/opt/omelet", str(root))
+    tar_path = _archive_with_install_sh(tmp_path, "runtime-v0.1.0", "#!/usr/bin/env bash\n")
+    environ = _bin(tmp_path, dpkg="exit 0\n", curl=f"cp '{tar_path}' \"$4\"\n",
+                   git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
+        environ.pop(name, None)
+    marker = tmp_path / "ran"
+    environ["OMELET_RUNTIME_URL"] = f"https://x.invalid/get.sh$(touch {marker})"
+    result = subprocess.run(["bash", "-c", script], env=environ, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    sourced = subprocess.run(
+        ["bash", "-c", f'source "{root}/runtime.env" && printf %s "$OMELET_RUNTIME_URL"'],
+        capture_output=True, text=True)
+    assert not marker.exists()
+    assert sourced.stdout == environ["OMELET_RUNTIME_URL"]
 
 
 def test_every_install_records_where_the_runtime_came_from(tmp_path):

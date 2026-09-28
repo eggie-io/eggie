@@ -148,13 +148,19 @@ def test_a_client_that_will_not_start_is_released_on_the_service(tmp_path):
 
 
 def test_turning_off_while_the_service_is_down_is_off_here_and_retried(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], release_public_url=[CloudUnavailable("down")])
-    public, state, runner, _ = make(tmp_path, cloud)
+    cloud = FakeCloud(create_public_url=[ON],
+                      release_public_url=[CloudUnavailable("down"), None],
+                      get_public_url=[CloudError("not_found", "none", 404)])
+    public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
 
     assert public.disable("blog") == {"state": "off", "note": None}
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
-    assert state.get_public("blog")["state"] == "releasing"
+
+    public.reconcile()
+
+    assert cloud.names()[-3:] == ["release_public_url", "release_public_url",
+                                  "get_public_url"]
 
 
 def test_turning_one_off_keeps_the_client_another_project_needs(tmp_path):
@@ -171,17 +177,17 @@ def test_turning_one_off_keeps_the_client_another_project_needs(tmp_path):
     assert runner.up and (tmp_path / "tunnel.token").exists()
 
 
-def test_an_enable_whose_row_was_cleared_meanwhile_undoes_itself(tmp_path):
+def test_an_enable_dropped_by_a_sign_out_meanwhile_undoes_itself(tmp_path):
     cloud = FakeCloud(create_public_url=[ON], release_public_url=[None])
-    public, state, runner, _ = make(tmp_path, cloud)
+    public, _, runner, _ = make(tmp_path, cloud)
     held = []
     public._spawn = held.append
     public.enable("blog")
-    state.clear_public()  # a sign-out landed while the service call was in flight
+    public.forget_local()  # a sign-out landed while the service call was in flight
 
     held[0]()
 
-    assert state.get_public("blog") is None
+    assert public.status("blog")["state"] != "on"
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
     assert cloud.names() == ["create_public_url", "release_public_url"]
 
@@ -206,41 +212,24 @@ def test_an_expired_url_reads_as_off_before_anything_cleans_up(tmp_path):
         "code": "expired", "message": MESSAGES["expired"]}}
 
 
-def test_a_row_cleared_after_the_client_starts_does_not_resurrect_it(tmp_path):
-    """A sign-out (state.clear_public()) landing between the client starting
-    and the final "on" write must not have that write bring the row back."""
-    cloud = FakeCloud(create_public_url=[ON], release_public_url=[None])
-    state = State(tmp_path / "state.db")
-    state.add_project("blog", "/p/blog", "d.io")
-    state.update_account(access_token="at", refresh_token="rt",
-                         access_expires_at=10**12, org_id="org-1")
-    state.map_cloud_project("blog", "c-blog", "org-1")
-    account = Account(state, cloud, spawn=lambda fn: None)
+def test_a_turn_off_after_the_client_starts_is_not_undone_by_the_turn_on(tmp_path):
+    cloud = FakeCloud(create_public_url=[ON], release_public_url=[None, None])
+    public, _, runner, _ = make(tmp_path, cloud)
+    start = runner.exec
 
-    class RacingRunner(TunnelRunner):
-        def __init__(self, state):
-            super().__init__()
-            self._state = state
+    def racing(argv, *, root=False):
+        result = start(argv, root=root)
+        if "up" in argv:
+            public.disable("blog", force=True)
+        return result
 
-        def exec(self, argv, *, root=False):
-            result = super().exec(argv, root=root)
-            if "up" in argv:
-                self._state.clear_public()
-            return result
-
-    runner = RacingRunner(state)
-    public = Public(state=state, account=account, cloud=cloud,
-                    client=TunnelClient(runner, tmp_path / "stack.yml"),
-                    token_path=tmp_path / "tunnel.token", origin="http://traefik:39080",
-                    hosts_for=lambda pid: list(HOSTS), clock=Clock(),
-                    spawn=lambda fn: fn())
+    runner.exec = racing
 
     public.enable("blog")
 
-    assert state.get_public("blog") is None
-    assert not runner.up
-    assert not (tmp_path / "tunnel.token").exists()
-    assert cloud.names() == ["create_public_url", "release_public_url"]
+    assert public.status("blog") == {"state": "off", "note": None}
+    assert not runner.up and not (tmp_path / "tunnel.token").exists()
+    assert cloud.names()[-1] == "release_public_url"
 
 
 def test_a_malformed_reply_is_cleaned_up_like_a_failed_start(tmp_path):
@@ -256,29 +245,15 @@ def test_a_malformed_reply_is_cleaned_up_like_a_failed_start(tmp_path):
     assert public.status("blog")["reason"]["code"] == "client_failed"
 
 
-def test_enable_meeting_a_stuck_releasing_row_retries_release_not_create(tmp_path):
-    cloud = FakeCloud(release_public_url=[CloudUnavailable("down")])
-    public, state, runner, _ = make(tmp_path, cloud)
-    state.put_public("blog", cloud_id="c-blog", state="releasing")
-
-    public.enable("blog")
-
-    assert cloud.names() == ["release_public_url"]
-    row = state.get_public("blog")
-    assert row["state"] == "releasing" and row["reason_code"] == "cloud_unavailable"
-    assert public.status("blog") == {"state": "failed", "reason": {
-        "code": "cloud_unavailable", "message": MESSAGES["cloud_unavailable"]}}
-
-
 def test_reconcile_ends_an_expired_url_and_stops_the_client(tmp_path):
-    public, state, runner, clock = make(tmp_path, FakeCloud(create_public_url=[ON]))
+    cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON])
+    public, _, runner, clock = make(tmp_path, cloud)
     public.enable("blog")
-    clock.now = EXPIRES + 1
+    clock.now = EXPIRES + 1  # the service may list it for up to a minute more
 
     public.reconcile()
 
-    row = state.get_public("blog")
-    assert (row["state"], row["reason_code"], row["urls"]) == ("ended", "expired", None)
+    assert public.status("blog")["note"]["code"] == "expired"
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
 
 
@@ -294,45 +269,6 @@ def test_reconcile_notices_a_url_turned_off_from_the_website(tmp_path):
     assert not runner.up
 
 
-def test_reconcile_retries_a_release_and_forgets_the_row_once_done(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON],
-                      release_public_url=[CloudUnavailable("down"), None])
-    public, state, _, _ = make(tmp_path, cloud)
-    public.enable("blog")
-    public.disable("blog")
-
-    public.reconcile()
-
-    assert state.get_public("blog") is None
-
-
-def test_reconcile_releases_an_enable_the_api_restart_interrupted(tmp_path):
-    cloud = FakeCloud(release_public_url=[None])
-    public, state, _, _ = make(tmp_path, cloud)
-    state.put_public("blog", cloud_id="c-blog", state="enabling")
-
-    public.reconcile()
-
-    assert cloud.names() == ["release_public_url"]
-    assert public.status("blog")["reason"]["code"] == "interrupted"
-
-
-def test_reconcile_of_an_interrupted_enable_retries_a_failed_release(tmp_path):
-    cloud = FakeCloud(release_public_url=[CloudUnavailable("down"), None])
-    public, state, _, _ = make(tmp_path, cloud)
-    state.put_public("blog", cloud_id="c-blog", state="enabling")
-
-    public.reconcile()
-
-    row = state.get_public("blog")
-    assert row["state"] == "releasing" and row["reason_code"] == "interrupted"
-    assert public.status("blog")["reason"]["code"] == "interrupted"
-
-    public.reconcile()
-
-    assert state.get_public("blog") is None
-
-
 def test_reconcile_restarts_a_client_that_is_down_while_a_url_is_on(tmp_path):
     cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON])
     public, _, runner, _ = make(tmp_path, cloud)
@@ -345,7 +281,8 @@ def test_reconcile_restarts_a_client_that_is_down_while_a_url_is_on(tmp_path):
 
 
 def test_reconcile_stops_a_client_nothing_needs(tmp_path):
-    public, _, runner, _ = make(tmp_path, FakeCloud())
+    cloud = FakeCloud(get_public_url=[CloudError("not_found", "none", 404)])
+    public, _, runner, _ = make(tmp_path, cloud)
     runner.up = True
     (tmp_path / "tunnel.token").write_text("stale")
 
@@ -354,39 +291,27 @@ def test_reconcile_stops_a_client_nothing_needs(tmp_path):
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
 
 
-def test_reconcile_leaves_the_client_alone_while_another_row_is_enabling(tmp_path):
-    """A commit from the live enable thread can land between reconcile's per-row
-    pass and its client decision; if no row reads "on" yet, the client must be
-    left as-is rather than stopped out from under that in-flight enable."""
-    cloud = FakeCloud(create_public_url=[ON])
-    public, state, runner, _ = make(tmp_path, cloud)
+def test_reconcile_leaves_the_client_alone_while_a_turn_on_is_in_flight(tmp_path):
+    """The turn-on starts the client before it records the URL; a reconcile
+    in between must not stop the client out from under it."""
+    cloud = FakeCloud(create_public_url=[ON],
+                      get_public_url=[CloudError("not_found", "none", 404)])
+    public, _, runner, _ = make(tmp_path, cloud)
     held = []
     public._spawn = held.append
-    public.enable("blog")  # row is "enabling"; the thread never runs
+    public.enable("blog")
     runner.up = True
     (tmp_path / "tunnel.token").write_text("stale")
 
     public.reconcile()
 
     assert runner.up and (tmp_path / "tunnel.token").exists()
-    assert state.get_public("blog")["state"] == "enabling"
-
-
-def test_reconcile_releases_the_url_of_a_project_deleted_meanwhile(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], release_public_url=[None])
-    public, state, _, _ = make(tmp_path, cloud)
-    public.enable("blog")
-    state.remove_project("blog")
-
-    public.reconcile()
-
-    assert state.get_public("blog") is None
-    assert "release_public_url" in cloud.names()
+    assert public.status("blog") == {"state": "enabling"}
 
 
 def test_signing_out_releases_then_forgets_every_public_url(tmp_path):
     cloud = FakeCloud(create_public_url=[ON], release_public_url=[None], logout=[None])
-    public, state, runner, _ = make(tmp_path, cloud)
+    public, _, runner, _ = make(tmp_path, cloud)
     public._account.on_forget = public.forget_local
     public.enable("blog")
 
@@ -394,7 +319,7 @@ def test_signing_out_releases_then_forgets_every_public_url(tmp_path):
     public._account.sign_out()
 
     assert cloud.names() == ["create_public_url", "release_public_url", "logout"]
-    assert state.list_public() == []
+    assert public.status("blog")["reason"]["code"] == "signed_out"
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
 
 
@@ -432,56 +357,25 @@ def test_a_naive_expiry_timestamp_is_read_as_utc(tmp_path):
     assert public.status("blog")["expires_at"] == EXPIRES
 
 
-@pytest.mark.parametrize("stale", ["releasing", "enabling"])
-def test_reconcile_leaves_a_row_that_changed_since_its_snapshot(tmp_path, stale):
-    """An enable that finished between reconcile's snapshot and its handling of
-    the row must not have its fresh "on" URL released or deleted."""
-    public, state, runner, _ = make(tmp_path, FakeCloud(create_public_url=[ON]))
-    public.enable("blog")
-    snapshot = {**state.get_public("blog"), "state": stale}
-
-    public._reconcile_row(snapshot, {"blog"})
-
-    assert state.get_public("blog")["state"] == "on"
-    assert runner.up
-
-
-def test_a_releasing_row_turned_back_on_during_the_release_is_kept(tmp_path):
-    public, state, _, _ = make(tmp_path, FakeCloud())
-    state.put_public("blog", cloud_id="c-blog", state="releasing")
-
-    class Racing(FakeCloud):
-        def release_public_url(self, token, cloud_id):
-            state.put_public("blog", cloud_id="c-blog", state="on", expires_at=EXPIRES)
-            return None
-
-    public._cloud = Racing()
-
-    public.reconcile()
-
-    assert state.get_public("blog")["state"] == "on"
-
-
 def test_a_url_ended_for_a_missing_token_is_released_on_the_service(tmp_path):
     cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON], release_public_url=[None])
-    public, state, runner, _ = make(tmp_path, cloud)
+    public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
     runner.up = False
     (tmp_path / "tunnel.token").unlink()
 
     public.reconcile()
 
-    assert state.get_public("blog")["reason_code"] == "client_failed"
+    assert public.status("blog")["note"]["code"] == "client_failed"
     assert cloud.names()[-1] == "release_public_url"
 
 
 def test_turning_off_a_failed_url_clears_it(tmp_path):
     cloud = FakeCloud(create_public_url=[CloudError("public_url_active", "x", 409)])
-    public, state, _, _ = make(tmp_path, cloud)
+    public, _, _, _ = make(tmp_path, cloud)
     public.enable("blog")
 
     assert public.disable("blog") == {"state": "off", "note": None}
-    assert state.get_public("blog") is None
 
 
 TWO_HOSTS = [
@@ -516,7 +410,7 @@ def test_each_public_url_is_matched_to_its_route_by_local_hostname(tmp_path):
 
 def test_a_url_with_no_expiry_stays_on_through_reconcile(tmp_path):
     cloud = FakeCloud(create_public_url=[{**ON, "expires_at": None}],
-                      get_public_url=[ON])
+                      get_public_url=[{**ON, "expires_at": None}])
     public, _, runner, clock = make(tmp_path, cloud)
     public.enable("blog")
     clock.now = EXPIRES + 10**6
@@ -592,3 +486,45 @@ def test_an_unchanged_token_is_narrowed_back_to_0640(tmp_path):
 
     assert write_token(token, "tun-1") is False
     assert stat.S_IMODE(os.stat(token).st_mode) == 0o640
+
+
+def test_after_a_restart_a_url_the_service_still_has_is_picked_up(tmp_path):
+    cloud = FakeCloud(get_public_url=[ON])
+    public, _, runner, _ = make(tmp_path, cloud)
+    write_token(tmp_path / "tunnel.token", "tun-1")
+
+    public.reconcile()
+
+    assert public.status("blog")["urls"][0]["url"] == "https://k3x9.example.dev"
+    assert runner.up
+
+
+def test_a_service_that_cannot_be_reached_leaves_the_client_running(tmp_path):
+    cloud = FakeCloud(create_public_url=[ON], get_public_url=[CloudUnavailable("down")])
+    public, _, runner, _ = make(tmp_path, cloud)
+    public.enable("blog")
+
+    public.reconcile()
+
+    assert public.status("blog")["state"] == "on"
+    assert runner.up
+
+
+def test_a_404_read_before_a_fresh_turn_on_does_not_drop_it(tmp_path):
+    fresh = {**ON, "urls": [{"service": "web", "local_hostname": "blog.d.io",
+                             "url": "https://new.example.dev"}]}
+    public, _, _, clock = make(tmp_path, FakeCloud(create_public_url=[ON]))
+    public.enable("blog")
+    clock.now = EXPIRES + 1
+
+    class Racing(FakeCloud):
+        def get_public_url(self, token, cloud_id):
+            public._cloud = FakeCloud(create_public_url=[{**fresh, "expires_at": None}])
+            public.enable("blog")
+            raise CloudError("not_found", "none", 404)
+
+    public._cloud = Racing()
+
+    public.reconcile()
+
+    assert public.status("blog")["urls"][0]["url"] == "https://new.example.dev"

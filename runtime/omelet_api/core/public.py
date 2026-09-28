@@ -25,7 +25,6 @@ MESSAGES = {
     "cloud_unavailable": "The Omelet service couldn't be reached. Check the "
                          "internet connection and try again.",
     "client_failed": "The public connection couldn't start on this computer.",
-    "interrupted": "Omelet restarted while turning this on. Try again.",
     "expired": "The public address expired. Start a new one; it will be a "
                "different address.",
     "released_elsewhere": "The public address was turned off from the Omelet website.",
@@ -111,16 +110,27 @@ def _epoch(value: str | None) -> float | None:
     return dt.timestamp()
 
 
-def _expired(row: dict, now: float) -> bool:
+def _expired(record: dict, now: float) -> bool:
     # A null expiry means the service set no time limit.
-    return row["expires_at"] is not None and row["expires_at"] <= now
+    return record["expires_at"] is not None and record["expires_at"] <= now
 
 
 def _reason(code: str, message: str | None = None) -> dict:
     return {"code": code, "message": message or MESSAGES[code]}
 
 
+class _Attempt:
+    """One turn-on; compared by identity so a stale thread can't commit."""
+
+    def __init__(self, cloud_id: str):
+        self.cloud_id = cloud_id
+
+
 class Public:
+    """The service is the record of which URLs are on. This keeps only what a
+    restart may lose: the last record seen per project, an in-flight turn-on,
+    a failure or an ended note to show, and releases still to retry."""
+
     def __init__(self, *, state, account, cloud, client: TunnelClient,
                  token_path: Path, origin: str,
                  hosts_for: Callable[[str], list[dict]],
@@ -134,11 +144,14 @@ class Public:
         self._hosts_for = hosts_for
         self._clock = clock
         self._spawn = spawn
+        # Guards the dicts below. _client_lock may take it, never the reverse.
         self._lock = threading.Lock()
-        # Serialises the client's stop-and-remove-token against reconcile's
-        # read-then-start. Never taken while holding _lock.
         self._client_lock = threading.Lock()
-        self._enabling: set[str] = set()
+        self._on: dict[str, dict] = {}
+        self._enabling: dict[str, _Attempt] = {}
+        self._failed: dict[str, dict] = {}
+        self._notes: dict[str, dict] = {}
+        self._releasing: set[str] = set()
 
     # --- reading ---------------------------------------------------------
 
@@ -152,65 +165,75 @@ class Public:
         return None
 
     def status(self, local_id: str) -> dict:
-        row = self._state.get_public(local_id)
-        if row is not None:
-            if row["state"] == "on":
-                if _expired(row, self._clock()):
-                    return {"state": "off", "note": _reason("expired")}
-                return {"state": "on", "urls": row["urls"],
-                        "expires_at": row["expires_at"]}
-            if row["state"] == "enabling":
-                return {"state": "enabling"}
-            if row["state"] == "failed" or (row["state"] == "releasing"
-                                            and row["reason_code"]):
-                return {"state": "failed", "reason": _reason(
-                    row["reason_code"], row["reason_message"])}
+        with self._lock:
+            enabling = local_id in self._enabling
+            record = self._on.get(local_id)
+            failed = self._failed.get(local_id)
+            note = self._notes.get(local_id)
+        if enabling:
+            return {"state": "enabling"}
+        if record is not None:
+            if _expired(record, self._clock()):
+                return {"state": "off", "note": _reason("expired")}
+            return {"state": "on", "urls": record["urls"],
+                    "expires_at": record["expires_at"]}
+        if failed is not None:
+            return {"state": "failed", "reason": failed}
         blocked = self._blocked(local_id)
         if blocked:
             return {"state": "unavailable", "reason": _reason(blocked)}
-        if row is not None and row["state"] == "ended":
-            return {"state": "off", "note": _reason(row["reason_code"])}
-        return {"state": "off", "note": None}
+        return {"state": "off", "note": note}
+
+    def _record(self, local_id: str, cloud_id: str, out: dict) -> dict:
+        by_host = {h["hostname"]: h for h in self._hosts_for(local_id)}
+        urls = [{"url": u["url"],
+                 "service": by_host[u["local_hostname"]]["service"],
+                 "local_url": by_host[u["local_hostname"]]["local_url"]}
+                for u in out["urls"] if u["local_hostname"] in by_host]
+        return {"cloud_id": cloud_id, "urls": urls,
+                "expires_at": _epoch(out["expires_at"])}
 
     # --- turning on ------------------------------------------------------
 
     def enable(self, local_id: str) -> dict:
-        row = self._state.get_public(local_id)
-        if row is not None and row["state"] == "on" and _expired(row, self._clock()):
-            self._end(row, "expired")
         with self._lock:
             if local_id in self._enabling:
                 raise PublicBusy(local_id)
-            row = self._state.get_public(local_id)
-            if row is not None and row["state"] == "on":
-                return self.status(local_id)
-            blocked = self._blocked(local_id)
-            if blocked:
-                raise Unavailable(blocked)
-            cloud_id = self._state.cloud_mapping()[local_id]["cloud_id"]
-            prior = row
-            self._enabling.add(local_id)
-            self._state.put_public(local_id, cloud_id=cloud_id, state="enabling")
-        self._spawn(lambda: self._run_enable(local_id, cloud_id, prior))
+            record = self._on.get(local_id)
+            live = record is not None and not _expired(record, self._clock())
+        if live:
+            return self.status(local_id)
+        blocked = self._blocked(local_id)
+        if blocked:
+            raise Unavailable(blocked)
+        cloud_id = self._state.cloud_mapping()[local_id]["cloud_id"]
+        attempt = _Attempt(cloud_id)
+        with self._lock:
+            if local_id in self._enabling:
+                raise PublicBusy(local_id)
+            self._enabling[local_id] = attempt
+            self._on.pop(local_id, None)
+            self._failed.pop(local_id, None)
+            self._notes.pop(local_id, None)
+        self._spawn(lambda: self._run_enable(local_id, attempt))
         return self.status(local_id)
 
-    def _run_enable(self, local_id: str, cloud_id: str, prior: dict | None) -> None:
+    def _current(self, local_id: str, attempt: _Attempt) -> bool:
+        return self._enabling.get(local_id) is attempt
+
+    def _run_enable(self, local_id: str, attempt: _Attempt) -> None:
         try:
-            if prior is not None and prior["state"] == "releasing":
-                if not self._release(prior["cloud_id"]):
-                    self._state.transition_public(local_id, "enabling",
-                                                   state="releasing",
-                                                   reason_code="cloud_unavailable")
-                    return
-            self._turn_on(local_id, cloud_id)
+            self._turn_on(local_id, attempt)
         except Exception:
             log.exception("turning on the public URL of %s failed", local_id)
-            self._fail(local_id, cloud_id, "client_failed")
+            self._fail(local_id, attempt, "client_failed")
         finally:
             with self._lock:
-                self._enabling.discard(local_id)
+                if self._current(local_id, attempt):
+                    del self._enabling[local_id]
 
-    def _turn_on(self, local_id: str, cloud_id: str) -> None:
+    def _turn_on(self, local_id: str, attempt: _Attempt) -> None:
+        cloud_id = attempt.cloud_id
         hosts = self._hosts_for(local_id)
         try:
             routes = [{"local_hostname": h["hostname"], "service": h["service"]}
@@ -218,18 +241,17 @@ class Public:
             out = self._account.authed(lambda token: self._cloud.create_public_url(
                 token, cloud_id, routes, self._origin))
         except NotSignedIn:
-            self._state.delete_public(local_id)
             return
         except CloudUnavailable:
-            self._fail(local_id, cloud_id, "cloud_unavailable")
+            self._fail(local_id, attempt, "cloud_unavailable")
             return
         except CloudError as e:
-            self._fail_from_service(local_id, cloud_id, e)
+            self._fail_from_service(local_id, attempt, e)
             return
 
         # Everything past this point holds a live service-side URL: any
         # failure here -- a bad client start, a malformed reply -- must
-        # release it, not just mark the row failed.
+        # release it, not just report a failure.
         try:
             credentials = out.get("credentials")
             if credentials:
@@ -242,50 +264,45 @@ class Public:
             started = self._client.start(recreate=changed)
             if not started.ok:
                 raise RuntimeError("tunnel client failed to start")
-            by_host = {h["hostname"]: h for h in hosts}
-            urls = [{"url": u["url"],
-                     "service": by_host[u["local_hostname"]]["service"],
-                     "local_url": by_host[u["local_hostname"]]["local_url"]}
-                    for u in out["urls"] if u["local_hostname"] in by_host]
-            expires_at = _epoch(out["expires_at"])
+            record = self._record(local_id, cloud_id, out)
         except Exception:
+            log.exception("starting the public URL of %s failed", local_id)
             self._stop_unless_needed(local_id)
             self._release(cloud_id)
-            self._fail(local_id, cloud_id, "client_failed")
+            self._fail(local_id, attempt, "client_failed")
             return
 
-        # The row may have been force-disabled or cleared (sign-out) while
-        # the create/start calls were in flight; only take the "on" write if
-        # it is still the same "enabling" attempt, or a wanted-off row would
-        # come back on.
-        committed = self._state.transition_public(
-            local_id, "enabling", state="on", urls=urls, expires_at=expires_at)
+        # A disable or sign-out may have landed while the calls were in
+        # flight; then this attempt is no longer current and must undo itself.
+        with self._lock:
+            committed = self._current(local_id, attempt)
+            if committed:
+                self._on[local_id] = record
         if not committed:
             self._stop_unless_needed(local_id)
             self._release(cloud_id)
 
-    def _fail(self, local_id: str, cloud_id: str, code: str,
+    def _fail(self, local_id: str, attempt: _Attempt, code: str,
               message: str | None = None) -> None:
-        # Only takes if the row is still this attempt's "enabling" row, so a
-        # row already moved or deleted by a disable/sign-out is left alone.
-        self._state.transition_public(local_id, "enabling", state="failed",
-                                      reason_code=code,
-                                      reason_message=message or MESSAGES.get(code))
+        with self._lock:
+            if self._current(local_id, attempt):
+                self._failed[local_id] = _reason(code, message)
 
-    def _fail_from_service(self, local_id: str, cloud_id: str, e: CloudError) -> None:
+    def _fail_from_service(self, local_id: str, attempt: _Attempt,
+                           e: CloudError) -> None:
         # The UI shows our wording only; the service's own reason lives here.
         log.warning("the service refused a public URL for %s (%s): %s %s",
-                    local_id, cloud_id, e.status, e)
+                    local_id, attempt.cloud_id, e.status, e)
         if e.code == "public_url_active":
-            holder = next((r["local_id"] for r in self._state.list_public()
-                           if r["state"] == "on" and r["local_id"] != local_id), None)
+            with self._lock:
+                holder = next((other for other in self._on if other != local_id), None)
             message = (f'Only one public address can be on at a time. Turn off the '
                        f'one on "{holder}" first.') if holder else None
-            self._fail(local_id, cloud_id, e.code, message)
+            self._fail(local_id, attempt, e.code, message)
         elif e.code in MESSAGES:
-            self._fail(local_id, cloud_id, e.code)
+            self._fail(local_id, attempt, e.code)
         else:
-            self._fail(local_id, cloud_id, e.code,
+            self._fail(local_id, attempt, e.code,
                        f"The Omelet service refused: {e.message}")
 
     # --- turning off -----------------------------------------------------
@@ -294,15 +311,18 @@ class Public:
         with self._lock:
             if local_id in self._enabling and not force:
                 raise PublicBusy(local_id)
-        row = self._state.get_public(local_id)
-        if row is None:
-            return self.status(local_id)
-        self._state.delete_public(local_id)
-        self._stop_unless_needed(local_id)
-        if row["state"] in ("on", "releasing", "enabling"):
-            if not self._release(row["cloud_id"]):
-                self._state.put_public(local_id, cloud_id=row["cloud_id"],
-                                       state="releasing")
+            self._enabling.pop(local_id, None)
+            record = self._on.pop(local_id, None)
+            self._failed.pop(local_id, None)
+            self._notes.pop(local_id, None)
+        # A dropped in-flight attempt releases its own URL when it sees that.
+        if record is not None:
+            self._stop_unless_needed(local_id)
+            if not self._release(record["cloud_id"]):
+                # The stopped client already takes the address offline; the
+                # service still counts it against the one-per-account limit.
+                with self._lock:
+                    self._releasing.add(record["cloud_id"])
         return self.status(local_id)
 
     def _release(self, cloud_id: str) -> bool:
@@ -320,13 +340,16 @@ class Public:
             return False
         return True
 
-    def _stop_unless_needed(self, local_id: str) -> None:
+    def _others_on(self, local_id: str) -> bool:
+        now = self._clock()
         with self._lock:
-            if self._enabling - {local_id}:
-                return  # another project may be about to need the client
+            return (any(other != local_id for other in self._enabling)
+                    or any(other != local_id and not _expired(r, now)
+                           for other, r in self._on.items()))
+
+    def _stop_unless_needed(self, local_id: str) -> None:
         with self._client_lock:
-            if any(r["state"] == "on" and r["local_id"] != local_id
-                   for r in self._state.list_public()):
+            if self._others_on(local_id):
                 return
             self._client.stop()
             remove_token(self._token_path)
@@ -334,26 +357,80 @@ class Public:
     # --- keeping it true -------------------------------------------------
 
     def reconcile(self) -> None:
-        projects = {row["id"] for row in self._state.list_projects()}
-        for row in self._state.list_public():
-            try:
-                self._reconcile_row(row, projects)
-            except Exception:
-                log.exception("reconciling the public URL of %s failed",
-                              row["local_id"])
+        if not self._account.signed_in:
+            return
         with self._lock:
-            # A concurrent enable may commit "on" and start the client right
-            # after this check; deciding the client's state here too could
-            # race it (stop what it just started, or skip a start it needs).
+            pending = set(self._releasing)
+        for cloud_id in pending:
+            if self._release(cloud_id):
+                with self._lock:
+                    self._releasing.discard(cloud_id)
+        if not self._refresh():
+            return  # the service didn't answer; leave the client as it is
+        with self._lock:
+            # A turn-on starts the client before it records the URL; deciding
+            # the client's state now could stop what it just started.
             if self._enabling:
                 return
         self._reconcile_client()
 
+    def _refresh(self) -> bool:
+        """Re-reads every project's URL from the service. False if it
+        couldn't be reached, so nothing may be concluded from this pass."""
+        projects = {row["id"] for row in self._state.list_projects()}
+        mapping = self._state.cloud_mapping()
+        with self._lock:
+            releasing = set(self._releasing)
+            for gone in set(self._on) - set(mapping):
+                del self._on[gone]
+        for local_id, m in mapping.items():
+            cloud_id = m["cloud_id"]
+            if local_id not in projects or cloud_id in releasing:
+                continue
+            with self._lock:
+                before = self._on.get(local_id)
+            try:
+                out = self._account.authed(
+                    lambda token: self._cloud.get_public_url(token, cloud_id))
+                record = self._record(local_id, cloud_id, out)
+            except CloudError as e:
+                if e.status == 404:
+                    self._forget(local_id, before, None)
+                else:
+                    log.warning("checking public URL %s failed: %s", cloud_id, e)
+                continue
+            except (CloudUnavailable, NotSignedIn):
+                return False
+            except Exception:
+                log.exception("reading the public URL of %s failed", local_id)
+                continue
+            with self._lock:
+                # A turn-on or turn-off during the GET wins over its answer.
+                if local_id not in self._enabling and self._on.get(local_id) is before:
+                    self._on[local_id] = record
+                    self._failed.pop(local_id, None)
+                    self._notes.pop(local_id, None)
+        return True
+
+    def _forget(self, local_id: str, before: dict | None, code: str | None) -> None:
+        """Drops a URL the service no longer has and says why -- only if it is
+        still the record `before`, not one a newer turn-on put in its place."""
+        now = self._clock()
+        with self._lock:
+            if before is None or self._on.get(local_id) is not before:
+                return
+            del self._on[local_id]
+            if code is None:
+                code = "expired" if _expired(before, now) else "released_elsewhere"
+            self._notes[local_id] = _reason(code)
+
     def _reconcile_client(self) -> None:
+        now = self._clock()
+        with self._lock:
+            live = [(k, r) for k, r in self._on.items() if not _expired(r, now)]
         with self._client_lock:
-            on_rows = [r for r in self._state.list_public() if r["state"] == "on"]
             running = self._client.running()
-            if not on_rows:
+            if not live:
                 if running or self._token_path.exists():
                     self._client.stop()
                     remove_token(self._token_path)
@@ -366,68 +443,29 @@ class Public:
                     log.warning("restarting the tunnel client failed: %s",
                                 started.stderr)
                 return
-        # Outside the lock: _end stops the client through _stop_unless_needed.
-        for row in on_rows:
-            if self._end(row, "client_failed"):
-                log.warning("public URL of %s had no tunnel token; ended it",
-                            row["local_id"])
-                self._release(row["cloud_id"])
-
-    def _reconcile_row(self, row: dict, projects: set[str]) -> None:
-        local_id, state = row["local_id"], row["state"]
-        with self._lock:
-            if local_id in self._enabling:
-                return
-        # An enable may have finished since the snapshot; act only on the row
-        # as it still is.
-        current = self._state.get_public(local_id)
-        if current is None or current["state"] != state:
-            return
-        if local_id not in projects:
-            self.disable(local_id, force=True)
-            return
-        if state == "on":
-            if _expired(row, self._clock()):
-                self._end(row, "expired")
-                return
-            try:
-                self._account.authed(lambda token: self._cloud.get_public_url(
-                    token, row["cloud_id"]))
-            except CloudError as e:
-                if e.status == 404:
-                    self._end(row, "released_elsewhere")
-                else:
-                    log.warning("checking public URL %s failed: %s",
-                                row["cloud_id"], e)
-            except (CloudUnavailable, NotSignedIn):
-                pass
-        elif state == "releasing":
-            if self._release(row["cloud_id"]):
-                self._state.delete_public_if(local_id, "releasing")
-        elif state == "enabling":
-            if self._release(row["cloud_id"]):
-                self._fail(local_id, row["cloud_id"], "interrupted")
-            else:
-                self._state.transition_public(local_id, "enabling",
-                                               state="releasing",
-                                               reason_code="interrupted")
-
-    def _end(self, row: dict, code: str) -> bool:
-        # Guarded: the row may have moved (a fresh enable, a disable) since
-        # this snapshot was read, e.g. across the get_public_url call above.
-        ended = self._state.transition_public(row["local_id"], "on",
-                                              state="ended", reason_code=code)
-        if ended:
-            self._stop_unless_needed(row["local_id"])
-        return ended
+        # A URL is on but this VM holds no token to serve it: end it.
+        for local_id, record in live:
+            log.warning("public URL of %s had no tunnel token; ended it", local_id)
+            self._forget(local_id, record, "client_failed")
+            if not self._release(record["cloud_id"]):
+                with self._lock:
+                    self._releasing.add(record["cloud_id"])
 
     def release_all(self) -> None:
-        for row in self._state.list_public():
-            if row["state"] in ("on", "enabling", "releasing"):
-                self._release(row["cloud_id"])
+        with self._lock:
+            cloud_ids = ({r["cloud_id"] for r in self._on.values()}
+                         | {a.cloud_id for a in self._enabling.values()}
+                         | self._releasing)
+        for cloud_id in cloud_ids:
+            self._release(cloud_id)
 
     def forget_local(self) -> None:
-        self._state.clear_public()
+        with self._lock:
+            self._on.clear()
+            self._enabling.clear()
+            self._failed.clear()
+            self._notes.clear()
+            self._releasing.clear()
         with self._client_lock:
             self._client.stop()
             remove_token(self._token_path)

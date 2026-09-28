@@ -236,8 +236,9 @@ Do not add an `if windows` anywhere else — push the difference into a provider
   mounted read-only into the client) and starts the profile-gated `tunnel` service in `stack.yml` through compose. The service rewrites Host to the
   project's local hostname, so overlays are unchanged; apps that build absolute URLs from Host
   send public visitors to `*.127-0-0-1.sslip.io`. Only the console turns it on or off (POST
-  and DELETE are mounted at `/api` alone); the CLI never shows it. Reconciled on every sync
-  pass. The `tunnel` network reaches the VM through its gateway, so every port published on
+  and DELETE are mounted at `/api` alone); the CLI never shows it. Nothing about it is in
+  `state.db`: the service is the record, the API keeps only a memory of it and re-reads
+  every mapped project on each sync pass (one GET each). The `tunnel` network reaches the VM through its gateway, so every port published on
   0.0.0.0 (the api's, a project's `ports:`) is reachable from the tunnel client.
 - `runtime/web/` — the browser UI at `localhost:<edge>`, shipped as the `omelet-web` nginx image
   and routed by Traefik below the API's `/api` router — a sibling of the API inside `runtime/`,

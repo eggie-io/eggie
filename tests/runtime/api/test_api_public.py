@@ -70,7 +70,7 @@ def test_deleting_a_project_releases_its_public_url(env):
     client.delete("/projects/blog")
 
     assert "release_public_url" in cloud.names()
-    assert state.get_public("blog") is None and not tunnel.up
+    assert not tunnel.up
 
 
 def test_signing_out_releases_the_public_url(env):
@@ -81,7 +81,7 @@ def test_signing_out_releases_the_public_url(env):
     client.post("/account/sign-out")
 
     assert cloud.names()[-2:] == ["release_public_url", "logout"]
-    assert state.list_public() == [] and not tunnel.up
+    assert not tunnel.up
 
 
 def test_the_default_public_wiring_reaches_the_service_with_real_hosts_and_origin(env):
@@ -134,7 +134,7 @@ def test_the_guest_token_cannot_turn_a_public_url_on_or_off(env):
     assert client.post("/projects/blog/public").status_code in (404, 405)
     assert client.delete("/projects/blog/public").status_code in (404, 405)
     assert client.get("/projects/blog/public").status_code == 200
-    assert cloud.calls == [] and state.get_public("blog") is None
+    assert cloud.calls == []
 
 
 def test_a_failing_public_reconcile_does_not_stop_the_account_sync(env):

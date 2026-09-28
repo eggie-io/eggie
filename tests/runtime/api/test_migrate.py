@@ -137,31 +137,3 @@ def test_a_v3_database_gains_an_account_and_keeps_its_projects(tmp_path):
     assert account["device_id"], "a device id is minted once, by the migration"
     assert account["access_token"] is None
     assert state.cloud_mapping() == {}
-
-
-def test_a_v4_database_gains_public_urls_and_keeps_its_rows(tmp_path):
-    conn = connect(tmp_path)
-    for step in migrate.MIGRATIONS[:4]:
-        step(conn)
-    conn.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
-    conn.execute("INSERT INTO schema_version(version) VALUES (4)")
-    conn.execute("INSERT INTO projects(id, guest_path, domain) VALUES ('blog', '/g', 'd')")
-    conn.execute("INSERT INTO cloud_projects VALUES ('blog', 'c1', 'org-1')")
-    conn.commit()
-
-    migrate.migrate(conn)
-
-    assert "public_urls" in tables(conn)
-    assert conn.execute("SELECT id FROM projects").fetchall() == [("blog",)]
-    assert conn.execute("SELECT cloud_id FROM cloud_projects").fetchall() == [("c1",)]
-
-
-def test_public_rows_round_trip_their_urls(tmp_path):
-    state = State(tmp_path / "state.db")
-    urls = [{"url": "https://k.example", "service": "web", "local_url": "http://b"}]
-
-    state.put_public("blog", cloud_id="c1", state="on", urls=urls, expires_at=5.0)
-
-    assert state.get_public("blog")["urls"] == urls
-    state.put_public("blog", cloud_id="c1", state="ended", reason_code="expired")
-    assert state.get_public("blog")["urls"] is None

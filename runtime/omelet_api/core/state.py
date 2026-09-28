@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -168,65 +167,6 @@ class State:
     def clear_cloud_projects(self) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM cloud_projects")
-            self._conn.commit()
-
-    @staticmethod
-    def _public_row(row) -> dict:
-        out = dict(row)
-        out["urls"] = json.loads(out["urls"]) if out["urls"] is not None else None
-        return out
-
-    def get_public(self, local_id):
-        with self._lock:
-            row = self._conn.execute("SELECT * FROM public_urls WHERE local_id=?",
-                                     (local_id,)).fetchone()
-        return self._public_row(row) if row else None
-
-    def list_public(self):
-        with self._lock:
-            rows = self._conn.execute(
-                "SELECT * FROM public_urls ORDER BY local_id").fetchall()
-        return [self._public_row(r) for r in rows]
-
-    def put_public(self, local_id, *, cloud_id, state, urls=None, expires_at=None,
-                   reason_code=None, reason_message=None):
-        with self._lock:
-            self._conn.execute(
-                "INSERT OR REPLACE INTO public_urls(local_id, cloud_id, state, urls, "
-                "expires_at, reason_code, reason_message) VALUES (?,?,?,?,?,?,?)",
-                (local_id, cloud_id, state, json.dumps(urls) if urls is not None else None,
-                 expires_at, reason_code, reason_message))
-            self._conn.commit()
-
-    def transition_public(self, local_id, from_state, *, state, urls=None,
-                          expires_at=None, reason_code=None, reason_message=None) -> bool:
-        """Whole-row replace like `put_public`, but only takes if the row is
-        still `from_state` -- the guard against a write racing a disable or
-        sign-out that already moved or deleted the row. `cloud_id` is kept."""
-        with self._lock:
-            cur = self._conn.execute(
-                "UPDATE public_urls SET state=?, urls=?, expires_at=?, reason_code=?, "
-                "reason_message=? WHERE local_id=? AND state=?",
-                (state, json.dumps(urls) if urls is not None else None, expires_at,
-                 reason_code, reason_message, local_id, from_state))
-            self._conn.commit()
-            return cur.rowcount > 0
-
-    def delete_public(self, local_id):
-        with self._lock:
-            self._conn.execute("DELETE FROM public_urls WHERE local_id=?", (local_id,))
-            self._conn.commit()
-
-    def delete_public_if(self, local_id, state) -> bool:
-        with self._lock:
-            cur = self._conn.execute(
-                "DELETE FROM public_urls WHERE local_id=? AND state=?", (local_id, state))
-            self._conn.commit()
-            return cur.rowcount > 0
-
-    def clear_public(self):
-        with self._lock:
-            self._conn.execute("DELETE FROM public_urls")
             self._conn.commit()
 
     def close(self):

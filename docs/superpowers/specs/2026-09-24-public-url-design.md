@@ -163,16 +163,19 @@ values that already exist.
 
 ### Storage
 
-Migration `_v5_public_urls`:
+None in `state.db`. The service is the record of which URLs are on; the API keeps
+in memory only what a restart may lose:
 
-```
-public_urls(local_id TEXT PRIMARY KEY,
-            cloud_id TEXT NOT NULL,     -- kept so a release survives sync dropping the mapping
-            state TEXT NOT NULL,        -- enabling | on | releasing | failed | ended
-            urls TEXT,                  -- JSON, only while state = 'on'
-            expires_at REAL,            -- only while state = 'on'
-            reason_code TEXT, reason_message TEXT)
-```
+- the last record read per project (`cloud_id`, `urls`, `expires_at`);
+- an in-flight turn-on, as an attempt object compared by identity, so a turn-on
+  that a turn-off or sign-out dropped meanwhile undoes itself instead of committing;
+- a failure reason, or an off note (`expired`, `released_elsewhere`,
+  `client_failed`), to show until the next turn-on;
+- releases that failed while the service was unreachable, retried each pass.
+
+After a restart the first sync pass re-reads every project from the service, so a
+URL that is still on is picked up and its client started again; until then it reads
+as off. A failure shown before the restart is gone.
 
 ### Token file
 
@@ -185,60 +188,57 @@ It exists only while a URL is on. Turning off, expiry, sign-out and delete remov
 
 1. Refuse at once, as `unavailable`, when: not signed in (`signed_out`); the project
    has no `cloud_projects` mapping yet (`not_registered`); the project has no web
-   service (`no_web`). A project already `enabling` answers 409 `project_busy`, and so
-   does turning it off while it is `enabling`. A row already `on` is returned as is,
-   unless its `expires_at` has passed: it is ended as `expired` and a new URL is made.
-   A `releasing` row is released first; if that fails the row stays `releasing`
-   with `cloud_unavailable` as its reason.
-2. Set the row to `enabling`, return, and do the rest on a spawned thread.
+   service (`no_web`). A project already turning on answers 409 `project_busy`, and so
+   does turning it off meanwhile. A URL already on is returned as is, unless its
+   `expires_at` has passed: then a new one is made.
+2. Record the attempt, return `enabling`, and do the rest on a spawned thread.
 3. `POST` with one route per web service (`host_for` for its local hostname, the
    primary first) and `origin`.
 4. On 201/200: write the token and start the client (recreated only when the token
-   changed), store `urls` and `expires_at`, set `on`.
-5. If the client does not start: stop it, delete the token, `DELETE` on the service,
-   set `failed` / `client_failed`.
-6. On a service error or `CloudUnavailable`: set `failed` with the code (section 6).
-   `NotSignedIn` mid-call: set `unavailable` / `signed_out` by deleting the row.
+   changed), then keep the record, if the attempt is still current. If it is not,
+   stop the client unless another project needs it and `DELETE` on the service.
+5. If the client does not start, or the reply is malformed: stop it, delete the
+   token, `DELETE` on the service, fail with `client_failed`.
+6. On a service error or `CloudUnavailable`: fail with the code (section 6).
+   `NotSignedIn` mid-call: nothing is kept; the status reads `signed_out`.
 
 ### Turn off
 
-Stop the client and delete the token first, then `DELETE` on the service. 204 or 404
-deletes the row. `CloudUnavailable` or any other failure sets `releasing`; the next
-reconcile retries. Locally the URL is off at once either way.
+Stop the client and delete the token (unless another project's URL needs them),
+then `DELETE` on the service. Locally the URL is off at once: with the client
+stopped the address no longer answers. A failed `DELETE` is retried on the next pass,
+since the service still counts it against the one-per-account limit.
 
 ### Reconcile
 
-Runs once at API startup (from `routes/__main__.py`, like `account.resume()`) and at
-the start of every sync pass:
+At the start of every sync pass (the first runs at API startup), when signed in:
 
-- `on` with `expires_at` passed (never, when it is null) → stop the client, delete the token, `ended` /
-  `expired`, clear `urls` and `expires_at`.
-- `on` and `GET` answers 404 → the same cleanup, `ended` / `released_elsewhere`.
-- `releasing` → retry `DELETE`; 204/404 deletes the row if it is still `releasing`.
-- `enabling` with no enable thread running (the API restarted mid-call) → `DELETE`
-  on the service, then `failed` / `interrupted`.
-- No row `on` but the client is running → stop it and delete the token.
-  A row `on` but the client is not running → start it; with no token file, end it
-  as `client_failed` and `DELETE` it on the service.
-- Rows for projects that no longer exist → treated as a delete (below).
-- Each row is re-read before it is handled; one whose state moved since the pass's
-  snapshot (an enable finished meanwhile) is left for the next pass. A failing
-  reconcile is logged and never stops the rest of the sync pass.
+- Retry the pending releases.
+- `GET` every mapped project that still exists. A record replaces what is kept,
+  unless a turn-on or turn-off landed during the call. A 404 drops what is kept with
+  an off note: `expired` if its `expires_at` had passed, else `released_elsewhere`.
+  `CloudUnavailable` ends the pass: nothing is concluded, the client is left alone.
+- Unless a turn-on is in flight: no unexpired URL kept → stop the client and delete
+  the token. One kept but the client is not running → start it; with no token file,
+  drop it as `client_failed` and `DELETE` it on the service.
+- A failing reconcile is logged and never stops the rest of the sync pass.
+
+This costs one `GET` per mapped project per pass. A single "this device's active
+URL" endpoint on the service would make it one call; not there yet.
 
 Status reads compare `expires_at` with the clock and report `off` with the
 `expired` note the moment it passes, before reconcile has cleaned up.
 
 ### Project delete
 
-`DELETE /projects/{id}` turns the public URL off (falling back to `releasing`)
-before the existing removal and `sync.wake()`. Section 3's release-on-project-delete
+`DELETE /projects/{id}` turns the public URL off before the existing removal and `sync.wake()`. Section 3's release-on-project-delete
 is the backstop.
 
 ### Sign-out and account change
 
 `Account.sign_out()` turns every live URL off while the token is still valid, before
 forgetting it. `_forget` (sign-out, revoked) stops the client, deletes the token and
-clears `public_urls`. A revoked account cannot call the service; the service's own
+clears everything kept in memory. A revoked account cannot call the service; the service's own
 expiry covers it.
 
 ## 6. API routes and states
@@ -266,9 +266,7 @@ Additive: `API_VERSION` does not change and the host never calls them.
 {"state": "failed", "reason": {"code": "…", "message": "…"}}
 ```
 
-`ended` and `releasing` rows both read as `off`, except a `releasing` row whose
-release blocked a new turn-on: it carries a reason and reads as `failed`. `unavailable` is computed on each
-read (account and mapping), never stored.
+`unavailable` is computed on each read (account and mapping), never kept.
 
 ### Wording
 
@@ -284,7 +282,6 @@ code not listed here reads "The Omelet service refused: <its message>".
 | `public_url_unavailable` | failed | Your plan doesn't include public addresses. |
 | `cloud_unavailable` | failed | The Omelet service couldn't be reached. Check the internet connection and try again. |
 | `client_failed` | failed | The public connection couldn't start on this computer. |
-| `interrupted` | failed | Omelet restarted while turning this on. Try again. |
 | `expired` | off note | The public address expired. Start a new one; it will be a different address. |
 | `released_elsewhere` | off note | The public address was turned off from the Omelet website. |
 | `project_not_found` | failed | This project isn't linked to your account yet. Try again in a minute. |
@@ -333,11 +330,12 @@ Only where a wrong result is plausible:
   - `public_url_active` names a project that is on in this VM and falls back to the
     "elsewhere" wording otherwise;
   - a client that does not start is released on the service;
-  - turning off while the service is unreachable leaves `releasing`, and the next
-    reconcile deletes the row;
-  - reconcile: an expired URL ends (client stopped, token gone, URLs cleared); a
-    `GET` 404 ends as `released_elsewhere`; a leftover `enabling` is released and
-    marked `interrupted`;
+  - turning off while the service is unreachable is off here at once, and the next
+    reconcile retries the release;
+  - reconcile: an expired URL ends (client stopped, token gone); a `GET` 404 ends as
+    `released_elsewhere`; a URL the service still has after a restart is picked up;
+    an unreachable service leaves the client running; a 404 read before a fresh
+    turn-on does not drop it;
   - status reports `off`/`expired` once the clock passes `expires_at`, before
     reconcile runs.
 - Routes: deleting a project and signing out both release a live URL.
@@ -346,7 +344,6 @@ Only where a wrong result is plausible:
 - `stack.yml` boundary guard: `tunnel` is profile-gated, reads a token file, is not
   on `edge`; `api` is not on `tunnel`.
 - `install.sh` text assertion: the pull uses `--profile tunnel`.
-- Migration: a v4 database migrates to v5 with its rows intact.
 - Console: `publicView` flips to off at expiry, formats time left, and maps each
   status to its view.
 

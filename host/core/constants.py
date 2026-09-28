@@ -14,6 +14,9 @@ the runtime cannot end up pointing at different files.
 # diagnostics text. Bumped with pyproject.toml's.
 APP_VERSION = "0.1.0"
 
+# Desktop app releases are tagged host-vX.Y.Z on this repository.
+HOST_RELEASES_URL = "https://api.github.com/repos/ihorklymchukdev/omelet/releases"
+
 GUEST_ROOT = "/opt/omelet"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 API_PORT = 39099

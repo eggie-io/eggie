@@ -24,7 +24,9 @@ disposable.
 | W7 | `omelet.exe selfcheck` from the *installed* copy | Prints OK for every asset, exits 0 | |
 | W8 | **Destructive.** Uninstall from Apps & Features | A confirmation appears first (declining leaves everything in place); afterwards `wsl -l -v` has no `omelet-vm` and the cache is gone | |
 | W9 | PATH before and after W8 (`reg query HKCU\Environment /v Path`) | No other entry changed. The app's own leftover segment is expected (see `installer.iss`) | |
-| W10 | Click Update | The window closes on its own after the download, and the installer starts | |
+| W10 | Update from the previous host release via the **Update** button | The window closes on its own after the download; the installer runs and reopens the app with the new version in the footer | |
+| W11 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
+| W12 | Boot with the network off | The VM starts on its old runtime; `journalctl -u omelet-update` explains why | |
 
 ## macOS (`OmeletSetup-<version>-<arch>.pkg`)
 
@@ -46,7 +48,9 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | M10 | Light and dark mode | Text is readable in both | |
 | M11 | **Destructive.** `bash packaging/macos/uninstall.sh` | The VM, app, `/usr/local/bin/omelet`, pkg receipt and `~/.local/share/omelet` are all gone | |
 | M12 | Intel Mac, built on Intel | Boots the `x86_64` image | |
-| M13 | Click Update | The window closes on its own after the download, and the installer starts | |
+| M13 | Update from the previous host release via the **Update** button | The window closes on its own after the download; Installer.app opens and asks for the admin password (as on a first install); reopening Omelet afterwards shows the new version in the footer | |
+| M14 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
+| M15 | Boot with the network off | The VM starts on its old runtime; `journalctl -u omelet-update` explains why | |
 
 ## Both platforms, once set up
 

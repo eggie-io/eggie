@@ -25,7 +25,7 @@ disposable.
 | W8 | **Destructive.** Uninstall from Apps & Features | A confirmation appears first (declining leaves everything in place); afterwards `wsl -l -v` has no `omelet-vm` and the cache is gone | |
 | W9 | PATH before and after W8 (`reg query HKCU\Environment /v Path`) | No other entry changed. The app's own leftover segment is expected (see `installer.iss`) | |
 
-## macOS (`OmeletSetup-<version>.pkg`)
+## macOS (`OmeletSetup-<version>-<arch>.pkg`)
 
 The build is native-arch. Test a *downloaded* copy for M2: a locally built `.pkg` carries no
 quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are listed in

@@ -244,3 +244,15 @@ def test_recover_reports_a_vm_still_not_answering():
     except VmUnresponsive:
         return
     raise AssertionError("a restart that did not help must say so")
+
+
+def test_the_windows_installer_updates_silently_and_closes_the_running_app(tmp_path):
+    spawned = []
+    provider = Wsl2Provider(distro="omelet-vm", install_dir=Path("/tmp/inst"),
+                           rootfs=Path("/tmp/ubuntu.tar.gz"), wsl="wsl.exe",
+                           runner=FakeRunner(), spawner=spawned.append, arch="amd64")
+    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0.exe"
+    provider.launch_installer(Path("C:/cache/OmeletSetup-0.2.0.exe"))
+    (argv,) = spawned
+    assert argv[0].endswith("OmeletSetup-0.2.0.exe")
+    assert {"/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/NORESTART"} <= set(argv[1:])

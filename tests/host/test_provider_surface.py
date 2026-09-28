@@ -36,7 +36,7 @@ LIFECYCLE_SURFACE = {
 # AttributeError before its first step.
 INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "remediable", "runtime", "access",
-                   "recover_warning"}
+                   "recover_warning", "installer_asset", "launch_installer"}
 
 
 def _protocol_methods() -> set[str]:

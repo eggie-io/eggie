@@ -413,6 +413,15 @@ class Wsl2Provider:
         """
         self._run(["shutdown", "/r", "/t", "0"])
 
+    def installer_asset(self, version: str) -> str:
+        return f"OmeletSetup-{version}.exe"
+
+    def launch_installer(self, path: Path) -> None:
+        # The installer closes this app itself and relaunches it when done
+        # (installer.iss); the app must not wait for it.
+        self._spawn([str(path), "/SILENT", "/SUPPRESSMSGBOXES",
+                     "/CLOSEAPPLICATIONS", "/NORESTART"])
+
     def register_resume(self, exe_path: str) -> None:
         self._write_registry(RUNONCE_KEY, _RESUME_VALUE_NAME,
                              f'"{exe_path}" setup --resume')

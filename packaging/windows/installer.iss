@@ -15,6 +15,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=force
 
 [Files]
 Source: "..\..\dist\Omelet\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -32,6 +33,9 @@ Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"
   StatusMsg: "Installing Microsoft Edge WebView2 runtime..."; Flags: waituntilterminated
 Filename: "{app}\setup.exe"; Parameters: "setup"; \
   Description: "Set up Omelet now"; Flags: postinstall nowait skipifsilent
+; A silent run is the app's own Update button: reopen it when done. The entry
+; above is skipifsilent, so it never covers this.
+Filename: "{app}\setup.exe"; Parameters: "setup"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallRun]
 ; Destroys the VM and every project inside it before files are removed.

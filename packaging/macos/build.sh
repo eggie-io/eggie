@@ -15,7 +15,7 @@ staging="$repo/build/pkgroot"
 
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/pyproject.toml" | head -1)"
 [ -n "$version" ] || { echo "no version in pyproject.toml" >&2; exit 1; }
-pkg="$repo/dist/OmeletSetup-$version.pkg"
+pkg="$repo/dist/OmeletSetup-$version-$(uname -m).pkg"
 
 [ -x "$venv_python" ] || {
     echo "No virtualenv at $venv_python. Run: python3.12 -m venv .venv" >&2; exit 1; }

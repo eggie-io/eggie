@@ -267,8 +267,9 @@ class Public:
             record = self._record(local_id, cloud_id, out)
         except Exception:
             log.exception("starting the public URL of %s failed", local_id)
-            self._stop_unless_needed(local_id)
-            self._release(cloud_id)
+            if not self._superseded(local_id, attempt):
+                self._stop_unless_needed(local_id)
+                self._release(cloud_id)
             self._fail(local_id, attempt, "client_failed")
             return
 
@@ -278,9 +279,16 @@ class Public:
             committed = self._current(local_id, attempt)
             if committed:
                 self._on[local_id] = record
-        if not committed:
+        if not committed and not self._superseded(local_id, attempt):
             self._stop_unless_needed(local_id)
             self._release(cloud_id)
+
+    def _superseded(self, local_id: str, attempt: _Attempt) -> bool:
+        # A newer turn-on of the same project (after a force-disable) holds
+        # the same service URL and the client; a stale attempt leaves both.
+        with self._lock:
+            return not self._current(local_id, attempt) and (
+                local_id in self._enabling or local_id in self._on)
 
     def _fail(self, local_id: str, attempt: _Attempt, code: str,
               message: str | None = None) -> None:

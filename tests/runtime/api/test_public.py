@@ -540,3 +540,21 @@ def test_the_active_url_of_another_device_is_not_this_vms(tmp_path):
 
     assert public.status("blog")["note"]["code"] == "released_elsewhere"
     assert not runner.up and not (tmp_path / "tunnel.token").exists()
+
+
+def test_a_stale_turn_on_leaves_a_newer_one_of_the_same_project_alone(tmp_path):
+    # Delete, recreate and turn on again while the first call is still out.
+    cloud = FakeCloud(create_public_url=[ON, ON])
+    public, _, runner, _ = make(tmp_path, cloud)
+    held = []
+    public._spawn = held.append
+    public.enable("blog")
+    public.disable("blog", force=True)
+    public._spawn = lambda fn: fn()
+    public.enable("blog")
+
+    held[0]()
+
+    assert public.status("blog")["state"] == "on"
+    assert runner.up and (tmp_path / "tunnel.token").exists()
+    assert "release_public_url" not in cloud.names()

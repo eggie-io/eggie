@@ -90,6 +90,13 @@ main() {
     echo "Omelet runtime $ref is already installed"
     return 0
   fi
+  # A failed fetch of the newest release.json lands resolve_ref on an older tag.
+  if (( update )) && [[ -z "${OMELET_RUNTIME_REF:-}" \
+        && "$installed" =~ ^runtime-v[0-9]+\.[0-9]+\.[0-9]+$ \
+        && "$(printf '%s\n' "$installed" "$ref" | sort -V | head -n 1)" == "$ref" ]]; then
+    echo "Omelet runtime $installed is newer than $ref, the newest release this machine accepts; keeping it" >&2
+    return 0
+  fi
   echo "installing Omelet runtime $ref"
 
   tmp="$(mktemp -d)"

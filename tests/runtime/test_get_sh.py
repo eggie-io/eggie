@@ -264,7 +264,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
 
 
 def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0",
-                pull_code=0, install_code=0, update=True):
+                pull_code=0, install_code=0, update=True, tags=None, unreachable_release=None):
     """Runs get.sh against a fake /opt/omelet with runtime-v0.1.0 installed."""
     root = tmp_path / "opt-omelet"
     (root / "runtime" / "install").mkdir(parents=True)
@@ -287,12 +287,16 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
     fake_docker.chmod(0o755)
     script = (GET.read_text().replace("/opt/omelet", str(root))
               .replace("/usr/bin/docker", str(fake_docker)))
+    unreachable = (f'*/raw/{unreachable_release}/runtime/release.json) exit 22 ;;\n'
+                   if unreachable_release else '')
     curl = ('for last; do :; done\n'
             'case "$last" in\n'
+            + unreachable +
             '*/release.json) echo \'{"api": 1}\' ;;\n'
             f'*) cp "{tar_path}" "$4" ;;\n'
             'esac\n')
-    environ = _bin(tmp_path, dpkg="exit 0\n", curl=curl, git=_git_listing(tmp_path, [latest]))
+    environ = _bin(tmp_path, dpkg="exit 0\n", curl=curl,
+                   git=_git_listing(tmp_path, tags or [latest]))
     for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
                  "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE", "OMELET_RUNTIME_URL"):
         environ.pop(name, None)
@@ -311,6 +315,19 @@ def test_an_update_to_the_ref_already_installed_changes_nothing(tmp_path):
     assert (root / "runtime" / "keep-me").exists()
     assert "install.sh" not in result.stdout
     assert docker == ""
+
+
+def test_an_update_never_moves_to_an_older_release_than_the_installed_one(tmp_path):
+    # One failed fetch of the newest release.json makes resolve_ref settle on an older tag.
+    result, root, docker = _update_run(
+        tmp_path, installed="runtime-v0.3.0", latest="runtime-v0.2.0",
+        tags=["runtime-v0.3.0", "runtime-v0.2.0"], unreachable_release="runtime-v0.3.0")
+    assert result.returncode == 0, result.stderr
+    assert "runtime-v0.3.0 is newer than runtime-v0.2.0" in result.stderr
+    assert (root / "runtime" / "keep-me").exists()
+    assert "install.sh" not in result.stdout
+    assert docker == ""
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.3.0"
 
 
 def test_an_update_pulls_the_new_images_before_touching_the_installed_runtime(tmp_path):

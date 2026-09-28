@@ -29,12 +29,27 @@ def _git_listing(tmp_path: Path, tags, code: int = 0) -> str:
     return f"cat '{listing}'\nexit {code}\n"
 
 
-def _resolve(tmp_path, *, tags=(), git_code=0, installed="", **env):
+def _curl_serving(tmp_path: Path, releases: dict) -> str:
+    # releases: tag -> release.json body, or None for a tag without the file.
+    lines = []
+    for tag, body in releases.items():
+        if body is not None:
+            (tmp_path / f"{tag}.json").write_text(body)
+            lines.append(f'*/raw/{tag}/runtime/release.json) cat "{tmp_path / (tag + ".json")}"; exit 0 ;;')
+    return ('for last; do :; done\ncase "$last" in\n' + "\n".join(lines)
+            + '\n*) exit 22 ;;\nesac\n')
+
+
+def _resolve(tmp_path, *, tags=(), git_code=0, installed="", releases=None, **env):
     marker = tmp_path / "runtime.version"
     if installed:
         marker.write_text(installed + "\n")
-    environ = _bin(tmp_path, git=_git_listing(tmp_path, tags, git_code))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    fakes = {"git": _git_listing(tmp_path, tags, git_code)}
+    if releases is not None:
+        fakes["curl"] = _curl_serving(tmp_path, releases)
+    environ = _bin(tmp_path, **fakes)
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
     environ.update(env)
     return subprocess.run(
@@ -87,13 +102,68 @@ def test_an_unreachable_repository_is_a_plain_failure(tmp_path):
     assert "could not reach" in result.stderr
 
 
+def test_the_newest_release_speaking_an_accepted_api_wins_over_a_newer_one_that_does_not(tmp_path):
+    result = _resolve(tmp_path,
+                      tags=["runtime-v0.9.0", "runtime-v0.10.0", "runtime-v1.0.0"],
+                      releases={"runtime-v1.0.0": '{"api": 2}',
+                                "runtime-v0.10.0": '{"api": 1}',
+                                "runtime-v0.9.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "runtime-v0.10.0"
+
+
+def test_any_listed_api_is_accepted(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0", "runtime-v0.2.0"],
+                      releases={"runtime-v0.2.0": '{"api": 2}', "runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1,2")
+    assert result.stdout.strip() == "runtime-v0.2.0"
+
+
+def test_a_release_without_release_json_is_skipped(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.0.7", "runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": None, "runtime-v0.0.7": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1")
+    assert result.stdout.strip() == "runtime-v0.0.7"
+
+
+def test_no_release_speaking_an_accepted_api_is_a_plain_failure(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="2")
+    assert result.returncode != 0
+    assert "speaks api 2" in result.stderr
+
+
+def test_an_explicit_ref_is_installed_without_an_api_check(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"], releases={},
+                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REF="feature/x")
+    assert result.stdout.strip() == "feature/x"
+
+
+def test_a_repair_keeps_the_installed_ref_even_with_an_api_list(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.3.0"], installed="runtime-v0.2.0",
+                      releases={"runtime-v0.3.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REPAIR="1")
+    assert result.stdout.strip() == "runtime-v0.2.0"
+
+
+def test_an_api_list_that_is_not_numbers_is_refused(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1;rm")
+    assert result.returncode != 0
+    assert "OMELET_RUNTIME_API" in result.stderr
+
+
 @pytest.mark.parametrize("how", ["bash -c", "stdin"])
 def test_fetching_the_script_runs_the_install_not_just_its_functions(tmp_path, how):
     # The host runs it with `bash -c "$script"`, a cloud VM with `curl | bash`;
     # a sourcing guard that misfires there would define functions and exit 0.
     environ = _bin(tmp_path, dpkg="exit 0\n", curl="exit 22\n",
                    git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
     script = GET.read_text()
     if how == "bash -c":
@@ -134,7 +204,8 @@ def test_a_successful_install_exits_zero_and_hands_install_sh_the_ref(tmp_path, 
 
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=make_curl(tar_path),
                    git=_git_listing(tmp_path, [ref]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
     expected_args = ref
     if repair:
@@ -163,7 +234,8 @@ def test_an_archive_without_the_runtime_is_a_plain_failure(tmp_path):
 
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=make_curl(tar_path),
                    git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
 
     script = GET.read_text()

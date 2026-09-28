@@ -3,7 +3,7 @@
 # revision of exactly this file -- vmType, rosetta.enabled, the aarch64
 # image, cpus/memory/disk, and the two portForwards below -- was what
 # `limactl start` actually ran; that VM booted, the engine installed, and
-# both ports answered. See docs/lima-verification-report.md.
+# both ports answered. See docs/macos-status.md.
 # Everything added after that commit has never been passed to `limactl`: the
 # x86_64 image and the `ssh:` block right below it, in particular --
 # `ssh.localPort` is a request nobody has confirmed Lima honours.
@@ -13,7 +13,7 @@ vmType: vz
 # guest's own binaries are already native. Left enabled rather than made
 # conditional on image arch: nobody has run an Intel build to know whether
 # Lima even treats the flag differently per image, and that is a behaviour
-# change this branch is not making blind. See docs/macos-install-test-matrix.md.
+# change this branch is not making blind. See docs/release-testing.md.
 rosetta:
   enabled: true
 images:

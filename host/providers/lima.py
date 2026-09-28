@@ -6,7 +6,7 @@ from __future__ import annotations
 # booted under `vz`, ran the full engine bootstrap, and answered both
 # declared portForwards (39080, 39099) -- confirmed after the fact, not by a
 # controlled session anyone recorded as it happened. See
-# docs/lima-verification-report.md for the command trail.
+# docs/macos-status.md (it points at the full command trail in git history).
 # Still unrun anywhere: `forward()`/`forwards()` and the ssh control master
 # they assume, `stop()`/`destroy()`, the uninstall path, whether
 # omelet.yaml's `ssh.localPort` is honoured by Lima at all (the one VM
@@ -29,7 +29,7 @@ LOOPBACK = "127.0.0.1"
 # Lima actually binds. Not shown to the user for that reason (see
 # _PORT_UNCONFIRMED below): the one VM this project has inspected predates
 # the field, so whether Lima honours it is still an open question in
-# docs/lima-verification-report.md. Kept here only as the value asked for.
+# docs/macos-status.md. Kept here only as the value asked for.
 DECLARED_SSH_PORT = "39022"
 
 # What the screen shows for Port before Lima has written its own ssh.config
@@ -66,7 +66,7 @@ def parse_ssh_config(text: str) -> dict[str, str]:
 # check. Port is different: Omelet requests it via omelet.yaml's
 # `ssh.localPort`, but no run of this project has ever confirmed Lima honours
 # that field rather than picking its own free port -- the one VM inspected so
-# far predates the field entirely (see docs/lima-verification-report.md).
+# far predates the field entirely (see docs/macos-status.md).
 # User and Identity file are never configured anywhere: they are guesses at
 # Lima's usual behaviour for a fresh guest account (`getpass.getuser()`,
 # `_config/user`), and a host username Lima sanitizes when provisioning the

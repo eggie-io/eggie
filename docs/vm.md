@@ -1,0 +1,77 @@
+# The VM
+
+The guest is always Ubuntu 24.04 running Docker. It's named `omelet-vm` on both platforms.
+
+| | Windows | macOS |
+|---|---|---|
+| Backend | WSL2 distro | Lima (`vz`) |
+| Host-side data | `%LOCALAPPDATA%\Omelet\` (`vm\`, `cache\`) | `~/.local/share/omelet/` (`vm/`, `cache/`, `lima/`) and `~/.lima/omelet-vm/` |
+| Shell as root | `wsl -d omelet-vm -u root` | `limactl shell omelet-vm -- sudo -i` |
+
+On Windows, always pass `-d omelet-vm`. Every WSL distro reports the Windows machine name as its
+hostname, so the prompt doesn't tell you which one you're in. On macOS, `sudo` in the VM needs no
+password, and `limactl list` shows the VM's status and ports. **Nothing from the Mac is mounted**
+(`mounts: []`): projects reach the VM over HTTP uploads, not a shared folder.
+
+## Creating it by hand
+
+`omelet setup` is the normal path. To use the lower-level commands on Windows, first point
+`OMELET_ROOTFS` at Canonical's Ubuntu 24.04 WSL image, using a **Windows** path because it goes
+straight to `wsl --import`:
+
+- amd64: <https://releases.ubuntu.com/24.04.4/ubuntu-24.04.4-wsl-amd64.wsl>
+  (sha256 `9b2f7730dc68227dd04a9f3e5eab86ad85caf556b8606ad94f1f29ff5c4fd3f5`)
+- arm64: <https://cdimages.ubuntu.com/releases/24.04.4/release/ubuntu-24.04.4-wsl-arm64.wsl>
+
+```powershell
+$env:OMELET_ROOTFS = "C:\Users\you\Downloads\ubuntu-24.04.4-wsl-amd64.wsl"
+omelet vm create      # import, enable systemd, install the runtime
+omelet vm start | vm stop | vm destroy
+omelet port add <guest> <host> | port remove <guest> <host> | port list
+```
+
+The imported distro runs as root: `vm create` rewrites `/etc/wsl.conf` to `[boot] systemd=true`.
+
+## Where things are inside
+
+| Path | What |
+|---|---|
+| `/opt/omelet/runtime.version` | Installed runtime tag. If this file is missing, the runtime isn't installed |
+| `/opt/omelet/runtime/` | The unpacked `runtime/` tree of that tag |
+| `/opt/omelet/stack.yml` | Traefik + API + web compose stack |
+| `/opt/omelet/api.token` | Shared secret between the host and the API |
+| `/opt/omelet/state.db` | Project state (sqlite) |
+| `/opt/omelet/projects/<id>/` | Each project; the generated Traefik overlay is at `.omelet/overlay.yml` |
+| `/opt/omelet/uploads/` | Partially uploaded files |
+| `/opt/omelet/connect.json` | VM kind and login user, shown by the console's agent guide |
+
+```bash
+docker ps                                                   # traefik, api, web, projects
+docker compose -f /opt/omelet/stack.yml logs -f api
+curl -s 127.0.0.1:39099/health
+bash /opt/omelet/runtime/install/install.sh "$(cat /opt/omelet/runtime.version)" --repair  # re-run the install, output shown live
+```
+
+Ports: the API listens on `39099`, and all project and console traffic enters through Traefik on
+`39080`. Project URLs look like `http://<name>.127-0-0-1.sslip.io:39080`.
+
+## Troubleshooting
+
+- **WSL says the VM is running but nothing answers.** WSL's service can hang, often after sleep,
+  with `Wsl/Service/CreateInstance/0x8007274c`, while `wsl -l --running` still lists `omelet-vm`.
+  Try `wsl --terminate omelet-vm` first. `wsl --shutdown` always clears it, but it also stops
+  every other distro and Docker Desktop.
+- **The install failed partway.** `runtime.version` is written last, so a failed install never
+  looks installed. Re-run setup, or run `install.sh ... --repair` in the VM (above) to see the
+  output live.
+- **`omelet doctor`** lists what the host is missing and exits non-zero if the host is
+  unsupported.
+
+## Uninstalling
+
+```bash
+omelet uninstall --purge                 # destroys the VM, every project in it, and the cache
+bash packaging/macos/uninstall.sh        # macOS, installed from the .pkg: also removes the app (run as yourself, not sudo)
+```
+
+On Windows, the uninstaller in Apps & Features runs `omelet uninstall --purge` itself.

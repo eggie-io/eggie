@@ -82,7 +82,7 @@ fi
 
 # Signing is optional and off by default: a Developer ID costs money and a PoC
 # build is installed by the person who made it. Unsigned, Gatekeeper requires a
-# right-click > Open on the .pkg — see docs/macos-install-test-matrix.md.
+# right-click > Open on the .pkg — see docs/release-testing.md.
 #
 # --deep re-signs every Mach-O in the bundle, which is right while everything in
 # it comes from PyInstaller. It stops being right the moment a third-party

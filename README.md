@@ -1,244 +1,66 @@
 # Omelet (PoC)
 
-Bring up a Linux VM, install Docker in it, run any `docker-compose` project, and
-get a working URL on the host. Windows/WSL2 (verified by unit tests) and
-macOS/Lima (parity, unverified).
+Creates a Linux VM, installs Docker in it, runs any `docker-compose` project inside, and gives you a
+working URL on the host. Windows/WSL2 is the main platform; macOS/Lima works but is mostly
+unverified ([status](docs/macos-status.md)).
 
-## Setup (Windows)
+Details for everything below: [docs/](docs/README.md).
 
-Run this from the repo root in PowerShell. It is the whole install:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\setup.ps1
-```
-
-`-ExecutionPolicy Bypass` applies to that one invocation only; it changes
-nothing on your machine. The script finds a Python 3.12+, builds `.venv`,
-installs the package, downloads and checksums the Ubuntu 24.04 rootfs into
-`%LOCALAPPDATA%\Omelet\cache` (~400 MB, once), then creates the VM and
-installs Docker + Traefik in it. Expect several minutes on the first run.
-
-It also drops a `omelet.cmd` shim in the repo, so afterwards:
-
-```powershell
-.\omelet up .\my-project   # prints http://my-project.127-0-0-1.sslip.io:39080
-.\omelet status
-```
-
-Useful flags: `-Rootfs <path>` to use a rootfs you already have,
-`-NoCreate` to install without touching the VM.
-
-**Important:** the CLI must run on Windows, not inside WSL. It drives
-`wsl.exe`, and `get_provider()` raises `unsupported host platform: linux` if
-you run it from a WSL shell.
-
-## Building the installer (Windows)
-
-Build in PowerShell on Windows: PyInstaller only freezes a Windows `.exe` there.
-Use a Windows-side checkout, not `\\wsl$\...`, because a Linux `.venv` in a WSL
-checkout clashes with the Windows one.
-
-```powershell
-git clone <repo-url> C:\src\omelet
-cd C:\src\omelet
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"   # PyInstaller, pywebview, pythonnet
-winget install -e --id JRSoftware.InnoSetup
-
-powershell -ExecutionPolicy Bypass -File .\packaging\windows\build.ps1
-# -> dist\OmeletSetup-<version>.exe
-```
-
-If `ISCC.exe` is not found automatically, pass it with
-`-InnoSetup "C:\Path\To\ISCC.exe"`.
-
-`build.ps1` freezes `dist\Omelet\omelet.exe` and `setup.exe` from
-`packaging\windows\omelet.spec` and smoke-tests the frozen `omelet.exe`
-(`version`, then `selfcheck`). It then downloads Microsoft's WebView2
-bootstrapper, so the build needs network access. Finally, Inno Setup
-(`installer.iss`) packages everything. The version comes from `pyproject.toml`.
-The installer is unsigned. Manual release gates are in
-`docs/installer-test-matrix.md`.
-
-## Setup (macOS)
-
-Build the installer, then install it:
+## Develop
 
 ```bash
-brew install lima                  # not bundled yet; setup stops without it
 python3.12 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
-bash packaging/macos/build.sh      # -> dist/OmeletSetup-<version>.pkg
-sudo installer -pkg dist/OmeletSetup-0.1.0.pkg -target /
+.venv/bin/python -m pytest -q                  # Python tests
+.venv/bin/python -m pytest -k classify -q      # one test by name
+
+cd runtime/web && npm install
+npm run dev                                    # console on a mock API (?scenario=empty, busy, …)
+npm test && npm run typecheck
 ```
 
-The build needs a Python 3.12+ **with tkinter** (Homebrew splits it out:
-`brew install python-tk@3.13`), and produces a native-architecture package — an
-Apple Silicon build refuses to install on Intel rather than installing binaries
-it cannot run. It is unsigned unless `OMELET_CODESIGN_ID` and
-`OMELET_INSTALLER_ID` are set, so a *downloaded* copy needs right-click > Open;
-a locally built one installs normally.
-
-The package puts `Omelet.app` in `/Applications` and `omelet` on your PATH, and
-stops there. Open Omelet from Applications to build the VM (or run
-`omelet setup --headless`) — the installer deliberately does not do it for you:
-its scripts run as root, and Lima keeps VMs per user under `~/.lima`.
-
-To remove everything, including the VM and every project in it:
-`bash packaging/macos/uninstall.sh`.
-
-**Unverified below the packaging.** No Lima VM has ever been created; setup is
-known to run as far as its first check. See `docs/lima-verification-report.md`
-and `docs/macos-install-test-matrix.md` for exactly what has and has not been
-run.
-
-## Setup (manual)
+## Run
 
 ```bash
-pip install -e ".[dev]"
-omelet doctor            # reports what this host is missing, non-zero if unsupported
+omelet setup                 # desktop window: builds the VM and installs the runtime
+omelet setup --headless      # same, in the terminal
+omelet doctor                # what this machine is missing
+
+omelet up ./my-project       # → http://my-project.127-0-0-1.sslip.io:39080
+omelet status | logs <id> | down <id> | destroy <id>
+omelet vm stop | vm destroy
+omelet uninstall --purge     # removes the VM and every project in it
 ```
 
-On Windows, `omelet vm create` additionally needs `OMELET_ROOTFS` pointing at
-an Ubuntu 24.04 rootfs — Canonical's official WSL image, the same file
-Microsoft's WSL distro manifest points at:
+On Windows, run from PowerShell, not inside WSL. `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
+does the whole dev install in one go.
 
-- amd64: <https://releases.ubuntu.com/24.04.4/ubuntu-24.04.4-wsl-amd64.wsl>
-  (391 MB, sha256 `9b2f7730dc68227dd04a9f3e5eab86ad85caf556b8606ad94f1f29ff5c4fd3f5`)
-- arm64: <https://cdimages.ubuntu.com/releases/24.04.4/release/ubuntu-24.04.4-wsl-arm64.wsl>
-
-A `.wsl` file is a gzipped rootfs tarball; `wsl --import` takes it as-is. The
-value must be a **Windows** path — it goes straight to `wsl.exe --import`,
-which cannot resolve a WSL-side `/home/...` path.
+## Build
 
 ```powershell
-$env:OMELET_ROOTFS = "C:\Users\you\Downloads\ubuntu-24.04.4-wsl-amd64.wsl"
-omelet vm create
+powershell -ExecutionPolicy Bypass -File .\packaging\windows\build.ps1   # → dist\OmeletSetup-<v>.exe
 ```
-
-`vm create` imports the `omelet-vm` distro under `%LOCALAPPDATA%\Omelet\vm`,
-enables systemd, and installs the Omelet runtime inside it (fetched from `OMELET_RUNTIME_URL`,
-default `runtime/install/get.sh` on GitHub; set `OMELET_RUNTIME_REF` to a branch or tag to install
-something other than the latest `runtime-v*` release). The imported distro
-runs as root: `create()` replaces `/etc/wsl.conf` with a `[boot] systemd=true`
-stanza, dropping the image's default-user setting. `OMELET_ROOTFS` is read
-only by `vm create`; no other command needs it.
-
-Manage running projects and the VM:
 
 ```bash
-omelet status            # list known projects and their status
-omelet logs <id>         # show a project's container logs
-omelet down <id>         # stop a project's containers
-omelet destroy <id>      # stop and forget a project
-omelet vm stop           # stop the VM
-omelet vm destroy        # destroy the VM
+bash packaging/macos/build.sh          # → dist/OmeletSetup-<v>.pkg (native arch, unsigned)
+packaging/images/build.sh              # api + web images into local docker
 ```
 
-## Releasing the API and web UI
-
-The VM runs two images of ours, `omelet-api` and `omelet-web`. They release
-together under one version. A VM pulls whatever tags the installed runtime
-tag's `runtime/stack.yml` names, so a new image reaches no one until a new
-`runtime-v*` tag points at it.
-
-1. On `main`, bump these together: `runtime/omelet_api/__init__.py`'s
-   `__version__`, `runtime/omelet_api/Dockerfile`'s `SERVICE_VERSION`, and
-   both image tags in `runtime/stack.yml`. `SERVICE_VERSION` is this release
-   number, not the wire-protocol `API_VERSION` in
-   `runtime/omelet_api/core/constants.py` — the two change on different
-   cadences and must not collapse into the same name.
-2. Build and push both images for `linux/amd64` and `linux/arm64`. This needs
-   `docker buildx` and a `docker login ghcr.io`:
-
-   ```bash
-   packaging/images/build.sh --push
-   ```
-
-   The script refuses to build if those versions disagree. A package pushed
-   for the first time is private on ghcr: make it public in the package
-   settings, or every VM install fails pulling it.
-3. Tag the release. Only `runtime-vN.N.N` tags count; `get.sh` ignores others:
-
-   ```bash
-   git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z
-   ```
-
-Other ways to run the script:
+## Release the runtime
 
 ```bash
-packaging/images/build.sh                              # native arch, into local docker, no push
-packaging/images/build.sh --only web                   # just one image
-packaging/images/build.sh --push --tag dev --only web  # a throwaway tag to try in a VM
+# bump the version in the 5 places listed in docs/releasing.md, then:
+packaging/images/build.sh --push
+git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z
 ```
 
-### Updating an installed VM
-
-Re-running setup does nothing once the runtime is installed. Repair reinstalls
-the ref that is **already** installed, so it pulls the same image tags. To
-move a VM to the newest `runtime-v*` release, run `get.sh` in it without the
-repair flag. It pulls the new images and recreates the containers whose
-image changed:
+## Inside the VM
 
 ```powershell
-wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | bash"
+wsl -d omelet-vm -u root                       # Windows
 ```
-
-On macOS, run the same command through `limactl shell omelet-vm -- sudo bash -lc "..."`.
-Pin a release by putting `OMELET_RUNTIME_REF=runtime-vX.Y.Z` before `bash`.
-
-To try a `--tag dev` image without cutting a release, swap it in by hand. The
-next `get.sh` run puts the released image back:
 
 ```bash
-# inside the VM, as root
-OMELET_WEB_IMAGE=ghcr.io/ihorklymchukdev/omelet-web:dev \
-  docker compose -f /opt/omelet/stack.yml up -d web
+limactl shell omelet-vm -- sudo -i             # macOS
 ```
 
-## Looking inside the VM
-
-There is no `omelet shell` command; use the VM tool for your platform.
-
-### macOS
-
-```bash
-limactl shell omelet-vm                      # a shell in the VM, as your user
-limactl shell omelet-vm -- sudo -i           # root
-limactl shell omelet-vm -- sudo docker ps    # traefik + projects
-limactl shell omelet-vm -- sudo cat /opt/omelet/runtime.version
-limactl shell omelet-vm -- sudo bash /opt/omelet/runtime/install/install.sh runtime-vX.Y.Z --repair
-```
-
-`sudo` needs no password and no TTY. `limactl list` shows the VM's status, ports
-and directory.
-
-**Nothing from the Mac is mounted.** `omelet.yaml` sets `mounts: []`, so the VM
-cannot see your files; projects reach it over HTTP (`ApiClient.upload_directory`),
-never through a shared folder.
-
-### Windows
-
-Use `wsl.exe`. Note that every WSL distro
-reports your Windows machine name as its hostname, so the prompt does not tell
-you which one you are in — always pass `-d omelet-vm`.
-
-```powershell
-wsl -d omelet-vm -u root                                     # a shell in the VM
-wsl -d omelet-vm -u root -- docker ps                        # traefik + projects
-wsl -d omelet-vm -u root -- cat /opt/omelet/runtime.version           # installed runtime ref
-wsl -d omelet-vm -u root -- bash /opt/omelet/runtime/install/install.sh runtime-vX.Y.Z --repair   # re-run, live output
-```
-
-Projects land in `/opt/omelet/projects/<id>/`, with the generated Traefik
-overlay at `<id>/.omelet/overlay.yml` beside your `docker-compose.yml`.
-
-## Verified vs live
-
-- Verified here: all core logic (detection, overlay, state, failure
-  classification), provider command construction, the WSL encoding decoder, and
-  the platform-boundary invariant.
-- Left for the live run: the rootfs/image download, the browser check,
-  and the five-compose acceptance test on real Windows and macOS hosts.
-- Note: in this sandbox, `/tmp/pytest-of-ihor` is root-owned, which breaks
-  `tmp_path`-based tests unless `TMPDIR` is redirected to a writable directory
-  when running the suite — a sandbox artifact, not a code issue.
+Projects are in `/opt/omelet/projects/<id>/`. The runtime version is in `/opt/omelet/runtime.version`.

@@ -1,0 +1,63 @@
+# runtime/web/ — the browser console
+
+React + Vite + TypeScript npm workspace, shipped as the `omelet-web` nginx image. Traefik routes
+`localhost:<edge>/` here and `/api` to the API. A sibling of the API inside `runtime/` — never nest
+it in the Python package. Not to be confused with `host/desktop/ui/` (the native window's local
+screens); don't share code or assets with it.
+
+## Commands (Node ≥ 22.22)
+
+```bash
+npm install
+npm run dev          # Vite + in-browser mock API (src/mocks/)
+                     # ?scenario=empty|expired|handoff-spent|old-api|down|lost-mid-use|wrong-host|
+                     #   uploads|full|fills-up|busy|locked|windows
+npm test             # Vitest (all workspaces)
+npx vitest run apps/console/src/projects/view.test.ts   # one file
+npm run typecheck
+npm run build && npm run check-offline
+```
+
+The image build needs `--build-context fixtures=tests/fixtures` (use `packaging/images/build.sh`);
+a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUDE.md`.
+
+## Structure
+
+- `packages/ui` — the kit: tokens, fonts, components, drawn from `docs/design/` (never from
+  `host/desktop/ui`). Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
+- `apps/console` — the app.
+  - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
+    and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
+    `tests/test_constants_agree.py`.
+  - `projects/view.ts` maps the API's `status`/`problem`/`job`/`empty` to one screen state for both
+    the list and the project page. `projects/slugify.ts` mirrors the API's `_slug`; both read
+    `tests/fixtures/slugify-cases.json`.
+  - `uploads/queue.ts` owns the chunked-upload protocol (resume at the API's offset, busy retry on
+    the last chunk, hold on `disk_full`) with no React in it. One instance lives above the router in
+    `uploads/QueueProvider.tsx`, so uploads continue across screens but stop when the page closes.
+  - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
+    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
+  - `/agents` and `/agents/:id` — the "Connect an agent" guide. All content is in
+    `apps/console/agent-guides/` (served at `/agent-guides/`): `index.json` for order,
+    `<id>/agent.json` with `windows` and `mac` blocks, `via_ssh`, steps, optional screenshots.
+    `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
+    names a missing image.
+
+## Hard rules
+
+- **Works offline.** `scripts/check-offline.mjs` fails the image build on any load from another host.
+- **Assets ship as files.** The CSP refuses `data:` fonts, hence `build.assetsInlineLimit: 0` in
+  `apps/console/vite.config.ts`.
+- **Open external addresses with `desktop.ts`'s `openExternal`** (an anchor click), never
+  `window.open` — WKWebView hands only link activations to the system browser.
+
+## Things that will bite you
+
+- `apps/console/src/projects/slugify.test.ts` reaches `tests/fixtures/slugify-cases.json` by
+  counting `../` segments from its own location, and that count must agree with `Dockerfile`'s
+  `WORKDIR` (and the `COPY --from=fixtures` destination). Changing one without the other passes
+  `npm test` in the checkout and fails only inside the image build.
+- `agent-guides/` is outside Vite's build output (`publicDir` is dev-only): the Dockerfile copies it
+  into the nginx root, so `npm run build` + `preview` shows no guides.
+- nginx's `/agent-guides/` location has no SPA fallback, so its path must never be a console route
+  prefix: `/agents/` once turned every guide reload into a bare 404. `content.test.ts` checks.

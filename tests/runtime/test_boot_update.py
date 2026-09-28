@@ -81,3 +81,8 @@ def test_a_vm_installed_from_a_branch_is_left_alone(tmp_path):
     result = _run(tmp_path, installed="feature/x")
     assert result.returncode == 0
     assert "update=1" not in result.stdout
+
+
+def test_the_boot_update_reads_the_file_the_host_writes():
+    from host.core import constants
+    assert constants.HOST_JSON in BOOT.read_text()

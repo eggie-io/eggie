@@ -35,6 +35,10 @@ RUNTIME_URL = ("https://raw.githubusercontent.com/ihorklymchukdev/"
                "local-environment/main/runtime/install/get.sh")
 RUNTIME_MARKER = f"{GUEST_ROOT}/runtime.version"
 
+# Written by the host on every connect; the VM's boot-time updater reads it to
+# stay on releases this host can drive.
+HOST_JSON = f"{GUEST_ROOT}/host.json"
+
 # Generated in the guest by the runtime installer, never pushed from the host.
 # The host reads it fresh per client via provider.exec(root=True) rather than
 # caching a copy -- see host/client.py.

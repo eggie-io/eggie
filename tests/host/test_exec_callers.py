@@ -5,17 +5,19 @@ from pathlib import Path
 # Path("host") scans nothing and passes vacuously when pytest runs elsewhere.
 HOST = Path(__file__).resolve().parents[2] / "host"
 
-# `exec()` survives the thinning for three jobs: getting the VM provisioned,
-# reading the token that lets the host talk to the API over HTTP, and the
-# readiness probe's own cheap reachability check (`exec(["true"])`) and runtime
-# marker read (`exec(["cat", ...])`) -- both facts the probe must establish
-# itself, before there is a client to ask anything of. Every other use is
-# project logic reaching across the boundary by shelling into the guest, which
-# is what Phase 1 moved into the API. A new entry here is a design decision,
-# not a formality.
+# `exec()` survives the thinning for four jobs: getting the VM provisioned,
+# declaring which API numbers this host speaks (so the VM's boot-time updater
+# can stay on a release it accepts), reading the token that lets the host talk
+# to the API over HTTP, and the readiness probe's own cheap reachability check
+# (`exec(["true"])`) and runtime marker read (`exec(["cat", ...])`) -- both
+# facts the probe must establish itself, before there is a client to ask
+# anything of. Every other use is project logic reaching across the boundary
+# by shelling into the guest, which is what Phase 1 moved into the API. A new
+# entry here is a design decision, not a formality.
 ALLOWED_CALLERS = {
     ("core/bootstrap.py", "_run"),
     ("core/bootstrap.py", "_installed"),
+    ("core/runtime_update.py", "declare_supported"),
     ("client.py", "read_token"),
     ("core/status.py", "probe"),
 }

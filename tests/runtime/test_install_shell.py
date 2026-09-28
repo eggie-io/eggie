@@ -364,3 +364,11 @@ def test_install_records_how_agents_reach_the_vm_before_the_marker():
     record = text.index("/opt/omelet/connect.json")
     assert record < text.index("> /opt/omelet/runtime.version")
     assert "/proc/sys/kernel/osrelease" in text and "/mnt/lima-cidata" in text
+
+
+def test_install_enables_the_boot_update_without_running_it_now():
+    # Starting it here would run an update inside every install.
+    text = INSTALL.read_text()
+    assert "systemctl enable omelet-update.service" in text
+    assert "enable --now omelet-update" not in text
+    assert "start omelet-update" not in text

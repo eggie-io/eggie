@@ -1,0 +1,12 @@
+[Unit]
+Description=Update the Omelet runtime to the newest release this machine's host accepts
+After=network-online.target docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/omelet/runtime/install/lib/boot-update.sh
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

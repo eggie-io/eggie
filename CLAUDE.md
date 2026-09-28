@@ -33,7 +33,8 @@ public URL (optional) → Omelet service's Cloudflare tunnel → `tunnel` contai
 ```
 
 **The seam is a fixed contract and nothing else:** token path `/opt/omelet/api.token`, API port +
-`/health`'s `api` number, edge port, `/opt/omelet/runtime.version`. A change inside the VM must
+`/health`'s `api` number, edge port, `/opt/omelet/runtime.version`, `/opt/omelet/host.json` (host →
+VM, the API numbers it accepts), `runtime/release.json`'s `api`. A change inside the VM must
 never need a host release; if it does, the logic is on the wrong side. Before adding a host CLI
 command or a host-side guest asset, check the phased plan: Phase 1 (MVP) is moving toward no host
 CLI and SSH-only access, not away from it.

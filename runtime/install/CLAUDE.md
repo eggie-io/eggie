@@ -1,17 +1,39 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_login_users.py`, `test_github_apply.py`.
+`test_install_shell.py`, `test_install_agents.py`, `test_login_users.py`, `test_github_apply.py`,
+`tests/runtime/test_boot_update.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
 Hosts fetch it from **`main`**, not from a tag, so an edit here reaches every installed host at once.
 Keep backward compatible: its env vars (`OMELET_RUNTIME_REPO`, `OMELET_RUNTIME_REF`,
-`OMELET_RUNTIME_REPAIR`), the marker path `/opt/omelet/runtime.version`, and its exit semantics.
+`OMELET_RUNTIME_REPAIR`, `OMELET_RUNTIME_API`, `OMELET_RUNTIME_UPDATE`), the marker path
+`/opt/omelet/runtime.version`, and its exit semantics.
 
 Flow: `resolve_ref` (explicit `OMELET_RUNTIME_REF` → installed ref on repair → highest `runtime-v*`
-tag by `sort -V`) → download that ref's tarball → replace `/opt/omelet/runtime/` with its `runtime/`
-→ run `install/install.sh <ref> [--repair]`.
+tag by `sort -V`, filtered to `OMELET_RUNTIME_API` when set — the newest tag whose
+`runtime/release.json` declares an accepted `api`) → download that ref's tarball → replace
+`/opt/omelet/runtime/` with its `runtime/` → run `install/install.sh <ref> [--repair]`. Every
+install also writes `/opt/omelet/runtime.env` (`OMELET_RUNTIME_URL`, `OMELET_RUNTIME_REPO`), the
+source a later update reads. The whole flow — install, repair and update alike — runs under
+`flock /opt/omelet/update.lock`, so a host-started update and the boot unit can't interleave.
+
+### Update mode (`OMELET_RUNTIME_UPDATE=1`)
+
+A no-op when the resolved ref is already installed. Otherwise: stage the new tree and
+`docker compose ... pull` its images before touching anything installed; on success, move
+`/opt/omelet/runtime` to `/opt/omelet/runtime.prev` and swap the new tree in; if `install.sh`
+then fails, restore `runtime.prev` and re-run its `install.sh` to roll back. A successful update
+deletes `runtime.prev`.
+
+### `lib/boot-update.sh` + `systemd/omelet-update.service`
+
+The oneshot unit `install.sh` installs and **enables but never starts** — it only ever runs at the
+VM's own boot. It skips a VM installed from a ref that isn't a `runtime-vN.N.N` tag (a pinned
+branch), reads the accepted API from `/opt/omelet/host.json` (falling back to the installed
+release's own `api` when the host never wrote one), retries fetching `get.sh` a few times in case
+the network comes up after the unit starts, then runs it with `OMELET_RUNTIME_UPDATE=1`.
 
 ## `install.sh` — numbered steps, order matters
 

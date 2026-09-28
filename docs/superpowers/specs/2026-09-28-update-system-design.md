@@ -1,7 +1,7 @@
 # Update system: runtime and desktop app
 
 Date: 2026-09-28
-Status: designed, not implemented
+Status: implemented
 Issue: #25
 
 ## 1. Problem
@@ -42,7 +42,9 @@ Added to the seam. Everything already in it is unchanged.
    reaches the VM. Only the host writes it; the runtime only reads it.
 3. **`/opt/omelet/runtime.env`**: `OMELET_RUNTIME_URL=…` and `OMELET_RUNTIME_REPO=…`, written by
    `get.sh` on every install, so an update started inside the VM uses the source the VM was
-   installed from (a fork during development) rather than a hard-coded default.
+   installed from (a fork during development) rather than a hard-coded default. The host's stub
+   exports `OMELET_RUNTIME_URL` to `get.sh`; without it (`curl | bash` on a cloud VM) `get.sh`
+   records `$REPO/raw/main/runtime/install/get.sh`.
 4. **`get.sh` inputs**, both optional, so every existing caller behaves as before:
    - `OMELET_RUNTIME_API=1,2` — accepted API numbers. When set, `resolve_ref` takes the newest
      `runtime-vN.N.N` tag whose `release.json` has an accepted `api`.
@@ -72,6 +74,8 @@ The unit runs a small script, `runtime/install/lib/boot-update.sh`:
    no host therefore gets fixes but never changes API.
 3. Fetch `get.sh` from the URL (downloaded in full before it runs, as the host's stub does) and run
    it with `OMELET_RUNTIME_UPDATE=1 OMELET_RUNTIME_API=<accepted>`.
+
+An installed ref that is not a `runtime-vN.N.N` tag (a pinned branch) is left alone.
 
 ### Update mode in `get.sh`
 

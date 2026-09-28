@@ -32,6 +32,7 @@ class DesktopApi:
         self._steps_factory = steps_factory
         self._client_factory = client_factory or self._default_client_factory
         self._install_dir_factory = install_dir_factory or self._default_install_dir
+        self._push = push
         self.jobs = JobRegistry(push)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
@@ -39,6 +40,7 @@ class DesktopApi:
         self._app_update_fn = app_update_fn or self._default_app_update
         self._quit_app = quit_app or self._default_quit
         self._app_release = None
+        self._app_check = None
 
     @staticmethod
     def _default_client_factory(provider):
@@ -109,13 +111,21 @@ class DesktopApi:
         }
 
     def start_app_update_check(self) -> None:
-        """Once per launch, off the window's thread; Home picks it up on its next refresh."""
+        """Once per launch, off the window's thread; announces a release so Home redraws."""
         import threading
 
         def run():
-            self._app_release = self._app_update_fn()
+            try:
+                self._app_release = self._app_update_fn()
+                if self._app_release:
+                    self._push({"kind": "app_update", "type": "available",
+                                "version": self._app_release.version})
+            except Exception:
+                # The Check for updates tile asks again and shows its error.
+                pass
 
-        threading.Thread(target=run, daemon=True).start()
+        self._app_check = threading.Thread(target=run, daemon=True)
+        self._app_check.start()
 
     # --- actions ------------------------------------------------------
 
@@ -325,6 +335,8 @@ class DesktopApi:
         def work(emit):
             emit({"type": "stage", "stage": "update"})
             install.connect_with_updates(self._provider)
+            # Into the console, as a fresh launch on a running machine would.
+            self._home_seen = False
             return {"type": "done"}
 
         return {"job": self.jobs.start("runtime_update", work)}
@@ -357,7 +369,8 @@ class DesktopApi:
         release = self._app_release
         if release is None:
             return {"ok": False}
-        dest = self._install_dir_factory().parent / "cache" / release.url.rsplit("/", 1)[-1]
+        dest = (self._install_dir_factory().parent / "cache"
+                / self._provider.installer_asset(release.version))
 
         def work(emit):
             def on_progress(done, total):
@@ -369,4 +382,4 @@ class DesktopApi:
             self._quit_app()
             return {"type": "done"}
 
-        return {"job": self.jobs.start("app_update", work)}
+        return {"job": self.jobs.start("app_update", work), "version": release.version}

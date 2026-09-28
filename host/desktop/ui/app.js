@@ -126,13 +126,19 @@ ACTIONS['check-updates'] = async () => {
 };
 
 ACTIONS['app-update'] = async () => {
-  const home = await api().home();
   const started = await api().start_app_update();
   if (started.ok === false) return refresh();
-  show('app-update:running', { available: home.app_update });
+  show('app-update:running', { available: started.version });
 };
 
 window.omelet.handlers.app_update = (event) => {
+  // The launch-time check usually lands after Home has drawn. Only Home is
+  // redrawn: refreshing elsewhere would throw the user off their screen.
+  if (event.type === 'available') {
+    const screen = document.getElementById('screen').dataset.screen || '';
+    if (screen.startsWith('home:')) refresh();
+    return;
+  }
   if (event.type === 'progress') {
     const bar = document.querySelector('[data-field="fraction"]');
     if (bar && event.total) bar.style.width = `${Math.round((event.done / event.total) * 100)}%`;
@@ -402,6 +408,9 @@ window.omelet.handlers.repair = (event) => {
 // Auto-started once per session: an update that "succeeds" without fixing the
 // API would otherwise restart itself on every refresh.
 let runtimeUpdateTried = false;
+// home.problem is empty when the runtime answers but speaks an old API, so the
+// failed screen reached again from refresh() shows the job's own error.
+let runtimeUpdateError = '';
 
 async function startRuntimeUpdate() {
   runtimeUpdateTried = true;
@@ -414,7 +423,10 @@ JOB_ACTIONS.add('retry-runtime-update');
 
 window.omelet.handlers.runtime_update = (event) => {
   if (event.type === 'progress' || event.type === 'stage') return;
-  if (event.type === 'crashed') return show('runtime-update:failed', { message: event.message });
+  if (event.type === 'crashed') {
+    runtimeUpdateError = event.message;
+    return show('runtime-update:failed', { message: event.message });
+  }
   refresh();
 };
 
@@ -450,7 +462,7 @@ async function refresh() {
   }
   if (home.route === 'update_runtime') {
     if (!runtimeUpdateTried) return startRuntimeUpdate();
-    return show('runtime-update:failed', { message: home.problem });
+    return show('runtime-update:failed', { message: runtimeUpdateError || home.problem });
   }
   show(home.route === 'home' ? `home:${home.state}` : home.route, home);
 }

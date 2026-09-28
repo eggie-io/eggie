@@ -36,6 +36,45 @@ def test_home_shows_an_update_only_after_one_was_found(tmp_path):
     assert api.home()["app_update"] == "0.2.0"
 
 
+def _check_in_background(api):
+    api.start_app_update_check()
+    api._app_check.join(timeout=5)
+
+
+def test_a_release_found_in_the_background_is_announced(tmp_path):
+    # Home has usually drawn before the check returns; the push is what redraws it.
+    pushed = []
+    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/x.exe", "0" * 64), pushed=pushed)
+    _check_in_background(api)
+    assert pushed == [{"kind": "app_update", "type": "available", "version": "0.2.0"}]
+
+
+def test_no_release_found_in_the_background_announces_nothing(tmp_path):
+    pushed = []
+    api = _api(tmp_path, None, pushed=pushed)
+    _check_in_background(api)
+    assert pushed == []
+
+
+def test_a_background_check_that_fails_stays_quiet(tmp_path):
+    def failing():
+        raise OSError("no network")
+
+    pushed = []
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"), push=pushed.append,
+                     probe_fn=lambda p: Readiness(), app_update_fn=failing)
+    errors = []
+    import threading
+    previous, threading.excepthook = threading.excepthook, errors.append
+    try:
+        _check_in_background(api)
+    finally:
+        threading.excepthook = previous
+    assert errors == []
+    assert pushed == []
+    assert api.home()["app_update"] == ""
+
+
 def test_no_release_means_nothing_to_offer(tmp_path):
     api = _api(tmp_path, None)
     assert api.check_app_update()["available"] == ""
@@ -44,7 +83,8 @@ def test_no_release_means_nothing_to_offer(tmp_path):
 
 def test_the_installer_is_verified_launched_and_the_app_closes(tmp_path, monkeypatch):
     body = b"installer"
-    release = AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe",
+    # The cached file takes the validated asset name, never the URL's last segment.
+    release = AppRelease("0.2.0", "https://dl.invalid/download?id=..%2Fevil",
                          hashlib.sha256(body).hexdigest())
 
     import io
@@ -54,11 +94,12 @@ def test_the_installer_is_verified_launched_and_the_app_closes(tmp_path, monkeyp
     provider, pushed, quits = FakeProvider(), [], []
     api = _api(tmp_path, release, pushed=pushed, quits=quits, provider=provider)
     api.check_app_update()
-    api.start_app_update()
+    assert api.start_app_update()["version"] == "0.2.0"
     api.jobs.join(timeout=5)
     (path,) = provider.launched
     assert path.read_bytes() == body
     assert path.name == "OmeletSetup-0.2.0.exe"
+    assert path.parent == tmp_path / "omelet" / "cache"
     assert quits == [True]
 
 

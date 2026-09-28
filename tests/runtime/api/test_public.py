@@ -551,7 +551,7 @@ def test_a_new_token_recreates_the_client(tmp_path):
     assert any("--force-recreate" in argv for argv in runner.calls if "up" in argv)
 
 
-def test_a_cloudflare_failure_reads_in_plain_words(tmp_path):
+def test_a_tunnel_provider_failure_reads_in_plain_words(tmp_path):
     cloud = FakeCloud(create_public_url=[CloudError("tunnel_provider_error", "x", 502)])
     public, _, _, _ = make(tmp_path, cloud)
 

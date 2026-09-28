@@ -289,7 +289,7 @@ code not listed here reads "The Omelet service refused: <its message>".
 | `released_elsewhere` | off note | The public address was turned off from the Omelet website. |
 | `project_not_found` | failed | This project isn't linked to your account yet. Try again in a minute. |
 | `device_required` | failed | This computer's sign-in can't make public addresses. Sign out and sign in again. |
-| `tunnel_provider_error` | failed | Cloudflare couldn't set up the address. Try again in a few minutes. |
+| `tunnel_provider_error` | failed | The public address couldn't be set up. Try again in a few minutes. |
 | `public_urls_disabled` | failed | Public addresses are switched off on the Omelet service right now. |
 | `validation_error` | failed | The Omelet service couldn't accept this project's addresses. |
 

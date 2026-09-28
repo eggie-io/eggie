@@ -32,7 +32,7 @@ MESSAGES = {
     "project_not_found": "This project isn't linked to your account yet. Try again in a minute.",
     "device_required": "This computer's sign-in can't make public addresses. "
                        "Sign out and sign in again.",
-    "tunnel_provider_error": "Cloudflare couldn't set up the address. "
+    "tunnel_provider_error": "The public address couldn't be set up. "
                              "Try again in a few minutes.",
     "public_urls_disabled": "Public addresses are switched off on the Omelet "
                             "service right now.",
@@ -273,6 +273,9 @@ class Public:
                                       reason_message=message or MESSAGES.get(code))
 
     def _fail_from_service(self, local_id: str, cloud_id: str, e: CloudError) -> None:
+        # The UI shows our wording only; the service's own reason lives here.
+        log.warning("the service refused a public URL for %s (%s): %s %s",
+                    local_id, cloud_id, e.status, e)
         if e.code == "public_url_active":
             holder = next((r["local_id"] for r in self._state.list_public()
                            if r["state"] == "on" and r["local_id"] != local_id), None)

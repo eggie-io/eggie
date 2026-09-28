@@ -102,12 +102,6 @@ def _v5_github(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT OR IGNORE INTO github(id) VALUES (1)")
 
 
-def _v6_no_public_urls(conn: sqlite3.Connection) -> None:
-    # Holds slot 6 for databases from an unreleased build that kept public
-    # URLs here (the service holds them now); on those the table stays, unused.
-    conn.execute("DROP TABLE IF EXISTS public_urls")
-
-
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -116,7 +110,6 @@ MIGRATIONS = [
     _v3_web_ui,
     _v4_account,
     _v5_github,
-    _v6_no_public_urls,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

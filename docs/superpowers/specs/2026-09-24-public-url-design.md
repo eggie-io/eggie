@@ -79,10 +79,13 @@ request: {"origin": "http://traefik:39080",
   - `502 tunnel_provider_error` — Cloudflare failed; retry later.
   - `503 public_urls_disabled` — public URLs are switched off on the server.
 
-### `GET /v1/tunnels/projects/{id}/url`
+### `GET /v1/tunnels/url` (agreed, not live yet)
 
-200 with the shape above, or 404 when no URL is live. The VM only needs the status
-code here; it never reads `credentials` from a GET.
+The account's one active URL, whichever device made it: 200 with the shape above
+(`project_id` included), or 404 when none is on. The VM never reads `credentials`
+from it. A `project_id` that is not one of this VM's mapped projects is another
+device's URL. The per-project `GET /v1/tunnels/projects/{id}/url` exists but the VM
+does not use it.
 
 ### `DELETE /v1/tunnels/projects/{id}/url`
 
@@ -214,17 +217,15 @@ since the service still counts it against the one-per-account limit.
 At the start of every sync pass (the first runs at API startup), when signed in:
 
 - Retry the pending releases.
-- `GET` every mapped project that still exists. A record replaces what is kept,
-  unless a turn-on or turn-off landed during the call. A 404 drops what is kept with
-  an off note: `expired` if its `expires_at` had passed, else `released_elsewhere`.
-  `CloudUnavailable` ends the pass: nothing is concluded, the client is left alone.
+- `GET /v1/tunnels/url`. If it names a project of this VM that still exists (and
+  is not being released), that record replaces what is kept, unless a turn-on or
+  turn-off landed during the call. Every other kept URL is dropped with an off note:
+  `expired` if its `expires_at` had passed, else `released_elsewhere`. Any answer
+  but 200/404 ends the pass: nothing is concluded, the client is left alone.
 - Unless a turn-on is in flight: no unexpired URL kept → stop the client and delete
   the token. One kept but the client is not running → start it; with no token file,
   drop it as `client_failed` and `DELETE` it on the service.
 - A failing reconcile is logged and never stops the rest of the sync pass.
-
-This costs one `GET` per mapped project per pass. A single "this device's active
-URL" endpoint on the service would make it one call; not there yet.
 
 Status reads compare `expires_at` with the clock and report `off` with the
 `expired` note the moment it passes, before reconcile has cleaned up.
@@ -332,8 +333,8 @@ Only where a wrong result is plausible:
   - a client that does not start is released on the service;
   - turning off while the service is unreachable is off here at once, and the next
     reconcile retries the release;
-  - reconcile: an expired URL ends (client stopped, token gone); a `GET` 404 ends as
-    `released_elsewhere`; a URL the service still has after a restart is picked up;
+  - reconcile: an expired URL ends (client stopped, token gone); a 404, or an
+    active URL of another device, ends as `released_elsewhere`; a URL the service still has after a restart is picked up;
     an unreachable service leaves the client running; a 404 read before a fresh
     turn-on does not drop it;
   - status reports `off`/`expired` once the clock passes `expires_at`, before

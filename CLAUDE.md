@@ -238,8 +238,9 @@ Do not add an `if windows` anywhere else — push the difference into a provider
   send public visitors to `*.127-0-0-1.sslip.io`. Only the console turns it on or off (POST
   and DELETE are mounted at `/api` alone); the CLI never shows it. Nothing about it is in
   `state.db`: the service is the record, the API keeps only a memory of it and re-reads
-  every mapped project on each sync pass (one GET each). The `tunnel` network reaches the VM through its gateway, so every port published on
-  0.0.0.0 (the api's, a project's `ports:`) is reachable from the tunnel client.
+  the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The
+  `tunnel` network reaches the VM through its gateway, so every port published on 0.0.0.0
+  (the api's, a project's `ports:`) is reachable from the tunnel client.
 - `runtime/web/` — the browser UI at `localhost:<edge>`, shipped as the `omelet-web` nginx image
   and routed by Traefik below the API's `/api` router — a sibling of the API inside `runtime/`,
   never nested in the Python package. `packages/ui` is the kit (tokens, fonts,

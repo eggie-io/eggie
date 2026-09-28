@@ -375,41 +375,45 @@ class Public:
         self._reconcile_client()
 
     def _refresh(self) -> bool:
-        """Re-reads every project's URL from the service. False if it
-        couldn't be reached, so nothing may be concluded from this pass."""
-        projects = {row["id"] for row in self._state.list_projects()}
-        mapping = self._state.cloud_mapping()
+        """Re-reads the account's active URL from the service. False if it
+        couldn't be read, so nothing may be concluded from this pass."""
+        # Taken before the call: a turn-on or turn-off that lands during it
+        # replaces these records and wins over the answer.
         with self._lock:
-            releasing = set(self._releasing)
-            for gone in set(self._on) - set(mapping):
-                del self._on[gone]
-        for local_id, m in mapping.items():
-            cloud_id = m["cloud_id"]
-            if local_id not in projects or cloud_id in releasing:
-                continue
-            with self._lock:
-                before = self._on.get(local_id)
-            try:
-                out = self._account.authed(
-                    lambda token: self._cloud.get_public_url(token, cloud_id))
-                record = self._record(local_id, cloud_id, out)
-            except CloudError as e:
-                if e.status == 404:
-                    self._forget(local_id, before, None)
-                else:
-                    log.warning("checking public URL %s failed: %s", cloud_id, e)
-                continue
-            except (CloudUnavailable, NotSignedIn):
+            befores = dict(self._on)
+        try:
+            out = self._account.authed(self._cloud.active_public_url)
+        except CloudError as e:
+            if e.status != 404:
+                log.warning("checking the active public URL failed: %s", e)
                 return False
-            except Exception:
-                log.exception("reading the public URL of %s failed", local_id)
-                continue
-            with self._lock:
-                # A turn-on or turn-off during the GET wins over its answer.
-                if local_id not in self._enabling and self._on.get(local_id) is before:
-                    self._on[local_id] = record
-                    self._failed.pop(local_id, None)
-                    self._notes.pop(local_id, None)
+            out = None
+        except (CloudUnavailable, NotSignedIn):
+            return False
+        projects = {row["id"] for row in self._state.list_projects()}
+        by_cloud = {m["cloud_id"]: local_id
+                    for local_id, m in self._state.cloud_mapping().items()}
+        # Another device's URL, or one being released here, is not this VM's.
+        active = by_cloud.get(out["project_id"]) if out else None
+        with self._lock:
+            if active is not None and (active not in projects
+                                       or out["project_id"] in self._releasing):
+                active = None
+        for local_id, before in befores.items():
+            if local_id != active:
+                self._forget(local_id, before, None)
+        if active is None:
+            return True
+        try:
+            record = self._record(active, out["project_id"], out)
+        except Exception:
+            log.exception("reading the public URL of %s failed", active)
+            return False
+        with self._lock:
+            if active not in self._enabling and self._on.get(active) is befores.get(active):
+                self._on[active] = record
+                self._failed.pop(active, None)
+                self._notes.pop(active, None)
         return True
 
     def _forget(self, local_id: str, before: dict | None, code: str | None) -> None:

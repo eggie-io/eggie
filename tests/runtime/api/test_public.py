@@ -150,7 +150,7 @@ def test_a_client_that_will_not_start_is_released_on_the_service(tmp_path):
 def test_turning_off_while_the_service_is_down_is_off_here_and_retried(tmp_path):
     cloud = FakeCloud(create_public_url=[ON],
                       release_public_url=[CloudUnavailable("down"), None],
-                      get_public_url=[CloudError("not_found", "none", 404)])
+                      active_public_url=[CloudError("not_found", "none", 404)])
     public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
 
@@ -160,7 +160,7 @@ def test_turning_off_while_the_service_is_down_is_off_here_and_retried(tmp_path)
     public.reconcile()
 
     assert cloud.names()[-3:] == ["release_public_url", "release_public_url",
-                                  "get_public_url"]
+                                  "active_public_url"]
 
 
 def test_turning_one_off_keeps_the_client_another_project_needs(tmp_path):
@@ -246,7 +246,7 @@ def test_a_malformed_reply_is_cleaned_up_like_a_failed_start(tmp_path):
 
 
 def test_reconcile_ends_an_expired_url_and_stops_the_client(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON])
+    cloud = FakeCloud(create_public_url=[ON], active_public_url=[ON])
     public, _, runner, clock = make(tmp_path, cloud)
     public.enable("blog")
     clock.now = EXPIRES + 1  # the service may list it for up to a minute more
@@ -259,7 +259,7 @@ def test_reconcile_ends_an_expired_url_and_stops_the_client(tmp_path):
 
 def test_reconcile_notices_a_url_turned_off_from_the_website(tmp_path):
     cloud = FakeCloud(create_public_url=[ON],
-                      get_public_url=[CloudError("not_found", "none", 404)])
+                      active_public_url=[CloudError("not_found", "none", 404)])
     public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
 
@@ -270,7 +270,7 @@ def test_reconcile_notices_a_url_turned_off_from_the_website(tmp_path):
 
 
 def test_reconcile_restarts_a_client_that_is_down_while_a_url_is_on(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON])
+    cloud = FakeCloud(create_public_url=[ON], active_public_url=[ON])
     public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
     runner.up = False  # the VM rebooted, or someone removed the container
@@ -281,7 +281,7 @@ def test_reconcile_restarts_a_client_that_is_down_while_a_url_is_on(tmp_path):
 
 
 def test_reconcile_stops_a_client_nothing_needs(tmp_path):
-    cloud = FakeCloud(get_public_url=[CloudError("not_found", "none", 404)])
+    cloud = FakeCloud(active_public_url=[CloudError("not_found", "none", 404)])
     public, _, runner, _ = make(tmp_path, cloud)
     runner.up = True
     (tmp_path / "tunnel.token").write_text("stale")
@@ -295,7 +295,7 @@ def test_reconcile_leaves_the_client_alone_while_a_turn_on_is_in_flight(tmp_path
     """The turn-on starts the client before it records the URL; a reconcile
     in between must not stop the client out from under it."""
     cloud = FakeCloud(create_public_url=[ON],
-                      get_public_url=[CloudError("not_found", "none", 404)])
+                      active_public_url=[CloudError("not_found", "none", 404)])
     public, _, runner, _ = make(tmp_path, cloud)
     held = []
     public._spawn = held.append
@@ -358,7 +358,7 @@ def test_a_naive_expiry_timestamp_is_read_as_utc(tmp_path):
 
 
 def test_a_url_ended_for_a_missing_token_is_released_on_the_service(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], get_public_url=[ON], release_public_url=[None])
+    cloud = FakeCloud(create_public_url=[ON], active_public_url=[ON], release_public_url=[None])
     public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
     runner.up = False
@@ -410,7 +410,7 @@ def test_each_public_url_is_matched_to_its_route_by_local_hostname(tmp_path):
 
 def test_a_url_with_no_expiry_stays_on_through_reconcile(tmp_path):
     cloud = FakeCloud(create_public_url=[{**ON, "expires_at": None}],
-                      get_public_url=[{**ON, "expires_at": None}])
+                      active_public_url=[{**ON, "expires_at": None}])
     public, _, runner, clock = make(tmp_path, cloud)
     public.enable("blog")
     clock.now = EXPIRES + 10**6
@@ -489,7 +489,7 @@ def test_an_unchanged_token_is_narrowed_back_to_0640(tmp_path):
 
 
 def test_after_a_restart_a_url_the_service_still_has_is_picked_up(tmp_path):
-    cloud = FakeCloud(get_public_url=[ON])
+    cloud = FakeCloud(active_public_url=[ON])
     public, _, runner, _ = make(tmp_path, cloud)
     write_token(tmp_path / "tunnel.token", "tun-1")
 
@@ -500,7 +500,7 @@ def test_after_a_restart_a_url_the_service_still_has_is_picked_up(tmp_path):
 
 
 def test_a_service_that_cannot_be_reached_leaves_the_client_running(tmp_path):
-    cloud = FakeCloud(create_public_url=[ON], get_public_url=[CloudUnavailable("down")])
+    cloud = FakeCloud(create_public_url=[ON], active_public_url=[CloudUnavailable("down")])
     public, _, runner, _ = make(tmp_path, cloud)
     public.enable("blog")
 
@@ -518,7 +518,7 @@ def test_a_404_read_before_a_fresh_turn_on_does_not_drop_it(tmp_path):
     clock.now = EXPIRES + 1
 
     class Racing(FakeCloud):
-        def get_public_url(self, token, cloud_id):
+        def active_public_url(self, token):
             public._cloud = FakeCloud(create_public_url=[{**fresh, "expires_at": None}])
             public.enable("blog")
             raise CloudError("not_found", "none", 404)
@@ -528,3 +528,15 @@ def test_a_404_read_before_a_fresh_turn_on_does_not_drop_it(tmp_path):
     public.reconcile()
 
     assert public.status("blog")["urls"][0]["url"] == "https://new.example.dev"
+
+
+def test_the_active_url_of_another_device_is_not_this_vms(tmp_path):
+    elsewhere = {**ON, "project_id": "c-on-another-device"}
+    cloud = FakeCloud(create_public_url=[ON], active_public_url=[elsewhere])
+    public, _, runner, _ = make(tmp_path, cloud)
+    public.enable("blog")
+
+    public.reconcile()
+
+    assert public.status("blog")["note"]["code"] == "released_elsewhere"
+    assert not runner.up and not (tmp_path / "tunnel.token").exists()

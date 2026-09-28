@@ -203,6 +203,30 @@
   </section>
 </template>
 
+<template data-screen="runtime-update:running">
+  <section class="pad centered">
+    <span class="badge badge-warm">Updating</span>
+    <h1 class="display">Updating Omelet inside the kitchen</h1>
+    <p class="lede">This app is newer than what runs inside your machine, so that part
+      is catching up. It takes a minute or two. Your projects stay put.</p>
+  </section>
+</template>
+
+<template data-screen="runtime-update:failed">
+  <section class="pad">
+    <span class="badge badge-bad">Update didn't finish</span>
+    <h1 class="display">The kitchen couldn't catch up</h1>
+    <p class="lede">Omelet couldn't update what runs inside your machine, so this app
+      can't talk to it yet. Your projects are safe. Check your internet connection and try again.</p>
+    <div class="row">
+      <button class="btn-primary" data-action="retry-runtime-update">Try again</button>
+      <button class="btn-secondary" data-action="doctor">Run Doctor</button>
+    </div>
+    <details class="log"><summary>Show logs</summary>
+      <pre data-field="message"></pre></details>
+  </section>
+</template>
+
 <template data-screen="recover-confirm">
   <section class="pad">
     <h2 class="title">Restarting the kitchen wasn't enough</h2>

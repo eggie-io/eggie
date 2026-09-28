@@ -13,7 +13,7 @@ export function NeedsUpdate({ apiVersion, onRetry }: { apiVersion: number | null
     >
       <p className={s.lead}>
         This page and the Omelet service on your computer come from different releases, so they can't safely
-        talk to each other. Update Omelet from the desktop app, then try again.
+        talk to each other. Open the Omelet desktop app — it finishes the update.
       </p>
       <p className={s.detail}>
         page speaks api {SUPPORTED_API.join(", ")} · service speaks {apiVersion === null ? "an older api" : `api ${apiVersion}`}

@@ -54,10 +54,10 @@ def test_api_refused_is_the_only_unreachable():
     assert route_for(readiness) == ("unreachable", "")
 
 
-def test_unsupported_api_is_wrong_not_unreachable():
+def test_an_installed_runtime_on_an_unsupported_api_is_updated():
     readiness = Readiness(vm_exists=True, vm_reachable=True,
                           runtime_version="runtime-v9.0.0", api_version=99)
-    assert route_for(readiness) == ("home", "wrong")
+    assert route_for(readiness) == ("update_runtime", "")
 
 
 def test_ready_is_running():

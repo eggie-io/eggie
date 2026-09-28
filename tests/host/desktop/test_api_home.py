@@ -81,3 +81,34 @@ def test_the_resume_flag_is_consumed_by_the_first_home_call(tmp_path):
     api.resumed = True
     assert api.home()["resumed"] is True
     assert api.home()["resumed"] is False
+
+
+class RecordingProvider:
+    def __init__(self):
+        self.execs = []
+
+    def exec(self, argv, *, root=False):
+        from host.core.provider import Completed
+
+        self.execs.append(argv)
+        return Completed(0, "", "")
+
+
+def test_home_declares_the_hosts_apis_once_the_vm_answers(tmp_path):
+    from host.core import constants
+
+    provider = RecordingProvider()
+    api = DesktopApi(provider, InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: READY)
+    api.home()
+    api.home()
+    writes = [a for a in provider.execs if constants.HOST_JSON in a[-1]]
+    assert len(writes) == 1, "once per session is enough"
+
+
+def test_home_never_declares_to_a_vm_that_is_not_answering(tmp_path):
+    provider = RecordingProvider()
+    api = DesktopApi(provider, InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: Readiness(vm_exists=True))
+    api.home()
+    assert provider.execs == []

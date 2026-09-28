@@ -287,6 +287,16 @@ def test_every_bridge_call_in_the_ui_names_a_real_method():
     assert called <= set(public_methods(DesktopApi)), called - set(public_methods(DesktopApi))
 
 
+def test_the_runtime_update_screens_exist_and_auto_start_once():
+    markup = (UI / "index.html").read_text()
+    for screen in ("runtime-update:running", "runtime-update:failed"):
+        assert f'data-screen="{screen}"' in markup
+    script = (UI / "app.js").read_text()
+    # Auto-starting on every refresh would loop forever on an update that
+    # "succeeds" without fixing the API.
+    assert "runtimeUpdateTried" in script
+
+
 def test_the_page_lets_pywebview_build_its_bridge():
     """The CSP must allow dynamic code evaluation for scripts, or the window
     opens empty.

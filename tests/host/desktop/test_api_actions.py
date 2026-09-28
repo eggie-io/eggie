@@ -180,3 +180,20 @@ def test_recovery_passes_through_how_wide_to_go(tmp_path):
     provider = Recovering()
     assert _recover(tmp_path, provider, True)["type"] == "done"
     assert provider.recovered == [True]
+
+
+def test_the_runtime_update_job_reports_failure_in_the_installers_words(tmp_path, monkeypatch):
+    from host.core import install
+    from host.core.install import ApiIncompatible
+
+    def failing(provider):
+        raise ApiIncompatible("no runtime-v* release speaks api 2")
+
+    monkeypatch.setattr(install, "connect_with_updates", failing)
+    pushed = []
+    api = _api(tmp_path, FakeProvider(), pushed)
+    api.start_runtime_update()
+    api.jobs.join(timeout=5)
+    assert pushed[-1]["kind"] == "runtime_update"
+    assert pushed[-1]["type"] == "crashed"
+    assert "speaks api 2" in pushed[-1]["message"]

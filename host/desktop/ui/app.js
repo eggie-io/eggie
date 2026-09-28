@@ -381,6 +381,25 @@ window.omelet.handlers.repair = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
+// Auto-started once per session: an update that "succeeds" without fixing the
+// API would otherwise restart itself on every refresh.
+let runtimeUpdateTried = false;
+
+async function startRuntimeUpdate() {
+  runtimeUpdateTried = true;
+  show('runtime-update:running', {});
+  await api().start_runtime_update();
+}
+
+ACTIONS['retry-runtime-update'] = () => startRuntimeUpdate();
+JOB_ACTIONS.add('retry-runtime-update');
+
+window.omelet.handlers.runtime_update = (event) => {
+  if (event.type === 'progress' || event.type === 'stage') return;
+  if (event.type === 'crashed') return show('runtime-update:failed', { message: event.message });
+  refresh();
+};
+
 window.omelet.handlers.recover = (event) => {
   // The wider restart stops more than this machine, so it is offered, never
   // taken; if even that fails, the probe lands back on the unresponsive screen.
@@ -410,6 +429,10 @@ async function refresh() {
     const result = await api().enter_console();
     if (result.ok) return window.location.assign(result.url);
     showNotice(result.message);
+  }
+  if (home.route === 'update_runtime') {
+    if (!runtimeUpdateTried) return startRuntimeUpdate();
+    return show('runtime-update:failed', { message: home.problem });
   }
   show(home.route === 'home' ? `home:${home.state}` : home.route, home);
 }

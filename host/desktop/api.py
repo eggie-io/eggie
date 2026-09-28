@@ -34,6 +34,7 @@ class DesktopApi:
         self.jobs = JobRegistry(push)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
+        self._declared = False
 
     @staticmethod
     def _default_client_factory(provider):
@@ -59,6 +60,13 @@ class DesktopApi:
         re-install loop with no way back to Home.
         """
         readiness = self._probe(self._provider)
+        if readiness.vm_reachable and not self._declared:
+            from host.core.runtime_update import declare_supported
+            try:
+                self._declared = declare_supported(self._provider)
+            except Exception:
+                # A hung VM surfaces through the probe on the next refresh.
+                pass
         route, state = route_for(readiness)
         resumed = getattr(self, "resumed", False)
         self.resumed = False
@@ -275,17 +283,27 @@ class DesktopApi:
         return {"job": self.jobs.start("recover", work)}
 
     def start_repair(self) -> dict:
+        from host.core import install
         from host.core.bootstrap import bootstrap
-        from host.core.install import connect_step
 
         def work(emit):
             emit({"type": "stage", "stage": "bootstrap"})
             bootstrap(self._provider, repair=True)
             emit({"type": "stage", "stage": "connect"})
-            connect_step(self._provider)
+            install.connect_with_updates(self._provider)
             return {"type": "done"}
 
         return {"job": self.jobs.start("repair", work)}
+
+    def start_runtime_update(self) -> dict:
+        from host.core import install
+
+        def work(emit):
+            emit({"type": "stage", "stage": "update"})
+            install.connect_with_updates(self._provider)
+            return {"type": "done"}
+
+        return {"job": self.jobs.start("runtime_update", work)}
 
     def start_uninstall(self, purge: bool) -> dict:
         from host.core.install import remove_downloads, remove_vm_data

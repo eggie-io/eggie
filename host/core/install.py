@@ -217,26 +217,45 @@ def _once_serving(call, sleep, timeout: float):
         sleep(1.0)
 
 
-def connect_step(provider, *, client=None, reconnect=None, sleep=time.sleep):
+def _incompatible(api) -> str:
+    from host.core import constants
+
+    supported = ", ".join(str(n) for n in sorted(constants.SUPPORTED_API))
+    return ("This app and the Omelet service inside the virtual machine are "
+            "versions that cannot work together.\n"
+            f"service API {api}, app supports {supported}")
+
+
+def connect_step(provider, *, client=None, reconnect=None, update=None,
+                 sleep=time.sleep):
     """Check the API speaks a version this host supports and accepts this
     host's token.
 
-    `reconnect` reinstalls the runtime in repair mode -- recreating the API so
-    it re-reads its token -- and returns a client holding the token the VM has
-    now. Returning None keeps the current client.
+    `update` moves the runtime to a release speaking a supported API and
+    returns a client for it. `reconnect` reinstalls the runtime in repair mode
+    -- recreating the API so it re-reads its token -- and returns a client
+    holding the token the VM has now. Returning None keeps the current client.
     """
     from host.client import ApiClient, ApiError
     from host.core import constants
+    from host.core.bootstrap import BootstrapError
 
     client = client or ApiClient.for_provider(provider)
     # 0.1.0 APIs predate the field and serve api 1.
     api = _once_serving(client.health, sleep, API_RESTART_TIMEOUT).get("api", 1)
+    updated = False
     if api not in constants.SUPPORTED_API:
-        supported = ", ".join(str(n) for n in sorted(constants.SUPPORTED_API))
-        raise ApiIncompatible(
-            "This app and the Omelet service inside the virtual machine are "
-            "versions that cannot work together.\n"
-            f"service API {api}, app supports {supported}")
+        if update is None:
+            raise ApiIncompatible(_incompatible(api))
+        try:
+            client = update() or client
+        except BootstrapError as e:
+            raise ApiIncompatible(
+                f"{_incompatible(api)}\nUpdating it did not work:\n{e}") from e
+        api = _once_serving(client.health, sleep, API_RESTART_TIMEOUT).get("api", 1)
+        if api not in constants.SUPPORTED_API:
+            raise ApiIncompatible(_incompatible(api))
+        updated = True
     # /health skips the token check; /version is the cheapest route that does not.
     try:
         client.version()
@@ -255,6 +274,8 @@ def connect_step(provider, *, client=None, reconnect=None, sleep=time.sleep):
                 f"not change that.\n{again.message}") from again
         return ("The Omelet service in the virtual machine was not accepting "
                 "this computer, and has been reconnected.")
+    if updated:
+        return "The Omelet service in the virtual machine was updated."
     return None
 
 
@@ -466,9 +487,7 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
         step("bootstrap", lambda: _bootstrap(provider), always_run=True),
         # Before verify: a mismatched or refusing API is one sentence here,
         # not a 404 or 401 minutes into the smoke test.
-        step("connect", lambda: connect_step(
-            provider, reconnect=lambda: _reconnect(provider)),
-            always_run=True),
+        step("connect", lambda: connect_with_updates(provider), always_run=True),
         step("verify", lambda: verify_step(provider, template_dir, domain),
              always_run=True),
         step("finish", lambda: finish_step(provider.location, provider.terminal),
@@ -495,7 +514,7 @@ def _bootstrap(provider, *, repair: bool = False) -> None:
     bootstrap(provider, repair=repair)
 
 
-def _reconnect(provider):
+def reconnect_runtime(provider):
     """Reinstall in repair mode, which recreates the API container so it
     re-reads its token, then dial it with the token the VM holds now (the
     client caches the one it was built with)."""
@@ -503,3 +522,20 @@ def _reconnect(provider):
 
     _bootstrap(provider, repair=True)
     return ApiClient.for_provider(provider)
+
+
+def update_runtime(provider):
+    """Move the VM to the newest release speaking an API this host supports."""
+    from host.client import ApiClient
+    from .bootstrap import bootstrap
+
+    bootstrap(provider, update=True)
+    return ApiClient.for_provider(provider)
+
+
+def connect_with_updates(provider):
+    from .runtime_update import declare_supported
+
+    declare_supported(provider)
+    return connect_step(provider, reconnect=lambda: reconnect_runtime(provider),
+                        update=lambda: update_runtime(provider))

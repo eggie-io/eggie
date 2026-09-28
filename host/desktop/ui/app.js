@@ -120,9 +120,27 @@ document.getElementById('notice')
   .querySelector('[data-action="dismiss-notice"]')
   .addEventListener('click', () => ACTIONS['dismiss-notice']());
 
-// Ships visible and honest rather than hidden: the board has the tile, and
-// there is no update backend behind it yet.
-ACTIONS['check-updates'] = async () => show('updates-unavailable', await api().home());
+ACTIONS['check-updates'] = async () => {
+  const result = await api().check_app_update();
+  show('updates', Object.assign({ none: result.available ? '' : 'yes' }, result));
+};
+
+ACTIONS['app-update'] = async () => {
+  const home = await api().home();
+  const started = await api().start_app_update();
+  if (started.ok === false) return refresh();
+  show('app-update:running', { available: home.app_update });
+};
+
+window.omelet.handlers.app_update = (event) => {
+  if (event.type === 'progress') {
+    const bar = document.querySelector('[data-field="fraction"]');
+    if (bar && event.total) bar.style.width = `${Math.round((event.done / event.total) * 100)}%`;
+    return;
+  }
+  // 'done' needs nothing: the window is closing.
+  if (event.type === 'crashed') { showNotice(event.message); refresh(); }
+};
 
 // Rows the install screen fills from start_install()'s row list, keyed by
 // step name so a pushed 'step' event can find its <li> again. Rebuilt only

@@ -65,6 +65,8 @@
         <p class="lede">Your machine is up and the cook is at the counter.</p>
       </div>
     </div>
+    <p class="update-note" data-when="app_update">Omelet <span data-field="app_update"></span> is available.
+      <button class="btn-secondary" data-action="app-update">Update</button></p>
     <div class="row">
       <button class="btn-primary" data-action="enter-console">Open Omelet</button>
       <button class="btn-secondary" data-action="stop-vm">Stop the kitchen</button>
@@ -93,6 +95,8 @@
         <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
       </div>
     </div>
+    <p class="update-note" data-when="app_update">Omelet <span data-field="app_update"></span> is available.
+      <button class="btn-secondary" data-action="app-update">Update</button></p>
     <div class="row">
       <button class="btn-primary" data-action="start-vm">Start the kitchen</button>
       <button class="btn-secondary" disabled>Open Omelet</button>
@@ -123,6 +127,8 @@
           about four minutes and 6 GB of space.</p>
       </div>
     </div>
+    <p class="update-note" data-when="app_update">Omelet <span data-field="app_update"></span> is available.
+      <button class="btn-secondary" data-action="app-update">Update</button></p>
     <div class="row">
       <button class="btn-primary" data-action="start-install">Set up the kitchen</button>
     </div>
@@ -150,6 +156,8 @@
           are safe — Doctor can usually sort this out on its own.</p>
       </div>
     </div>
+    <p class="update-note" data-when="app_update">Omelet <span data-field="app_update"></span> is available.
+      <button class="btn-secondary" data-action="app-update">Update</button></p>
     <div class="row">
       <button class="btn-primary" data-action="doctor">Run Doctor</button>
       <button class="btn-secondary" data-action="restart-vm">Restart the kitchen</button>
@@ -241,13 +249,28 @@
   </section>
 </template>
 
-<template data-screen="updates-unavailable">
+<template data-screen="updates">
   <section class="pad centered">
-    <h2 class="title">Nothing to check yet</h2>
-    <p class="lede">Omelet updates itself when a new version is released.
-      There's nothing to check for yet.</p>
-    <p class="hint"><span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></p>
-    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button></div>
+    <div data-when="available">
+      <h2 class="title">Omelet <span data-field="available"></span> is ready</h2>
+      <p class="lede">Updating closes this window, installs the new version and opens it again.</p>
+      <div class="row"><button class="btn-primary" data-action="app-update">Update</button>
+        <button class="btn-secondary" data-action="go-home">Not now</button></div>
+    </div>
+    <div data-when="none">
+      <h2 class="title">You're up to date</h2>
+      <p class="lede">What runs inside the kitchen updates itself whenever the machine starts.</p>
+      <div class="row"><button class="btn-secondary" data-action="go-home">Done</button></div>
+    </div>
+    <p class="hint">Version <span data-field="app_version"></span></p>
+  </section>
+</template>
+
+<template data-screen="app-update:running">
+  <section class="pad centered">
+    <h2 class="title">Downloading Omelet <span data-field="available"></span></h2>
+    <div class="bar"><span data-field="fraction"></span></div>
+    <p class="hint">The window closes when the installer starts.</p>
   </section>
 </template>
 

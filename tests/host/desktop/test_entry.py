@@ -15,7 +15,8 @@ from host.desktop.__main__ import WEBVIEW_MISSING, run, ui_dir
 
 
 class FakeProvider:
-    pass
+    def installer_asset(self, version):
+        return f"OmeletSetup-{version}.exe"
 
 
 LOCAL = "http://127.0.0.1:53817/index.html"

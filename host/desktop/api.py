@@ -24,7 +24,8 @@ class DesktopApi:
 
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,
-                 client_factory=None, install_dir_factory=None, local_url=None):
+                 client_factory=None, install_dir_factory=None, local_url=None,
+                 app_update_fn=None, quit_app=None):
         self._provider = provider
         self._state = state
         self._probe = probe_fn
@@ -35,6 +36,9 @@ class DesktopApi:
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
         self._declared = False
+        self._app_update_fn = app_update_fn or self._default_app_update
+        self._quit_app = quit_app or self._default_quit
+        self._app_release = None
 
     @staticmethod
     def _default_client_factory(provider):
@@ -47,6 +51,16 @@ class DesktopApi:
         from host.providers import default_install_dir
 
         return default_install_dir()
+
+    def _default_app_update(self):
+        from host.core import app_update
+        return app_update.check(current=constants.APP_VERSION,
+                                asset_name=self._provider.installer_asset)
+
+    @staticmethod
+    def _default_quit():
+        import webview
+        webview.windows[0].destroy()
 
     # --- what to draw -------------------------------------------------
 
@@ -91,7 +105,17 @@ class DesktopApi:
             # restart, so the install screen can explain why it appeared.
             "resumed": resumed,
             "enter_console": enter_console,
+            "app_update": self._app_release.version if self._app_release else "",
         }
+
+    def start_app_update_check(self) -> None:
+        """Once per launch, off the window's thread; Home picks it up on its next refresh."""
+        import threading
+
+        def run():
+            self._app_release = self._app_update_fn()
+
+        threading.Thread(target=run, daemon=True).start()
 
     # --- actions ------------------------------------------------------
 
@@ -320,3 +344,29 @@ class DesktopApi:
             return {"type": "done"}
 
         return {"job": self.jobs.start("uninstall", work)}
+
+    def check_app_update(self) -> dict:
+        self._app_release = self._app_update_fn()
+        return {"available": self._app_release.version if self._app_release else "",
+                "app_version": constants.APP_VERSION}
+
+    def start_app_update(self) -> dict:
+        from host.core import download
+        from host.core.images import Image
+
+        release = self._app_release
+        if release is None:
+            return {"ok": False}
+        dest = self._install_dir_factory().parent / "cache" / release.url.rsplit("/", 1)[-1]
+
+        def work(emit):
+            def on_progress(done, total):
+                emit({"type": "progress", "done": done, "total": total})
+
+            path = download.fetch(Image(release.url, release.sha256), dest,
+                                  opener=download._default_opener, on_progress=on_progress)
+            self._provider.launch_installer(path)
+            self._quit_app()
+            return {"type": "done"}
+
+        return {"job": self.jobs.start("app_update", work)}

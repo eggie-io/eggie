@@ -56,15 +56,16 @@ def test_every_home_state_has_a_template():
     markup = (UI / "index.html").read_text()
     for screen in ("home:not_installed", "home:stopped", "home:running",
                    "home:wrong", "unreachable", "first-run",
-                   "updates-unavailable"):
+                   "updates"):
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
-def test_the_update_tile_promises_nothing_it_cannot_do():
-    # There is no update backend. The tile ships because the board has it,
-    # but it must not claim to have checked anything.
+def test_every_home_state_can_offer_the_app_update():
     markup = (UI / "index.html").read_text()
-    assert "nothing to check for yet" in markup.lower()
+    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
+        start = markup.index(f'data-screen="{screen}"')
+        end = markup.index("</template>", start)
+        assert 'data-when="app_update"' in markup[start:end], screen
 
 
 def test_no_template_renders_a_separator_with_nothing_after_it():

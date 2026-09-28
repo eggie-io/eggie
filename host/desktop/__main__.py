@@ -68,6 +68,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
+    api.start_app_update_check()
 
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),

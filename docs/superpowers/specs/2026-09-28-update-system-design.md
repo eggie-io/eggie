@@ -173,6 +173,11 @@ Home shows "Omelet X.Y.Z is available" with **Update**, disabled while any job r
    checked against `SHA256SUMS`), showing progress;
 2. starts the installer detached and closes the app.
 
+The check usually finishes after Home has drawn, so a found release is pushed to the window, which
+redraws Home (only Home) to show the offer. Known limitation: when the app opens straight into the
+console on a running machine, the offer is seen only on Home — the "Check for updates" tile, or
+coming back Home from the console.
+
 ### Platform difference, in the providers
 
 - `installer_asset(version) -> str` — the asset name for this machine.
@@ -197,6 +202,8 @@ immediate update runs.
 - A periodic in-VM check or a "restart to update" action.
 - Surfacing failed boot updates in the console.
 - An `omelet self-update` CLI command.
+- While a boot update recreates the stack, an open desktop app can briefly show the unreachable
+  screen; its Restart button would interrupt the update (the next boot redoes it).
 
 ## 8. Testing
 

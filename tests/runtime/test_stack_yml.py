@@ -74,6 +74,13 @@ def test_stack_yml_pins_exact_image_tags():
     assert ":latest" not in _text()
 
 
+def test_both_omelet_images_run_the_version_the_install_recorded():
+    services = yaml.safe_load(_text())["services"]
+    for name, image in (("api", "omelet-api"), ("web", "omelet-web")):
+        assert services[name]["image"].endswith(f"/{image}:${{OMELET_VERSION}}}}"), \
+            services[name]["image"]
+
+
 def test_bootstrap_pins_a_traefik_that_docker_still_talks_to():
     # Traefik <= 3.5 asks the daemon for Docker API 1.24. docker-ce 29 raised
     # MinAPIVersion to 1.40 and rejects it, so the docker provider loads no

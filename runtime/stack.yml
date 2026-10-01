@@ -38,7 +38,7 @@ services:
       - tunnel
 
   api:
-    image: ${OMELET_API_IMAGE:-ghcr.io/omelet-app/omelet-api:0.3.0}
+    image: ${OMELET_API_IMAGE:-ghcr.io/omelet-app/omelet-api:${OMELET_VERSION}}
     restart: always
     # No `hostname:` here -- the api service looks itself up with
     # `docker inspect $HOSTNAME` to remove root-owned project files, and
@@ -86,7 +86,7 @@ services:
   # the api service's version -- the two install as a pair. Its router is the
   # catch-all for the UI hosts, so it sits below omelet-api's priority.
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:0.3.0}
+    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:${OMELET_VERSION}}
     restart: always
     networks:
       - edge

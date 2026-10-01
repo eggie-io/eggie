@@ -2,7 +2,7 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_install_agents.py`, `test_login_users.py`, `test_github_apply.py`,
-`tests/runtime/test_boot_update.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -23,7 +23,8 @@ source a later update reads. The whole flow — install, repair and update alike
 
 A no-op when the resolved ref is already installed, or sorts below an installed `runtime-v*` tag
 (a failed `release.json` fetch must never cause a downgrade). Otherwise: stage the new tree and
-`docker compose ... pull` its images before touching anything installed; on success, move
+`docker compose ... pull` its images before touching anything installed (with `OMELET_VERSION`
+set to the new release's, since `.env` still names the installed one); on success, move
 `/opt/omelet/runtime` to `/opt/omelet/runtime.prev` and swap the new tree in; if `install.sh`
 then fails, restore `runtime.prev` and re-run its `install.sh` to roll back, exiting with the new
 `install.sh`'s code. A successful update deletes `runtime.prev`; a run that finds `runtime.prev`
@@ -41,7 +42,8 @@ the network comes up after the unit starts, then runs it with `OMELET_RUNTIME_UP
 ## `install.sh` — numbered steps, order matters
 
 Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/omelet` permissions →
-docker GID into `.env` for `stack.yml`'s `group_add` → token (only if absent) → the compose stack
+docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
+any other ref the newest release's images or `OMELET_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → Node ≥ 22.20 from NodeSource →
 `/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → per account (root + `lib/login-users.sh`):
 the Codex block and `~/projects` link (`lib/install-agents.sh`) and

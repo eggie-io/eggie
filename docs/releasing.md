@@ -15,14 +15,15 @@ The host (desktop app) and the runtime (everything inside the VM) release separa
 
 ## Cut a runtime release
 
-1. Bump the version in all five places (`tests/test_constants_agree.py` checks):
-   `runtime/omelet_api/__init__.py`, `runtime/omelet_api/pyproject.toml`,
-   `runtime/omelet_api/Dockerfile` (`SERVICE_VERSION`), `runtime/omelet_api/Dockerfile.debug`
-   (`SERVICE_IMAGE`), `runtime/stack.yml` (api and web tags).
-2. `packaging/images/build.sh --push` (amd64 + arm64; register qemu first).
-3. `git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z`
+GitHub → **Actions** → **Release runtime** → **Run workflow** on `main`, version `X.Y.Z`.
 
-VMs pick it up at their next boot.
+It runs the Python and web tests, builds and pushes `omelet-api` and `omelet-web` for amd64 and
+arm64 as `X.Y.Z`, then creates `runtime-vX.Y.Z`. The tag is the only place the version lives:
+`install.sh` turns it into `OMELET_VERSION` in `/opt/omelet/.env`, which `stack.yml` reads. Nothing
+to bump in the repo. VMs pick it up at their next boot.
+
+Every change under `runtime/` needs a release to reach VMs, the in-VM CLI and agent instructions
+included. Skills live in `omelet-skills` and are re-installed by every runtime install.
 
 ### Changing the API number
 
@@ -32,8 +33,8 @@ Only when a route the host calls changes incompatibly:
 2. Release a host whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
    or no VM will install it.
 
-`SERVICE_VERSION` (the release number) and `API_VERSION` (the wire protocol) are different
-numbers. Never merge them.
+The release number (the tag) and `API_VERSION` (the wire protocol) are different numbers. Never
+merge them.
 
 ## Cut a host release
 
@@ -48,7 +49,8 @@ numbers. Never merge them.
 
 - The repository is public, `runtime/install/get.sh` is on `main`.
 - A `runtime-v*` tag with `runtime/release.json` exists.
-- ghcr `omelet-api` and `omelet-web` are public and multi-arch.
+- ghcr `omelet-api` and `omelet-web` are public, and each package grants this repository
+  **Write** under *Manage Actions access* (the workflow pushes with `GITHUB_TOKEN`).
 - `github.com/omelet-app/omelet-skills` is public.
 
 ## Pin or repair a VM by hand

@@ -48,7 +48,8 @@ CLI and SSH-only access, not away from it.
   `sys.platform` / `platform.system()` / `os.name` anywhere else in `host/` or `runtime/omelet_api/`.
   Push the difference into a provider method.
 - **Shared constants are declared on each side and held equal** by `tests/test_constants_agree.py`
-  (ports, versions, `SUPPORTED_API` vs `API_VERSION`, SSH port, image tags). When you change one,
+  (ports, `SUPPORTED_API` vs `API_VERSION`, SSH port). The runtime release number is not one of
+them: it lives only in the `runtime-v*` tag (see `runtime/CLAUDE.md`). When you change one,
   run it.
 - **Tests reach repo files via `__file__`, never a cwd-relative `Path("host")`** — that passes
   vacuously from another directory and has bitten this repo three times. Boundary tests also assert

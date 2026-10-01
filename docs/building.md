@@ -56,15 +56,14 @@ sudo installer -pkg dist/OmeletSetup-<version>-<arch>.pkg -target /
 ## Container images
 
 The VM runs two images of ours, `omelet-api` and `omelet-web`. They're built together and share
-one version.
+one version: the runtime tag's. Releases build them in CI (`docs/releasing.md`); locally:
 
 ```bash
 packaging/images/build.sh                              # native arch, loaded into local docker
 packaging/images/build.sh --only web                   # one image
-packaging/images/build.sh --push                       # amd64 + arm64 to ghcr (a release)
 packaging/images/build.sh --push --tag dev --only web  # throwaway tag to try in a VM
 ```
 
-Pushing needs `docker buildx` and `docker login ghcr.io`. The script refuses to build if the
-version numbers disagree. The web image needs `--build-context fixtures=tests/fixtures`, so build
+Pushing needs `docker buildx` and `docker login ghcr.io`, and either `--version X.Y.Z` (what the
+release workflow passes) or `--tag`. The web image needs `--build-context fixtures=tests/fixtures`, so build
 it with this script rather than a bare `docker build runtime/web`, which fails.

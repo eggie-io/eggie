@@ -3,6 +3,7 @@ import re
 from fastapi.testclient import TestClient
 
 from tests.runtime.api.conftest import BROWSER
+from tests.runtime.api.route_sweep import every_route
 
 ORIGIN = {"Origin": "http://localhost:41080"}
 
@@ -68,7 +69,7 @@ def test_every_api_route_requires_a_session_except_the_open_ones(env):
     # check instead of the bearer token.
     client = _browser(env, **ORIGIN)
     checked = 0
-    for route in env.app.routes:
+    for route in every_route(env.app):
         path = getattr(route, "path", None)
         methods = getattr(route, "methods", None) or set()
         if not path or not path.startswith("/api/"):

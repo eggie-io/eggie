@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from omelet_api.routes.app import create_app
 from omelet_api.core.config import ApiConfig
+from tests.runtime.api.route_sweep import every_route
 
 
 def _app(tmp_path, token: str | None) -> FastAPI:
@@ -99,7 +100,7 @@ def test_every_route_except_health_requires_a_token(tmp_path):
     # /docs -- is what keeps this property true after this test is written.
     client = _client(tmp_path, "secret")
     checked = 0
-    for route in client.app.routes:
+    for route in every_route(client.app):
         path = getattr(route, "path", None)
         methods = getattr(route, "methods", None) or set()
         # The /api mount answers to the browser allowlist, not the bearer

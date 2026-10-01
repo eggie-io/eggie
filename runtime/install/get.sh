@@ -81,6 +81,20 @@ main() {
   # The boot unit and a host-started update may run at the same moment.
   exec 9>/opt/omelet/update.lock
   flock 9
+  # An update killed after the swap but before install.sh wrote its marker
+  # leaves no marker; the working release is runtime.prev. Put it back first.
+  if [[ -d "$RUNTIME_DIR.prev" && ! -s "$MARKER" && -s "$RUNTIME_DIR.prev.version" ]]; then
+    local previous
+    previous="$(cat "$RUNTIME_DIR.prev.version")"
+    echo "an earlier update did not finish; going back to Omelet runtime $previous" >&2
+    rm -rf "$RUNTIME_DIR"
+    mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
+    if ! bash "$RUNTIME_DIR/install/install.sh" "$previous"; then
+      echo "reinstalling Omelet runtime $previous failed" >&2
+      exit 1
+    fi
+    rm -f "$RUNTIME_DIR.prev.version"
+  fi
   # A crash between the two moves of an update leaves only runtime.prev.
   if [[ -d "$RUNTIME_DIR.prev" && ! -d "$RUNTIME_DIR" ]]; then
     mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
@@ -136,8 +150,9 @@ main() {
     fi
   fi
 
-  rm -rf "$RUNTIME_DIR.prev"
+  rm -rf "$RUNTIME_DIR.prev" "$RUNTIME_DIR.prev.version"
   if (( update )) && [[ -n "$installed" && -d "$RUNTIME_DIR" ]]; then
+    printf '%s\n' "$installed" > "$RUNTIME_DIR.prev.version"
     mv "$RUNTIME_DIR" "$RUNTIME_DIR.prev"
   else
     # Replaced, not merged: a file dropped from the runtime must not linger.
@@ -157,13 +172,15 @@ main() {
       echo "Omelet runtime $ref did not install; going back to $installed" >&2
       rm -rf "$RUNTIME_DIR"
       mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
-      if ! bash "$RUNTIME_DIR/install/install.sh" "$installed"; then
+      if bash "$RUNTIME_DIR/install/install.sh" "$installed"; then
+        rm -f "$RUNTIME_DIR.prev.version"
+      else
         echo "reinstalling Omelet runtime $installed failed too" >&2
       fi
     fi
     exit "$rc"
   fi
-  rm -rf "$RUNTIME_DIR.prev"
+  rm -rf "$RUNTIME_DIR.prev" "$RUNTIME_DIR.prev.version"
 }
 
 # `return` only succeeds when sourced (the tests); under `bash -c` or a pipe it

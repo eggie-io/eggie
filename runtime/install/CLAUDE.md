@@ -27,8 +27,12 @@ A no-op when the resolved ref is already installed, or sorts below an installed 
 set to the new release's, since `.env` still names the installed one); on success, move
 `/opt/omelet/runtime` to `/opt/omelet/runtime.prev` and swap the new tree in; if `install.sh`
 then fails, restore `runtime.prev` and re-run its `install.sh` to roll back, exiting with the new
-`install.sh`'s code. A successful update deletes `runtime.prev`; a run that finds `runtime.prev`
-without `runtime` (a crash mid-swap) moves it back first.
+`install.sh`'s code. The swap records the previous ref in
+`runtime.prev.version`; a successful update deletes both. Every run starts by repairing what an
+interrupted one left: `runtime.prev` with no marker (killed while the new `install.sh` ran) is
+moved back and its `install.sh` re-run with the recorded ref; `runtime.prev` without `runtime` (a
+crash between the two moves) is moved back. `boot-update.sh` reads `runtime.prev.version` when
+the marker is missing, so the next boot does this and then updates again.
 
 ### `lib/boot-update.sh` + `systemd/omelet-update.service`
 

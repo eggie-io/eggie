@@ -20,6 +20,8 @@ accepted_api() {
 main() {
   local installed api script attempt
   installed="$(cat /opt/omelet/runtime.version 2>/dev/null || true)"
+  # No marker after an interrupted update: get.sh restores this release first.
+  [[ -n "$installed" ]] || installed="$(cat /opt/omelet/runtime.prev.version 2>/dev/null || true)"
   # A branch was pinned by hand; moving it to a tag would undo that.
   if [[ ! "$installed" =~ ^runtime-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "installed runtime '$installed' is not a release; not updating"

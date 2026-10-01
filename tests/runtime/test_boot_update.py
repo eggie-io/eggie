@@ -55,8 +55,10 @@ def test_nothing_to_go_on_is_a_failure_not_an_empty_list(tmp_path):
     assert result.stdout.strip() == ""
 
 
-def _run(tmp_path, *, installed="runtime-v0.1.0"):
+def _run(tmp_path, *, installed="runtime-v0.1.0", prev_version=None):
     root = _root(tmp_path, host_json='{"supported_api": [1]}', installed=installed)
+    if prev_version:
+        (root / "runtime.prev.version").write_text(prev_version + "\n")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     curl = bin_dir / "curl"
@@ -81,6 +83,13 @@ def test_a_vm_installed_from_a_branch_is_left_alone(tmp_path):
     result = _run(tmp_path, installed="feature/x")
     assert result.returncode == 0
     assert "update=1" not in result.stdout
+
+
+def test_a_vm_left_without_a_marker_by_an_interrupted_update_is_updated(tmp_path):
+    # get.sh puts the previous release back before it updates again.
+    result = _run(tmp_path, installed="", prev_version="runtime-v0.1.0")
+    assert result.returncode == 0, result.stderr
+    assert "update=1" in result.stdout
 
 
 def test_the_boot_update_reads_the_file_the_host_writes():

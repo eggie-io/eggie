@@ -1,3 +1,5 @@
+import ipaddress
+
 import pytest
 
 from omelet_api.core import health
@@ -221,7 +223,9 @@ def test_proc_net_addresses_decode_byte_order_correctly(field, expected):
     # The words are little-endian; get this wrong and 127.0.0.1 reads as
     # 1.0.0.127 and no bind-address fault is ever confirmed.
     address, port = health._decode_address(field)
-    assert (str(address), port) == expected
+    # Compared as addresses: Python 3.12.14 prints an IPv4-mapped address
+    # as ::ffff:127.0.0.1 where earlier patch releases print ::ffff:7f00:1.
+    assert (address, port) == (ipaddress.ip_address(expected[0]), expected[1])
 
 
 def test_an_ipv6_service_on_all_interfaces_is_not_read_as_loopback():

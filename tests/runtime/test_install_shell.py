@@ -168,7 +168,7 @@ def test_the_skills_install_from_their_own_repository():
     # runtime: `add` was doing the filing while the tarball did the
     # distributing. The argument must be a remote source, not a local path.
     script = (ROOT / "runtime" / "install" / "install.sh").read_text()
-    assert "ihorklymchukdev/omelet-skills" in script
+    assert "omelet-app/omelet-skills" in script
     assert "$RUNTIME_DIR/skills" not in script
     assert "$INSTALL_DIR/skills" not in script
 

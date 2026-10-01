@@ -160,7 +160,7 @@ GitHub releases on the repo, tag `host-vX.Y.Z`, not marked pre-release. Assets:
 ### Checking
 
 `host/core/app_update.py`, stdlib `urllib` only. Once per app launch on a background thread:
-`GET https://api.github.com/repos/ihorklymchukdev/omelet/releases`, keep non-draft,
+`GET https://api.github.com/repos/omelet-app/omelet/releases`, keep non-draft,
 non-pre-release `host-vN.N.N` tags, compare as version tuples, take the highest above
 `APP_VERSION` that has this machine's asset and `SHA256SUMS`. Any failure means "no update" and
 shows nothing. Unauthenticated GitHub allows 60 requests an hour — one per launch is well inside.

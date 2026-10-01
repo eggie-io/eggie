@@ -465,8 +465,8 @@ Expected: FAIL — `RUNTIME_URL must live in host/core/constants.py`, and the st
 ```python
 # The host knows only where the runtime's entrypoint lives and which file says
 # it finished; what gets installed, and which version, is decided in the VM.
-RUNTIME_URL = ("https://raw.githubusercontent.com/ihorklymchukdev/"
-               "local-environment/main/runtime/install/get.sh")
+RUNTIME_URL = ("https://raw.githubusercontent.com/omelet-app/"
+               "omelet/main/runtime/install/get.sh")
 RUNTIME_MARKER = f"{GUEST_ROOT}/runtime.version"
 
 # Generated in the guest by the runtime installer, never pushed from the host.
@@ -501,7 +501,7 @@ Expected: no output.
 `runtime/install/get.sh` — the header comment, the three env vars, the two paths, the tag glob, and the tarball wildcard. The wildcard must now match the repository's `runtime/` directory while the script itself lives one level deeper inside it:
 
 ```bash
-REPO="${OMELET_RUNTIME_REPO:-https://github.com/ihorklymchukdev/local-environment}"
+REPO="${OMELET_RUNTIME_REPO:-https://github.com/omelet-app/omelet}"
 MARKER=/opt/omelet/runtime.version
 RUNTIME_DIR=/opt/omelet/runtime
 ```
@@ -565,7 +565,7 @@ Also `rm -f /opt/omelet/engine.version` → `runtime.version`, the two `/opt/ome
 
 ```yaml
   api:
-    image: ${OMELET_API_IMAGE:-ghcr.io/ihorklymchukdev/omelet-api:0.2.0}
+    image: ${OMELET_API_IMAGE:-ghcr.io/omelet-app/omelet-api:0.2.0}
 ```
 
 The Traefik router labels already read `omelet-api` and do not change. Update any `depends_on: [agent]` to `[api]`, and the token mount path to `api.token`. Apply the same changes to `runtime/stack.debug.yml`.
@@ -656,13 +656,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `runtime/install/install.sh` from Task 3.
-- Produces: `SKILLS_SOURCE`, defaulting to `ihorklymchukdev/omelet-skills`, overridable by `OMELET_SKILLS_SOURCE`.
+- Produces: `SKILLS_SOURCE`, defaulting to `omelet-app/omelet-skills`, overridable by `OMELET_SKILLS_SOURCE`.
 
 - [ ] **Step 1: Populate the skills repository**
 
 ```bash
 POC=/home/ihor/projects/local-environment-for-non-tech/poc
-cd /tmp && git clone https://github.com/ihorklymchukdev/omelet-skills && cd omelet-skills
+cd /tmp && git clone https://github.com/omelet-app/omelet-skills && cd omelet-skills
 cp -r "$POC"/engine/skills/* .
 mkdir -p tests && cp "$POC"/tests/runtime/test_skills.py tests/
 ```
@@ -688,13 +688,13 @@ Skills for coding agents — Claude Code, Codex, Cursor — that turn a plain-wo
 idea into a running project: an interview, a stack choice, a plan, and the rules
 the agent follows while building.
 
-They are written for an [Omelet](https://github.com/ihorklymchukdev/local-environment)
+They are written for an [Omelet](https://github.com/omelet-app/omelet)
 box, where the `omelet` command runs projects for you, but nothing here needs one
 to install.
 
 ## Install
 
-    npx skills add ihorklymchukdev/omelet-skills -s '*' -g -a claude-code codex
+    npx skills add omelet-app/omelet-skills -s '*' -g -a claude-code codex
 
 ## The skills
 
@@ -709,7 +709,7 @@ to install.
 
 ```bash
 git add -A && git commit -m "Omelet's skills for coding agents" && git push
-gh repo view ihorklymchukdev/omelet-skills --json visibility
+gh repo view omelet-app/omelet-skills --json visibility
 ```
 
 Expected: `{"visibility":"PUBLIC"}`. A private repository fails every install, exactly like a private ghcr package.
@@ -724,7 +724,7 @@ def test_the_skills_install_from_their_own_repository():
     # runtime: `add` was doing the filing while the tarball did the
     # distributing. The argument must be a remote source, not a local path.
     script = (ROOT / "runtime" / "install" / "install.sh").read_text()
-    assert "ihorklymchukdev/omelet-skills" in script
+    assert "omelet-app/omelet-skills" in script
     assert "$RUNTIME_DIR/skills" not in script
     assert "$INSTALL_DIR/skills" not in script
 
@@ -748,7 +748,7 @@ Expected: FAIL — the script still names `$ENGINE_DIR/skills`.
 SKILLS_CLI=skills@1.5.26
 # Unpinned on purpose: pinning a tag here is a value change, not a code change.
 # Until it is pinned, a box's skills are not identifiable from runtime.version.
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-ihorklymchukdev/omelet-skills}"
+SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
 ```
 
 At line 223:
@@ -939,12 +939,12 @@ packaging/images/build.sh --push
 
 - [ ] **Step 2: Make `omelet-api` public**
 
-A newly pushed ghcr package is private, and `install.sh` fails the whole install on any image it cannot pull. Flip `omelet-api`'s visibility by hand at `github.com/users/ihorklymchukdev/packages/container/omelet-api/settings`.
+A newly pushed ghcr package is private, and `install.sh` fails the whole install on any image it cannot pull. Flip `omelet-api`'s visibility by hand at `github.com/orgs/omelet-app/packages/container/omelet-api/settings`.
 
 Confirm from an unauthenticated client before going further:
 
 ```bash
-docker logout ghcr.io && docker pull ghcr.io/ihorklymchukdev/omelet-api:0.2.0
+docker logout ghcr.io && docker pull ghcr.io/omelet-app/omelet-api:0.2.0
 ```
 
 - [ ] **Step 3: Push the branch and tag it**
@@ -959,7 +959,7 @@ git tag runtime-v0.2.0 && git push origin runtime-v0.2.0
 The host fetches `get.sh` from `main` by default, which does not have this branch's changes yet, so the run must override the source:
 
 ```powershell
-$env:OMELET_RUNTIME_URL = "https://raw.githubusercontent.com/ihorklymchukdev/local-environment/feature/runtime-boundary/runtime/install/get.sh"
+$env:OMELET_RUNTIME_URL = "https://raw.githubusercontent.com/omelet-app/omelet/feature/runtime-boundary/runtime/install/get.sh"
 $env:OMELET_RUNTIME_REF = "runtime-v0.2.0"
 omelet vm create
 omelet verify

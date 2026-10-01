@@ -2476,7 +2476,7 @@ gh pr create --base main --title "Connect GitHub" --body-file <body>
 ```
 
 The PR body must:
-- link `https://github.com/ihorklymchukdev/omelet-resources/issues/12`;
+- link `https://github.com/omelet-app/omelet-resources/issues/12`;
 - explain where each piece lives and why (spec §2), and that no host release is needed;
 - list what was left untested: the systemd units and modal components;
 - include the live acceptance checklist from spec §10;

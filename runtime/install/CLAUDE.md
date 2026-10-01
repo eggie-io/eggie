@@ -46,7 +46,7 @@ docker GID into `.env` for `stack.yml`'s `group_add` → token (only if absent) 
 `/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → per account (root + `lib/login-users.sh`):
 the Codex block and `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a claude-code codex -y </dev/null`
-(`SKILLS_SOURCE` defaults to `ihorklymchukdev/omelet-skills`, unpinned on purpose;
+(`SKILLS_SOURCE` defaults to `omelet-app/omelet-skills`, unpinned on purpose;
 `OMELET_SKILLS_SOURCE` overrides) → the VM kind (`wsl`/`lima`/`other`) and first login user into
 `/opt/omelet/connect.json` (read by `GET /connect`) → **`runtime.version` last**, so a failed
 install never looks installed. Re-running is safe; the comments in the script explain each guard —

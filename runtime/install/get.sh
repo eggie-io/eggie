@@ -8,7 +8,7 @@ set -euo pipefail
 # prompt nobody is watching.
 export GIT_TERMINAL_PROMPT=0
 
-REPO="${OMELET_RUNTIME_REPO:-https://github.com/ihorklymchukdev/local-environment}"
+REPO="${OMELET_RUNTIME_REPO:-https://github.com/omelet-app/omelet}"
 MARKER=/opt/omelet/runtime.version
 RUNTIME_DIR=/opt/omelet/runtime
 # Script-scoped, not local to main: the EXIT trap below runs after main

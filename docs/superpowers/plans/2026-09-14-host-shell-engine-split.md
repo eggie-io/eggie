@@ -14,8 +14,8 @@
 
 - `host/` never imports `agent/`; host runtime dependency stays `typer` only; no `sys.platform`/`platform.system()`/`os.name` outside `host/providers/`.
 - Every test reaches repo files through `Path(__file__).resolve()`, never a cwd-relative path.
-- Engine entrypoint default: `https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/engine/get.sh`.
-- Engine repository default: `https://github.com/ihorklymchukdev/local-environment`.
+- Engine entrypoint default: `https://raw.githubusercontent.com/omelet-app/omelet/main/engine/get.sh`.
+- Engine repository default: `https://github.com/omelet-app/omelet`.
 - Installed marker: `/opt/omelet/engine.version` — the host checks presence only.
 - Engine versions are git tags `engine-vX.Y.Z`.
 - Skills CLI pinned to `skills@1.5.26`; it requires Node `>=22.20.0`.
@@ -260,8 +260,8 @@ Replace the block from `# Bootstrap is purely host-side provisioning;` through `
 ```python
 # The host knows only where the engine's entrypoint lives and which file says
 # it finished; what gets installed, and which version, is decided in the VM.
-ENGINE_URL = ("https://raw.githubusercontent.com/ihorklymchukdev/"
-              "local-environment/main/engine/get.sh")
+ENGINE_URL = ("https://raw.githubusercontent.com/omelet-app/"
+              "omelet/main/engine/get.sh")
 ENGINE_MARKER = f"{GUEST_ROOT}/engine.version"
 ```
 
@@ -1147,7 +1147,7 @@ Expected: FAIL — `bash: .../engine/get.sh: No such file or directory`.
 # on nothing beside it. Run as root.
 set -euo pipefail
 
-REPO="${OMELET_ENGINE_REPO:-https://github.com/ihorklymchukdev/local-environment}"
+REPO="${OMELET_ENGINE_REPO:-https://github.com/omelet-app/omelet}"
 MARKER=/opt/omelet/engine.version
 ENGINE_DIR=/opt/omelet/engine
 
@@ -1497,7 +1497,7 @@ host release; if it does, the logic is on the wrong side.
 
 1. Bump `agent/__init__.py`'s `__version__`, the Dockerfile's `AGENT_VERSION` and
    `engine/stack.yml`'s image tag together (`tests/test_constants_agree.py` holds them equal).
-2. `docker build -t ghcr.io/ihorklymchukdev/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/ihorklymchukdev/omelet-agent:X.Y.Z`
+2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/omelet-app/omelet-agent:X.Y.Z`
 3. `git tag engine-vX.Y.Z && git push origin engine-vX.Y.Z`
 
 Bump `agent/core/constants.API_VERSION` (and the host's `SUPPORTED_API`) only when a route the host

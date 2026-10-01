@@ -49,16 +49,16 @@ numbers. Never merge them.
 - The repository is public, `runtime/install/get.sh` is on `main`.
 - A `runtime-v*` tag with `runtime/release.json` exists.
 - ghcr `omelet-api` and `omelet-web` are public and multi-arch.
-- `github.com/ihorklymchukdev/omelet-skills` is public.
+- `github.com/omelet-app/omelet-skills` is public.
 
 ## Pin or repair a VM by hand
 
 ```powershell
-wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 ```bash
-limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 Use `OMELET_RUNTIME_REPAIR=1` instead to reinstall the current release. A VM on a pinned branch

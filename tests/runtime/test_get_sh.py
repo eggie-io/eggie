@@ -182,7 +182,7 @@ def _archive_with_install_sh(tmp_path: Path, ref: str, body: str) -> Path:
     tar_path = tmp_path / "archive.tar.gz"
     with tarfile.open(tar_path, "w:gz") as tar:
         data = body.encode()
-        info = tarfile.TarInfo(name=f"local-environment-{ref}/runtime/install/install.sh")
+        info = tarfile.TarInfo(name=f"omelet-{ref}/runtime/install/install.sh")
         info.size = len(data)
         tar.addfile(tarinfo=info, fileobj=__import__("io").BytesIO(data))
     return tar_path
@@ -226,7 +226,7 @@ def test_an_archive_without_the_runtime_is_a_plain_failure(tmp_path):
     # Archive with GitHub shape (top-level directory) but no runtime/ inside.
     tar_path = tmp_path / "archive.tar.gz"
     with tarfile.open(tar_path, "w:gz") as tar:
-        info = tarfile.TarInfo(name="local-environment-runtime-v0.1.0/host/readme.txt")
+        info = tarfile.TarInfo(name="omelet-runtime-v0.1.0/host/readme.txt")
         info.size = 5
         tar.addfile(tarinfo=info, fileobj=__import__("io").BytesIO(b"hello"))
 
@@ -257,7 +257,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
         for name, body in {"runtime/install/install.sh": install_body,
                            "runtime/stack.yml": stack}.items():
             data = body.encode()
-            info = tarfile.TarInfo(name=f"local-environment-{ref}/{name}")
+            info = tarfile.TarInfo(name=f"omelet-{ref}/{name}")
             info.size = len(data)
             tar.addfile(tarinfo=info, fileobj=io.BytesIO(data))
     return tar_path
@@ -403,8 +403,8 @@ def test_every_install_records_where_the_runtime_came_from(tmp_path):
     result, root, _ = _update_run(tmp_path, update=False)
     assert result.returncode == 0, result.stderr
     env = (root / "runtime.env").read_text()
-    assert "OMELET_RUNTIME_REPO=https://github.com/ihorklymchukdev/local-environment\n" in env
-    assert ("OMELET_RUNTIME_URL=https://github.com/ihorklymchukdev/local-environment"
+    assert "OMELET_RUNTIME_REPO=https://github.com/omelet-app/omelet\n" in env
+    assert ("OMELET_RUNTIME_URL=https://github.com/omelet-app/omelet"
             "/raw/main/runtime/install/get.sh\n") in env
 
 

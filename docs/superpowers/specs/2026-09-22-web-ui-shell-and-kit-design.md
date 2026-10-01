@@ -207,7 +207,7 @@ architecture only.
 
 ```yaml
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/ihorklymchukdev/omelet-web:0.2.0}
+    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:0.2.0}
     restart: always
     networks:
       - edge
@@ -228,7 +228,7 @@ as 0.2.0 (no engine tag exists past 0.1.0). `CLAUDE.md`'s release steps gain:
 
 ```
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/ihorklymchukdev/omelet-web:X.Y.Z --push web/
+  -t ghcr.io/omelet-app/omelet-web:X.Y.Z --push web/
 ```
 
 and the web tag joins the list of values bumped together. `CLAUDE.md` also

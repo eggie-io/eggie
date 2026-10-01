@@ -15,7 +15,7 @@ the runtime cannot end up pointing at different files.
 APP_VERSION = "0.1.0"
 
 # Desktop app releases are tagged host-vX.Y.Z on this repository.
-HOST_RELEASES_URL = "https://api.github.com/repos/ihorklymchukdev/omelet/releases"
+HOST_RELEASES_URL = "https://api.github.com/repos/omelet-app/omelet/releases"
 
 GUEST_ROOT = "/opt/omelet"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
@@ -34,8 +34,8 @@ COMPOSE_FILE = "docker-compose.yml"
 
 # The host knows only where the runtime's entrypoint lives and which file says
 # it finished; what gets installed, and which version, is decided in the VM.
-RUNTIME_URL = ("https://raw.githubusercontent.com/ihorklymchukdev/"
-               "local-environment/main/runtime/install/get.sh")
+RUNTIME_URL = ("https://raw.githubusercontent.com/omelet-app/"
+               "omelet/main/runtime/install/get.sh")
 RUNTIME_MARKER = f"{GUEST_ROOT}/runtime.version"
 
 # Written by the host on every connect; the VM's boot-time updater reads it to

@@ -64,7 +64,7 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> N
 ```
 
 - `source` defaults to `os.environ.get("OMELET_ENGINE_URL", constants.ENGINE_URL)`, with
-  `constants.ENGINE_URL = "https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/engine/get.sh"`.
+  `constants.ENGINE_URL = "https://raw.githubusercontent.com/omelet-app/omelet/main/engine/get.sh"`.
 - The fetch-and-run command is one `bash -c` line passing the URL as `$1`: `curl -fsSL "$1"` piped
   to `bash`, falling back to `python3 -c 'urllib.request…'` when `curl` is absent. Nothing is
   pushed as a file.
@@ -126,7 +126,7 @@ agent/                     # unchanged: the image source
 Runs as root, `set -euo pipefail`. Kept minimal so version-specific logic lives in the tarball.
 
 1. `apt-get install -y ca-certificates curl git` when any is missing.
-2. `REPO=${OMELET_ENGINE_REPO:-https://github.com/ihorklymchukdev/local-environment}`.
+2. `REPO=${OMELET_ENGINE_REPO:-https://github.com/omelet-app/omelet}`.
 3. Choose the ref, first match wins:
    1. `OMELET_ENGINE_REF` when set (a branch works — this is how unreleased work is tested);
    2. `OMELET_ENGINE_REPAIR=1` and `/opt/omelet/engine.version` exists → that installed ref;
@@ -214,7 +214,7 @@ Only tests that can fail on a real bug.
 ## 6. Release (manual until CI exists)
 
 1. Bump `agent/` version, the Dockerfile `AGENT_VERSION`, and `engine/stack.yml`'s image tag.
-2. `docker build -t ghcr.io/ihorklymchukdev/omelet-agent:X.Y.Z agent/ && docker push …`.
+2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push …`.
 3. `git tag engine-vX.Y.Z && git push origin engine-vX.Y.Z`.
 
 An engine release never touches `host/`.

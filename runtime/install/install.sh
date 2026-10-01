@@ -14,7 +14,7 @@ fi
 SKILLS_CLI=skills@1.5.26
 # Unpinned on purpose: pinning a tag here is a value change, not a code change.
 # Until it is pinned, a box's skills are not identifiable from runtime.version.
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-ihorklymchukdev/omelet-skills}"
+SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
 # skills@1.5.26 declares node >=22.20.0; Ubuntu 24.04's own nodejs is 18.
 NODE_MIN=22.20.0
 TOKEN_CREATED=0

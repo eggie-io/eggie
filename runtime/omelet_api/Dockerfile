@@ -1,5 +1,5 @@
 # Build context is this directory, not the repo root:
-#   docker build -t ghcr.io/ihorklymchukdev/omelet-api:<version> runtime/omelet_api/
+#   docker build -t ghcr.io/omelet-app/omelet-api:<version> runtime/omelet_api/
 # `pyproject.toml` maps package-dir {"omelet_api" = "."} against that context,
 # which is also what keeps `omelet_api/` importable and installable on its own
 # (the property tests/host/test_no_api_import.py protects). `docker build .`

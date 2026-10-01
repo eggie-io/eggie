@@ -21,7 +21,7 @@ release — if it does, the logic is on the wrong side of the seam (see the root
   re-declared and held equal by `tests/test_constants_agree.py`. Tests load it by path
   (`tests/runtime/cli/loader.py`).
 - `instructions/` — what coding agents read (installed as `/etc/claude-code/CLAUDE.md` etc.). The
-  five skills live in the separate `omelet-skills` repo (github.com/ihorklymchukdev/omelet-skills)
+  five skills live in the separate `omelet-skills` repo (github.com/omelet-app/omelet-skills)
   and are installed by `install.sh` via `npx skills add`; they are not in this tree. The runtime
   writes nothing into user repositories.
 

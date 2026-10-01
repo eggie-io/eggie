@@ -18,7 +18,7 @@
 - `host/` never imports `omelet_api`; no `sys.platform` / `platform.system()` / `os.name` outside `host/providers/`.
 - The host gains no dependency: HTTP through stdlib `urllib` only.
 - Host releases: tag `host-vX.Y.Z`, not pre-release; assets `OmeletSetup-X.Y.Z.exe`, `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg`, `SHA256SUMS`.
-- Releases API: `https://api.github.com/repos/ihorklymchukdev/omelet/releases`.
+- Releases API: `https://api.github.com/repos/omelet-app/omelet/releases`.
 - Guest paths: `/opt/omelet/host.json` (`{"supported_api": [1]}`), `/opt/omelet/runtime.env`, `/opt/omelet/update.lock`, `/opt/omelet/runtime.prev`, `/opt/omelet/stack.next.yml`.
 - Tests: no network, no real VM; shell scripts run against fakes on `PATH`; repo files reached via `Path(__file__).resolve()`. `TMPDIR=<writable dir>` prefix in this sandbox.
 - Comments: only for non-obvious edge cases; no ticket or doc references.
@@ -272,7 +272,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
         for name, body in {"runtime/install/install.sh": install_body,
                            "runtime/stack.yml": stack}.items():
             data = body.encode()
-            info = tarfile.TarInfo(name=f"local-environment-{ref}/{name}")
+            info = tarfile.TarInfo(name=f"omelet-{ref}/{name}")
             info.size = len(data)
             tar.addfile(tarinfo=info, fileobj=io.BytesIO(data))
     return tar_path
@@ -362,8 +362,8 @@ def test_every_install_records_where_the_runtime_came_from(tmp_path):
     result, root, _ = _update_run(tmp_path, update=False)
     assert result.returncode == 0, result.stderr
     env = (root / "runtime.env").read_text()
-    assert "OMELET_RUNTIME_REPO=https://github.com/ihorklymchukdev/local-environment\n" in env
-    assert ("OMELET_RUNTIME_URL=https://github.com/ihorklymchukdev/local-environment"
+    assert "OMELET_RUNTIME_REPO=https://github.com/omelet-app/omelet\n" in env
+    assert ("OMELET_RUNTIME_URL=https://github.com/omelet-app/omelet"
             "/raw/main/runtime/install/get.sh\n") in env
 
 
@@ -1452,7 +1452,7 @@ Expected: FAIL (no module).
 
 ```python
 # Desktop app releases are tagged host-vX.Y.Z on this repository.
-HOST_RELEASES_URL = "https://api.github.com/repos/ihorklymchukdev/omelet/releases"
+HOST_RELEASES_URL = "https://api.github.com/repos/omelet-app/omelet/releases"
 ```
 
 `host/core/app_update.py`:
@@ -1881,16 +1881,16 @@ numbers. Never merge them.
 - The repository is public, `runtime/install/get.sh` is on `main`.
 - A `runtime-v*` tag with `runtime/release.json` exists.
 - ghcr `omelet-api` and `omelet-web` are public and multi-arch.
-- `github.com/ihorklymchukdev/omelet-skills` is public.
+- `github.com/omelet-app/omelet-skills` is public.
 
 ## Pin or repair a VM by hand
 
 ```powershell
-wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 ```bash
-limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 Use `OMELET_RUNTIME_REPAIR=1` instead to reinstall the current release. A VM on a pinned branch

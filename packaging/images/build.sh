@@ -8,7 +8,7 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-registry="ghcr.io/ihorklymchukdev"
+registry="ghcr.io/omelet-app"
 platforms="linux/amd64,linux/arm64"
 
 usage() {

@@ -97,7 +97,7 @@ reachable.
 To try a web image you pushed with `--tag dev` without cutting a release:
 
 ```bash
-OMELET_WEB_IMAGE=ghcr.io/ihorklymchukdev/omelet-web:dev \
+OMELET_WEB_IMAGE=ghcr.io/omelet-app/omelet-web:dev \
   docker compose -f /opt/omelet/stack.yml up -d web
 ```
 

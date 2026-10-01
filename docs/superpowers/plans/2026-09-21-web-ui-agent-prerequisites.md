@@ -2081,7 +2081,7 @@ git commit -m "Add resumable upload routes, one-level listings and attachment do
 
 - `agent/__init__.py`: `__version__ = "0.2.0"`
 - `agent/Dockerfile`: `ARG AGENT_VERSION=0.2.0`
-- `engine/stack.yml`: `image: ${OMELET_AGENT_IMAGE:-ghcr.io/ihorklymchukdev/omelet-agent:0.2.0}`
+- `engine/stack.yml`: `image: ${OMELET_AGENT_IMAGE:-ghcr.io/omelet-app/omelet-agent:0.2.0}`
 
 - [ ] **Step 2: Add the agent's Traefik labels and the uploads root**
 

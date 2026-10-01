@@ -40,7 +40,7 @@ field, and the vocabulary outlives the concepts permanently.
 |---|---|
 | 1 | The guest component is named **`runtime`**. It says what it does, carries no AI association, and stays true when the target moves from a VM to a VPS. |
 | 2 | `engine/` **dissolves**. It is not renamed — once the skills leave, every remaining file has a home inside `runtime/`. |
-| 3 | The skills move to **`github.com/ihorklymchukdev/omelet-skills`** and are installed from there by pinned ref. They leave this repository in this change — see §6. |
+| 3 | The skills move to **`github.com/omelet-app/omelet-skills`** and are installed from there by pinned ref. They leave this repository in this change — see §6. |
 | 4 | `web/` is a **sibling of the service inside `runtime/`**, never nested in the Python package. Two images behind Traefik are peers, not container and contained. |
 | 5 | `instructions/omelet.md` goes with **`runtime`**, not the skills. It documents the `omelet` CLI and must move in lockstep with `cli/omelet.py`; alone in a skills repo it would describe something that may not be installed. `install-agents.sh` reads it and nothing else from the tree, so this costs nothing. |
 | 6 | The two published images are **`omelet-api`** and **`omelet-web`**. Traefik already names the first router `omelet-api` (`engine/stack.yml:78`), so this adopts a name the stack half-uses already. |
@@ -188,7 +188,7 @@ git hosts, and a `/tree/<ref>/<path>` form that carries a ref. So the entire
 change is the argument:
 
 ```
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-ihorklymchukdev/omelet-skills}"
+SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
 npx -y "$SKILLS_CLI" add "$SKILLS_SOURCE" -s '*' -g -a claude-code codex -y
 ```
 
@@ -342,7 +342,7 @@ all point at a single skill directory, so that form would need verifying before 
 could be relied on.
 
 ```
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-ihorklymchukdev/omelet-skills}"
+SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
 ```
 
 The override is the point. Every box installs whatever `main` holds at that
@@ -362,7 +362,7 @@ Three repositories, created in this order:
 | Repository | Exists | Populated by |
 |---|---|---|
 | `omelet-skills` | yes, empty | **this change** (§6) |
-| `local-environment` (this one) | yes | stays the host + runtime home for now |
+| `omelet` (this one) | yes | stays the host + runtime home for now |
 | `omelet-runtime` | not yet | a later change — reserve the name now, split later |
 
 **Create `omelet-runtime` now if you like — but do not split into it yet.** The
@@ -387,7 +387,7 @@ is exactly the table in §5.
 ### README and bundling
 
 `omelet-skills` gets a short `README.md` in this change — one paragraph on what
-the skills are, the `npx skills add ihorklymchukdev/omelet-skills` line, and a
+the skills are, the `npx skills add omelet-app/omelet-skills` line, and a
 sentence each on the five skills. It is the public face of the extraction, the
 repository is public, and an empty repository that `install.sh` points at is
 worse than no repository.

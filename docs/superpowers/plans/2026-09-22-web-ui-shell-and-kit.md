@@ -2393,7 +2393,7 @@ Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
 - Modify: `CLAUDE.md`
 
 **Interfaces:**
-- Consumes: the image name `ghcr.io/ihorklymchukdev/omelet-web`, port 8080 (Task 7); agent version `0.2.0` (`agent/__init__.py`).
+- Consumes: the image name `ghcr.io/omelet-app/omelet-web`, port 8080 (Task 7); agent version `0.2.0` (`agent/__init__.py`).
 
 - [ ] **Step 1: Write the failing Python tests**
 
@@ -2447,7 +2447,7 @@ In `engine/stack.yml`, insert after the agent service's last label line (before 
   # the agent's version -- the two install as a pair. Its router is the
   # catch-all for the UI hosts, so it sits below omelet-api's priority.
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/ihorklymchukdev/omelet-web:0.2.0}
+    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:0.2.0}
     restart: always
     networks:
       - edge
@@ -2474,8 +2474,8 @@ In `CLAUDE.md`:
 ```
 1. Bump `agent/__init__.py`'s `__version__`, the Dockerfile's `AGENT_VERSION` and
    `engine/stack.yml`'s agent and web image tags together (`tests/test_constants_agree.py` holds them equal).
-2. `docker build -t ghcr.io/ihorklymchukdev/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/ihorklymchukdev/omelet-agent:X.Y.Z`,
-   then `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/ihorklymchukdev/omelet-web:X.Y.Z --push web/`
+2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/omelet-app/omelet-agent:X.Y.Z`,
+   then `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/omelet-app/omelet-web:X.Y.Z --push web/`
 ```
    (read the current wording of step 1 first and keep anything it says beyond this).
 3. In "## Commands", after the pytest block, add:

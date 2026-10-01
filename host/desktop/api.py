@@ -24,16 +24,23 @@ class DesktopApi:
 
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,
-                 client_factory=None, install_dir_factory=None, local_url=None):
+                 client_factory=None, install_dir_factory=None, local_url=None,
+                 app_update_fn=None, quit_app=None):
         self._provider = provider
         self._state = state
         self._probe = probe_fn
         self._steps_factory = steps_factory
         self._client_factory = client_factory or self._default_client_factory
         self._install_dir_factory = install_dir_factory or self._default_install_dir
+        self._push = push
         self.jobs = JobRegistry(push)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
+        self._declared = False
+        self._app_update_fn = app_update_fn or self._default_app_update
+        self._quit_app = quit_app or self._default_quit
+        self._app_release = None
+        self._app_check = None
 
     @staticmethod
     def _default_client_factory(provider):
@@ -47,6 +54,16 @@ class DesktopApi:
 
         return default_install_dir()
 
+    def _default_app_update(self):
+        from host.core import app_update
+        return app_update.check(current=constants.APP_VERSION,
+                                asset_name=self._provider.installer_asset)
+
+    @staticmethod
+    def _default_quit():
+        import webview
+        webview.windows[0].destroy()
+
     # --- what to draw -------------------------------------------------
 
     def home(self) -> dict:
@@ -59,6 +76,13 @@ class DesktopApi:
         re-install loop with no way back to Home.
         """
         readiness = self._probe(self._provider)
+        if readiness.vm_reachable and not self._declared:
+            from host.core.runtime_update import declare_supported
+            try:
+                self._declared = declare_supported(self._provider)
+            except Exception:
+                # A hung VM surfaces through the probe on the next refresh.
+                pass
         route, state = route_for(readiness)
         resumed = getattr(self, "resumed", False)
         self.resumed = False
@@ -83,7 +107,25 @@ class DesktopApi:
             # restart, so the install screen can explain why it appeared.
             "resumed": resumed,
             "enter_console": enter_console,
+            "app_update": self._app_release.version if self._app_release else "",
         }
+
+    def start_app_update_check(self) -> None:
+        """Once per launch, off the window's thread; announces a release so Home redraws."""
+        import threading
+
+        def run():
+            try:
+                self._app_release = self._app_update_fn()
+                if self._app_release:
+                    self._push({"kind": "app_update", "type": "available",
+                                "version": self._app_release.version})
+            except Exception:
+                # The Check for updates tile asks again and shows its error.
+                pass
+
+        self._app_check = threading.Thread(target=run, daemon=True)
+        self._app_check.start()
 
     # --- actions ------------------------------------------------------
 
@@ -275,17 +317,29 @@ class DesktopApi:
         return {"job": self.jobs.start("recover", work)}
 
     def start_repair(self) -> dict:
+        from host.core import install
         from host.core.bootstrap import bootstrap
-        from host.core.install import connect_step
 
         def work(emit):
             emit({"type": "stage", "stage": "bootstrap"})
             bootstrap(self._provider, repair=True)
             emit({"type": "stage", "stage": "connect"})
-            connect_step(self._provider)
+            install.connect_with_updates(self._provider)
             return {"type": "done"}
 
         return {"job": self.jobs.start("repair", work)}
+
+    def start_runtime_update(self) -> dict:
+        from host.core import install
+
+        def work(emit):
+            emit({"type": "stage", "stage": "update"})
+            install.connect_with_updates(self._provider)
+            # Into the console, as a fresh launch on a running machine would.
+            self._home_seen = False
+            return {"type": "done"}
+
+        return {"job": self.jobs.start("runtime_update", work)}
 
     def start_uninstall(self, purge: bool) -> dict:
         from host.core.install import remove_downloads, remove_vm_data
@@ -302,3 +356,30 @@ class DesktopApi:
             return {"type": "done"}
 
         return {"job": self.jobs.start("uninstall", work)}
+
+    def check_app_update(self) -> dict:
+        self._app_release = self._app_update_fn()
+        return {"available": self._app_release.version if self._app_release else "",
+                "app_version": constants.APP_VERSION}
+
+    def start_app_update(self) -> dict:
+        from host.core import download
+        from host.core.images import Image
+
+        release = self._app_release
+        if release is None:
+            return {"ok": False}
+        dest = (self._install_dir_factory().parent / "cache"
+                / self._provider.installer_asset(release.version))
+
+        def work(emit):
+            def on_progress(done, total):
+                emit({"type": "progress", "done": done, "total": total})
+
+            path = download.fetch(Image(release.url, release.sha256), dest,
+                                  opener=download._default_opener, on_progress=on_progress)
+            self._provider.launch_installer(path)
+            self._quit_app()
+            return {"type": "done"}
+
+        return {"job": self.jobs.start("app_update", work), "version": release.version}

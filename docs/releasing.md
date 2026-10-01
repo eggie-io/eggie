@@ -1,68 +1,65 @@
-# Releasing the runtime
+# Releasing
 
-The host (installer) and the runtime (everything inside the VM) release separately. A host never
-bundles the runtime. When it sets up a VM, it fetches `runtime/install/get.sh` from **`main`**,
-and `get.sh` installs the highest `runtime-vX.Y.Z` tag. The VM then pulls the image tags that
-tag's `runtime/stack.yml` names. So a new image reaches nobody until a new tag points at it.
+The host (desktop app) and the runtime (everything inside the VM) release separately.
 
-**Keep `get.sh` on `main` backward compatible.** Every shipped host runs it. Its env vars
-(`OMELET_RUNTIME_REPO`, `OMELET_RUNTIME_REF`, `OMELET_RUNTIME_REPAIR`), the
-`/opt/omelet/runtime.version` marker and its exit codes are a contract.
+## How installed machines update
 
-## Cutting a release
+- **Runtime:** every VM checks at boot (`omelet-update.service`) and moves to the newest
+  `runtime-vX.Y.Z` whose `runtime/release.json` `api` the host accepts (`/opt/omelet/host.json`).
+  A host that finds an older API updates the runtime at once. A failed update keeps the old one.
+- **Desktop app:** the app checks `host-v*` releases on launch and shows **Update**.
 
-1. **Bump the version in all five places at once.** `tests/test_constants_agree.py` fails if any
-   of them differ:
-   - `runtime/omelet_api/__init__.py` — `__version__`
-   - `runtime/omelet_api/pyproject.toml` — `version`
-   - `runtime/omelet_api/Dockerfile` — `SERVICE_VERSION`
-   - `runtime/omelet_api/Dockerfile.debug` — the `SERVICE_IMAGE` default tag
-   - `runtime/stack.yml` — both the `omelet-api` and `omelet-web` image tags
-2. **Build and push both images for amd64 and arm64:**
-   ```bash
-   packaging/images/build.sh --push
-   ```
-3. **Tag.** `get.sh` ignores every tag that isn't `runtime-vN.N.N`:
-   ```bash
-   git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z
-   ```
+`runtime/install/get.sh` on `main` is what every host and every VM runs. Keep its env vars
+(`OMELET_RUNTIME_REPO`, `_REF`, `_REPAIR`, `_API`, `_UPDATE`), the marker
+`/opt/omelet/runtime.version` and its exit codes backward compatible.
 
-### `SERVICE_VERSION` is not `API_VERSION`
+## Cut a runtime release
 
-The version above is the release number. `API_VERSION` in `runtime/omelet_api/core/constants.py`
-is the wire-protocol number the host checks against its `SUPPORTED_API`. Bump it only when a
-route the host calls changes incompatibly, and that change also needs a new host release. Keep
-the two numbers separate.
+1. Bump the version in all five places (`tests/test_constants_agree.py` checks):
+   `runtime/omelet_api/__init__.py`, `runtime/omelet_api/pyproject.toml`,
+   `runtime/omelet_api/Dockerfile` (`SERVICE_VERSION`), `runtime/omelet_api/Dockerfile.debug`
+   (`SERVICE_IMAGE`), `runtime/stack.yml` (api and web tags).
+2. `packaging/images/build.sh --push` (amd64 + arm64; register qemu first).
+3. `git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z`
+
+VMs pick it up at their next boot.
+
+### Changing the API number
+
+Only when a route the host calls changes incompatibly:
+
+1. Bump `API_VERSION` in `runtime/omelet_api/core/constants.py` and `runtime/release.json`.
+2. Release a host whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
+   or no VM will install it.
+
+`SERVICE_VERSION` (the release number) and `API_VERSION` (the wire protocol) are different
+numbers. Never merge them.
+
+## Cut a host release
+
+1. Bump `version` in `pyproject.toml` and `APP_VERSION` in `host/core/constants.py`.
+2. Build on each platform (`docs/building.md`): `OmeletSetup-X.Y.Z.exe`,
+   `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg`.
+3. Put all three in one folder and run `sha256sum OmeletSetup-* > SHA256SUMS`.
+4. `gh release create host-vX.Y.Z OmeletSetup-* SHA256SUMS --title "Omelet X.Y.Z"`
+   (not `--prerelease`, or no app will offer it).
 
 ## First-release checklist
 
-These must all be true before any shipped host can install anything. `install.sh` fails the
-whole install if any of them is false:
+- The repository is public, `runtime/install/get.sh` is on `main`.
+- A `runtime-v*` tag with `runtime/release.json` exists.
+- ghcr `omelet-api` and `omelet-web` are public and multi-arch.
+- `github.com/ihorklymchukdev/omelet-skills` is public.
 
-- The GitHub repository is public, and `runtime/install/get.sh` is on `main`.
-- At least one `runtime-v*` tag exists.
-- Both ghcr packages (`omelet-api`, `omelet-web`) are **public**. ghcr makes a newly pushed
-  package private, so flip each one by hand in the package settings. Both are multi-arch.
-- `github.com/ihorklymchukdev/omelet-skills` is public and holds the five skill folders.
-  `install.sh` installs them with `npx skills add`; override the source with
-  `OMELET_SKILLS_SOURCE`.
-
-## Moving an installed VM to a new release
-
-Re-running setup does nothing once the runtime is installed. **Repair** reinstalls the ref that
-is *already* installed, so it doesn't upgrade. To move to the newest `runtime-v*` tag, run
-`get.sh` in the VM without the repair flag. It pulls the new images and recreates the containers
-whose image changed.
+## Pin or repair a VM by hand
 
 ```powershell
-# Windows
-wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | bash"
+wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 ```bash
-# macOS
-limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | bash"
+limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/ihorklymchukdev/local-environment/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
-To pin a release, put `OMELET_RUNTIME_REF=runtime-vX.Y.Z` before `bash`. To reinstall the current
-ref in place, put `OMELET_RUNTIME_REPAIR=1` there instead.
+Use `OMELET_RUNTIME_REPAIR=1` instead to reinstall the current release. A VM on a pinned branch
+(not a `runtime-v*` tag) is never moved by the boot update.

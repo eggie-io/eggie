@@ -15,10 +15,18 @@ RUNTIME_DIR=/opt/omelet/runtime
 # returns, once main's own locals are already out of scope.
 tmp=
 
+# release_api <repo> <tag>: the api number a release declares; empty when it
+# declares none (every release cut before release.json existed).
+release_api() {
+  curl -fsSL "$1/raw/$2/runtime/release.json" 2>/dev/null \
+    | tr -d ' \n' | sed -n 's/.*"api":\([0-9][0-9]*\).*/\1/p'
+}
+
 # resolve_ref <repo> <marker>: an explicit ref wins, a repair keeps what is
-# installed, anything else takes the highest runtime-v* tag.
+# installed, anything else takes the highest runtime-v* tag -- the highest one
+# speaking an api in OMELET_RUNTIME_API when that is set.
 resolve_ref() {
-  local repo=$1 marker=$2 tags latest
+  local repo=$1 marker=$2 tags candidates tag api
   if [[ -n "${OMELET_RUNTIME_REF:-}" ]]; then
     echo "$OMELET_RUNTIME_REF"
     return
@@ -27,18 +35,33 @@ resolve_ref() {
     cat "$marker"
     return
   fi
+  if [[ -n "${OMELET_RUNTIME_API:-}" && ! "$OMELET_RUNTIME_API" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+    echo "OMELET_RUNTIME_API must be a comma-separated list of numbers, not '$OMELET_RUNTIME_API'" >&2
+    return 1
+  fi
   if ! tags="$(git ls-remote --tags --refs "$repo" 'runtime-v*')"; then
     echo "could not reach $repo to find the latest Omelet runtime" >&2
     return 1
   fi
-  # grep exits 1 when no tag matches (e.g. every tag is a pre-release, or
-  # there are none); the empty $latest that leaves is handled below, not here.
-  latest="$(sed -n 's#.*refs/tags/##p' <<<"$tags" | grep -E '^runtime-v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)" || true
-  if [[ -z "$latest" ]]; then
+  # grep exits 1 when no tag matches; the empty result is handled below.
+  candidates="$(sed -n 's#.*refs/tags/##p' <<<"$tags" | grep -E '^runtime-v[0-9]+\.[0-9]+\.[0-9]+$' | sort -rV)" || true
+  if [[ -z "$candidates" ]]; then
     echo "$repo has no runtime-v* release to install" >&2
     return 1
   fi
-  echo "$latest"
+  if [[ -z "${OMELET_RUNTIME_API:-}" ]]; then
+    head -n 1 <<<"$candidates"
+    return
+  fi
+  while read -r tag; do
+    api="$(release_api "$repo" "$tag")" || true
+    if [[ -n "$api" && ",$OMELET_RUNTIME_API," == *",$api,"* ]]; then
+      echo "$tag"
+      return
+    fi
+  done <<<"$candidates"
+  echo "no runtime-v* release in $repo speaks api $OMELET_RUNTIME_API" >&2
+  return 1
 }
 
 main() {
@@ -54,12 +77,34 @@ main() {
     fi
   fi
 
-  local ref
+  mkdir -p /opt/omelet
+  # The boot unit and a host-started update may run at the same moment.
+  exec 9>/opt/omelet/update.lock
+  flock 9
+  # A crash between the two moves of an update leaves only runtime.prev.
+  if [[ -d "$RUNTIME_DIR.prev" && ! -d "$RUNTIME_DIR" ]]; then
+    mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
+  fi
+
+  local ref installed="" update=0
+  [[ "${OMELET_RUNTIME_UPDATE:-}" == 1 ]] && update=1
+  [[ -s "$MARKER" ]] && installed="$(cat "$MARKER")"
   ref="$(resolve_ref "$REPO" "$MARKER")"
+  if (( update )) && [[ "$ref" == "$installed" ]]; then
+    echo "Omelet runtime $ref is already installed"
+    return 0
+  fi
+  # A failed fetch of the newest release.json lands resolve_ref on an older tag.
+  if (( update )) && [[ -z "${OMELET_RUNTIME_REF:-}" \
+        && "$installed" =~ ^runtime-v[0-9]+\.[0-9]+\.[0-9]+$ \
+        && "$(printf '%s\n' "$installed" "$ref" | sort -V | head -n 1)" == "$ref" ]]; then
+    echo "Omelet runtime $installed is newer than $ref, the newest release this machine accepts; keeping it" >&2
+    return 0
+  fi
   echo "installing Omelet runtime $ref"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "${tmp:-}"' EXIT
+  trap 'rm -rf "${tmp:-}"; rm -f /opt/omelet/stack.next.yml' EXIT
   if ! curl -fsSL "$REPO/archive/$ref.tar.gz" -o "$tmp/runtime.tar.gz"; then
     echo "could not download Omelet runtime $ref from $REPO" >&2
     exit 1
@@ -72,9 +117,25 @@ main() {
     echo "$ref of $REPO has no runtime/install/install.sh" >&2
     exit 1
   fi
-  # Replaced, not merged: a file dropped from the runtime must not linger.
-  mkdir -p /opt/omelet
-  rm -rf "$RUNTIME_DIR"
+  printf 'OMELET_RUNTIME_URL=%q\nOMELET_RUNTIME_REPO=%q\n' \
+    "${OMELET_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/omelet/runtime.env
+
+  # Next to /opt/omelet/.env so compose reads the docker GID the stack needs.
+  if (( update )) && [[ -n "$installed" ]]; then
+    install -m 644 "$tmp/runtime/stack.yml" /opt/omelet/stack.next.yml
+    if ! /usr/bin/docker compose -f /opt/omelet/stack.next.yml --profile tunnel pull; then
+      echo "could not download the images for Omelet runtime $ref; staying on $installed" >&2
+      exit 1
+    fi
+  fi
+
+  rm -rf "$RUNTIME_DIR.prev"
+  if (( update )) && [[ -n "$installed" && -d "$RUNTIME_DIR" ]]; then
+    mv "$RUNTIME_DIR" "$RUNTIME_DIR.prev"
+  else
+    # Replaced, not merged: a file dropped from the runtime must not linger.
+    rm -rf "$RUNTIME_DIR"
+  fi
   mv "$tmp/runtime" "$RUNTIME_DIR"
   chmod 755 "$RUNTIME_DIR"
 
@@ -82,7 +143,20 @@ main() {
   if [[ "${OMELET_RUNTIME_REPAIR:-}" == 1 ]]; then
     args+=(--repair)
   fi
-  bash "$RUNTIME_DIR/install/install.sh" "${args[@]}"
+  local rc=0
+  bash "$RUNTIME_DIR/install/install.sh" "${args[@]}" || rc=$?
+  if (( rc )); then
+    if [[ -d "$RUNTIME_DIR.prev" ]]; then
+      echo "Omelet runtime $ref did not install; going back to $installed" >&2
+      rm -rf "$RUNTIME_DIR"
+      mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
+      if ! bash "$RUNTIME_DIR/install/install.sh" "$installed"; then
+        echo "reinstalling Omelet runtime $installed failed too" >&2
+      fi
+    fi
+    exit "$rc"
+  fi
+  rm -rf "$RUNTIME_DIR.prev"
 }
 
 # `return` only succeeds when sourced (the tests); under `bash -c` or a pipe it

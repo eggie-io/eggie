@@ -20,7 +20,7 @@ else
   script="$(python3 -c 'import sys, urllib.request; sys.stdout.write(urllib.request.urlopen(sys.argv[1], timeout=60).read().decode())' "$1")" \\
     || { echo "could not download the Omelet installer from $1" >&2; exit 1; }
 fi
-bash -c "$script"
+OMELET_RUNTIME_URL="$1" bash -c "$script"
 """
 _STUB_PATH = "/tmp/omelet-bootstrap.sh"
 
@@ -50,23 +50,28 @@ def _installed(provider) -> bool:
     return provider.exec(["test", "-s", constants.RUNTIME_MARKER], root=True).ok
 
 
-def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> None:
+def bootstrap(provider, *, source: str | None = None, repair: bool = False,
+              update: bool = False) -> None:
     """Install the runtime in the VM unless it is already there.
 
     `repair` reinstalls regardless and tells the installer to keep the ref it
-    has and recreate the api container.
+    has and recreate the api container. `update` moves to the newest release
+    speaking an API this host supports, leaving an up-to-date VM untouched.
     """
-    if not repair and _installed(provider):
+    if not repair and not update and _installed(provider):
         return
     url = _shell_safe(
         source or os.environ.get("OMELET_RUNTIME_URL") or constants.RUNTIME_URL,
         "OMELET_RUNTIME_URL")
-    assignments = []
+    apis = ",".join(str(n) for n in sorted(constants.SUPPORTED_API))
+    assignments = [f"OMELET_RUNTIME_API={apis}"]
     ref = os.environ.get("OMELET_RUNTIME_REF")
     if ref:
         assignments.append(f"OMELET_RUNTIME_REF={_shell_safe(ref, 'OMELET_RUNTIME_REF')}")
     if repair:
         assignments.append("OMELET_RUNTIME_REPAIR=1")
+    if update:
+        assignments.append("OMELET_RUNTIME_UPDATE=1")
     encoded = base64.b64encode(_STUB.encode()).decode("ascii")
     command = " ".join([*assignments, "bash", _STUB_PATH, url])
     _run(provider,

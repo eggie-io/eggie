@@ -262,6 +262,12 @@ if ! systemctl start omelet-github.service; then
   exit 1
 fi
 
+# 12b. the boot-time updater. Enabled only: starting it here would run an
+# update inside this install.
+install -m 644 "$INSTALL_DIR/systemd/omelet-update.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable omelet-update.service
+
 # 13. what the console's "Connect an agent" guide needs to know.
 if grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
 elif [[ -d /mnt/lima-cidata ]]; then vm=lima

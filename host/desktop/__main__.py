@@ -58,16 +58,17 @@ def _default_start(**kwargs):
 
 
 def run(provider, state, *, create=_default_create, start=_default_start,
-        resumed: bool = False, steps_factory=None) -> int:
+        resumed: bool = False, steps_factory=None, app_update_fn=None) -> int:
     from .api import DesktopApi
     from .shell import Shell, guarded
 
     shell = Shell()
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
-                     local_url=shell.local_url)
+                     local_url=shell.local_url, app_update_fn=app_update_fn)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
+    api.start_app_update_check()
 
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),

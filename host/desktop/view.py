@@ -46,7 +46,7 @@ def route_for(readiness: Readiness) -> tuple[str, str]:
     if not readiness.runtime_version:
         return ("home", "wrong")
     if readiness.api_version not in constants.SUPPORTED_API:
-        return ("home", "wrong")
+        return ("update_runtime", "")
     return ("home", "running")
 
 

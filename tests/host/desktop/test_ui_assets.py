@@ -56,15 +56,16 @@ def test_every_home_state_has_a_template():
     markup = (UI / "index.html").read_text()
     for screen in ("home:not_installed", "home:stopped", "home:running",
                    "home:wrong", "unreachable", "first-run",
-                   "updates-unavailable"):
+                   "updates"):
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
-def test_the_update_tile_promises_nothing_it_cannot_do():
-    # There is no update backend. The tile ships because the board has it,
-    # but it must not claim to have checked anything.
+def test_every_home_state_can_offer_the_app_update():
     markup = (UI / "index.html").read_text()
-    assert "nothing to check for yet" in markup.lower()
+    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
+        start = markup.index(f'data-screen="{screen}"')
+        end = markup.index("</template>", start)
+        assert 'data-when="app_update"' in markup[start:end], screen
 
 
 def test_no_template_renders_a_separator_with_nothing_after_it():
@@ -285,6 +286,16 @@ def test_every_bridge_call_in_the_ui_names_a_real_method():
     called = set(re.findall(r"api\(\)\.([a-zA-Z_]+)\(", script))
     assert "enter_console" in called
     assert called <= set(public_methods(DesktopApi)), called - set(public_methods(DesktopApi))
+
+
+def test_the_runtime_update_screens_exist_and_auto_start_once():
+    markup = (UI / "index.html").read_text()
+    for screen in ("runtime-update:running", "runtime-update:failed"):
+        assert f'data-screen="{screen}"' in markup
+    script = (UI / "app.js").read_text()
+    # Auto-starting on every refresh would loop forever on an update that
+    # "succeeds" without fixing the API.
+    assert "runtimeUpdateTried" in script
 
 
 def test_the_page_lets_pywebview_build_its_bridge():

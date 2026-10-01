@@ -18,6 +18,12 @@ class FakeProvider:
     pass
 
 
+def _no_update_check():
+    # run() defaults to a real network check for the desktop app's own
+    # update; every call here stubs it so the suite never dials out.
+    return None
+
+
 LOCAL = "http://127.0.0.1:53817/index.html"
 
 
@@ -51,7 +57,8 @@ def test_a_missing_webview_runtime_is_a_sentence_not_a_traceback(tmp_path, capsy
         raise RuntimeError("WebView2 runtime not found")
 
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
-               create=create, start=lambda **kwargs: None)
+               create=create, start=lambda **kwargs: None,
+               app_update_fn=_no_update_check)
 
     assert code == 3
     assert WEBVIEW_MISSING in capsys.readouterr().err
@@ -66,7 +73,8 @@ def test_a_working_window_starts_the_loop_and_returns_zero(tmp_path):
     started = []
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=lambda **kwargs: FakeWindow(),
-               start=lambda **kwargs: started.append(kwargs))
+               start=lambda **kwargs: started.append(kwargs),
+               app_update_fn=_no_update_check)
 
     assert code == 0
     # debug must be off in a shipped build: it exposes devtools and a context
@@ -82,7 +90,8 @@ def test_the_real_failure_reaches_stderr_under_the_runtime_message(tmp_path, cap
         raise TypeError("create_window() got an unexpected keyword argument 'widht'")
 
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
-               create=create, start=lambda **kwargs: None)
+               create=create, start=lambda **kwargs: None,
+               app_update_fn=_no_update_check)
 
     err = capsys.readouterr().err
     assert code == 3
@@ -95,7 +104,8 @@ def test_a_resumed_launch_is_recorded_for_the_install_screen(tmp_path):
     be able to say why it opened by itself."""
     window = FakeWindow()
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
-        create=lambda **kwargs: window, start=lambda **kwargs: None, resumed=True)
+        create=lambda **kwargs: window, start=lambda **kwargs: None, resumed=True,
+        app_update_fn=_no_update_check)
 
     assert window.exposed["home"]()["resumed"] is True
 
@@ -110,7 +120,8 @@ def test_javascript_gets_the_guarded_bridge_not_the_api(tmp_path):
         return window
 
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
-        create=create, start=lambda **kwargs: None)
+        create=create, start=lambda **kwargs: None,
+        app_update_fn=_no_update_check)
     # pywebview resolves a dotted call name from js_api with plain getattr, so
     # any object there lets a page walk "home.__func__.__globals__" past the
     # guard. Named functions are looked up by exact name only.

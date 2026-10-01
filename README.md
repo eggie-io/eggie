@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File .\packaging\windows\build.ps1   # → d
 ```
 
 ```bash
-bash packaging/macos/build.sh          # → dist/OmeletSetup-<v>.pkg (native arch, unsigned)
+bash packaging/macos/build.sh          # → dist/OmeletSetup-<v>-<arch>.pkg (native arch, unsigned)
 packaging/images/build.sh              # api + web images into local docker
 ```
 

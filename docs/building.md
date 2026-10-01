@@ -35,8 +35,8 @@ which runs `setup.exe setup`. The uninstaller runs
 ```bash
 python3.12 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
 bash packaging/macos/build.sh
-# → dist/OmeletSetup-<version>.pkg
-sudo installer -pkg dist/OmeletSetup-<version>.pkg -target /
+# → dist/OmeletSetup-<version>-<arch>.pkg
+sudo installer -pkg dist/OmeletSetup-<version>-<arch>.pkg -target /
 ```
 
 - **Native architecture only.** An Apple Silicon build refuses to install on Intel; an Intel Mac

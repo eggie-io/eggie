@@ -29,12 +29,27 @@ def _git_listing(tmp_path: Path, tags, code: int = 0) -> str:
     return f"cat '{listing}'\nexit {code}\n"
 
 
-def _resolve(tmp_path, *, tags=(), git_code=0, installed="", **env):
+def _curl_serving(tmp_path: Path, releases: dict) -> str:
+    # releases: tag -> release.json body, or None for a tag without the file.
+    lines = []
+    for tag, body in releases.items():
+        if body is not None:
+            (tmp_path / f"{tag}.json").write_text(body)
+            lines.append(f'*/raw/{tag}/runtime/release.json) cat "{tmp_path / (tag + ".json")}"; exit 0 ;;')
+    return ('for last; do :; done\ncase "$last" in\n' + "\n".join(lines)
+            + '\n*) exit 22 ;;\nesac\n')
+
+
+def _resolve(tmp_path, *, tags=(), git_code=0, installed="", releases=None, **env):
     marker = tmp_path / "runtime.version"
     if installed:
         marker.write_text(installed + "\n")
-    environ = _bin(tmp_path, git=_git_listing(tmp_path, tags, git_code))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    fakes = {"git": _git_listing(tmp_path, tags, git_code)}
+    if releases is not None:
+        fakes["curl"] = _curl_serving(tmp_path, releases)
+    environ = _bin(tmp_path, **fakes)
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
     environ.update(env)
     return subprocess.run(
@@ -87,15 +102,72 @@ def test_an_unreachable_repository_is_a_plain_failure(tmp_path):
     assert "could not reach" in result.stderr
 
 
+def test_the_newest_release_speaking_an_accepted_api_wins_over_a_newer_one_that_does_not(tmp_path):
+    result = _resolve(tmp_path,
+                      tags=["runtime-v0.9.0", "runtime-v0.10.0", "runtime-v1.0.0"],
+                      releases={"runtime-v1.0.0": '{"api": 2}',
+                                "runtime-v0.10.0": '{"api": 1}',
+                                "runtime-v0.9.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "runtime-v0.10.0"
+
+
+def test_any_listed_api_is_accepted(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0", "runtime-v0.2.0"],
+                      releases={"runtime-v0.2.0": '{"api": 2}', "runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1,2")
+    assert result.stdout.strip() == "runtime-v0.2.0"
+
+
+def test_a_release_without_release_json_is_skipped(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.0.7", "runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": None, "runtime-v0.0.7": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1")
+    assert result.stdout.strip() == "runtime-v0.0.7"
+
+
+def test_no_release_speaking_an_accepted_api_is_a_plain_failure(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="2")
+    assert result.returncode != 0
+    assert "speaks api 2" in result.stderr
+
+
+def test_an_explicit_ref_is_installed_without_an_api_check(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"], releases={},
+                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REF="feature/x")
+    assert result.stdout.strip() == "feature/x"
+
+
+def test_a_repair_keeps_the_installed_ref_even_with_an_api_list(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.3.0"], installed="runtime-v0.2.0",
+                      releases={"runtime-v0.3.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REPAIR="1")
+    assert result.stdout.strip() == "runtime-v0.2.0"
+
+
+def test_an_api_list_that_is_not_numbers_is_refused(tmp_path):
+    result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
+                      releases={"runtime-v0.1.0": '{"api": 1}'},
+                      OMELET_RUNTIME_API="1;rm")
+    assert result.returncode != 0
+    assert "OMELET_RUNTIME_API" in result.stderr
+
+
 @pytest.mark.parametrize("how", ["bash -c", "stdin"])
 def test_fetching_the_script_runs_the_install_not_just_its_functions(tmp_path, how):
     # The host runs it with `bash -c "$script"`, a cloud VM with `curl | bash`;
     # a sourcing guard that misfires there would define functions and exit 0.
+    root = tmp_path / "opt-omelet"
+    root.mkdir()
     environ = _bin(tmp_path, dpkg="exit 0\n", curl="exit 22\n",
                    git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
-    script = GET.read_text()
+    script = GET.read_text().replace("/opt/omelet", str(root))
     if how == "bash -c":
         result = subprocess.run(["bash", "-c", script], env=environ,
                                 capture_output=True, text=True)
@@ -134,7 +206,8 @@ def test_a_successful_install_exits_zero_and_hands_install_sh_the_ref(tmp_path, 
 
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=make_curl(tar_path),
                    git=_git_listing(tmp_path, [ref]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
     expected_args = ref
     if repair:
@@ -161,14 +234,179 @@ def test_an_archive_without_the_runtime_is_a_plain_failure(tmp_path):
         # curl -fsSL <url> -o <dest>: $1=-fsSL $2=url $3=-o $4=dest
         return f"cp '{archive_path}' \"$4\"\n"
 
+    root = tmp_path / "opt-omelet"
+    root.mkdir()
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=make_curl(tar_path),
                    git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR"):
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
         environ.pop(name, None)
 
-    script = GET.read_text()
+    script = GET.read_text().replace("/opt/omelet", str(root))
     result = subprocess.run(["bash", "-c", script], env=environ,
                             capture_output=True, text=True)
     assert result.returncode != 0
     assert "runtime-v0.1.0" in result.stderr
     assert "no runtime/" in result.stderr
+
+
+def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}\n") -> Path:
+    import io
+    tar_path = tmp_path / f"{ref}.tar.gz"
+    with tarfile.open(tar_path, "w:gz") as tar:
+        for name, body in {"runtime/install/install.sh": install_body,
+                           "runtime/stack.yml": stack}.items():
+            data = body.encode()
+            info = tarfile.TarInfo(name=f"local-environment-{ref}/{name}")
+            info.size = len(data)
+            tar.addfile(tarinfo=info, fileobj=io.BytesIO(data))
+    return tar_path
+
+
+def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0",
+                pull_code=0, install_code=0, update=True, tags=None, unreachable_release=None,
+                old_install_code=0, crashed_mid_swap=False):
+    """Runs get.sh against a fake /opt/omelet with runtime-v0.1.0 installed."""
+    root = tmp_path / "opt-omelet"
+    (root / "runtime" / "install").mkdir(parents=True)
+    (root / "runtime" / "install" / "install.sh").write_text(
+        f'#!/usr/bin/env bash\necho "old install.sh $*"\necho "$1" > "{root}/runtime.version"\n'
+        f'exit {old_install_code}\n')
+    (root / "runtime" / "keep-me").write_text("old runtime")
+    if crashed_mid_swap:
+        (root / "runtime").rename(root / "runtime.prev")
+    for kept in ("api.token", "state.db", "host.json"):
+        (root / kept).write_text(kept)
+    (root / "projects" / "app").mkdir(parents=True)
+    if installed:
+        (root / "runtime.version").write_text(installed + "\n")
+    new_install = (f'#!/usr/bin/env bash\nrm -f "{root}/runtime.version"\n'
+                   f'echo "new install.sh $*"\nexit {install_code}\n'
+                   if install_code else
+                   f'#!/usr/bin/env bash\necho "new install.sh $*"\necho "$1" > "{root}/runtime.version"\n')
+    tar_path = _archive(tmp_path, latest, new_install)
+    docker_log = tmp_path / "docker.log"
+    fake_docker = tmp_path / "docker"
+    fake_docker.write_text(f'#!/bin/sh\necho "$*" >> "{docker_log}"\nexit {pull_code}\n')
+    fake_docker.chmod(0o755)
+    script = (GET.read_text().replace("/opt/omelet", str(root))
+              .replace("/usr/bin/docker", str(fake_docker)))
+    unreachable = (f'*/raw/{unreachable_release}/runtime/release.json) exit 22 ;;\n'
+                   if unreachable_release else '')
+    curl = ('for last; do :; done\n'
+            'case "$last" in\n'
+            + unreachable +
+            '*/release.json) echo \'{"api": 1}\' ;;\n'
+            f'*) cp "{tar_path}" "$4" ;;\n'
+            'esac\n')
+    environ = _bin(tmp_path, dpkg="exit 0\n", curl=curl,
+                   git=_git_listing(tmp_path, tags or [latest]))
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE", "OMELET_RUNTIME_URL"):
+        environ.pop(name, None)
+    environ["OMELET_RUNTIME_API"] = "1"
+    if update:
+        environ["OMELET_RUNTIME_UPDATE"] = "1"
+    result = subprocess.run(["bash", "-c", script], env=environ,
+                            capture_output=True, text=True)
+    docker = docker_log.read_text() if docker_log.exists() else ""
+    return result, root, docker
+
+
+def test_an_update_to_the_ref_already_installed_changes_nothing(tmp_path):
+    result, root, docker = _update_run(tmp_path, installed="runtime-v0.2.0", latest="runtime-v0.2.0")
+    assert result.returncode == 0, result.stderr
+    assert (root / "runtime" / "keep-me").exists()
+    assert "install.sh" not in result.stdout
+    assert docker == ""
+
+
+def test_an_update_never_moves_to_an_older_release_than_the_installed_one(tmp_path):
+    # One failed fetch of the newest release.json makes resolve_ref settle on an older tag.
+    result, root, docker = _update_run(
+        tmp_path, installed="runtime-v0.3.0", latest="runtime-v0.2.0",
+        tags=["runtime-v0.3.0", "runtime-v0.2.0"], unreachable_release="runtime-v0.3.0")
+    assert result.returncode == 0, result.stderr
+    assert "runtime-v0.3.0 is newer than runtime-v0.2.0" in result.stderr
+    assert (root / "runtime" / "keep-me").exists()
+    assert "install.sh" not in result.stdout
+    assert docker == ""
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.3.0"
+
+
+def test_an_update_pulls_the_new_images_before_touching_the_installed_runtime(tmp_path):
+    result, root, docker = _update_run(tmp_path, pull_code=1)
+    assert result.returncode != 0
+    assert "pull" in docker and "stack.next.yml" in docker and "--profile tunnel" in docker
+    assert (root / "runtime" / "keep-me").exists(), "a failed pull must leave the runtime alone"
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.1.0"
+    assert not (root / "stack.next.yml").exists()
+
+
+def test_a_successful_update_replaces_the_runtime_and_drops_the_previous_one(tmp_path):
+    result, root, _ = _update_run(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "new install.sh runtime-v0.2.0" in result.stdout
+    assert not (root / "runtime" / "keep-me").exists()
+    assert not (root / "runtime.prev").exists()
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.2.0"
+    for kept in ("api.token", "state.db", "host.json"):
+        assert (root / kept).read_text() == kept, f"an update must not touch {kept}"
+    assert (root / "projects" / "app").is_dir()
+
+
+def test_a_failed_install_rolls_back_to_the_previous_runtime(tmp_path):
+    result, root, _ = _update_run(tmp_path, install_code=3)
+    assert result.returncode == 3, "get.sh exits with install.sh's own code"
+    assert "old install.sh runtime-v0.1.0" in result.stdout
+    assert (root / "runtime" / "keep-me").exists()
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.1.0"
+    assert not (root / "runtime.prev").exists()
+
+
+def test_a_failed_rollback_says_so(tmp_path):
+    result, root, _ = _update_run(tmp_path, install_code=1, old_install_code=1)
+    assert result.returncode == 1
+    assert "reinstalling Omelet runtime runtime-v0.1.0 failed too" in result.stderr
+
+
+def test_a_runtime_left_only_as_runtime_prev_by_a_crash_is_restored(tmp_path):
+    result, root, _ = _update_run(tmp_path, installed="runtime-v0.2.0", latest="runtime-v0.2.0",
+                                  crashed_mid_swap=True)
+    assert result.returncode == 0, result.stderr
+    assert (root / "runtime" / "keep-me").exists()
+    assert not (root / "runtime.prev").exists()
+
+
+def test_runtime_env_values_are_quoted_so_sourcing_never_runs_them(tmp_path):
+    root = tmp_path / "opt-omelet"
+    root.mkdir()
+    script = GET.read_text().replace("/opt/omelet", str(root))
+    tar_path = _archive_with_install_sh(tmp_path, "runtime-v0.1.0", "#!/usr/bin/env bash\n")
+    environ = _bin(tmp_path, dpkg="exit 0\n", curl=f"cp '{tar_path}' \"$4\"\n",
+                   git=_git_listing(tmp_path, ["runtime-v0.1.0"]))
+    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
+                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
+        environ.pop(name, None)
+    marker = tmp_path / "ran"
+    environ["OMELET_RUNTIME_URL"] = f"https://x.invalid/get.sh$(touch {marker})"
+    result = subprocess.run(["bash", "-c", script], env=environ, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    sourced = subprocess.run(
+        ["bash", "-c", f'source "{root}/runtime.env" && printf %s "$OMELET_RUNTIME_URL"'],
+        capture_output=True, text=True)
+    assert not marker.exists()
+    assert sourced.stdout == environ["OMELET_RUNTIME_URL"]
+
+
+def test_every_install_records_where_the_runtime_came_from(tmp_path):
+    result, root, _ = _update_run(tmp_path, update=False)
+    assert result.returncode == 0, result.stderr
+    env = (root / "runtime.env").read_text()
+    assert "OMELET_RUNTIME_REPO=https://github.com/ihorklymchukdev/local-environment\n" in env
+    assert ("OMELET_RUNTIME_URL=https://github.com/ihorklymchukdev/local-environment"
+            "/raw/main/runtime/install/get.sh\n") in env
+
+
+def test_get_sh_holds_the_update_lock():
+    assert "flock" in GET.read_text() and "/opt/omelet/update.lock" in GET.read_text()

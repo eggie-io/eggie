@@ -120,9 +120,33 @@ document.getElementById('notice')
   .querySelector('[data-action="dismiss-notice"]')
   .addEventListener('click', () => ACTIONS['dismiss-notice']());
 
-// Ships visible and honest rather than hidden: the board has the tile, and
-// there is no update backend behind it yet.
-ACTIONS['check-updates'] = async () => show('updates-unavailable', await api().home());
+ACTIONS['check-updates'] = async () => {
+  const result = await api().check_app_update();
+  show('updates', Object.assign({ none: result.available ? '' : 'yes' }, result));
+};
+
+ACTIONS['app-update'] = async () => {
+  const started = await api().start_app_update();
+  if (started.ok === false) return refresh();
+  show('app-update:running', { available: started.version });
+};
+
+window.omelet.handlers.app_update = (event) => {
+  // The launch-time check usually lands after Home has drawn. Only Home is
+  // redrawn: refreshing elsewhere would throw the user off their screen.
+  if (event.type === 'available') {
+    const screen = document.getElementById('screen').dataset.screen || '';
+    if (screen.startsWith('home:')) refresh();
+    return;
+  }
+  if (event.type === 'progress') {
+    const bar = document.querySelector('[data-field="fraction"]');
+    if (bar && event.total) bar.style.width = `${Math.round((event.done / event.total) * 100)}%`;
+    return;
+  }
+  // 'done' needs nothing: the window is closing.
+  if (event.type === 'crashed') { showNotice(event.message); refresh(); }
+};
 
 // Rows the install screen fills from start_install()'s row list, keyed by
 // step name so a pushed 'step' event can find its <li> again. Rebuilt only
@@ -381,6 +405,31 @@ window.omelet.handlers.repair = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
+// Auto-started once per session: an update that "succeeds" without fixing the
+// API would otherwise restart itself on every refresh.
+let runtimeUpdateTried = false;
+// home.problem is empty when the runtime answers but speaks an old API, so the
+// failed screen reached again from refresh() shows the job's own error.
+let runtimeUpdateError = '';
+
+async function startRuntimeUpdate() {
+  runtimeUpdateTried = true;
+  show('runtime-update:running', {});
+  await api().start_runtime_update();
+}
+
+ACTIONS['retry-runtime-update'] = () => startRuntimeUpdate();
+JOB_ACTIONS.add('retry-runtime-update');
+
+window.omelet.handlers.runtime_update = (event) => {
+  if (event.type === 'progress' || event.type === 'stage') return;
+  if (event.type === 'crashed') {
+    runtimeUpdateError = event.message;
+    return show('runtime-update:failed', { message: event.message });
+  }
+  refresh();
+};
+
 window.omelet.handlers.recover = (event) => {
   // The wider restart stops more than this machine, so it is offered, never
   // taken; if even that fails, the probe lands back on the unresponsive screen.
@@ -410,6 +459,10 @@ async function refresh() {
     const result = await api().enter_console();
     if (result.ok) return window.location.assign(result.url);
     showNotice(result.message);
+  }
+  if (home.route === 'update_runtime') {
+    if (!runtimeUpdateTried) return startRuntimeUpdate();
+    return show('runtime-update:failed', { message: runtimeUpdateError || home.problem });
   }
   show(home.route === 'home' ? `home:${home.state}` : home.route, home);
 }

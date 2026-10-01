@@ -279,3 +279,16 @@ def test_running_reads_the_status_column():
 
 def test_running_false_for_a_stopped_vm():
     assert make(FakeRunner(stdout=b"Stopped\n")).running() is False
+
+
+def test_the_mac_installer_is_the_package_for_this_architecture():
+    ran = []
+
+    class Result:
+        returncode, stdout, stderr = 0, b"", b""
+
+    provider = LimaProvider(runner=lambda argv: ran.append(argv) or Result(),
+                            machine=lambda: "arm64")
+    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0-arm64.pkg"
+    provider.launch_installer(Path("/cache/OmeletSetup-0.2.0-arm64.pkg"))
+    assert ran == [["open", "/cache/OmeletSetup-0.2.0-arm64.pkg"]]

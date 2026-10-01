@@ -52,8 +52,6 @@ install on any image it can't pull or a failed `npx skills add`.
 
 ## Updating an installed VM
 
-Re-running setup does nothing once `runtime.version` exists. Repair reinstalls the **already
-installed** ref. To move to the newest release, run `get.sh` in the VM without repair (README has
-the `wsl -d omelet-vm -u root -- bash -lc "curl … | bash"` form). To try a `--tag dev` image,
+The VM updates itself at boot; see `docs/releasing.md`. To try a `--tag dev` image,
 `OMELET_WEB_IMAGE=… docker compose -f /opt/omelet/stack.yml up -d web` inside the VM; the next
-`get.sh` puts the released image back.
+update puts the released image back.

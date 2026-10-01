@@ -235,6 +235,11 @@ details.log {
   font:400 13px 'Hanken Grotesk', sans-serif; color:var(--ink-3);
 }
 
+.update-note {
+  padding-left:14px;
+  font:400 13px 'Hanken Grotesk', sans-serif; color:var(--ink-3);
+}
+
 /* Install screens: a fixed 300px left column (pan, copy, buttons) beside a
    row panel that grows to hold however many steps the factory returned --
    seven on Lima, nine on WSL2. Padding here is tighter than .pad so nine

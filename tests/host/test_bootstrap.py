@@ -151,3 +151,23 @@ def test_a_broken_download_runs_nothing_and_says_so(tmp_path):
     assert result.returncode != 0
     assert "could not download" in result.stderr
     assert "half-a-script" not in result.stdout
+
+
+def test_every_run_tells_the_installer_which_apis_this_host_speaks():
+    p = FakeProvider()
+    bootstrap(p)
+    expected = ",".join(str(n) for n in sorted(constants.SUPPORTED_API))
+    assert f"OMELET_RUNTIME_API={expected}" in _command(p)
+    assert "OMELET_RUNTIME_UPDATE" not in _command(p)
+
+
+def test_an_update_runs_on_an_installed_runtime_in_update_mode():
+    p = FakeProvider(installed=True)
+    bootstrap(p, update=True)
+    assert "OMELET_RUNTIME_UPDATE=1" in _command(p)
+
+
+def test_the_stub_hands_get_sh_the_url_it_came_from(tmp_path):
+    env = _fake_curl(tmp_path, "echo 'echo \"from=$OMELET_RUNTIME_URL\"'\n")
+    result = _run_stub(tmp_path, env)
+    assert result.stdout.strip() == "from=https://example.invalid/get.sh"

@@ -14,6 +14,9 @@ the runtime cannot end up pointing at different files.
 # diagnostics text. Bumped with pyproject.toml's.
 APP_VERSION = "0.1.0"
 
+# Desktop app releases are tagged host-vX.Y.Z on this repository.
+HOST_RELEASES_URL = "https://api.github.com/repos/ihorklymchukdev/omelet/releases"
+
 GUEST_ROOT = "/opt/omelet"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 API_PORT = 39099
@@ -34,6 +37,10 @@ COMPOSE_FILE = "docker-compose.yml"
 RUNTIME_URL = ("https://raw.githubusercontent.com/ihorklymchukdev/"
                "local-environment/main/runtime/install/get.sh")
 RUNTIME_MARKER = f"{GUEST_ROOT}/runtime.version"
+
+# Written by the host on every connect; the VM's boot-time updater reads it to
+# stay on releases this host can drive.
+HOST_JSON = f"{GUEST_ROOT}/host.json"
 
 # Generated in the guest by the runtime installer, never pushed from the host.
 # The host reads it fresh per client via provider.exec(root=True) rather than

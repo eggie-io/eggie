@@ -149,3 +149,14 @@ def test_the_ssh_port_the_console_shows_is_the_one_lima_is_asked_for():
     declared = yaml.safe_load(
         (Path(__file__).resolve().parents[1] / "host" / "providers" / "omelet.yaml").read_text())
     assert api_constants.LIMA_SSH_PORT == declared["ssh"]["localPort"]
+
+
+def test_the_release_declares_the_api_number_the_service_speaks():
+    # get.sh picks a release by this file before installing it; a release
+    # declaring the wrong number installs on a host that cannot drive it.
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    release = json.loads((root / "runtime" / "release.json").read_text())
+    assert release == {"api": api_constants.API_VERSION}

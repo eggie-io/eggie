@@ -166,7 +166,7 @@ class LimaProvider:
     def __init__(self, name="omelet-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
-                 mac_ver=None):
+                 mac_ver=None, machine=None):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
@@ -178,6 +178,9 @@ class LimaProvider:
         # test exercising preflight()/is_supported() needs a real version to check
         # the >= 13 gate against.
         self._mac_ver = mac_ver or platform.mac_ver
+        # Injectable for the same reason: platform.machine() on the Windows host
+        # returns the Windows architecture, not the target macOS one.
+        self._machine = machine or platform.machine
 
     def _spawn(self, argv: list[str]) -> Completed:
         p = self._run(argv)
@@ -414,6 +417,13 @@ class LimaProvider:
     # user watching "Turning on Windows features" learns the wrong thing about
     # what this program is doing.
     remediable = False
+
+    def installer_asset(self, version: str) -> str:
+        # The .pkg is built native-arch: an arm64 package refuses an Intel Mac.
+        return f"OmeletSetup-{version}-{self._machine()}.pkg"
+
+    def launch_installer(self, path: Path) -> None:
+        self._run(["open", str(path)])
 
     def register_resume(self, exe_path: str) -> None:
         """Nothing to resume: `reboot_required()` is always False here, so the

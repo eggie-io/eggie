@@ -267,7 +267,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
 
 def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0",
                 pull_code=0, install_code=0, update=True, tags=None, unreachable_release=None,
-                old_install_code=0, crashed_mid_swap=False):
+                old_install_code=0, crashed_mid_swap=False, interrupted=False):
     """Runs get.sh against a fake /opt/omelet with runtime-v0.1.0 installed."""
     root = tmp_path / "opt-omelet"
     (root / "runtime" / "install").mkdir(parents=True)
@@ -277,6 +277,13 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
     (root / "runtime" / "keep-me").write_text("old runtime")
     if crashed_mid_swap:
         (root / "runtime").rename(root / "runtime.prev")
+    if interrupted:
+        # Killed after the swap, before the new install.sh wrote its marker.
+        (root / "runtime").rename(root / "runtime.prev")
+        (root / "runtime.prev.version").write_text(installed + "\n")
+        (root / "runtime" / "install").mkdir(parents=True)
+        (root / "runtime" / "half-installed").write_text("new runtime")
+        installed = ""
     for kept in ("api.token", "state.db", "host.json"):
         (root / kept).write_text(kept)
     (root / "projects" / "app").mkdir(parents=True)
@@ -285,7 +292,9 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
     new_install = (f'#!/usr/bin/env bash\nrm -f "{root}/runtime.version"\n'
                    f'echo "new install.sh $*"\nexit {install_code}\n'
                    if install_code else
-                   f'#!/usr/bin/env bash\necho "new install.sh $*"\necho "$1" > "{root}/runtime.version"\n')
+                   f'#!/usr/bin/env bash\necho "new install.sh $*"\n'
+                   f'echo "prev=$(cat "{root}/runtime.prev.version" 2>/dev/null)"\n'
+                   f'echo "$1" > "{root}/runtime.version"\n')
     tar_path = _archive(tmp_path, latest, new_install)
     docker_log = tmp_path / "docker.log"
     fake_docker = tmp_path / "docker"
@@ -350,6 +359,25 @@ def test_an_update_stages_the_images_of_the_release_it_installs(tmp_path):
     result, _, docker = _update_run(tmp_path)
     assert result.returncode == 0, result.stderr
     assert "OMELET_VERSION=0.2.0 compose -f" in docker
+
+
+def test_an_update_records_which_release_it_can_go_back_to(tmp_path):
+    result, root, _ = _update_run(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "prev=runtime-v0.1.0" in result.stdout, "recorded before install.sh runs"
+    assert not (root / "runtime.prev.version").exists()
+
+
+def test_an_update_killed_before_its_marker_goes_back_then_updates_again(tmp_path):
+    result, root, _ = _update_run(tmp_path, interrupted=True)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert "old install.sh runtime-v0.1.0" in out
+    assert out.index("old install.sh runtime-v0.1.0") < out.index("new install.sh runtime-v0.2.0")
+    assert (root / "runtime.version").read_text().strip() == "runtime-v0.2.0"
+    assert not (root / "runtime" / "half-installed").exists()
+    assert not (root / "runtime.prev").exists()
+    assert not (root / "runtime.prev.version").exists()
 
 
 def test_a_successful_update_replaces_the_runtime_and_drops_the_previous_one(tmp_path):

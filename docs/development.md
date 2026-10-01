@@ -61,6 +61,10 @@ install: it finds a Python, builds `.venv`, downloads the Ubuntu rootfs into
 To install a runtime other than the latest release, set `OMELET_RUNTIME_REF=<branch|tag>`. To
 fetch the installer from somewhere else, set `OMELET_RUNTIME_URL`.
 
+A branch runs the newest release's images. To run others (say a `build.sh --push --tag dev`
+image), also set `OMELET_IMAGE_VERSION=<tag>`. It isn't remembered: a later repair goes back to
+the newest release's images.
+
 ## Web console (`runtime/web/`)
 
 Needs Node **22.22+**.

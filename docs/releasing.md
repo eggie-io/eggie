@@ -48,7 +48,9 @@ merge them.
 ## First-release checklist
 
 - The repository is public, `runtime/install/get.sh` is on `main`.
-- A `runtime-v*` tag with `runtime/release.json` exists.
+- A `runtime-v*` tag with `runtime/release.json` exists, cut by the **Release runtime** workflow.
+  Tags cut before it (up to `runtime-v0.0.7`) shipped images under a different number, so a
+  branch install has no images to borrow until the first workflow release exists.
 - ghcr `omelet-api` and `omelet-web` are public, and each package grants this repository
   **Write** under *Manage Actions access* (the workflow pushes with `GITHUB_TOKEN`).
 - `github.com/omelet-app/omelet-skills` is public.

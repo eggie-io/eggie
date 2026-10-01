@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 GET = ROOT / "runtime" / "install" / "get.sh"
+IMAGE_VERSION = ROOT / "runtime" / "install" / "lib" / "image-version.sh"
 REPO = "https://example.invalid/omelet"
 
 
@@ -255,6 +256,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
     tar_path = tmp_path / f"{ref}.tar.gz"
     with tarfile.open(tar_path, "w:gz") as tar:
         for name, body in {"runtime/install/install.sh": install_body,
+                           "runtime/install/lib/image-version.sh": IMAGE_VERSION.read_text(),
                            "runtime/stack.yml": stack}.items():
             data = body.encode()
             info = tarfile.TarInfo(name=f"omelet-{ref}/{name}")
@@ -287,7 +289,7 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
     tar_path = _archive(tmp_path, latest, new_install)
     docker_log = tmp_path / "docker.log"
     fake_docker = tmp_path / "docker"
-    fake_docker.write_text(f'#!/bin/sh\necho "$*" >> "{docker_log}"\nexit {pull_code}\n')
+    fake_docker.write_text(f'#!/bin/sh\necho "OMELET_VERSION=$OMELET_VERSION $*" >> "{docker_log}"\nexit {pull_code}\n')
     fake_docker.chmod(0o755)
     script = (GET.read_text().replace("/opt/omelet", str(root))
               .replace("/usr/bin/docker", str(fake_docker)))
@@ -341,6 +343,13 @@ def test_an_update_pulls_the_new_images_before_touching_the_installed_runtime(tm
     assert (root / "runtime" / "keep-me").exists(), "a failed pull must leave the runtime alone"
     assert (root / "runtime.version").read_text().strip() == "runtime-v0.1.0"
     assert not (root / "stack.next.yml").exists()
+
+
+def test_an_update_stages_the_images_of_the_release_it_installs(tmp_path):
+    # .env still names the installed release; the staged pull must not fetch those.
+    result, _, docker = _update_run(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "OMELET_VERSION=0.2.0 compose -f" in docker
 
 
 def test_a_successful_update_replaces_the_runtime_and_drops_the_previous_one(tmp_path):

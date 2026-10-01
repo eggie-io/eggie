@@ -87,7 +87,9 @@ in. Build the image to see them (`packaging/images/build.sh --only web`).
 Inside the VM, as root:
 
 ```bash
-docker build -t omelet-api:debug - < /opt/omelet/runtime/omelet_api/Dockerfile.debug
+. /opt/omelet/.env && docker build -t omelet-api:debug \
+  --build-arg SERVICE_IMAGE=ghcr.io/omelet-app/omelet-api:$OMELET_VERSION \
+  - < /opt/omelet/runtime/omelet_api/Dockerfile.debug
 docker compose -f /opt/omelet/stack.yml -f /opt/omelet/runtime/stack.debug.yml up -d
 ```
 

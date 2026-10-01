@@ -27,22 +27,22 @@ release — if it does, the logic is on the wrong side of the seam (see the root
 
 ## Two version numbers — never collapse them
 
-- `SERVICE_VERSION` — the image/package release number. Lives in `omelet_api/__init__.py`
-  (`__version__`), `omelet_api/pyproject.toml`, `omelet_api/Dockerfile` (`SERVICE_VERSION`),
-  `omelet_api/Dockerfile.debug` (`SERVICE_IMAGE` default) and **both** image tags in `stack.yml`.
-  Bumped together every release; `tests/test_constants_agree.py` fails on any drift.
+- The release number — lives **only** in the `runtime-vX.Y.Z` tag. The release workflow builds
+  both images as `X.Y.Z` (baked into the api as `OMELET_SERVICE_VERSION`), `install.sh` writes
+  `OMELET_VERSION=X.Y.Z` into `/opt/omelet/.env` (`install/lib/image-version.sh`), and `stack.yml`'s
+  image tags read it. The `0.0.0` in `omelet_api/__init__.py`, `pyproject.toml` and the
+  Dockerfile is a checkout placeholder — never bump it.
 - `API_VERSION` (`omelet_api/core/constants.py`) — the wire-protocol number the host checks against
   its `SUPPORTED_API`. Bump only when a route the host calls changes incompatibly; that needs a host
   release too. The console's `SUPPORTED_API` (`web/apps/console/src/api/version.ts`) follows it.
 
-## Releasing (manual until CI exists)
+## Releasing
 
-1. Bump the `SERVICE_VERSION` set above together.
-2. `packaging/images/build.sh --push` — builds and pushes `omelet-api` and `omelet-web` for
-   `linux/amd64` and `linux/arm64` (needs `docker buildx` + `docker login ghcr.io`; refuses if the
-   versions disagree). Variants: no `--push` (native arch, local docker), `--only web`,
-   `--tag dev`.
-3. `git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z` — only `runtime-v*` tags count.
+Run the **Release runtime** workflow (`.github/workflows/release-runtime.yml`) on `main` with the
+version: tests, `packaging/images/build.sh --push --version X.Y.Z` (amd64 + arm64), then the
+`runtime-vX.Y.Z` tag — **tag last**, because VMs install a tag the moment they see it
+(`tests/test_release_workflow.py`). Locally, `build.sh` without `--push` builds native-arch
+images; `--push --tag dev --only web` pushes a throwaway image to try in a VM.
 
 Preconditions for any shipped host to install anything: the repo is public; `install/get.sh` is on
 `main` (hosts fetch it from `main`, not a tag); at least one `runtime-v*` tag exists; both ghcr

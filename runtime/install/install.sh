@@ -89,7 +89,13 @@ if ! DOCKER_GID="$(getent group docker | cut -d: -f3)" || [[ -z "$DOCKER_GID" ]]
   echo 'no docker group in this VM after installing docker-ce' >&2
   exit 1
 fi
-printf 'OMELET_DOCKER_GID=%s\n' "$DOCKER_GID" > /opt/omelet/.env
+# The release tag is the only copy of the image version; stack.yml reads it from here.
+# shellcheck disable=SC1091
+[[ -s /opt/omelet/runtime.env ]] && source /opt/omelet/runtime.env
+if ! IMAGE_VERSION="$(bash "$INSTALL_DIR/lib/image-version.sh" "$REF" "${OMELET_RUNTIME_REPO:-https://github.com/omelet-app/omelet}")"; then
+  exit 1
+fi
+printf 'OMELET_DOCKER_GID=%s\nOMELET_VERSION=%s\n' "$DOCKER_GID" "$IMAGE_VERSION" > /opt/omelet/.env
 
 # 6. the shared secret between the host and the API.
 # Only if absent: bootstrap re-runs are normal, and regenerating it every

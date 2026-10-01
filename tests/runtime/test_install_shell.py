@@ -278,6 +278,13 @@ def test_install_writes_this_vms_real_docker_gid_for_the_stack():
         "a literal GID is the bug this guards against"
 
 
+def test_install_records_the_image_version_the_stack_pulls():
+    # stack.yml names no version of its own; the release tag is the only copy.
+    commands = _commands()
+    assert any("lib/image-version.sh" in l and "$REF" in l for l in commands)
+    assert any("OMELET_VERSION=" in l and f"{constants.GUEST_ROOT}/.env" in l for l in commands)
+
+
 def test_install_gets_the_github_cli_from_githubs_own_repo():
     # Ubuntu 24.04 ships no gh at all, and the third-party mirrors that carry
     # one lag releases badly. cli.github.com is the only source that is both

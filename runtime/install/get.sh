@@ -121,9 +121,16 @@ main() {
     "${OMELET_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/omelet/runtime.env
 
   # Next to /opt/omelet/.env so compose reads the docker GID the stack needs.
+  # .env still names the installed release's images, so the new release's
+  # version is passed explicitly; it takes precedence over .env.
   if (( update )) && [[ -n "$installed" ]]; then
     install -m 644 "$tmp/runtime/stack.yml" /opt/omelet/stack.next.yml
-    if ! /usr/bin/docker compose -f /opt/omelet/stack.next.yml --profile tunnel pull; then
+    local next_version=""
+    if [[ -f "$tmp/runtime/install/lib/image-version.sh" ]] \
+        && ! next_version="$(bash "$tmp/runtime/install/lib/image-version.sh" "$ref" "$REPO")"; then
+      exit 1
+    fi
+    if ! OMELET_VERSION="$next_version" /usr/bin/docker compose -f /opt/omelet/stack.next.yml --profile tunnel pull; then
       echo "could not download the images for Omelet runtime $ref; staying on $installed" >&2
       exit 1
     fi

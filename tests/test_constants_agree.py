@@ -51,49 +51,8 @@ def test_the_readiness_window_is_the_same_on_both_sides_of_the_seam():
     assert host_timeout == api_timeout
 
 
-def test_the_stack_deploys_the_image_version_the_api_service_reports():
-    # Four files name this version and are bumped together on a runtime
-    # release: the stack's image tag (what the VM pulls), the Dockerfile's
-    # SERVICE_VERSION (GET /version's answer), the package __version__ and
-    # the package's own pyproject.toml -- the dist metadata installed inside
-    # the image, which nothing else here reads.
-    import re
-    import tomllib
-    from pathlib import Path
-
-    from omelet_api import __version__ as package_version
-
-    root = Path(__file__).resolve().parent.parent
-    stack = re.search(r"\$\{OMELET_API_IMAGE:-[^}]+:([^}:]+)\}",
-                      (root / "runtime" / "stack.yml").read_text())
-    dockerfile = re.search(r"^ARG SERVICE_VERSION=(\S+)",
-                           (root / "runtime" / "omelet_api" / "Dockerfile").read_text(), re.M)
-    pyproject = tomllib.loads(
-        (root / "runtime" / "omelet_api" / "pyproject.toml").read_text())
-    assert stack, "stack.yml must default OMELET_API_IMAGE with a tag"
-    assert dockerfile, "the Dockerfile must default SERVICE_VERSION"
-    pyproject_version = pyproject["project"]["version"]
-    assert stack[1] == dockerfile[1] == pyproject_version == package_version
 
 
-def test_the_debug_image_is_built_on_the_current_release_not_a_stale_one():
-    # Dockerfile.debug's default SERVICE_IMAGE names a *published* tag to build
-    # FROM, so an unbumped default silently pins debugging to an old release --
-    # and since Docker never validates USER at build time, a base image built
-    # before some later rename (a package name, a Linux account) fails only at
-    # `docker run`, not at build. Held to the same version as the release
-    # itself so this can only drift on purpose.
-    import re
-    from pathlib import Path
-
-    from omelet_api import __version__ as package_version
-
-    root = Path(__file__).resolve().parent.parent
-    debug = re.search(
-        r"^ARG SERVICE_IMAGE=ghcr\.io/\S+/omelet-api:(\S+)",
-        (root / "runtime" / "omelet_api" / "Dockerfile.debug").read_text(), re.M)
-    assert debug, "Dockerfile.debug must default SERVICE_IMAGE to a tagged omelet-api image"
-    assert debug[1] == package_version
 
 
 def test_the_host_speaks_the_api_the_api_service_serves():
@@ -130,17 +89,6 @@ def test_the_web_page_speaks_the_api_the_api_service_serves():
     assert api_constants.API_VERSION in supported
 
 
-def test_the_web_image_ships_with_the_api_service_it_was_built_against():
-    # The page and the api service are released as a pair under one runtime tag.
-    import re
-    from pathlib import Path
-
-    from omelet_api import __version__ as package_version
-
-    stack = (Path(__file__).resolve().parent.parent / "runtime" / "stack.yml").read_text()
-    web = re.search(r"\$\{OMELET_WEB_IMAGE:-[^}]+:([^}:]+)\}", stack)
-    assert web, "stack.yml must default OMELET_WEB_IMAGE with a tag"
-    assert web[1] == package_version
 
 
 def test_the_ssh_port_the_console_shows_is_the_one_lima_is_asked_for():

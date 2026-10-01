@@ -14,7 +14,8 @@ FROM docker:${DOCKER_CLI_VERSION}-cli AS docker-cli
 
 FROM python:3.12-slim AS runtime
 
-ARG SERVICE_VERSION=0.3.0
+# Released images get the runtime tag's number from packaging/images/build.sh.
+ARG SERVICE_VERSION=0.0.0
 ARG DOCKER_GID=999
 
 ENV OMELET_SERVICE_VERSION=${SERVICE_VERSION} \

@@ -1,0 +1,140 @@
+name: Release app
+
+# Actions → Release app → Run workflow, on main, with the version already
+# bumped in pyproject.toml and host/core/constants.py.
+# The release is created last: installed apps offer any app-v* release that
+# has its installer and SHA256SUMS, so all three must be built first.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version, X.Y.Z (becomes app-vX.Y.Z)"
+        required: true
+
+concurrency:
+  group: release-app
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Run this workflow on main, not ${GITHUB_REF}." >&2
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the version
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must be X.Y.Z, not '$VERSION'" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/app-v$VERSION" >/dev/null; then
+            echo "app-v$VERSION already exists" >&2
+            exit 1
+          fi
+          latest="$(git tag -l 'app-v*' | sed -n 's/^app-v//p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)" || true
+          if [[ -n "$latest" && "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" ]]; then
+            echo "app-v$VERSION is not newer than app-v$latest" >&2
+            exit 1
+          fi
+          # The frozen app reports APP_VERSION and the installers are named
+          # from pyproject.toml; a mismatch would ship an app that offers
+          # itself as its own update.
+          pyproject="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+          constant="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' host/core/constants.py)"
+          if [[ "$pyproject" != "$VERSION" || "$constant" != "$VERSION" ]]; then
+            echo "bump both to $VERSION first: pyproject.toml has '$pyproject', APP_VERSION is '$constant'" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python tests
+        run: |
+          pip install -e ".[dev]" "fastapi>=0.110" "uvicorn[standard]>=0.30" pyyaml httpx
+          python -m pytest -q
+
+  build-windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          choco install innosetup -y --no-progress
+      - name: Build the installer
+        run: powershell -ExecutionPolicy Bypass -File .\packaging\windows\build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-windows
+          path: dist/OmeletSetup-${{ inputs.version }}.exe
+          if-no-files-found: error
+
+  build-macos:
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e ".[dev]"
+      - name: Build the package
+        run: bash packaging/macos/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-${{ matrix.arch }}
+          path: dist/OmeletSetup-${{ inputs.version }}-${{ matrix.arch }}.pkg
+          if-no-files-found: error
+
+  publish:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create the release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha256sum OmeletSetup-* > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "app-v$VERSION" OmeletSetup-* SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Omelet $VERSION" \
+            --notes "Omelet desktop app $VERSION."

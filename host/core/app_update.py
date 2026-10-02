@@ -9,7 +9,7 @@ from typing import Callable
 from . import constants
 
 RELEASES_URL = constants.HOST_RELEASES_URL
-_TAG = re.compile(r"host-v(\d+\.\d+\.\d+)")
+_TAG = re.compile(r"app-v(\d+\.\d+\.\d+)")
 _SUMS = "SHA256SUMS"
 
 

@@ -1,13 +1,13 @@
 # Releasing
 
-The host (desktop app) and the runtime (everything inside the VM) release separately.
+The desktop app (`host/`) and the runtime (everything inside the VM) release separately.
 
 ## How installed machines update
 
 - **Runtime:** every VM checks at boot (`omelet-update.service`) and moves to the newest
   `runtime-vX.Y.Z` whose `runtime/release.json` `api` the host accepts (`/opt/omelet/host.json`).
   A host that finds an older API updates the runtime at once. A failed update keeps the old one.
-- **Desktop app:** the app checks `host-v*` releases on launch and shows **Update**.
+- **Desktop app:** the app checks `app-vX.Y.Z` releases on launch and shows **Update**.
 
 `runtime/install/get.sh` on `main` is what every host and every VM runs. Keep its env vars
 (`OMELET_RUNTIME_REPO`, `_REF`, `_REPAIR`, `_API`, `_UPDATE`), the marker
@@ -30,20 +30,26 @@ included. Skills live in `omelet-skills` and are re-installed by every runtime i
 Only when a route the host calls changes incompatibly:
 
 1. Bump `API_VERSION` in `runtime/omelet_api/core/constants.py` and `runtime/release.json`.
-2. Release a host whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
+2. Release a desktop app whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
    or no VM will install it.
 
 The release number (the tag) and `API_VERSION` (the wire protocol) are different numbers. Never
 merge them.
 
-## Cut a host release
+## Cut a desktop app release
 
-1. Bump `version` in `pyproject.toml` and `APP_VERSION` in `host/core/constants.py`.
-2. Build on each platform (`docs/building.md`): `OmeletSetup-X.Y.Z.exe`,
-   `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg`.
-3. Put all three in one folder and run `sha256sum OmeletSetup-* > SHA256SUMS`.
-4. `gh release create host-vX.Y.Z OmeletSetup-* SHA256SUMS --title "Omelet X.Y.Z"`
-   (not `--prerelease`, or no app will offer it).
+1. In a PR, bump `version` in `pyproject.toml` and `APP_VERSION` in `host/core/constants.py`
+   to `X.Y.Z`, and merge it.
+2. GitHub → **Actions** → **Release app** → **Run workflow** on `main`, version `X.Y.Z`.
+
+It refuses a version that doesn't match both files, runs the Python tests, builds
+`OmeletSetup-X.Y.Z.exe`, `OmeletSetup-X.Y.Z-arm64.pkg` and `OmeletSetup-X.Y.Z-x86_64.pkg` on
+Windows and macOS runners, then creates the `app-vX.Y.Z` release with them and `SHA256SUMS`.
+Installed apps see the release as soon as it exists, so run the manual checks in
+[release-testing.md](release-testing.md) on locally built installers before step 2. The
+installers are unsigned.
+
+A release marked prerelease or draft is never offered to installed apps.
 
 ## First-release checklist
 

@@ -45,13 +45,10 @@ bash packaging/macos/build.sh          # → dist/OmeletSetup-<v>-<arch>.pkg (na
 packaging/images/build.sh              # api + web images into local docker
 ```
 
-## Release the runtime
+## Release
 
-```bash
-# bump the version in the 5 places listed in docs/releasing.md, then:
-packaging/images/build.sh --push
-git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z
-```
+GitHub → Actions → **Release runtime** or **Release app** → Run workflow on `main`. Details in
+[docs/releasing.md](docs/releasing.md).
 
 ## Inside the VM
 

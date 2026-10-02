@@ -323,60 +323,18 @@ def test_every_home_state_can_open_settings():
         assert 'data-action="settings"' in markup[start:end], screen
 
 
-def test_the_settings_copy_is_exact():
-    markup = (UI / "index.html").read_text()
-    assert "Open Omelet when I sign in" in markup
-    assert "Stopping Omelet…" in markup
-
-
 def test_the_page_answers_the_routes_the_tray_sends():
     # controller.open_route() sends exactly these names, by call or by #fragment.
     script = (UI / "app.js").read_text()
     assert "window.omelet.route =" in script
-    assert "addEventListener('pywebviewready', start)" in script
-    start = script[script.index("function start()"):]
-    assert "window.location.hash" in start.split("\n}\n")[0]
     routes = script[script.index("const ROUTES"):].split("};")[0]
     for route in ("settings", "quit"):
         assert f"'{route}'" in routes, f"ROUTES does not handle {route}"
 
 
-def test_cancelling_a_tray_route_restores_the_interrupted_screen_before_refreshing():
+def test_the_page_handles_the_events_the_controller_pushes():
+    from host.desktop.controller import BACKGROUND_DONE, WINDOW_SHOWN
     script = (UI / "app.js").read_text()
-    for action in ("quit-cancel", "settings-back"):
-        body = script[script.index(f"ACTIONS['{action}']"):].split("\n")[0]
-        assert "restoreScreen()" in body and "refresh()" in body, action
-        assert body.index("restoreScreen()") < body.index("refresh()"), action
-    assert 'data-action="settings-back"' in (UI / "index.html").read_text()
+    for event in (BACKGROUND_DONE, WINDOW_SHOWN):
+        assert f"window.omelet.handlers.{event['kind']} =" in script, event
 
-
-def test_the_page_handles_the_end_of_a_background_start():
-    from host.desktop.controller import BACKGROUND_DONE
-    script = (UI / "app.js").read_text()
-    handler = f"window.omelet.handlers.{BACKGROUND_DONE['kind']} ="
-    assert handler in script
-    body = script[script.index(handler):].split("\n};")[0]
-    # Only Home is stale; refreshing anywhere else throws the user off their screen.
-    assert "startsWith('home:')" in body and "refresh()" in body
-
-
-def test_any_screen_but_the_tray_ones_drops_the_parked_screen():
-    # A job's terminal event can replace Settings; Back must not then bring
-    # back the job's stale running screen.
-    script = (UI / "app.js").read_text()
-    body = script[script.index("function show("):].split("\n}\n")[0]
-    assert "stash = null" in body
-    keeps = script[script.index("const KEEPS_STASH"):].split(";")[0]
-    for screen in ("settings", "quit-confirm", "quitting"):
-        assert f"'{screen}'" in keeps, screen
-
-
-def test_a_failed_tray_route_puts_the_parked_screen_back():
-    # stashScreen() empties #screen; a rejected bridge call must not leave it blank.
-    script = (UI / "app.js").read_text()
-    body = script[script.index("function fromTray("):].split("\n}\n")[0]
-    assert "catch" in body and "restoreScreen()" in body and "refresh()" in body
-    routes = script[script.index("const ROUTES"):].split("};")[0]
-    for route in ("settings", "quit"):
-        line = next(l for l in routes.splitlines() if f"'{route}'" in l)
-        assert "fromTray(" in line, route

@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from ..core.images import WSL_IMAGES
@@ -11,6 +12,10 @@ from .wsl_encoding import decode_wsl
 from .wsl_checks import diagnose_wsl2, preflight_checks
 
 RUNONCE_KEY = r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+AUTOSTART_VALUE_NAME = "Omelet"
+# Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
+POWEROFF_WAIT = 30.0
 _RESUME_VALUE_NAME = "OmeletSetup"
 
 # The user clicked No on the UAC prompt (ERROR_CANCELLED).
@@ -156,6 +161,29 @@ def _default_registry_writer(key: str, name: str, value: str) -> None:
         winreg.SetValueEx(handle, name, 0, winreg.REG_SZ, value)
 
 
+def _default_registry_reader(key: str, name: str) -> str | None:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+            value, _kind = winreg.QueryValueEx(handle, name)
+    except FileNotFoundError:
+        return None
+    return value if isinstance(value, str) else None
+
+
+def _default_registry_deleter(key: str, name: str) -> None:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as handle:
+            winreg.DeleteValue(handle, name)
+    except FileNotFoundError:
+        pass
+
+
+def run_value(exe_path: str) -> str:
+    return f'"{exe_path}" setup --background'
+
+
 def _default_arch() -> str:
     import platform
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
@@ -166,7 +194,10 @@ class Wsl2Provider:
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=_default_registry_writer, arch=None,
-                 spawner=_default_spawner):
+                 spawner=_default_spawner,
+                 registry_reader=_default_registry_reader,
+                 registry_deleter=_default_registry_deleter,
+                 sleep=time.sleep, clock=time.monotonic):
         self.distro = distro
         self.install_dir = Path(install_dir) if install_dir else None
         self.rootfs = Path(rootfs) if rootfs else None
@@ -176,6 +207,10 @@ class Wsl2Provider:
         self._facts = facts
         self._elevate = elevator
         self._write_registry = registry_writer
+        self._read_registry = registry_reader
+        self._delete_registry = registry_deleter
+        self._sleep = sleep
+        self._clock = clock
         self._arch = arch or _default_arch()
         self._features_enabled = False
 
@@ -252,6 +287,17 @@ class Wsl2Provider:
                          "bash", "-c", f"exec -a {HOLD_NAME} sleep infinity"])
 
     def stop(self) -> None:
+        # --terminate alone pulls the plug on Docker and every project
+        # database. Powering off through systemd stops them first; whether
+        # poweroff also ends the distro depends on the WSL version, so
+        # --terminate follows either way.
+        try:
+            self.exec(["systemctl", "poweroff"], root=True)
+        except VmUnresponsive:
+            pass
+        deadline = self._clock() + POWEROFF_WAIT
+        while self.running() and self._clock() < deadline:
+            self._sleep(1)
         self._require(self._meta(["--terminate", self.distro]),
                       f"the virtual machine '{self.distro}' could not be stopped")
 
@@ -425,6 +471,15 @@ class Wsl2Provider:
     def register_resume(self, exe_path: str) -> None:
         self._write_registry(RUNONCE_KEY, _RESUME_VALUE_NAME,
                              f'"{exe_path}" setup --resume')
+
+    def autostart_enabled(self, exe_path: str) -> bool:
+        return self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) == run_value(exe_path)
+
+    def set_autostart(self, on: bool, exe_path: str) -> None:
+        if on:
+            self._write_registry(RUN_KEY, AUTOSTART_VALUE_NAME, run_value(exe_path))
+        else:
+            self._delete_registry(RUN_KEY, AUTOSTART_VALUE_NAME)
 
     def image(self):
         return WSL_IMAGES[self._arch]

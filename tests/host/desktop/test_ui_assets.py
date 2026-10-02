@@ -338,3 +338,19 @@ def test_the_page_handles_the_events_the_controller_pushes():
     for event in (BACKGROUND_DONE, WINDOW_SHOWN):
         assert f"window.omelet.handlers.{event['kind']} =" in script, event
 
+
+
+def test_every_home_tile_has_an_icon():
+    # A tile without an --icon rule renders its ::before mask as a solid square.
+    markup = (UI / "index.html").read_text()
+    css = (UI / "app.css").read_text()
+    actions = set()
+    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
+        start = markup.index(f'data-screen="{screen}"')
+        tiles = markup.index('class="tiles"', start)
+        end = markup.index("</div>", tiles)
+        actions.update(re.findall(r'data-action="([^"]+)"', markup[tiles:end]))
+    assert actions, "no tiles found on the home screens"
+    missing = [a for a in sorted(actions)
+               if f'.tiles [data-action="{a}"] {{ --icon:' not in css]
+    assert not missing, f"home tiles without an icon: {missing}"

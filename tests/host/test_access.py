@@ -138,7 +138,9 @@ def test_lima_parsing_is_case_insensitive_and_unquotes(tmp_path):
 
 def test_wsl2_does_not_pretend_to_have_an_ssh_server():
     access = Wsl2Provider(distro="omelet-vm", arch="amd64").access()
-    assert access.command == "wsl -d omelet-vm"
+    # --cd ~: wsl.exe otherwise opens in the caller's Windows folder, which the
+    # guest's profile snippet leaves alone; from $HOME it moves to ~/projects.
+    assert access.command == "wsl -d omelet-vm --cd ~"
     assert "ssh" not in access.command.lower()
     assert _fields(access)["Virtual machine"] == "omelet-vm"
     assert r"\\wsl$\omelet-vm\opt\omelet\projects" in _fields(access).values()

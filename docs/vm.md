@@ -13,6 +13,10 @@ hostname, so the prompt doesn't tell you which one you're in. On macOS, `sudo` i
 password, and `limactl list` shows the VM's status and ports. **Nothing from the Mac is mounted**
 (`mounts: []`): projects reach the VM over HTTP uploads, not a shared folder.
 
+An interactive login shell that starts in `$HOME` moves to `~/projects` (`/etc/profile.d/omelet-cwd.sh`,
+installed by the runtime). On Windows add `--cd ~` — without it `wsl` opens in the current Windows folder
+and stays there.
+
 ## Creating it by hand
 
 `omelet setup` is the normal path. To use the lower-level commands on Windows, first point

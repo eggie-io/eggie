@@ -358,3 +358,18 @@ def test_uninstall_goes_on_when_autostart_cannot_be_removed(monkeypatch):
             raise OSError("registry locked")
     monkeypatch.setattr(cli, "_provider_factory", lambda: Stuck())
     assert runner.invoke(cli.app, ["uninstall", "--purge"]).exit_code == 0
+
+
+def test_uninstall_purge_forgets_the_desktop_settings(monkeypatch):
+    # A full reinstall must turn open-at-login on again, and that runs only
+    # while autostart_set_once is unset.
+    from host.desktop.settings import AUTOSTART_SET_ONCE, Settings
+    from host.providers import default_install_dir
+
+    monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
+    settings = Settings(default_install_dir().parent / "settings.json")
+    settings.set(AUTOSTART_SET_ONCE, True)
+
+    runner.invoke(cli.app, ["uninstall", "--purge"])
+
+    assert Settings(default_install_dir().parent / "settings.json").get(AUTOSTART_SET_ONCE) is False

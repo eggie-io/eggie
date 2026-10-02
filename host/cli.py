@@ -366,6 +366,11 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     root = install_dir.parent
     remove_vm_data(root, install_dir)
     remove_downloads(root)
+    # Only a full uninstall forgets these; a reset keeps them on purpose.
+    try:
+        (root / "settings.json").unlink(missing_ok=True)
+    except OSError as e:
+        typer.echo(f"Could not remove the desktop settings: {e}", err=True)
     # No host-side state.db to remove any more: project state lives in the VM
     # at /opt/omelet/state.db and goes with the VM.
 

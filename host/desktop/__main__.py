@@ -73,7 +73,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         app_update_fn=None, settings=None) -> int:
     from .api import DesktopApi
     from .controller import Controller
-    from .lifecycle import TRAY_ONLY, launch_mode
+    from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
     from .settings import Settings
     from .shell import Shell, guarded
 
@@ -95,6 +95,19 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     api.resumed = resumed
     api.start_app_update_check()
 
+    # Started before the window exists: a tray that cannot load (missing
+    # import, icon) must not leave a windowless app with an unseen traceback.
+    tray = None
+    try:
+        tray = provider.tray(icon=icon_path(), on_open=controller.show,
+                             on_settings=lambda: controller.open_route("settings"),
+                             on_quit=lambda: controller.open_route("quit"))
+        tray.start()
+    except Exception as e:
+        print(f"Omelet could not start its tray icon: {e!r}", file=sys.stderr)
+        tray = None
+        mode = WINDOW
+
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),
                         js_api=None, width=WINDOW_SIZE[0],
@@ -108,18 +121,16 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         # "install WebView2", which would not help and would not be true.
         print(WEBVIEW_MISSING, file=sys.stderr)
         print(f"(technical detail: {e!r})", file=sys.stderr)
+        if tray is not None:
+            tray.stop()
         return 3
 
     shell.window = window
     controller.window = window
     window.expose(*guarded(api, shell))
-    window.events.closing += controller.on_closing
-
-    tray = provider.tray(icon=icon_path(), on_open=controller.show,
-                         on_settings=lambda: controller.open_route("settings"),
-                         on_quit=lambda: controller.open_route("quit"))
-    controller.tray = tray
-    tray.start()
+    if tray is not None:
+        window.events.closing += controller.on_closing
+        controller.tray = tray
     if mode == TRAY_ONLY:
         provider.on_window_shown(False)
         controller.start_vm_in_background()
@@ -129,7 +140,8 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     try:
         start(debug=False)
     finally:
-        tray.stop()
+        if tray is not None:
+            tray.stop()
     return 0
 
 

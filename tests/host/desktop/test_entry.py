@@ -6,6 +6,7 @@ name the command that still works.
 """
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -16,28 +17,36 @@ from host.desktop.__main__ import WEBVIEW_MISSING, run, ui_dir
 
 
 class FakeTray:
-    def __init__(self):
+    def __init__(self, fail=False):
         self.started = self.stopped = False
-    def start(self): self.started = True
+        self.fail = fail
+    def start(self):
+        if self.fail:
+            raise ImportError("pystray")
+        self.started = True
     def stop(self): self.stopped = True
     def notify(self, text): return True
 
 
 class FakeProvider:
-    def __init__(self, exists=True, primary=True):
+    def __init__(self, exists=True, primary=True, tray_fails=False):
         self._exists, self._primary = exists, primary
+        self._tray_fails = tray_fails
+        self.vm_started = threading.Event()
         self.tray_made, self.started, self.login_watch = None, 0, None
         self.announce = None
 
     def exists(self): return self._exists
-    def start(self): self.started += 1
+    def start(self):
+        self.started += 1
+        self.vm_started.set()
     def single_instance(self, on_show, *, announce):
         self.announce = announce
         return self._primary
     def watch_login_launch(self, on_login): self.login_watch = on_login
     def on_window_shown(self, visible): pass
     def tray(self, **kwargs):
-        self.tray_made = (kwargs, FakeTray())
+        self.tray_made = (kwargs, FakeTray(self._tray_fails))
         return self.tray_made[1]
 
 
@@ -88,7 +97,7 @@ def test_a_missing_webview_runtime_is_a_sentence_not_a_traceback(tmp_path, capsy
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=create, start=lambda **kwargs: None,
                app_update_fn=_no_update_check,
-               settings=Settings(tmp_path / "settings.json"))
+        settings=Settings(tmp_path / "settings.json"))
 
     assert code == 3
     assert WEBVIEW_MISSING in capsys.readouterr().err
@@ -105,7 +114,7 @@ def test_a_working_window_starts_the_loop_and_returns_zero(tmp_path):
                create=lambda **kwargs: FakeWindow(),
                start=lambda **kwargs: started.append(kwargs),
                app_update_fn=_no_update_check,
-               settings=Settings(tmp_path / "settings.json"))
+        settings=Settings(tmp_path / "settings.json"))
 
     assert code == 0
     # debug must be off in a shipped build: it exposes devtools and a context
@@ -123,7 +132,7 @@ def test_the_real_failure_reaches_stderr_under_the_runtime_message(tmp_path, cap
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=create, start=lambda **kwargs: None,
                app_update_fn=_no_update_check,
-               settings=Settings(tmp_path / "settings.json"))
+        settings=Settings(tmp_path / "settings.json"))
 
     err = capsys.readouterr().err
     assert code == 3
@@ -138,7 +147,7 @@ def test_a_resumed_launch_is_recorded_for_the_install_screen(tmp_path):
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
         create=lambda **kwargs: window, start=lambda **kwargs: None, resumed=True,
         app_update_fn=_no_update_check,
-               settings=Settings(tmp_path / "settings.json"))
+        settings=Settings(tmp_path / "settings.json"))
 
     assert window.exposed["home"]()["resumed"] is True
 
@@ -155,7 +164,7 @@ def test_javascript_gets_the_guarded_bridge_not_the_api(tmp_path):
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
         create=create, start=lambda **kwargs: None,
         app_update_fn=_no_update_check,
-               settings=Settings(tmp_path / "settings.json"))
+        settings=Settings(tmp_path / "settings.json"))
     # pywebview resolves a dotted call name from js_api with plain getattr, so
     # any object there lets a page walk "home.__func__.__globals__" past the
     # guard. Named functions are looked up by exact name only.
@@ -228,3 +237,45 @@ def test_the_tray_stops_when_the_loop_ends(tmp_path):
     provider = FakeProvider()
     _run(tmp_path, provider)
     assert provider.tray_made[1].stopped is True
+
+
+def test_a_tray_that_cannot_start_falls_back_to_a_plain_window(tmp_path, capsys):
+    provider = FakeProvider(exists=True, tray_fails=True)
+    started = []
+    captured = {}
+    window = FakeWindow()
+
+    def create(**kw):
+        captured.update(kw)
+        return window
+
+    code = run(provider, InstallState(tmp_path / "s.json"), create=create,
+               start=lambda **kw: started.append(kw), background=True,
+               app_update_fn=_no_update_check,
+               settings=Settings(tmp_path / "settings.json"))
+    assert code == 0
+    assert captured["hidden"] is False
+    assert started
+    assert window.events.closing.handlers == []
+    assert "pystray" in capsys.readouterr().err
+    assert not provider.vm_started.wait(0.2)
+
+
+def test_a_login_launch_starts_the_vm(tmp_path):
+    provider = FakeProvider(exists=True)
+    _run(tmp_path, provider, background=True)
+    assert provider.vm_started.wait(5)
+
+
+def test_a_normal_launch_watches_for_login_launches(tmp_path):
+    provider = FakeProvider()
+    _run(tmp_path, provider)
+    assert provider.login_watch is not None
+    assert not provider.vm_started.wait(0.2)
+
+
+def test_resumed_and_login_launches_do_not_watch_for_login_launches(tmp_path):
+    resumed, login = FakeProvider(), FakeProvider()
+    _run(tmp_path, resumed, resumed=True)
+    _run(tmp_path, login, background=True)
+    assert resumed.login_watch is None and login.login_watch is None

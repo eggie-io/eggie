@@ -351,9 +351,10 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     provider = _provider()
     try:
         provider.set_autostart(False, _sys.executable)
-    except Exception:
-        # Never block removing the VM on a login entry that is already gone.
-        pass
+    except Exception as e:
+        # Whatever stops the login entry coming off (locked registry, already
+        # gone) must not block removing the VM.
+        typer.echo(f"Could not turn off open at login: {e}", err=True)
 
     destroy_error = None
     try:

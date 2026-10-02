@@ -75,7 +75,6 @@
       <span class="overline">Odds and ends</span>
       <div class="tiles">
         <button data-action="import">Import folder</button>
-        <button data-action="ports">Ports</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
@@ -106,7 +105,6 @@
       <span class="overline">Odds and ends</span>
       <div class="tiles">
         <button data-action="import">Import folder</button>
-        <button data-action="ports">Ports</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
@@ -136,7 +134,6 @@
       <span class="overline">Odds and ends</span>
       <div class="tiles">
         <button data-action="import" disabled>Import folder</button>
-        <button data-action="ports" disabled>Ports</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <span class="tile-note">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
@@ -168,7 +165,6 @@
       <span class="overline">Odds and ends</span>
       <div class="tiles">
         <button data-action="import">Import folder</button>
-        <button data-action="ports">Ports</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
@@ -368,21 +364,6 @@
       original folder isn't being touched.</p>
     <div class="bar"><span data-field="fraction"></span></div>
     <span class="hint" data-field="counter"></span>
-  </section>
-</template>
-
-<template data-screen="ports">
-  <section class="pad">
-    <h2 class="title">Serving hatches</h2>
-    <p class="lede">Each one lets something inside the kitchen show up in your
-      browser at a normal web address.</p>
-    <button class="btn-primary" data-action="add-port-row">Add a port</button>
-    <table class="hatches">
-      <thead><tr><th>On this computer</th><th>Inside the kitchen</th><th></th></tr></thead>
-      <tbody data-ports></tbody>
-    </table>
-    <p class="note">Only you can reach these. Nothing is published to the internet.</p>
-    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button></div>
   </section>
 </template>
 

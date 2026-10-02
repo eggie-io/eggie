@@ -16,7 +16,7 @@ from host.core import constants
 from host.core.status import probe
 
 from .jobs import JobRegistry
-from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event, validate_port
+from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
 
 
 class DesktopApi:
@@ -235,38 +235,6 @@ class DesktopApi:
 
         return {"job": self.jobs.start("import", work),
                 "project_id": project_id, **summary}
-
-    def list_ports(self) -> dict:
-        return {"ports": [{"guest": guest, "host": host_port}
-                          for guest, host_port in self._provider.forwards()]}
-
-    def add_port(self, guest: int, host_port: int) -> dict:
-        try:
-            guest, host_port = int(guest), int(host_port)
-        except (TypeError, ValueError):
-            return {"ok": False, "reason": "range"}
-        reason = validate_port(guest, host_port, self._provider.forwards())
-        if reason:
-            return {"ok": False, "reason": reason}
-        try:
-            self._provider.forward(guest, host_port)
-        except Exception as e:
-            # forward() shells netsh on Windows, which writes to HKLM and needs
-            # administrator: it can fail outright or be declined at the UAC
-            # prompt. Uncaught, this rejects the JS promise and the user's
-            # click silently does nothing.
-            return {"ok": False, "reason": "refused", "message": f"{e}"}
-        return {"ok": True}
-
-    def remove_port(self, guest: int, host_port: int) -> dict:
-        try:
-            self._provider.unforward(int(guest), int(host_port))
-        except Exception as e:
-            # netsh writes to HKLM and needs administrator, so removal can
-            # fail or be declined at the UAC prompt. The row says so rather
-            # than disappearing as though it worked.
-            return {"ok": False, "reason": "refused", "message": f"{e}"}
-        return {"ok": True}
 
     def doctor(self) -> dict:
         from host.core.diagnose import render_diagnosis

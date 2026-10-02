@@ -149,23 +149,3 @@ def inspect_folder(path) -> dict:
             files += 1
             total += entry.stat().st_size
     return {"name": root.name, "files": files, "bytes": total}
-
-
-# Forwarded by the providers for their own use. A user who takes API_PORT
-# severs the host from the api service, and every screen afterwards reads as
-# "can't reach the kitchen" with nothing pointing at the cause.
-RESERVED_HOST_PORTS = frozenset({constants.API_PORT, constants.EDGE_PORT})
-
-
-def validate_port(guest: int, host_port: int,
-                  existing: list[tuple[int, int]]) -> str:
-    """`""` when the pair may be added, else why not."""
-    if not (1 <= guest <= 65535 and 1 <= host_port <= 65535):
-        return "range"
-    if host_port in RESERVED_HOST_PORTS:
-        return "reserved"
-    # Keyed on the host port alone: netsh keys its table by the listening
-    # port, so a second rule replaces the first instead of coexisting.
-    if any(host_port == existing_host for _, existing_host in existing):
-        return "duplicate"
-    return ""

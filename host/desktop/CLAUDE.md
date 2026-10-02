@@ -15,6 +15,12 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
   `DesktopApi` method is covered automatically.
 - `jobs.py` — runs **one** slow job at a time on a worker thread (`JobBusy` otherwise):
   `InstallState` is a JSON file and two installs writing it would race.
+- `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
+  routes reach the page via `window.omelet.route()` or a `#route` reload when the console shows.
+  If the tray cannot start, the app runs as a plain window for that run (close exits) and the
+  failure goes to stderr.
+- `lifecycle.py` / `settings.py` — pure launch-mode decision and the `settings.json` flags that
+  must outlive the VM (`install-state.json` is deleted on reset).
 - `ui/` — HTML/CSS/JS and bundled fonts. Must work fully offline. This is **not** the browser
   console in `runtime/web/`; don't share assets between them.
 
@@ -37,3 +43,16 @@ system browser — there is no native menu.
   `window.pywebview.api` stays `{}`, `pywebviewready` never fires, and the window shows only its
   background colour — with nothing on stderr. Invisible on Windows (WebView2 runs injected script
   outside the CSP), fatal on macOS. Pinned by `tests/host/desktop/test_ui_assets.py`.
+- **`events.closing` fires for every close** — the title-bar button, `window.destroy()` and macOS
+  Cmd+Q (via `applicationShouldTerminate_`). `Controller` lets one through only after `exit()`;
+  the mac tray re-points the Cmd+Q menu item at Quit Omelet. A new close path must go through
+  `Controller.exit()` or it becomes a hide.
+- **macOS Dock → Quit, logout and restart do not stop the VM.** `tray_mac` overrides
+  `applicationShouldTerminate_` to `NSTerminateNow`; otherwise the close-to-hide handler cancels
+  termination and blocks logout.
+- **macOS tray callbacks run on a daemon thread.** pywebview's Cocoa window methods dispatch to
+  the main thread and wait, so calling them from the main thread deadlocks.
+- **Quit is not a job.** `JobRegistry` runs one job; Quit anyway must work while an install holds
+  it. Quit exits even when stopping the VM fails.
+- **Single instance on Windows is a per-user named pipe without an authkey.** The key
+  authenticated nothing and blocked `accept()`.

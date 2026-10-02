@@ -8,6 +8,8 @@ DefaultDirName={localappdata}\Programs\Omelet
 DefaultGroupName={#AppName}
 OutputDir=..\..\dist
 OutputBaseFilename=OmeletSetup-{#AppVersion}
+SetupIconFile=..\..\host\desktop\resources\icon.ico
+UninstallDisplayIcon={app}\setup.exe
 ; Per-user install: no admin for the install itself. The only UAC prompt in
 ; the whole experience is the scoped one for enabling WSL2.
 PrivilegesRequired=lowest

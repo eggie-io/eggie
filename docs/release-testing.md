@@ -52,6 +52,25 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | M14 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | M15 | Boot with the network off | The VM starts on its old runtime; `journalctl -u omelet-update` explains why | |
 
+## Tray and open at login
+
+| # | Action | Pass when | Result |
+|---|---|---|---|
+| T1 | Close the window with the title-bar button | The window hides; the tray / menu-bar icon stays; projects still answer. Windows: the first time only, a notification says Omelet is still in the tray | |
+| T2 | Tray icon: left-click (Windows) / menu **Open Omelet** | The window comes back where it was | |
+| T3 | Tray menu **Settings** while the projects console is showing | The window shows Omelet's Settings screen, not the console | |
+| T4 | Finish a first setup, then open Settings | **Open Omelet when I sign in** is ticked. Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Omelet` shows `"<install dir>\setup.exe" setup --background`. macOS: Omelet is listed in System Settings → General → Login Items | |
+| T5 | Sign out and back in (and once: reboot) | Only the tray icon appears, no window; within a minute the VM is running and projects answer | |
+| T6 | Untick the checkbox; turn it back on in Task Manager / System Settings | Reopening Settings shows the OS state each time | |
+| T7 | Untick, then run **Repair** and an app update | It stays unticked | |
+| T8 | Open Omelet again from the Start menu / Finder while it runs | The existing window comes forward; still one tray icon | |
+| T9 | Tray **Quit Omelet** with the VM running | "Stopping Omelet…" shows, then the app exits; `wsl -l --running` / `limactl list` shows the VM stopped. Record whether `systemctl poweroff` alone ended the WSL distro. If stopping the VM fails the app still exits | |
+| T10 | **Quit Omelet** during an import | "Omelet is still working" asks first; Cancel returns; Quit anyway exits | |
+| T11 | macOS: red button, then click the Dock icon; then Cmd+Q; then, with the VM running, Dock → Quit and a logout / restart | The Dock icon disappears while hidden and the window comes back on reopen; Cmd+Q stops the VM and quits; Dock → Quit, logout and restart end the app at once and do not stop the VM (and do not hang the logout) | |
+| T12 | **Update now** while the VM runs | The app restarts on the new version; the VM was never stopped | |
+| T13 | **Destructive.** Uninstall while the app runs | The app closes; the Run value / Login Item is gone | |
+| T14 | Make the tray unable to start (e.g. rename `icon.ico` in a build) and launch | The app runs as a plain window; closing it exits; the reason is on stderr | |
+
 ## Both platforms, once set up
 
 | # | Action | Pass when | Result |

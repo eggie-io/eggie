@@ -398,8 +398,9 @@ def selfcheck():
     ]
 
     try:
-        from host.desktop.__main__ import ui_dir
+        from host.desktop.__main__ import icon_path, ui_dir
         checks.append(("host/desktop/ui", ui_dir() / "index.html"))
+        checks.append(("host/desktop/resources", icon_path()))
     except ImportError as e:
         # host.desktop.__main__ is itself one of the hidden-import modules
         # checked below -- if it can't even be imported, there is no ui_dir()
@@ -407,6 +408,7 @@ def selfcheck():
         # this loop never crashes instead of reporting; the module import
         # itself is still reported separately by the loop below.
         checks.append(("host/desktop/ui", Path(f"<{e}>")))
+        checks.append(("host/desktop/resources", Path(f"<{e}>")))
 
     all_ok = True
     for label, path in checks:
@@ -431,7 +433,8 @@ def selfcheck():
     # machinery) is a different failure and still surfaces as a full
     # traceback, not as MISSING.
     import importlib
-    for name in ("__main__", "api", "view", "jobs"):
+    for name in ("__main__", "api", "view", "jobs", "controller", "lifecycle",
+                 "settings"):
         label = f"host.desktop.{name}"
         try:
             importlib.import_module(label)

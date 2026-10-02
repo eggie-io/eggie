@@ -13,11 +13,17 @@ window.omelet = {
 
 const api = () => window.pywebview.api;
 
+// Bumped on every screen change; a refresh that waited on home() while the
+// screen changed must not draw over it.
+let screenGeneration = 0;
+
 function show(screen, data) {
+  screenGeneration += 1;
   const template = document.querySelector(`template[data-screen="${screen}"]`);
   if (!template) throw new Error(`no template for ${screen}`);
   const root = document.getElementById('screen');
   clearBusy();
+  if (!KEEPS_STASH.has(screen)) stash = null;
   root.replaceChildren(template.content.cloneNode(true));
   root.dataset.screen = screen;
   fill(root, data || {});
@@ -255,6 +261,93 @@ function swap(screen, data) {
 
 ACTIONS['start-over'] = async () => { await api().reset_install(); refresh(); };
 
+// --- Settings and quit (also reached from the tray) -------------------
+
+ACTIONS['settings'] = async () => {
+  const settings = await api().get_settings();
+  show('settings', { unavailable: settings.autostart_available ? '' : 'yes', error: '' });
+  const box = document.querySelector('[data-setting="autostart"]');
+  box.checked = settings.autostart;
+  box.disabled = !settings.autostart_available;
+};
+
+ACTIONS['toggle-autostart'] = async (node) => {
+  let error = '';
+  try {
+    const result = await api().set_autostart(node.checked);
+    if (!result.ok) error = result.error;
+  } finally {
+    // Re-read rather than trust the click: the OS has the final say, and a
+    // rejected call must not leave the box in the clicked state.
+    try {
+      node.checked = (await api().get_settings()).autostart;
+    } catch (_) {
+      node.checked = !node.checked;
+    }
+    document.querySelector('[data-field="error"]').textContent = error;
+  }
+};
+
+// A tray route lands while a job's screen (install, update, import) may be
+// showing; its nodes are parked, not discarded, so the job's live handlers
+// keep a DOM to update and Cancel/Back can put it back.
+let stash = null;
+// The screens a tray route shows over the parked one; any other show()
+// means the parked screen is stale.
+const KEEPS_STASH = new Set(['settings', 'quit-confirm', 'quitting']);
+
+function stashScreen() {
+  const root = document.getElementById('screen');
+  const screen = root.dataset.screen;
+  if (!screen || stash || screen === 'settings' || screen === 'quit-confirm') return;
+  screenGeneration += 1;
+  const nodes = document.createDocumentFragment();
+  nodes.append(...root.childNodes);
+  stash = { nodes, screen };
+}
+
+function restoreScreen() {
+  if (!stash) return false;
+  const root = document.getElementById('screen');
+  clearBusy();
+  root.replaceChildren(stash.nodes);
+  root.dataset.screen = stash.screen;
+  stash = null;
+  return true;
+}
+
+async function startQuit(force) {
+  const result = await api().quit(force);
+  if (result.confirm) return show('quit-confirm', {});
+  show('quitting', {});
+}
+
+ACTIONS['quit-anyway'] = () => startQuit(true);
+ACTIONS['quit-cancel'] = () => { if (!restoreScreen()) return refresh(); };
+ACTIONS['settings-back'] = () => { if (!restoreScreen()) return refresh(); };
+
+// stashScreen() leaves #screen empty until the route draws; a rejected bridge
+// call must put the parked screen back (the rejection still reaches #notice).
+async function fromTray(go) {
+  stashScreen();
+  try {
+    return await go();
+  } catch (error) {
+    if (!restoreScreen() && !document.getElementById('screen').hasChildNodes()) refresh();
+    throw error;
+  }
+}
+
+const ROUTES = {
+  'settings': () => fromTray(ACTIONS.settings),
+  'quit': () => fromTray(() => startQuit(false)),
+};
+
+window.omelet.route = (name) => {
+  const go = ROUTES[name];
+  if (go) go();
+};
+
 // --- Import ---------------------------------------------------------
 
 // Set by choose-folder, read by do-import, cleared when Import is opened --
@@ -329,6 +422,17 @@ window.omelet.handlers.vm = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
+window.omelet.handlers.background_start = () => {
+  const screen = document.getElementById('screen').dataset.screen || '';
+  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
+};
+// Opening from the tray: a page drawn while hidden may be stale. Screens
+// holding user input or a job are left alone.
+window.omelet.handlers.window = (event) => {
+  if (event.type !== 'shown') return;
+  const screen = document.getElementById('screen').dataset.screen || '';
+  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
+};
 window.omelet.handlers.repair = (event) => {
   if (event.type === 'progress') return;
   // 'stage' events (bootstrap, connect) mark progress mid-repair, not the
@@ -376,7 +480,9 @@ window.omelet.handlers.uninstall = (event) => {
 };
 
 async function refresh() {
+  stash = null;
   if (!busy.timer) setBusy(null);
+  const generation = screenGeneration;
   let home;
   try {
     home = await api().home();
@@ -384,6 +490,7 @@ async function refresh() {
     clearBusy();
     throw error;
   }
+  if (generation !== screenGeneration) return;
   document.title = 'Omelet';
   // A window RunOnce reopened by itself must continue setup, not show Home.
   if (home.resumed) return ACTIONS['start-install'](null, home);
@@ -400,4 +507,15 @@ async function refresh() {
   show(home.route === 'home' ? `home:${home.state}` : home.route, home);
 }
 
-window.addEventListener('pywebviewready', refresh);
+function start() {
+  const route = window.location.hash.slice(1);
+  // The tray reloads this page with #settings or #quit when the console was
+  // showing; cleared so a later reload lands on Home.
+  if (route && ROUTES[route]) {
+    history.replaceState(null, '', window.location.pathname);
+    return ROUTES[route]();
+  }
+  return refresh();
+}
+
+window.addEventListener('pywebviewready', start);

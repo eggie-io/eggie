@@ -307,3 +307,34 @@ def test_the_page_lets_pywebview_build_its_bridge():
     assert "'unsafe-eval'" in sources, \
         f"script-src must allow 'unsafe-eval' for pywebview's api.js: {sources}"
     assert "'self'" in sources, f"script-src must still pin 'self': {sources}"
+
+
+def test_the_tray_screens_have_templates():
+    markup = (UI / "index.html").read_text()
+    for screen in ("settings", "quit-confirm", "quitting"):
+        assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
+
+
+def test_every_home_state_can_open_settings():
+    markup = (UI / "index.html").read_text()
+    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
+        start = markup.index(f'data-screen="{screen}"')
+        end = markup.index("</template>", start)
+        assert 'data-action="settings"' in markup[start:end], screen
+
+
+def test_the_page_answers_the_routes_the_tray_sends():
+    # controller.open_route() sends exactly these names, by call or by #fragment.
+    script = (UI / "app.js").read_text()
+    assert "window.omelet.route =" in script
+    routes = script[script.index("const ROUTES"):].split("};")[0]
+    for route in ("settings", "quit"):
+        assert f"'{route}'" in routes, f"ROUTES does not handle {route}"
+
+
+def test_the_page_handles_the_events_the_controller_pushes():
+    from host.desktop.controller import BACKGROUND_DONE, WINDOW_SHOWN
+    script = (UI / "app.js").read_text()
+    for event in (BACKGROUND_DONE, WINDOW_SHOWN):
+        assert f"window.omelet.handlers.{event['kind']} =" in script, event
+

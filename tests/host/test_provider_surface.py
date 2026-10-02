@@ -84,3 +84,24 @@ def test_the_install_surface_stays_out_of_the_lifecycle_protocol():
     # success message are installer copy, not lifecycle.
     assert not (INSTALL_SURFACE & LIFECYCLE_SURFACE)
     assert not (INSTALL_SURFACE & _protocol_methods())
+
+
+# What the desktop app asks of a provider to live in the tray and open at
+# login. Not lifecycle and not install, so it is pinned separately; a provider
+# missing one fails only on that platform, at the user's first launch.
+DESKTOP_SURFACE = {"autostart_enabled", "set_autostart", "single_instance",
+                   "watch_login_launch", "on_window_shown", "tray",
+                   "let_session_end_close"}
+
+
+def test_every_provider_offers_the_desktop_surface():
+    from host.providers.lima import LimaProvider
+    from host.providers.wsl2 import Wsl2Provider
+
+    for cls in (LimaProvider, Wsl2Provider):
+        missing = [name for name in DESKTOP_SURFACE if not callable(getattr(cls, name, None))]
+        assert not missing, f"{cls.__name__} does not implement {missing}"
+
+
+def test_the_desktop_surface_stays_out_of_the_lifecycle_protocol():
+    assert not (DESKTOP_SURFACE & _protocol_methods())

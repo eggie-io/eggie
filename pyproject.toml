@@ -7,23 +7,26 @@ requires-python = ">=3.12"
 #
 # pywebview is the desktop window; it has no bindings of its own and needs a
 # native backend per platform, so pythonnet (Windows, EdgeChromium) and the
-# three pyobjc packages (macOS, Cocoa/WebKit) are markers-scoped -- installing
+# four pyobjc packages (macOS, Cocoa/WebKit) are markers-scoped -- installing
 # on the wrong platform would either fail outright or drag an unused native
 # toolchain into a bundle meant for the other OS.
 dependencies = [
     "typer>=0.12",
-    "pywebview>=5.1",
+    "pywebview>=5.1,<7",
     "pythonnet>=3.0; sys_platform == 'win32'",
+    "pystray>=0.19; sys_platform == 'win32'",
+    "Pillow>=10.0; sys_platform == 'win32'",
     "pyobjc-core>=10.1; sys_platform == 'darwin'",
     "pyobjc-framework-Cocoa>=10.1; sys_platform == 'darwin'",
     "pyobjc-framework-WebKit>=10.1; sys_platform == 'darwin'",
+    "pyobjc-framework-ServiceManagement>=10.1; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
 omelet = "host.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pyinstaller>=6.10"]
+dev = ["pytest>=8", "pyinstaller>=6.10", "Pillow>=10.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

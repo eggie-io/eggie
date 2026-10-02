@@ -30,6 +30,14 @@ case "$reply" in
     *) echo "Nothing was removed."; exit 1 ;;
 esac
 
+# Quit through the app's own terminate path, which does not stop the VM: the
+# purge below destroys it anyway, and a running app would keep the bundle busy.
+osascript -e 'quit app "Omelet"' >/dev/null 2>&1 || true
+for _ in 1 2 3 4 5; do
+    pgrep -f "$app/Contents/MacOS/" >/dev/null 2>&1 || break
+    sleep 1
+done
+
 if [ -x "$cli" ]; then
     "$cli" uninstall --purge || echo "The VM could not be removed; continuing." >&2
 elif command -v omelet >/dev/null 2>&1; then

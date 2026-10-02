@@ -477,3 +477,9 @@ button[aria-busy="true"]::after {
 }
 button[aria-busy="true"]:disabled { opacity:1; }
 .tiles button[aria-busy="true"]::after { margin-left:auto; }
+
+.setting {
+  display:flex; align-items:center; gap:12px; margin:18px 0 6px;
+  font:500 15px 'Hanken Grotesk', sans-serif; color:var(--ink); cursor:pointer;
+}
+.setting input { width:18px; height:18px; accent-color:var(--yolk); }

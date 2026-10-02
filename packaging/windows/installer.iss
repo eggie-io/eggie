@@ -8,6 +8,8 @@ DefaultDirName={localappdata}\Programs\Omelet
 DefaultGroupName={#AppName}
 OutputDir=..\..\dist
 OutputBaseFilename=OmeletSetup-{#AppVersion}
+SetupIconFile=..\..\host\desktop\resources\icon.ico
+UninstallDisplayIcon={app}\setup.exe
 ; Per-user install: no admin for the install itself. The only UAC prompt in
 ; the whole experience is the scoped one for enabling WSL2.
 PrivilegesRequired=lowest
@@ -59,6 +61,7 @@ begin
 end;
 
 function InitializeUninstall(): Boolean;
+var ResultCode: Integer;
 begin
   Result := MsgBox(
     'Uninstalling Omelet permanently deletes the VM and every ' +
@@ -66,4 +69,15 @@ begin
     'PC, so nothing is recoverable afterward.' + #13#10#13#10 +
     'Continue with uninstall?',
     mbConfirmation, MB_YESNO + MB_DEFBUTTON2) = IDYES;
+  if Result then
+    // CloseApplications is Setup-only, so a running tray app would stay
+    // locked and outlive the VM. The purge destroys the VM right after, so a
+    // hard stop is fine. Done here, not in [UninstallRun], because Inno runs
+    // those entries in reverse order and the kill must come first.
+    // Matched by full path: setup.exe is a common installer name.
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+         '-NoProfile -Command "Get-Process setup -ErrorAction SilentlyContinue | ' +
+         'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\setup.exe') + ''' } | ' +
+         'Stop-Process -Force"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

@@ -195,6 +195,16 @@ def _default_registry_deleter(key: str, name: str) -> None:
         pass
 
 
+def _allow_any_foreground() -> None:
+    # Windows only lets the process the user just launched take the
+    # foreground; without this the first instance's window opens behind.
+    try:
+        import ctypes
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)
+    except Exception:
+        pass
+
+
 def run_value(exe_path: str) -> str:
     return f'"{exe_path}" setup --background'
 
@@ -466,11 +476,16 @@ class Wsl2Provider:
         return WinTray(icon=icon, on_open=on_open, on_settings=on_settings, on_quit=on_quit)
 
     def single_instance(self, on_show, *, announce: bool) -> bool:
-        from .instance import claim
+        from . import instance
+        try:
+            user = getpass.getuser()
+        except Exception:
+            user = "user"
         # Pipe names are machine-wide: without the user name, another user's
         # Omelet would answer and show its window instead.
-        address = rf"\\.\pipe\omelet-{getpass.getuser()}"
-        return claim(address, "AF_PIPE", on_show, announce=announce)
+        address = rf"\\.\pipe\omelet-{user}"
+        return instance.claim(address, "AF_PIPE", on_show, announce=announce,
+                              before_show=_allow_any_foreground)
 
     def apply_remedy(self, remedy: str) -> None:
         if remedy not in ("enable_wsl_features", "update_wsl"):

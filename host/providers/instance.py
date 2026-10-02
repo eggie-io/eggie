@@ -15,7 +15,7 @@ HELLO = b"hello"
 
 
 def claim(address: str, family: str, on_show: Callable[[], None], *,
-          announce: bool) -> bool:
+          announce: bool, before_show: Callable[[], None] | None = None) -> bool:
     """Connect to an existing instance or become the first one.
 
     Returns True if this process becomes the first instance (and now listens).
@@ -30,6 +30,8 @@ def claim(address: str, family: str, on_show: Callable[[], None], *,
     else:
         # Successfully connected to an existing instance.
         try:
+            if announce and before_show is not None:
+                before_show()
             conn.send_bytes(SHOW if announce else HELLO)
         except Exception:
             # Connection died; treat as best-effort and exit.

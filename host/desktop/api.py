@@ -34,7 +34,7 @@ class DesktopApi:
                  probe_fn=probe, steps_factory=None,
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
-                 settings=None, autostart_exe=_FROZEN,
+                 settings=None, autostart_exe=_FROZEN, window_shown_once=None,
                  stop_timeout=QUIT_STOP_TIMEOUT):
         self._provider = provider
         self._state = state
@@ -46,6 +46,7 @@ class DesktopApi:
         self.jobs = JobRegistry(push)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
+        self._window_shown_once = window_shown_once or (lambda: True)
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
         self._quit_app = quit_app or self._default_quit
@@ -107,9 +108,14 @@ class DesktopApi:
         first_run = not readiness.vm_exists and not self._state.completed()
         # One-shot like `resumed`: the console's Home link reloads this
         # page, and a second True would bounce the user back into it.
-        enter_console = (not self._home_seen and (route, state) == ("home", "running")
+        # A tray-only launch draws Home in a hidden window first; that call
+        # must leave the entry for the first one the user can see.
+        visible = self._window_shown_once()
+        enter_console = (visible and not self._home_seen
+                         and (route, state) == ("home", "running")
                          and not first_run and not resumed)
-        self._home_seen = True
+        if visible:
+            self._home_seen = True
         return {
             "route": route,
             "state": state,

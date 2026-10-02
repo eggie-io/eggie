@@ -418,7 +418,14 @@ window.omelet.handlers.vm = (event) => {
 };
 window.omelet.handlers.background_start = () => {
   const screen = document.getElementById('screen').dataset.screen || '';
-  if (screen.startsWith('home:')) refresh();
+  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
+};
+// Opening from the tray: a page drawn while hidden may be stale. Screens
+// holding user input or a job are left alone.
+window.omelet.handlers.window = (event) => {
+  if (event.type !== 'shown') return;
+  const screen = document.getElementById('screen').dataset.screen || '';
+  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
 };
 window.omelet.handlers.repair = (event) => {
   if (event.type === 'progress') return;

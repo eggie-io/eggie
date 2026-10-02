@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from host.desktop.controller import BACKGROUND_DONE, START_FAILED, TRAY_NOTICE, Controller
+from host.desktop.controller import BACKGROUND_DONE, WINDOW_SHOWN, START_FAILED, TRAY_NOTICE, Controller
 from host.desktop.settings import TRAY_NOTICE_SHOWN, Settings
 from host.desktop.shell import Shell
 
@@ -226,3 +226,39 @@ def test_a_failed_background_start_tells_the_page_once(tmp_path):
         tmp_path, FakeProvider(start_error=RuntimeError("wsl.exe failed")))
     controller.start_vm_in_background().join(timeout=5)
     assert pushed == [BACKGROUND_DONE]
+
+
+def test_showing_the_window_tells_the_page(tmp_path):
+    pushed = []
+    controller, _ = _controller(tmp_path)
+    controller._push = pushed.append
+    controller.show()
+    assert pushed == [WINDOW_SHOWN]
+
+
+def test_open_route_tells_the_page_the_window_came_back(tmp_path):
+    pushed = []
+    controller, _ = _controller(tmp_path)
+    controller._push = pushed.append
+    controller.open_route("settings")
+    assert WINDOW_SHOWN in pushed
+
+
+def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):
+    controller, window = _controller(tmp_path)
+
+    def broken(event):
+        raise RuntimeError("page gone")
+
+    controller._push = broken
+    controller.show()
+    assert window.calls[-1] == "show"
+
+
+def test_the_window_counts_as_shown_once_it_has_been_shown_after_a_hidden_launch(tmp_path):
+    controller, _ = _controller(tmp_path)
+    assert controller.shown_once is True
+    controller.mark_hidden_launch()
+    assert controller.shown_once is False
+    controller.show()
+    assert controller.shown_once is True

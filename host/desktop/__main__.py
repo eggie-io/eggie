@@ -90,7 +90,8 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     mode = launch_mode(resume=resumed, background=background, vm_exists=provider.exists)
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
-                     quit_app=controller.exit, settings=settings)
+                     quit_app=controller.exit, settings=settings,
+                     window_shown_once=lambda: controller.shown_once)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
@@ -138,6 +139,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         window.events.closing += controller.on_closing
         controller.tray = tray
     if mode == TRAY_ONLY:
+        controller.mark_hidden_launch()
         provider.on_window_shown(False)
         controller.start_vm_in_background()
     elif not resumed and tray is not None:

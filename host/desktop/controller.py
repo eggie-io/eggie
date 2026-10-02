@@ -11,6 +11,8 @@ TRAY_NOTICE = "Omelet is still running. Find it in the system tray."
 START_FAILED = "Omelet could not start. Open Omelet to see why."
 # The hidden page drew Home while the VM was still booting.
 BACKGROUND_DONE = {"kind": "background_start", "type": "done"}
+# The page may have drawn while hidden, before the VM answered.
+WINDOW_SHOWN = {"kind": "window", "type": "shown"}
 
 
 class Controller:
@@ -23,6 +25,10 @@ class Controller:
         self.tray = None
         self._exiting = False
         self._background = None
+        self.shown_once = True
+
+    def mark_hidden_launch(self) -> None:
+        self.shown_once = False
 
     def on_closing(self) -> bool:
         # destroy() and macOS terminate: both arrive here too; only a real
@@ -55,6 +61,8 @@ class Controller:
             return
         self.provider.on_window_shown(True)
         self.window.show()
+        self.shown_once = True
+        self._send(WINDOW_SHOWN)
 
     def open_route(self, route: str) -> None:
         if self.window is None:
@@ -101,10 +109,13 @@ class Controller:
             return False
 
     def _tell_page(self) -> None:
+        self._send(BACKGROUND_DONE)
+
+    def _send(self, event: dict) -> None:
         if self._push is None:
             return
         try:
-            self._push(BACKGROUND_DONE)
+            self._push(event)
         except Exception as e:
             print(f"Omelet could not refresh its window: {e!r}", file=sys.stderr)
 

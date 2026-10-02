@@ -384,6 +384,11 @@ class LimaProvider:
             fields=fields,
             note=note)
 
+    def single_instance(self, on_show, *, announce: bool) -> bool:
+        """LaunchServices keeps one instance of a .app; a second open arrives
+        as the reopen event, which the tray turns into Open Omelet."""
+        return True
+
     def runtime(self) -> Runtime | None:
         def install(emit) -> None:
             # Rebind: on a clean Mac find_limactl() ran before this download

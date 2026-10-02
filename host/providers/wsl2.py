@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import getpass
 import shutil
 import subprocess
 import sys
@@ -430,6 +431,13 @@ class Wsl2Provider:
                             rf"\\wsl$\{self.distro}"
                             + constants.GUEST_PROJECTS.replace("/", "\\")),
             ))
+
+    def single_instance(self, on_show, *, announce: bool) -> bool:
+        from .instance import claim
+        # Pipe names are machine-wide: without the user name, another user's
+        # Omelet would answer and show its window instead.
+        address = rf"\\.\pipe\omelet-{getpass.getuser()}"
+        return claim(address, "AF_PIPE", on_show, announce=announce)
 
     def apply_remedy(self, remedy: str) -> None:
         if remedy not in ("enable_wsl_features", "update_wsl"):

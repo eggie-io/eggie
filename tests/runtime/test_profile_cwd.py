@@ -15,13 +15,11 @@ def _start(shell: str, home: Path, cwd: Path, interactive: bool) -> str:
     flags = "-ic" if interactive else "-c"
     # No inherited PWD: the shell must derive it from the real cwd, as a login does.
     env = {"HOME": str(home), "PATH": os.environ["PATH"]}
-    # Suppress bash.bashrc sudo hint in interactive shells on Ubuntu.
-    if interactive:
-        (home / ".sudo_as_admin_successful").touch()
     result = subprocess.run([shell, flags, f'. "{SCRIPT}"; pwd'], cwd=cwd, env=env,
                             capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert result.returncode == 0, result.stderr
-    return result.stdout.strip()
+    # Interactive shells may print bashrc notices before the pwd; take the last line.
+    return result.stdout.strip().splitlines()[-1]
 
 
 @pytest.fixture

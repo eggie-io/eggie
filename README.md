@@ -56,7 +56,7 @@ git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z
 ## Inside the VM
 
 ```powershell
-wsl -d omelet-vm -u root                       # Windows
+wsl -d omelet-vm -u root --cd ~                # Windows
 ```
 
 ```bash

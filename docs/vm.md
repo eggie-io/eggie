@@ -6,7 +6,7 @@ The guest is always Ubuntu 24.04 running Docker. It's named `omelet-vm` on both 
 |---|---|---|
 | Backend | WSL2 distro | Lima (`vz`) |
 | Host-side data | `%LOCALAPPDATA%\Omelet\` (`vm\`, `cache\`) | `~/.local/share/omelet/` (`vm/`, `cache/`, `lima/`) and `~/.lima/omelet-vm/` |
-| Shell as root | `wsl -d omelet-vm -u root` | `limactl shell omelet-vm -- sudo -i` |
+| Shell as root | `wsl -d omelet-vm -u root --cd ~` | `limactl shell omelet-vm -- sudo -i` |
 
 On Windows, always pass `-d omelet-vm`. Every WSL distro reports the Windows machine name as its
 hostname, so the prompt doesn't tell you which one you're in. On macOS, `sudo` in the VM needs no

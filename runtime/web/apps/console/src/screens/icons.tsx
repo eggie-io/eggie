@@ -28,3 +28,6 @@ export const PLUG = (
 export const CHEVRON_RIGHT = <svg {...svg}><path d="M7 4l5 5-5 5" {...line} /></svg>;
 export const CHEVRON_DOWN = <svg {...svg}><path d="M5 7l4 4 4-4" {...line} /></svg>;
 export const CHECK = <svg {...svg}><path d="M4 9.4 7.2 12.6 14 5.4" {...line} /></svg>;
+export const GEAR = (
+  <svg {...svg}><circle cx="9" cy="9" r="2.3" {...line} /><path d="M9 2.5v1.7M9 13.8v1.7M2.5 9h1.7M13.8 9h1.7M4.4 4.4l1.2 1.2M12.4 12.4l1.2 1.2M4.4 13.6l1.2-1.2M12.4 5.6l1.2-1.2" {...line} /></svg>
+);

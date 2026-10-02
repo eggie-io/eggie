@@ -9,7 +9,7 @@ import { useLifecycle } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
-import { ARROW } from "../icons";
+import { ARROW, GEAR } from "../icons";
 import s from "./ProjectList.module.css";
 import { openExternal } from "../../desktop/desktop";
 
@@ -82,6 +82,13 @@ export function ProjectRow({ project }: { project: Project }) {
       break;
   }
 
+  // wrong/gone/waiting already lead to the page through their only action.
+  const settings = view.kind !== "wrong" && view.kind !== "gone" && view.kind !== "waiting" && (
+    <Button aria-label={`Settings for ${project.id}`} variant="quiet" onClick={look}>
+      {GEAR}Settings
+    </Button>
+  );
+
   return (
     <>
       <RowCard accent={view.badge === "wrong" ? "trouble" : "plain"} className={s.row}>
@@ -91,7 +98,7 @@ export function ProjectRow({ project }: { project: Project }) {
           {pub.kind === "on" && <span className={s.quiet}>{pub.left ? `Public · ${pub.left}` : "Public"}</span>}
         </div>
         <StateBadge state={view.badge} />
-        <div className={s.actions}>{actions}</div>
+        <div className={s.actions}>{actions}{settings}</div>
       </RowCard>
       {lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>}
     </>

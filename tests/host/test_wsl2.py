@@ -74,6 +74,17 @@ def test_create_imports_then_enables_systemd_then_reboots(tmp_path):
     assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in argvs[terminate:]
 
 
+def test_create_terminates_without_a_poweroff_wait(tmp_path):
+    # systemd is not running yet after the import, so there is nothing to
+    # power off; the graceful path would only wait out its 30 s poll.
+    rootfs = tmp_path / "ubuntu.tar.gz"
+    rootfs.write_bytes(b"")
+    r = FakeRunner()
+    make(r, install_dir=tmp_path / "inst", rootfs=rootfs).create()
+    assert not any("poweroff" in a for a in r.calls)
+    assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
+
+
 def test_create_rejects_a_rootfs_path_that_does_not_exist():
     r = FakeRunner()
     try:
@@ -223,7 +234,7 @@ def test_a_command_failing_inside_the_vm_still_returns_its_result():
 def test_recover_restarts_only_this_vm():
     r = FakeRunner()
     make(r).recover()
-    assert r.calls[0] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
     assert ["wsl.exe", "--shutdown"] not in r.calls
     assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in r.calls
 
@@ -256,3 +267,223 @@ def test_the_windows_installer_updates_silently_and_closes_the_running_app(tmp_p
     (argv,) = spawned
     assert argv[0].endswith("OmeletSetup-0.2.0.exe")
     assert {"/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/NORESTART"} <= set(argv[1:])
+
+
+from host.providers.wsl2 import (AUTOSTART_VALUE_NAME, RUN_KEY, STARTUP_APPROVED_KEY,  # noqa: E402
+                                   run_value)
+
+
+class PrefixRunner:
+    """Answers by argv prefix; records every call."""
+    def __init__(self, answers):
+        self.calls, self._answers = [], answers
+
+    def __call__(self, argv):
+        self.calls.append(argv)
+        for prefix, (rc, out) in self._answers.items():
+            if tuple(argv[:len(prefix)]) == prefix:
+                break
+        else:
+            rc, out = 0, b""
+
+        class R:
+            returncode = rc
+            stdout = out
+            stderr = b""
+        return R()
+
+
+def _stopper(runner, clock_values):
+    ticks = iter(clock_values)
+    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=runner,
+                        spawner=[].append, sleep=lambda s: None,
+                        clock=lambda: next(ticks))
+
+
+RUNNING = ("omelet-vm\r\n").encode("utf-16-le")
+
+
+class PoweroffEnds(PrefixRunner):
+    """The distro reports running until poweroff has been issued."""
+    def __call__(self, argv):
+        result = super().__call__(argv)
+        if argv[:3] == ["wsl.exe", "-l", "--running"]:
+            ended = any("poweroff" in c for c in self.calls)
+
+            class R:
+                returncode = 1 if ended else 0
+                stdout = b"" if ended else RUNNING
+                stderr = b""
+            return R()
+        return result
+
+
+def test_stop_powers_off_through_systemd_before_terminating():
+    runner = PoweroffEnds({})
+    _stopper(runner, [0, 1]).stop()
+    assert ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
+            "systemctl", "poweroff"] in runner.calls
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_on_a_stopped_distro_does_not_boot_it():
+    runner = PrefixRunner({("wsl.exe", "-l", "--running", "-q"): (1, b"")})
+    _stopper(runner, [0, 1]).stop()
+    assert not any(c[:2] == ["wsl.exe", "-d"] for c in runner.calls)
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_terminates_even_when_poweroff_fails():
+    runner = PoweroffEnds({
+        ("wsl.exe", "-d", "omelet-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
+    })
+    _stopper(runner, [0, 1]).stop()
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
+    runner = PrefixRunner({("wsl.exe", "-l", "--running", "-q"): (0, RUNNING)})
+    _stopper(runner, [0, 10, 20, 31]).stop()
+    polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
+    assert len(polls) == 4  # one to see it up, three while waiting
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_terminates_when_the_hung_wsl_rejects_poweroff():
+    hung = _HUNG.encode()
+
+    class Hung(PrefixRunner):
+        def __call__(self, argv):
+            result = super().__call__(argv)
+            if "poweroff" in argv:
+                class R:
+                    returncode = 4294967295
+                    stdout = b""
+                    stderr = hung
+                return R()
+            return result
+
+    runner = Hung({("wsl.exe", "-l", "--running", "-q"): (0, RUNNING)})
+    _stopper(runner, [0, 1]).stop()
+    polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
+    assert len(polls) == 1, "a hung poweroff must not be waited out"
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
+    hung = _HUNG.encode()
+
+    class HungPoll(PrefixRunner):
+        def __call__(self, argv):
+            result = super().__call__(argv)
+            if argv[:3] == ["wsl.exe", "-l", "--running"]:
+                class R:
+                    returncode = 4294967295
+                    stdout = b""
+                    stderr = hung
+                return R()
+            return result
+
+    runner = HungPoll({})
+    _stopper(runner, [0, 1]).stop()
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_run_value_quotes_a_path_with_spaces():
+    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Omelet\setup.exe"
+    assert run_value(exe) == f'"{exe}" setup --background'
+
+
+def _autostart(store):
+    def reader(key, name):
+        return store.get((key, name))
+
+    def writer(key, name, value):
+        store[(key, name)] = value
+
+    def binary_reader(key, name):
+        value = store.get((key, name))
+        return value if isinstance(value, bytes) else None
+
+    def deleter(key, name):
+        store.pop((key, name), None)
+
+    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=lambda a: None,
+                        spawner=[].append, registry_reader=reader,
+                        registry_writer=writer, registry_deleter=deleter,
+                        registry_binary_reader=binary_reader)
+
+
+EXE = r"C:\Program Files\Omelet\setup.exe"
+
+
+def test_set_autostart_on_writes_the_run_value():
+    store = {}
+    _autostart(store).set_autostart(True, EXE)
+    assert store == {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE)}
+
+
+def test_set_autostart_off_deletes_the_run_value():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE)}
+    _autostart(store).set_autostart(False, EXE)
+    assert store == {}
+
+
+def test_autostart_reads_enabled_only_for_this_exe():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(r"C:\old\setup.exe")}
+    provider = _autostart(store)
+    assert provider.autostart_enabled(EXE) is False
+    provider.set_autostart(True, EXE)
+    assert provider.autostart_enabled(EXE) is True
+
+
+def test_autostart_reads_disabled_when_the_value_is_missing():
+    assert _autostart({}).autostart_enabled(EXE) is False
+
+
+# Task Manager's Startup tab writes this; the first byte is the state.
+DISABLED_IN_TASK_MANAGER = bytes([0x03]) + bytes(11)
+ENABLED_IN_TASK_MANAGER = bytes([0x02]) + bytes(11)
+
+
+def test_disabled_in_task_manager_reads_as_off():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): DISABLED_IN_TASK_MANAGER}
+    assert _autostart(store).autostart_enabled(EXE) is False
+
+
+def test_re_enabled_in_task_manager_reads_as_on():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): ENABLED_IN_TASK_MANAGER}
+    assert _autostart(store).autostart_enabled(EXE) is True
+
+
+def test_turning_on_from_omelet_clears_the_task_manager_disable():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): DISABLED_IN_TASK_MANAGER}
+    provider = _autostart(store)
+    provider.set_autostart(True, EXE)
+    assert (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME) not in store
+    assert provider.autostart_enabled(EXE) is True
+
+
+def test_autostart_registers_the_gui_exe_when_given_the_console_exe(tmp_path):
+    """`omelet setup` runs the window from omelet.exe; a login entry pointing
+    there flashes a console at every sign-in."""
+    (tmp_path / "omelet.exe").write_bytes(b"")
+    (tmp_path / "setup.exe").write_bytes(b"")
+    console, gui = str(tmp_path / "OMELET.EXE"), str(tmp_path / "setup.exe")
+    store = {}
+    provider = _autostart(store)
+    provider.set_autostart(True, console)
+    assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(gui)
+    assert provider.autostart_enabled(gui) is True
+    assert provider.autostart_enabled(console) is True
+
+
+def test_autostart_keeps_the_console_exe_when_there_is_no_gui_sibling(tmp_path):
+    (tmp_path / "omelet.exe").write_bytes(b"")
+    console = str(tmp_path / "omelet.exe")
+    store = {}
+    _autostart(store).set_autostart(True, console)
+    assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(console)

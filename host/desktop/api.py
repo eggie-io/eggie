@@ -10,13 +10,21 @@ window.
 """
 from __future__ import annotations
 
+import sys
+import threading
 from urllib.parse import quote
 
 from host.core import constants
 from host.core.status import probe
 
 from .jobs import JobRegistry
+from .lifecycle import turn_on_autostart_once
+from .settings import Settings
 from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
+
+_FROZEN = object()
+# Past WSL's own 30 s poweroff wait; a hung wsl.exe must not keep Quit from quitting.
+QUIT_STOP_TIMEOUT = 60.0
 
 
 class DesktopApi:
@@ -25,7 +33,9 @@ class DesktopApi:
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,
                  client_factory=None, install_dir_factory=None, local_url=None,
-                 app_update_fn=None, quit_app=None):
+                 app_update_fn=None, quit_app=None,
+                 settings=None, autostart_exe=_FROZEN, window_shown_once=None,
+                 stop_timeout=QUIT_STOP_TIMEOUT):
         self._provider = provider
         self._state = state
         self._probe = probe_fn
@@ -36,11 +46,20 @@ class DesktopApi:
         self.jobs = JobRegistry(push)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
+        self._window_shown_once = window_shown_once or (lambda: True)
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
         self._quit_app = quit_app or self._default_quit
         self._app_release = None
         self._app_check = None
+        self._settings = settings or Settings(self._install_dir_factory().parent / "settings.json")
+        if autostart_exe is _FROZEN:
+            # A source checkout has no stable executable to register at login.
+            autostart_exe = sys.executable if getattr(sys, "frozen", False) else None
+        self._autostart_exe = autostart_exe
+        self._quitting = False
+        self._quit_thread = None
+        self._stop_timeout = stop_timeout
 
     @staticmethod
     def _default_client_factory(provider):
@@ -89,9 +108,14 @@ class DesktopApi:
         first_run = not readiness.vm_exists and not self._state.completed()
         # One-shot like `resumed`: the console's Home link reloads this
         # page, and a second True would bounce the user back into it.
-        enter_console = (not self._home_seen and (route, state) == ("home", "running")
+        # A tray-only launch draws Home in a hidden window first; that call
+        # must leave the entry for the first one the user can see.
+        visible = self._window_shown_once()
+        enter_console = (visible and not self._home_seen
+                         and (route, state) == ("home", "running")
                          and not first_run and not resumed)
-        self._home_seen = True
+        if visible:
+            self._home_seen = True
         return {
             "route": route,
             "state": state,
@@ -112,8 +136,6 @@ class DesktopApi:
 
     def start_app_update_check(self) -> None:
         """Once per launch, off the window's thread; announces a release so Home redraws."""
-        import threading
-
         def run():
             try:
                 self._app_release = self._app_update_fn()
@@ -165,13 +187,20 @@ class DesktopApi:
                 run_install(steps, self._state, report)
             except Exception as e:
                 return terminal_event(e)
+            try:
+                turn_on_autostart_once(
+                    self._settings, available=self._autostart_exe is not None,
+                    enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
+            except Exception as e:
+                # The VM is installed; an unsaved flag is not a failed install.
+                print(f"Omelet could not record turning on open at login: {e!r}",
+                      file=sys.stderr)
             return terminal_event(None)
 
         job_id = self.jobs.start("install", work)
         return {"job": job_id, "rows": rows_for(steps)}
 
     def reboot_now(self) -> dict:
-        import sys
         # Order matters and is pinned by a test: a machine that goes down
         # before RunOnce is written never comes back to setup.
         self._provider.register_resume(sys.executable)
@@ -351,3 +380,48 @@ class DesktopApi:
             return {"type": "done"}
 
         return {"job": self.jobs.start("app_update", work), "version": release.version}
+
+    # --- settings and quit ---------------------------------------------
+
+    def get_settings(self) -> dict:
+        available = self._autostart_exe is not None
+        return {"autostart": available and self._provider.autostart_enabled(self._autostart_exe),
+                "autostart_available": available}
+
+    def set_autostart(self, on: bool) -> dict:
+        if self._autostart_exe is None:
+            return {"ok": False, "error": "Only an installed Omelet can open when you sign in."}
+        try:
+            self._provider.set_autostart(bool(on), self._autostart_exe)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "error": ""}
+
+    def quit(self, force: bool) -> dict:
+        if self.jobs.running() and not force and not self._quitting:
+            return {"confirm": True}
+        if not self._quitting:
+            self._quitting = True
+            # Not a job: JobRegistry runs one at a time, and Quit anyway must
+            # work while an install still holds it.
+            self._quit_thread = threading.Thread(target=self._stop_then_exit,
+                                                 daemon=True, name="omelet-quit")
+            self._quit_thread.start()
+        return {"quitting": True}
+
+    def _stop_then_exit(self) -> None:
+        stopper = threading.Thread(target=self._stop_vm, daemon=True, name="omelet-stop")
+        stopper.start()
+        stopper.join(self._stop_timeout)
+        if stopper.is_alive():
+            print(f"Omelet timed out stopping the virtual machine after "
+                  f"{self._stop_timeout:g} s; quitting anyway.", file=sys.stderr)
+        self._quit_app()
+
+    def _stop_vm(self) -> None:
+        try:
+            if self._provider.running():
+                self._provider.stop()
+        except Exception as e:
+            # A VM that will not stop must not leave an app that cannot close.
+            print(f"Omelet could not stop the virtual machine: {e!r}", file=sys.stderr)

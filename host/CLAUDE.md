@@ -28,6 +28,9 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
   `subprocess.run(..., capture_output=True)`) — that is what makes them unit-testable.
   `lima.py` and `omelet.yaml` carry banners saying exactly what has and hasn't been run on a real
   Mac; keep them accurate when you change either.
+  Desktop surface (`autostart_*`, `single_instance`, `watch_login_launch`, `on_window_shown`,
+  `tray`) is pinned by `tests/host/test_provider_surface.py::DESKTOP_SURFACE`. macOS-only and
+  Windows-only imports stay function-local so the suite imports every provider on Linux.
 - `core/bootstrap.py` — the host's entire share of provisioning. Unless
   `/opt/omelet/runtime.version` exists (or `repair=True`) it runs a base64 stub as one `bash -lc`
   argument that downloads `OMELET_RUNTIME_URL` in full and runs it, forwarding `OMELET_RUNTIME_REF`

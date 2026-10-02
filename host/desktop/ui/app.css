@@ -235,9 +235,27 @@ details.log {
 }
 
 .update-note {
-  padding-left:14px;
-  font:400 13px 'Hanken Grotesk', sans-serif; color:var(--ink-3);
+  align-self:flex-start; max-width:100%;
+  display:flex; align-items:center; gap:14px;
+  padding:10px 10px 10px 14px; border-radius:var(--r-lg);
+  background:var(--yolk-soft); border:1px solid var(--line);
 }
+.update-note::before {
+  content:''; flex:none; width:30px; height:30px; border-radius:50%;
+  background:var(--yolk) center/16px no-repeat url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232B1E14' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19V5'/><path d='m5 12 7-7 7 7'/></svg>");
+}
+.update-note p {
+  margin:0; display:flex; flex-direction:column; gap:1px; min-width:0;
+  font:400 13.5px/1.35 'Hanken Grotesk', sans-serif; color:var(--ink-2);
+}
+.update-note b { font:700 14.5px/1.35 'Hanken Grotesk', sans-serif; color:var(--ink); }
+.btn-update {
+  flex:none; margin-left:10px; cursor:pointer; padding:9px 16px; border-radius:var(--r-md);
+  background:var(--surface); border:1px solid var(--line-2); color:var(--ink);
+  font:700 14px 'Hanken Grotesk', sans-serif;
+  transition:transform 120ms var(--ease);
+}
+.btn-update:hover { transform:translateY(-1px); }
 
 /* Install screens: a fixed 300px left column (pan, copy, buttons) beside a
    row panel that grows to hold however many steps the factory returned --
@@ -459,3 +477,9 @@ button[aria-busy="true"]::after {
 }
 button[aria-busy="true"]:disabled { opacity:1; }
 .tiles button[aria-busy="true"]::after { margin-left:auto; }
+
+.setting {
+  display:flex; align-items:center; gap:12px; margin:18px 0 6px;
+  font:500 15px 'Hanken Grotesk', sans-serif; color:var(--ink); cursor:pointer;
+}
+.setting input { width:18px; height:18px; accent-color:var(--yolk); }

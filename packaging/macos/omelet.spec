@@ -13,6 +13,8 @@ DATAS = [
      "host/provision/nginx-hello"),
     ("../../host/providers/omelet.yaml", "host/providers"),
     ("../../host/desktop/ui", "host/desktop/ui"),
+    # The tray loads icon.ico at runtime.
+    ("../../host/desktop/resources", "host/desktop/resources"),
 ]
 # Nothing from runtime/ is bundled: the VM pulls the API image and fetches the
 # rest of the runtime itself, and tests/host/test_frozen_bundle.py fails if an
@@ -29,7 +31,10 @@ DATAS = [
 # -- unverified against an installed pywebview, since none is installed in
 # this environment; confirm against the real package before a frozen build.
 HIDDEN = ["host.desktop.__main__", "host.desktop.api", "host.desktop.view",
-          "host.desktop.jobs", "webview", "webview.platforms.cocoa"]
+          "host.desktop.jobs", "host.desktop.controller", "host.desktop.lifecycle",
+          "host.desktop.settings", "host.providers.tray_mac",
+          "host.providers.mac_login", "ServiceManagement", "PyObjCTools.AppHelper",
+          "webview", "webview.platforms.cocoa"]
 
 cli = Analysis(["../../host/cli.py"], pathex=["../.."], datas=DATAS,
                hiddenimports=HIDDEN)
@@ -58,6 +63,8 @@ coll = COLLECT(setup_exe, cli_exe,
 app = BUNDLE(
     coll,
     name="Omelet.app",
+    # PyInstaller converts the .ico to .icns through Pillow (the dev extra).
+    icon="../../host/desktop/resources/icon.ico",
     bundle_identifier="dev.omelet.app",
     version=os.environ.get("OMELET_VERSION", "0.0.0"),
     info_plist={

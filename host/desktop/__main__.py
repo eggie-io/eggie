@@ -1,8 +1,9 @@
 """Build the provider, open the window, hand the loop to pywebview.
 
 `webview.start()` owns the main thread for the life of the app, so this
-module does nothing after calling it. Everything that happens later happens
-on a worker thread from jobs.py.
+module does nothing after calling it but stop the tray. Everything later runs
+on other threads: bridge calls, jobs.py's worker, the tray, the single-instance
+listener and the background VM start.
 """
 from __future__ import annotations
 
@@ -39,6 +40,17 @@ def ui_dir() -> Path:
     return Path(__file__).resolve().parent / "ui"
 
 
+def resource_dir() -> Path:
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        return Path(bundle) / "host" / "desktop" / "resources"
+    return Path(__file__).resolve().parent / "resources"
+
+
+def icon_path() -> Path:
+    return resource_dir() / "icon.ico"
+
+
 def _default_create(**kwargs):
     import webview
     return webview.create_window(**kwargs)
@@ -58,22 +70,56 @@ def _default_start(**kwargs):
 
 
 def run(provider, state, *, create=_default_create, start=_default_start,
-        resumed: bool = False, steps_factory=None, app_update_fn=None) -> int:
+        resumed: bool = False, background: bool = False, steps_factory=None,
+        app_update_fn=None, settings=None) -> int:
     from .api import DesktopApi
+    from .controller import Controller
+    from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
+    from .settings import Settings
     from .shell import Shell, guarded
 
+    if settings is None:
+        from host.providers import default_install_dir
+        settings = Settings(default_install_dir().parent / "settings.json")
+
     shell = Shell()
+    controller = Controller(provider, settings, shell, push=shell.push)
+    if not provider.single_instance(controller.show, announce=not background):
+        return 0
+
+    mode = launch_mode(resume=resumed, background=background, vm_exists=provider.exists)
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
-                     local_url=shell.local_url, app_update_fn=app_update_fn)
+                     local_url=shell.local_url, app_update_fn=app_update_fn,
+                     quit_app=controller.exit, settings=settings,
+                     window_shown_once=lambda: controller.shown_once)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
     api.start_app_update_check()
 
+    # Started before the window exists: a tray that cannot load (missing
+    # import, icon) must not leave a windowless app with an unseen traceback.
+    tray = None
+    try:
+        tray = provider.tray(icon=icon_path(), on_open=controller.show,
+                             on_settings=lambda: controller.open_route("settings"),
+                             on_quit=lambda: controller.open_route("quit"))
+        tray.start()
+    except Exception as e:
+        print(f"Omelet could not start its tray icon: {e!r}", file=sys.stderr)
+        tray = None
+        mode = WINDOW
+    if tray is not None:
+        try:
+            provider.let_session_end_close(controller.allow_exit)
+        except Exception as e:
+            print(f"Omelet could not watch for sign-out: {e!r}", file=sys.stderr)
+
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),
                         js_api=None, width=WINDOW_SIZE[0],
-                        height=WINDOW_SIZE[1], min_size=MIN_SIZE)
+                        height=WINDOW_SIZE[1], min_size=MIN_SIZE,
+                        hidden=mode == TRAY_ONLY)
     except Exception as e:
         # Deliberately broad: a missing runtime surfaces differently on each
         # backend, and pywebview cannot be imported here to catch its own
@@ -82,11 +128,28 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         # "install WebView2", which would not help and would not be true.
         print(WEBVIEW_MISSING, file=sys.stderr)
         print(f"(technical detail: {e!r})", file=sys.stderr)
+        if tray is not None:
+            tray.stop()
         return 3
 
     shell.window = window
+    controller.window = window
     window.expose(*guarded(api, shell))
-    start(debug=False)
+    if tray is not None:
+        window.events.closing += controller.on_closing
+        controller.tray = tray
+    if mode == TRAY_ONLY:
+        controller.mark_hidden_launch()
+        provider.on_window_shown(False)
+        controller.start_vm_in_background()
+    elif not resumed and tray is not None:
+        provider.watch_login_launch(controller.on_login_launch)
+
+    try:
+        start(debug=False)
+    finally:
+        if tray is not None:
+            tray.stop()
     return 0
 
 
@@ -99,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     # Written by provider.register_resume() into Windows RunOnce. The flag
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--background", action="store_true")
     args = parser.parse_args(argv)
 
     root = default_install_dir().parent
@@ -116,7 +180,8 @@ def main(argv: list[str] | None = None) -> int:
             exe_path=sys.executable,
         )
 
-    return run(provider, state, steps_factory=build_steps, resumed=args.resume)
+    return run(provider, state, steps_factory=build_steps, resumed=args.resume,
+               background=args.background)
 
 
 if __name__ == "__main__":

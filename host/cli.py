@@ -264,7 +264,8 @@ def destroy(project_id: str):
 
 @app.command()
 def setup(resume: bool = typer.Option(False, "--resume"),
-          headless: bool = typer.Option(False, "--headless")):
+          headless: bool = typer.Option(False, "--headless"),
+          background: bool = typer.Option(False, "--background")):
     """Set up everything: check the host, create the VM, install Docker."""
     import sys as _sys
     from host.core import constants
@@ -290,7 +291,7 @@ def setup(resume: bool = typer.Option(False, "--resume"),
     if not headless:
         from host.desktop.__main__ import run
         raise typer.Exit(code=run(provider, state, steps_factory=build_steps,
-                                  resumed=resume))
+                                  resumed=resume, background=background))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is
@@ -346,9 +347,18 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     from host.core.install import remove_downloads, remove_vm_data
     from host.providers import default_install_dir
 
+    import sys as _sys
+    provider = _provider()
+    try:
+        provider.set_autostart(False, _sys.executable)
+    except Exception as e:
+        # Whatever stops the login entry coming off (locked registry, already
+        # gone) must not block removing the VM.
+        typer.echo(f"Could not turn off open at login: {e}", err=True)
+
     destroy_error = None
     try:
-        _provider().destroy()
+        provider.destroy()
     except Exception as e:
         destroy_error = e
 
@@ -356,6 +366,11 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     root = install_dir.parent
     remove_vm_data(root, install_dir)
     remove_downloads(root)
+    # Only a full uninstall forgets these; a reset keeps them on purpose.
+    try:
+        (root / "settings.json").unlink(missing_ok=True)
+    except OSError as e:
+        typer.echo(f"Could not remove the desktop settings: {e}", err=True)
     # No host-side state.db to remove any more: project state lives in the VM
     # at /opt/omelet/state.db and goes with the VM.
 
@@ -388,8 +403,9 @@ def selfcheck():
     ]
 
     try:
-        from host.desktop.__main__ import ui_dir
+        from host.desktop.__main__ import icon_path, ui_dir
         checks.append(("host/desktop/ui", ui_dir() / "index.html"))
+        checks.append(("host/desktop/resources", icon_path()))
     except ImportError as e:
         # host.desktop.__main__ is itself one of the hidden-import modules
         # checked below -- if it can't even be imported, there is no ui_dir()
@@ -397,6 +413,7 @@ def selfcheck():
         # this loop never crashes instead of reporting; the module import
         # itself is still reported separately by the loop below.
         checks.append(("host/desktop/ui", Path(f"<{e}>")))
+        checks.append(("host/desktop/resources", Path(f"<{e}>")))
 
     all_ok = True
     for label, path in checks:
@@ -404,9 +421,10 @@ def selfcheck():
         all_ok = all_ok and ok
         typer.echo(f"{'OK' if ok else 'MISSING':<7} {label} -> {path}")
 
-    # The desktop window is four modules PyInstaller can only find through
-    # the spec's hiddenimports: cli.setup() reaches host.desktop.__main__
-    # through a function-local import, and it imports api/view/jobs in turn.
+    # The desktop window is the host.desktop modules below, which PyInstaller
+    # can only find through the spec's hiddenimports: cli.setup() reaches
+    # host.desktop.__main__ through a function-local import, and it imports
+    # the rest in turn, mostly function-locally too.
     # A bundle missing one launches, shows a Dock icon and dies on the first
     # draw -- which is exactly what this command exists to catch before a
     # user does. Reported the same way as the asset checks above (an
@@ -421,7 +439,8 @@ def selfcheck():
     # machinery) is a different failure and still surfaces as a full
     # traceback, not as MISSING.
     import importlib
-    for name in ("__main__", "api", "view", "jobs"):
+    for name in ("__main__", "api", "view", "jobs", "controller", "lifecycle",
+                 "settings"):
         label = f"host.desktop.{name}"
         try:
             importlib.import_module(label)

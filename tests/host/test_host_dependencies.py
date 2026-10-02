@@ -51,7 +51,8 @@ def test_webview_backends_are_platform_scoped():
         return dep
 
     assert "sys_platform == 'win32'" in find("pythonnet")
-    for name in ("pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-WebKit"):
+    for name in ("pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-WebKit",
+                 "pyobjc-framework-ServiceManagement"):
         assert "sys_platform == 'darwin'" in find(name)
 
 
@@ -76,3 +77,25 @@ def test_no_host_module_imports_yaml():
             if any(n == "yaml" or n.startswith("yaml.") for n in names):
                 offenders.append(f"{py}:{node.lineno}")
     assert not offenders, f"host/ imported yaml: {offenders}"
+
+
+def test_the_windows_tray_dependencies_are_platform_scoped():
+    # pystray's macOS backend needs the main thread pywebview already owns, so
+    # the mac tray is native; pystray and Pillow are Windows-only at runtime.
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    deps = data["project"]["dependencies"]
+    for name in ("pystray", "Pillow"):
+        dep = next((d for d in deps if d.startswith(name)), None)
+        assert dep, f"{name} is not declared"
+        assert "sys_platform == 'win32'" in dep
+
+
+def test_packaging_bundles_the_tray_icon_and_uses_it_as_the_app_icon():
+    # The tray loads icon.ico at runtime; a spec without it starts a tray
+    # with no image and pystray raises on the first draw.
+    for spec_path in ("packaging/windows/omelet.spec", "packaging/macos/omelet.spec"):
+        spec = (REPO_ROOT / spec_path).read_text()
+        assert '"../../host/desktop/resources"' in spec, f"{spec_path} does not bundle resources"
+        assert "icon=" in spec, f"{spec_path} does not set the app icon"
+    iss = (REPO_ROOT / "packaging/windows/installer.iss").read_text()
+    assert "SetupIconFile=" in iss

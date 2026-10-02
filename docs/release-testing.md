@@ -52,6 +52,26 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | M14 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | M15 | Boot with the network off | The VM starts on its old runtime; `journalctl -u omelet-update` explains why | |
 
+## Tray and open at login
+
+| # | Action | Pass when | Result |
+|---|---|---|---|
+| T1 | Close the window with the title-bar button | The window hides; the tray / menu-bar icon stays; projects still answer. Windows: the first time only, a notification says Omelet is still in the tray | |
+| T2 | Tray icon: left-click (Windows) / menu **Open Omelet** | The window comes back where it was | |
+| T3 | Tray menu **Settings** while the projects console is showing | The window shows Omelet's Settings screen, not the console | |
+| T4 | Finish a first setup, then open Settings | **Open Omelet when I sign in** is ticked. Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Omelet` shows `"<install dir>\setup.exe" setup --background`. macOS: Omelet is listed in System Settings → General → Login Items | |
+| T5 | Sign out and back in (and once: reboot) | Only the tray icon appears, no window (macOS: the window may flash briefly before it hides — the login launch is only recognised once the app is open); within a minute the VM is running and projects answer; opening Omelet then shows the up-to-date Home or console, not a "starting" screen | |
+| T6 | Untick the checkbox; turn it back on in Task Manager / System Settings | Reopening Settings shows the OS state each time | |
+| T7 | Untick, then run **Repair** and an app update | It stays unticked | |
+| T8 | Open Omelet again from the Start menu / Finder while it runs | The existing window comes forward; still one tray icon | |
+| T9 | Tray **Quit Omelet** with the VM running | "Stopping Omelet…" shows, then the app exits; `wsl -l --running` / `limactl list` shows the VM stopped. Record whether `systemctl poweroff` alone ended the WSL distro. If stopping the VM fails the app still exits | |
+| T10 | **Quit Omelet** during an import | "Omelet is still working" asks first; Cancel returns; Quit anyway exits | |
+| T11 | macOS: red button, then click the Dock icon; then Cmd+Q; then, with the VM running, Dock → Quit and a logout / restart | The Dock icon disappears while hidden and the window comes back on reopen; Cmd+Q stops the VM and quits; Dock → Quit, logout and restart end the app at once and do not stop the VM (and do not hang the logout) | |
+| T12 | **Update now** while the VM runs | The app restarts on the new version; the VM was never stopped | |
+| T13 | **Destructive.** Uninstall while the app runs (Windows: Settings → Apps; macOS: `uninstall.sh`) | Windows: after the confirmation the uninstaller force-ends `setup.exe` (taskkill; Inno's uninstaller cannot close running apps itself), so no "file in use" prompt appears, the tray icon goes (a force-killed icon may linger until hovered), the VM is destroyed and the Run value is gone. macOS: the script quits Omelet first (the tray icon disappears, the VM is not stopped by the app), then the purge destroys the VM and the Login Item is gone. Either way: no Omelet process and no tray icon remain | |
+| T14 | Windows: make the tray unable to start (e.g. rename `icon.ico` in a build) and launch, also once with `--background` | The app runs as a plain window, even with `--background`; closing it exits. `setup.exe` is windowed, so the reason is only visible when the app is started from a console build or with stderr redirected. macOS: a missing icon is not a tray failure — the menu-bar item shows the text "Omelet" instead and the app behaves as in T1–T3 | |
+| T15 | Windows: with the window hidden to the tray, sign out; then restart from the Start menu; then run setup's **Restart now** (after a WSL feature install); then install an app update over the running app | None of them is blocked by Omelet (no "This app is preventing you from signing out" / restart screen); the installer closes Omelet without asking | |
+
 ## Both platforms, once set up
 
 | # | Action | Pass when | Result |

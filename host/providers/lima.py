@@ -166,7 +166,7 @@ class LimaProvider:
     def __init__(self, name="omelet-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
-                 mac_ver=None, machine=None):
+                 mac_ver=None, machine=None, login_items=None):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
@@ -181,6 +181,8 @@ class LimaProvider:
         # Injectable for the same reason: platform.machine() on the Windows host
         # returns the Windows architecture, not the target macOS one.
         self._machine = machine or platform.machine
+        # Resolved lazily so importing this module never needs ServiceManagement.
+        self._login_items = login_items
 
     def _spawn(self, argv: list[str]) -> Completed:
         p = self._run(argv)
@@ -383,6 +385,30 @@ class LimaProvider:
             command=f"ssh -F {config} lima-{self.name}",
             fields=fields,
             note=note)
+
+    def _items(self):
+        if self._login_items is None:
+            from .mac_login import MainAppLoginItem
+            self._login_items = MainAppLoginItem()
+        return self._login_items
+
+    def autostart_enabled(self, exe_path: str) -> bool:
+        return self._items().enabled()
+
+    def set_autostart(self, on: bool, exe_path: str) -> None:
+        """exe_path is unused: SMAppService registers this .app bundle itself."""
+        if on:
+            self._items().register()
+        else:
+            self._items().unregister()
+
+    def watch_login_launch(self, on_login) -> None:
+        from .mac_login import install_login_launch_handler
+        install_login_launch_handler(on_login)
+
+    def on_window_shown(self, visible: bool) -> None:
+        from .mac_login import set_dock_visible
+        set_dock_visible(visible)
 
     def single_instance(self, on_show, *, announce: bool) -> bool:
         """LaunchServices keeps one instance of a .app; a second open arrives

@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 #
 # pywebview is the desktop window; it has no bindings of its own and needs a
 # native backend per platform, so pythonnet (Windows, EdgeChromium) and the
-# three pyobjc packages (macOS, Cocoa/WebKit) are markers-scoped -- installing
+# four pyobjc packages (macOS, Cocoa/WebKit) are markers-scoped -- installing
 # on the wrong platform would either fail outright or drag an unused native
 # toolchain into a bundle meant for the other OS.
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     "pyobjc-core>=10.1; sys_platform == 'darwin'",
     "pyobjc-framework-Cocoa>=10.1; sys_platform == 'darwin'",
     "pyobjc-framework-WebKit>=10.1; sys_platform == 'darwin'",
+    "pyobjc-framework-ServiceManagement>=10.1; sys_platform == 'darwin'",
 ]
 
 [project.scripts]

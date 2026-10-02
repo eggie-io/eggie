@@ -432,6 +432,12 @@ class Wsl2Provider:
                             + constants.GUEST_PROJECTS.replace("/", "\\")),
             ))
 
+    def watch_login_launch(self, on_login) -> None:
+        """Nothing to watch: the Run value passes --background itself."""
+
+    def on_window_shown(self, visible: bool) -> None:
+        """The taskbar button follows the window on its own."""
+
     def single_instance(self, on_show, *, announce: bool) -> bool:
         from .instance import claim
         # Pipe names are machine-wide: without the user name, another user's

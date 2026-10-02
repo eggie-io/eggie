@@ -307,3 +307,32 @@ def test_the_page_lets_pywebview_build_its_bridge():
     assert "'unsafe-eval'" in sources, \
         f"script-src must allow 'unsafe-eval' for pywebview's api.js: {sources}"
     assert "'self'" in sources, f"script-src must still pin 'self': {sources}"
+
+
+def test_the_tray_screens_have_templates():
+    markup = (UI / "index.html").read_text()
+    for screen in ("settings", "quit-confirm", "quitting"):
+        assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
+
+
+def test_every_home_state_can_open_settings():
+    markup = (UI / "index.html").read_text()
+    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
+        start = markup.index(f'data-screen="{screen}"')
+        end = markup.index("</template>", start)
+        assert 'data-action="settings"' in markup[start:end], screen
+
+
+def test_the_settings_copy_is_exact():
+    markup = (UI / "index.html").read_text()
+    assert "Open Omelet when I sign in" in markup
+    assert "Stopping Omelet…" in markup
+
+
+def test_the_page_answers_the_routes_the_tray_sends():
+    # controller.open_route() sends exactly these names, by call or by #fragment.
+    script = (UI / "app.js").read_text()
+    assert "omelet.route" in script or "route(" in script
+    for route in ("settings", "quit"):
+        assert f"'{route}'" in script, f"app.js does not handle the {route} route"
+    assert "location.hash" in script

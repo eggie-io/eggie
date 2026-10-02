@@ -255,6 +255,40 @@ function swap(screen, data) {
 
 ACTIONS['start-over'] = async () => { await api().reset_install(); refresh(); };
 
+// --- Settings and quit (also reached from the tray) -------------------
+
+ACTIONS['settings'] = async () => {
+  const settings = await api().get_settings();
+  show('settings', { unavailable: settings.autostart_available ? '' : 'yes', error: '' });
+  const box = document.querySelector('[data-setting="autostart"]');
+  box.checked = settings.autostart;
+  box.disabled = !settings.autostart_available;
+};
+
+ACTIONS['toggle-autostart'] = async (node) => {
+  const result = await api().set_autostart(node.checked);
+  // Re-read rather than trust the click: the OS has the final say.
+  const settings = await api().get_settings();
+  node.checked = settings.autostart;
+  fill(document.getElementById('screen'), { error: result.ok ? '' : result.error });
+};
+
+async function startQuit(force) {
+  const result = await api().quit(force);
+  if (result.confirm) return show('quit-confirm', {});
+  show('quitting', {});
+}
+
+ACTIONS['quit-anyway'] = () => startQuit(true);
+ACTIONS['quit-cancel'] = () => refresh();
+
+const ROUTES = { 'settings': () => ACTIONS.settings(), 'quit': () => startQuit(false) };
+
+window.omelet.route = (name) => {
+  const go = ROUTES[name];
+  if (go) go();
+};
+
 // --- Import ---------------------------------------------------------
 
 // Set by choose-folder, read by do-import, cleared when Import is opened --
@@ -400,4 +434,15 @@ async function refresh() {
   show(home.route === 'home' ? `home:${home.state}` : home.route, home);
 }
 
-window.addEventListener('pywebviewready', refresh);
+function start() {
+  const route = window.location.hash.slice(1);
+  // The tray reloads this page with #settings or #quit when the console was
+  // showing; cleared so a later reload lands on Home.
+  if (route && ROUTES[route]) {
+    history.replaceState(null, '', window.location.pathname);
+    return ROUTES[route]();
+  }
+  return refresh();
+}
+
+window.addEventListener('pywebviewready', start);

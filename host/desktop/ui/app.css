@@ -363,7 +363,7 @@ details.log {
 .row-step[data-status="failed"] .mark::after { content:'!'; }
 .row-step[data-status="failed"] .state { color:var(--paprika); }
 
-/* Import, Ports, Doctor, Uninstall -- odds-and-ends screens reached from the
+/* Import, Doctor, Uninstall -- odds-and-ends screens reached from the
    home tiles rather than the main flow, so they reuse .pad/.title/.lede/.row
    above and only add what those screens need. */
 .field {

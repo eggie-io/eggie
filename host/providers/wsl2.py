@@ -296,8 +296,11 @@ class Wsl2Provider:
         except VmUnresponsive:
             pass
         deadline = self._clock() + POWEROFF_WAIT
-        while self.running() and self._clock() < deadline:
-            self._sleep(1)
+        try:
+            while self.running() and self._clock() < deadline:
+                self._sleep(1)
+        except VmUnresponsive:
+            pass
         self._require(self._meta(["--terminate", self.distro]),
                       f"the virtual machine '{self.distro}' could not be stopped")
 

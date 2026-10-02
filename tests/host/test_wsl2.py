@@ -337,6 +337,25 @@ def test_stop_terminates_when_the_hung_wsl_rejects_poweroff():
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
 
 
+def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
+    hung = _HUNG.encode()
+
+    class HungPoll(PrefixRunner):
+        def __call__(self, argv):
+            result = super().__call__(argv)
+            if argv[:3] == ["wsl.exe", "-l", "--running"]:
+                class R:
+                    returncode = 4294967295
+                    stdout = b""
+                    stderr = hung
+                return R()
+            return result
+
+    runner = HungPoll({})
+    _stopper(runner, [0, 1]).stop()
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
 def test_run_value_quotes_a_path_with_spaces():
     exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Omelet\setup.exe"
     assert run_value(exe) == f'"{exe}" setup --background'

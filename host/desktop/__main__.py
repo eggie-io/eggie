@@ -39,6 +39,17 @@ def ui_dir() -> Path:
     return Path(__file__).resolve().parent / "ui"
 
 
+def resource_dir() -> Path:
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        return Path(bundle) / "host" / "desktop" / "resources"
+    return Path(__file__).resolve().parent / "resources"
+
+
+def icon_path() -> Path:
+    return resource_dir() / "icon.ico"
+
+
 def _default_create(**kwargs):
     import webview
     return webview.create_window(**kwargs)
@@ -58,13 +69,27 @@ def _default_start(**kwargs):
 
 
 def run(provider, state, *, create=_default_create, start=_default_start,
-        resumed: bool = False, steps_factory=None, app_update_fn=None) -> int:
+        resumed: bool = False, background: bool = False, steps_factory=None,
+        app_update_fn=None, settings=None) -> int:
     from .api import DesktopApi
+    from .controller import Controller
+    from .lifecycle import TRAY_ONLY, launch_mode
+    from .settings import Settings
     from .shell import Shell, guarded
 
+    if settings is None:
+        from host.providers import default_install_dir
+        settings = Settings(default_install_dir().parent / "settings.json")
+
     shell = Shell()
+    controller = Controller(provider, settings, shell)
+    if not provider.single_instance(controller.show, announce=not background):
+        return 0
+
+    mode = launch_mode(resume=resumed, background=background, vm_exists=provider.exists)
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
-                     local_url=shell.local_url, app_update_fn=app_update_fn)
+                     local_url=shell.local_url, app_update_fn=app_update_fn,
+                     quit_app=controller.exit, settings=settings)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
@@ -73,7 +98,8 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),
                         js_api=None, width=WINDOW_SIZE[0],
-                        height=WINDOW_SIZE[1], min_size=MIN_SIZE)
+                        height=WINDOW_SIZE[1], min_size=MIN_SIZE,
+                        hidden=mode == TRAY_ONLY)
     except Exception as e:
         # Deliberately broad: a missing runtime surfaces differently on each
         # backend, and pywebview cannot be imported here to catch its own
@@ -85,8 +111,25 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         return 3
 
     shell.window = window
+    controller.window = window
     window.expose(*guarded(api, shell))
-    start(debug=False)
+    window.events.closing += controller.on_closing
+
+    tray = provider.tray(icon=icon_path(), on_open=controller.show,
+                         on_settings=lambda: controller.open_route("settings"),
+                         on_quit=lambda: controller.open_route("quit"))
+    controller.tray = tray
+    tray.start()
+    if mode == TRAY_ONLY:
+        provider.on_window_shown(False)
+        controller.start_vm_in_background()
+    elif not resumed:
+        provider.watch_login_launch(controller.on_login_launch)
+
+    try:
+        start(debug=False)
+    finally:
+        tray.stop()
     return 0
 
 
@@ -99,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     # Written by provider.register_resume() into Windows RunOnce. The flag
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--background", action="store_true")
     args = parser.parse_args(argv)
 
     root = default_install_dir().parent
@@ -116,7 +160,8 @@ def main(argv: list[str] | None = None) -> int:
             exe_path=sys.executable,
         )
 
-    return run(provider, state, steps_factory=build_steps, resumed=args.resume)
+    return run(provider, state, steps_factory=build_steps, resumed=args.resume,
+               background=args.background)
 
 
 if __name__ == "__main__":

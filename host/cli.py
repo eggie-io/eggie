@@ -264,7 +264,8 @@ def destroy(project_id: str):
 
 @app.command()
 def setup(resume: bool = typer.Option(False, "--resume"),
-          headless: bool = typer.Option(False, "--headless")):
+          headless: bool = typer.Option(False, "--headless"),
+          background: bool = typer.Option(False, "--background")):
     """Set up everything: check the host, create the VM, install Docker."""
     import sys as _sys
     from host.core import constants
@@ -290,7 +291,7 @@ def setup(resume: bool = typer.Option(False, "--resume"),
     if not headless:
         from host.desktop.__main__ import run
         raise typer.Exit(code=run(provider, state, steps_factory=build_steps,
-                                  resumed=resume))
+                                  resumed=resume, background=background))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is
@@ -346,9 +347,17 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     from host.core.install import remove_downloads, remove_vm_data
     from host.providers import default_install_dir
 
+    import sys as _sys
+    provider = _provider()
+    try:
+        provider.set_autostart(False, _sys.executable)
+    except Exception:
+        # Never block removing the VM on a login entry that is already gone.
+        pass
+
     destroy_error = None
     try:
-        _provider().destroy()
+        provider.destroy()
     except Exception as e:
         destroy_error = e
 

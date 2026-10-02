@@ -30,12 +30,13 @@ class FakeProvider:
             raise self._stop_error
 
 
-def _api(tmp_path, provider=None, *, exe=EXE, steps=None, quits=None):
+def _api(tmp_path, provider=None, *, exe=EXE, steps=None, quits=None, **kwargs):
     return DesktopApi(provider or FakeProvider(), InstallState(tmp_path / "state.json"),
                       push=lambda e: None, probe_fn=lambda p: Readiness(),
                       steps_factory=lambda: steps or [Step("preflight", lambda: None)],
                       settings=Settings(tmp_path / "settings.json"), autostart_exe=exe,
-                      quit_app=(lambda: quits.append(True)) if quits is not None else lambda: None)
+                      quit_app=(lambda: quits.append(True)) if quits is not None else lambda: None,
+                      **kwargs)
 
 
 def test_settings_read_the_real_state(tmp_path):
@@ -136,3 +137,37 @@ def test_quit_anyway_runs_while_a_job_is_still_running(tmp_path):
     finally:
         release.set()
         api.jobs.join(timeout=5)
+
+
+def test_an_install_still_ends_done_when_the_once_flag_cannot_be_saved(tmp_path, capsys):
+    pushed = []
+    settings = Settings(tmp_path / "settings.json")
+
+    def broken_set(key, value):
+        raise OSError("disk full")
+
+    settings.set = broken_set
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "state.json"),
+                     push=pushed.append, probe_fn=lambda p: Readiness(),
+                     steps_factory=lambda: [Step("preflight", lambda: None)],
+                     settings=settings, autostart_exe=EXE, quit_app=lambda: None)
+    api.start_install(); api.jobs.join(timeout=5)
+    assert pushed[-1]["type"] == "done"
+    assert "disk full" in capsys.readouterr().err
+
+
+def test_quit_exits_when_stopping_the_vm_hangs(tmp_path, capsys):
+    release = threading.Event()
+
+    class Hanging(FakeProvider):
+        def stop(self):
+            release.wait(10)
+
+    quits = []
+    api = _api(tmp_path, Hanging(), quits=quits, stop_timeout=0.1)
+    try:
+        api.quit(False); api._quit_thread.join(timeout=5)
+        assert quits == [True]
+        assert "timed out" in capsys.readouterr().err
+    finally:
+        release.set()

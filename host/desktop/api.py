@@ -23,6 +23,8 @@ from .settings import Settings
 from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
 
 _FROZEN = object()
+# Past WSL's own 30 s poweroff wait; a hung wsl.exe must not keep Quit from quitting.
+QUIT_STOP_TIMEOUT = 60.0
 
 
 class DesktopApi:
@@ -32,7 +34,8 @@ class DesktopApi:
                  probe_fn=probe, steps_factory=None,
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
-                 settings=None, autostart_exe=_FROZEN):
+                 settings=None, autostart_exe=_FROZEN,
+                 stop_timeout=QUIT_STOP_TIMEOUT):
         self._provider = provider
         self._state = state
         self._probe = probe_fn
@@ -55,6 +58,7 @@ class DesktopApi:
         self._autostart_exe = autostart_exe
         self._quitting = False
         self._quit_thread = None
+        self._stop_timeout = stop_timeout
 
     @staticmethod
     def _default_client_factory(provider):
@@ -177,9 +181,14 @@ class DesktopApi:
                 run_install(steps, self._state, report)
             except Exception as e:
                 return terminal_event(e)
-            turn_on_autostart_once(
-                self._settings, available=self._autostart_exe is not None,
-                enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
+            try:
+                turn_on_autostart_once(
+                    self._settings, available=self._autostart_exe is not None,
+                    enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
+            except Exception as e:
+                # The VM is installed; an unsaved flag is not a failed install.
+                print(f"Omelet could not record turning on open at login: {e!r}",
+                      file=sys.stderr)
             return terminal_event(None)
 
         job_id = self.jobs.start("install", work)
@@ -395,11 +404,18 @@ class DesktopApi:
         return {"quitting": True}
 
     def _stop_then_exit(self) -> None:
+        stopper = threading.Thread(target=self._stop_vm, daemon=True, name="omelet-stop")
+        stopper.start()
+        stopper.join(self._stop_timeout)
+        if stopper.is_alive():
+            print(f"Omelet timed out stopping the virtual machine after "
+                  f"{self._stop_timeout:g} s; quitting anyway.", file=sys.stderr)
+        self._quit_app()
+
+    def _stop_vm(self) -> None:
         try:
             if self._provider.running():
                 self._provider.stop()
         except Exception as e:
             # A VM that will not stop must not leave an app that cannot close.
             print(f"Omelet could not stop the virtual machine: {e!r}", file=sys.stderr)
-        finally:
-            self._quit_app()

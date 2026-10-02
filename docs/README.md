@@ -4,7 +4,7 @@
 |---|---|
 | [development.md](development.md) | Setting up a checkout, running tests, the web UI dev server, debugging the API in a VM |
 | [building.md](building.md) | Building the Windows installer, the macOS package, and the container images |
-| [releasing.md](releasing.md) | Cutting runtime and host releases, and how installed machines update |
+| [releasing.md](releasing.md) | Cutting runtime and desktop app releases, and how installed machines update |
 | [vm.md](vm.md) | Running the VM by hand, looking inside it, troubleshooting, uninstalling |
 | [release-testing.md](release-testing.md) | The manual checks to run on real machines before shipping an installer |
 | [macos-status.md](macos-status.md) | What has and hasn't been run on a real Mac |

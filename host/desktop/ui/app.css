@@ -80,18 +80,18 @@ body {
 }
 
 .btn-primary {
-  border:0; cursor:pointer; padding:18px 34px; border-radius:var(--r-lg);
+  border:0; cursor:pointer; padding:14px 28px; border-radius:var(--r-lg);
   background:var(--yolk); color:#2B1E14;
-  font:700 20px 'Bricolage Grotesque', sans-serif;
+  font:700 17px 'Bricolage Grotesque', sans-serif;
   box-shadow:0 12px 26px -12px rgba(255,176,32,.95);
   transition:transform 120ms var(--ease);
 }
 .btn-primary:hover { transform:translateY(-2px); }
 .btn-primary:disabled { opacity:.6; cursor:not-allowed; transform:none; }
 .btn-secondary {
-  cursor:pointer; padding:15px 24px; border-radius:var(--r-md);
+  cursor:pointer; padding:11px 20px; border-radius:var(--r-md);
   background:var(--surface); border:1px solid var(--line-2); color:var(--ink-2);
-  font:600 15.5px 'Hanken Grotesk', sans-serif;
+  font:600 14.5px 'Hanken Grotesk', sans-serif;
   transition:background 120ms var(--ease), color 120ms var(--ease);
 }
 .btn-secondary:hover { background:var(--surface-2); color:var(--ink); }
@@ -414,9 +414,9 @@ fieldset[data-conflict] {
 .warn b { font-weight:700; }
 
 .btn-danger {
-  border:0; cursor:pointer; padding:15px 24px; border-radius:var(--r-md);
+  border:0; cursor:pointer; padding:11px 20px; border-radius:var(--r-md);
   background:var(--paprika); color:var(--surface);
-  font:700 15.5px 'Hanken Grotesk', sans-serif;
+  font:700 14.5px 'Hanken Grotesk', sans-serif;
   transition:transform 120ms var(--ease);
 }
 .btn-danger:hover { transform:translateY(-2px); }

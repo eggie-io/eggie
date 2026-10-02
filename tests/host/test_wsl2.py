@@ -74,6 +74,17 @@ def test_create_imports_then_enables_systemd_then_reboots(tmp_path):
     assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in argvs[terminate:]
 
 
+def test_create_terminates_without_a_poweroff_wait(tmp_path):
+    # systemd is not running yet after the import, so there is nothing to
+    # power off; the graceful path would only wait out its 30 s poll.
+    rootfs = tmp_path / "ubuntu.tar.gz"
+    rootfs.write_bytes(b"")
+    r = FakeRunner()
+    make(r, install_dir=tmp_path / "inst", rootfs=rootfs).create()
+    assert not any("poweroff" in a for a in r.calls)
+    assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
+
+
 def test_create_rejects_a_rootfs_path_that_does_not_exist():
     r = FakeRunner()
     try:

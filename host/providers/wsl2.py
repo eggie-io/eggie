@@ -291,7 +291,10 @@ class Wsl2Provider:
                        "printf '[boot]\\nsystemd=true\\n' > /etc/wsl.conf"],
                       root=True),
             f"systemd could not be turned on inside '{self.distro}'")
-        self.stop()  # --terminate so the wsl.conf change takes effect on next boot
+        # Not stop(): systemd is not running yet, so its poweroff path would
+        # only wait out the poll. --terminate makes wsl.conf apply on next boot.
+        self._require(self._meta(["--terminate", self.distro]),
+                      f"the virtual machine '{self.distro}' could not be restarted")
         self.start()  # like Lima's create: the VM is left running
 
     def start(self) -> None:

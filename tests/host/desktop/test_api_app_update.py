@@ -117,3 +117,24 @@ def test_a_download_that_does_not_match_its_digest_is_never_launched(tmp_path, m
     assert provider.launched == []
     assert quits == []
     assert pushed[-1]["type"] == "crashed"
+
+
+def test_the_update_quit_leaves_the_vm_running(tmp_path, monkeypatch):
+    # The installer relaunches the app at once; a stop here only adds a
+    # stop and a boot to every update.
+    from host.core import download
+
+    class Provider(FakeProvider):
+        stops = 0
+        def stop(self):
+            Provider.stops += 1
+
+    monkeypatch.setattr(download, "fetch", lambda *a, **k: tmp_path / "setup.exe")
+    quits = []
+    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/x.exe", "0" * 64),
+               quits=quits, provider=Provider())
+    api.check_app_update()
+    api.start_app_update()
+    api.jobs.join(timeout=5)
+    assert quits == [True]
+    assert Provider.stops == 0

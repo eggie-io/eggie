@@ -358,3 +358,25 @@ def test_the_page_handles_the_end_of_a_background_start():
     body = script[script.index(handler):].split("\n};")[0]
     # Only Home is stale; refreshing anywhere else throws the user off their screen.
     assert "startsWith('home:')" in body and "refresh()" in body
+
+
+def test_any_screen_but_the_tray_ones_drops_the_parked_screen():
+    # A job's terminal event can replace Settings; Back must not then bring
+    # back the job's stale running screen.
+    script = (UI / "app.js").read_text()
+    body = script[script.index("function show("):].split("\n}\n")[0]
+    assert "stash = null" in body
+    keeps = script[script.index("const KEEPS_STASH"):].split(";")[0]
+    for screen in ("settings", "quit-confirm", "quitting"):
+        assert f"'{screen}'" in keeps, screen
+
+
+def test_a_failed_tray_route_puts_the_parked_screen_back():
+    # stashScreen() empties #screen; a rejected bridge call must not leave it blank.
+    script = (UI / "app.js").read_text()
+    body = script[script.index("function fromTray("):].split("\n}\n")[0]
+    assert "catch" in body and "restoreScreen()" in body and "refresh()" in body
+    routes = script[script.index("const ROUTES"):].split("};")[0]
+    for route in ("settings", "quit"):
+        line = next(l for l in routes.splitlines() if f"'{route}'" in l)
+        assert "fromTray(" in line, route

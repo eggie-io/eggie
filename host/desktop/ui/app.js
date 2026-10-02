@@ -18,6 +18,7 @@ function show(screen, data) {
   if (!template) throw new Error(`no template for ${screen}`);
   const root = document.getElementById('screen');
   clearBusy();
+  if (!KEEPS_STASH.has(screen)) stash = null;
   root.replaceChildren(template.content.cloneNode(true));
   root.dataset.screen = screen;
   fill(root, data || {});
@@ -286,6 +287,9 @@ ACTIONS['toggle-autostart'] = async (node) => {
 // showing; its nodes are parked, not discarded, so the job's live handlers
 // keep a DOM to update and Cancel/Back can put it back.
 let stash = null;
+// The screens a tray route shows over the parked one; any other show()
+// means the parked screen is stale.
+const KEEPS_STASH = new Set(['settings', 'quit-confirm', 'quitting']);
 
 function stashScreen() {
   const root = document.getElementById('screen');
@@ -316,9 +320,21 @@ ACTIONS['quit-anyway'] = () => startQuit(true);
 ACTIONS['quit-cancel'] = () => { if (!restoreScreen()) return refresh(); };
 ACTIONS['settings-back'] = () => { if (!restoreScreen()) return refresh(); };
 
+// stashScreen() leaves #screen empty until the route draws; a rejected bridge
+// call must put the parked screen back (the rejection still reaches #notice).
+async function fromTray(go) {
+  stashScreen();
+  try {
+    return await go();
+  } catch (error) {
+    if (!restoreScreen() && !document.getElementById('screen').hasChildNodes()) refresh();
+    throw error;
+  }
+}
+
 const ROUTES = {
-  'settings': () => { stashScreen(); return ACTIONS.settings(); },
-  'quit': () => { stashScreen(); return startQuit(false); },
+  'settings': () => fromTray(ACTIONS.settings),
+  'quit': () => fromTray(() => startQuit(false)),
 };
 
 window.omelet.route = (name) => {

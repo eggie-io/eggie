@@ -260,7 +260,8 @@ def test_the_windows_installer_updates_silently_and_closes_the_running_app(tmp_p
     assert {"/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/NORESTART"} <= set(argv[1:])
 
 
-from host.providers.wsl2 import AUTOSTART_VALUE_NAME, RUN_KEY, run_value  # noqa: E402
+from host.providers.wsl2 import (AUTOSTART_VALUE_NAME, RUN_KEY, STARTUP_APPROVED_KEY,  # noqa: E402
+                                   run_value)
 
 
 class PrefixRunner:
@@ -368,12 +369,17 @@ def _autostart(store):
     def writer(key, name, value):
         store[(key, name)] = value
 
+    def binary_reader(key, name):
+        value = store.get((key, name))
+        return value if isinstance(value, bytes) else None
+
     def deleter(key, name):
         store.pop((key, name), None)
 
     return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=lambda a: None,
                         spawner=[].append, registry_reader=reader,
-                        registry_writer=writer, registry_deleter=deleter)
+                        registry_writer=writer, registry_deleter=deleter,
+                        registry_binary_reader=binary_reader)
 
 
 EXE = r"C:\Program Files\Omelet\setup.exe"
@@ -401,3 +407,29 @@ def test_autostart_reads_enabled_only_for_this_exe():
 
 def test_autostart_reads_disabled_when_the_value_is_missing():
     assert _autostart({}).autostart_enabled(EXE) is False
+
+
+# Task Manager's Startup tab writes this; the first byte is the state.
+DISABLED_IN_TASK_MANAGER = bytes([0x03]) + bytes(11)
+ENABLED_IN_TASK_MANAGER = bytes([0x02]) + bytes(11)
+
+
+def test_disabled_in_task_manager_reads_as_off():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): DISABLED_IN_TASK_MANAGER}
+    assert _autostart(store).autostart_enabled(EXE) is False
+
+
+def test_re_enabled_in_task_manager_reads_as_on():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): ENABLED_IN_TASK_MANAGER}
+    assert _autostart(store).autostart_enabled(EXE) is True
+
+
+def test_turning_on_from_omelet_clears_the_task_manager_disable():
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
+             (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): DISABLED_IN_TASK_MANAGER}
+    provider = _autostart(store)
+    provider.set_autostart(True, EXE)
+    assert (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME) not in store
+    assert provider.autostart_enabled(EXE) is True

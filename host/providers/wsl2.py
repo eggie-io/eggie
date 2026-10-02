@@ -14,6 +14,10 @@ from .wsl_checks import diagnose_wsl2, preflight_checks
 
 RUNONCE_KEY = r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+# Task Manager's Startup tab leaves the Run value alone and records its own
+# switch here: first byte 0x03 = disabled; missing or anything else = enabled.
+STARTUP_APPROVED_KEY = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+_STARTUP_DISABLED = 0x03
 AUTOSTART_VALUE_NAME = "Omelet"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
 POWEROFF_WAIT = 30.0
@@ -172,6 +176,16 @@ def _default_registry_reader(key: str, name: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _default_registry_binary_reader(key: str, name: str) -> bytes | None:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+            value, _kind = winreg.QueryValueEx(handle, name)
+    except FileNotFoundError:
+        return None
+    return bytes(value) if isinstance(value, (bytes, bytearray)) else None
+
+
 def _default_registry_deleter(key: str, name: str) -> None:
     import winreg
     try:
@@ -198,6 +212,7 @@ class Wsl2Provider:
                  spawner=_default_spawner,
                  registry_reader=_default_registry_reader,
                  registry_deleter=_default_registry_deleter,
+                 registry_binary_reader=_default_registry_binary_reader,
                  sleep=time.sleep, clock=time.monotonic):
         self.distro = distro
         self.install_dir = Path(install_dir) if install_dir else None
@@ -210,6 +225,7 @@ class Wsl2Provider:
         self._write_registry = registry_writer
         self._read_registry = registry_reader
         self._delete_registry = registry_deleter
+        self._read_registry_binary = registry_binary_reader
         self._sleep = sleep
         self._clock = clock
         self._arch = arch or _default_arch()
@@ -498,11 +514,15 @@ class Wsl2Provider:
                              f'"{exe_path}" setup --resume')
 
     def autostart_enabled(self, exe_path: str) -> bool:
-        return self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) == run_value(exe_path)
+        if self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) != run_value(exe_path):
+            return False
+        approved = self._read_registry_binary(STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME)
+        return not (approved and approved[0] == _STARTUP_DISABLED)
 
     def set_autostart(self, on: bool, exe_path: str) -> None:
         if on:
             self._write_registry(RUN_KEY, AUTOSTART_VALUE_NAME, run_value(exe_path))
+            self._delete_registry(STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME)
         else:
             self._delete_registry(RUN_KEY, AUTOSTART_VALUE_NAME)
 

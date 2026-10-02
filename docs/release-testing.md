@@ -60,7 +60,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | T2 | Tray icon: left-click (Windows) / menu **Open Omelet** | The window comes back where it was | |
 | T3 | Tray menu **Settings** while the projects console is showing | The window shows Omelet's Settings screen, not the console | |
 | T4 | Finish a first setup, then open Settings | **Open Omelet when I sign in** is ticked. Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Omelet` shows `"<install dir>\setup.exe" setup --background`. macOS: Omelet is listed in System Settings → General → Login Items | |
-| T5 | Sign out and back in (and once: reboot) | Only the tray icon appears, no window; within a minute the VM is running and projects answer | |
+| T5 | Sign out and back in (and once: reboot) | Only the tray icon appears, no window (macOS: the window may flash briefly before it hides — the login launch is only recognised once the app is open); within a minute the VM is running and projects answer; opening Omelet then shows the up-to-date Home or console, not a "starting" screen | |
 | T6 | Untick the checkbox; turn it back on in Task Manager / System Settings | Reopening Settings shows the OS state each time | |
 | T7 | Untick, then run **Repair** and an app update | It stays unticked | |
 | T8 | Open Omelet again from the Start menu / Finder while it runs | The existing window comes forward; still one tray icon | |

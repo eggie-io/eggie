@@ -1,8 +1,9 @@
 """Build the provider, open the window, hand the loop to pywebview.
 
 `webview.start()` owns the main thread for the life of the app, so this
-module does nothing after calling it. Everything that happens later happens
-on a worker thread from jobs.py.
+module does nothing after calling it but stop the tray. Everything later runs
+on other threads: bridge calls, jobs.py's worker, the tray, the single-instance
+listener and the background VM start.
 """
 from __future__ import annotations
 

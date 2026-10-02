@@ -421,9 +421,10 @@ def selfcheck():
         all_ok = all_ok and ok
         typer.echo(f"{'OK' if ok else 'MISSING':<7} {label} -> {path}")
 
-    # The desktop window is four modules PyInstaller can only find through
-    # the spec's hiddenimports: cli.setup() reaches host.desktop.__main__
-    # through a function-local import, and it imports api/view/jobs in turn.
+    # The desktop window is the host.desktop modules below, which PyInstaller
+    # can only find through the spec's hiddenimports: cli.setup() reaches
+    # host.desktop.__main__ through a function-local import, and it imports
+    # the rest in turn, mostly function-locally too.
     # A bundle missing one launches, shows a Dock icon and dies on the first
     # draw -- which is exactly what this command exists to catch before a
     # user does. Reported the same way as the asset checks above (an

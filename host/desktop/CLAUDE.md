@@ -43,10 +43,15 @@ system browser — there is no native menu.
   `window.pywebview.api` stays `{}`, `pywebviewready` never fires, and the window shows only its
   background colour — with nothing on stderr. Invisible on Windows (WebView2 runs injected script
   outside the CSP), fatal on macOS. Pinned by `tests/host/desktop/test_ui_assets.py`.
-- **`events.closing` fires for every close** — the title-bar button, `window.destroy()` and macOS
-  Cmd+Q (via `applicationShouldTerminate_`). `Controller` lets one through only after `exit()`;
-  the mac tray re-points the Cmd+Q menu item at Quit Omelet. A new close path must go through
-  `Controller.exit()` or it becomes a hide.
+- **`events.closing` decides closes** — on Windows the title-bar button and `window.destroy()`
+  both fire it; on Cocoa only the red button does (`destroy()` is `NSWindow.close`, which skips
+  `windowShouldClose_`, and the mac tray re-points Cmd+Q at Quit Omelet and overrides
+  `applicationShouldTerminate_`, so neither reaches it). `Controller` lets a close through only after
+  `exit()` or `allow_exit()`. A new close path must go through one of them or it becomes a hide.
+- **Windows sign-out, restart and installers close the window themselves.** pywebview cancels any
+  close our handler refuses, whatever the reason, so `provider.let_session_end_close` wraps the
+  winforms form's `on_closing` before `create()` and calls `Controller.allow_exit()` for
+  `WindowsShutDown` / `TaskManagerClosing`.
 - **macOS Dock → Quit, logout and restart do not stop the VM.** `tray_mac` overrides
   `applicationShouldTerminate_` to `NSTerminateNow`; otherwise the close-to-hide handler cancels
   termination and blocks logout.

@@ -1041,6 +1041,22 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
 
         return {"job_id": submit_locked(project_id, work, "down")}
 
+    def resume_projects() -> list[str]:
+        """Projects carry no restart policy, so a VM reboot leaves them stopped
+        while state.db still says started and Traefik answers 404."""
+        job_ids = []
+        for row in state.list_projects():
+            if row["status"] != STARTED_OK:
+                continue
+            try:
+                job_ids.append(submit_locked(
+                    row["id"], start_work(row["id"], stop_first=False), "up"))
+            except ApiError as e:
+                log.warning("not resuming %s: %s", row["id"], e.message)
+        return job_ids
+
+    app.state.resume_projects = resume_projects
+
     @router.get("/projects/{project_id}/logs")
     def project_logs(project_id: str, follow: bool = False,
                      service: str | None = None):

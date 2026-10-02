@@ -197,3 +197,10 @@ def test_a_session_end_close_is_let_through_without_hiding(tmp_path):
     assert controller.on_closing() is True
     assert window.calls == []
     assert controller.tray.notes == []
+
+
+def test_a_login_launch_without_a_tray_keeps_the_window(tmp_path):
+    controller, window = _controller(tmp_path)
+    controller.tray = None
+    controller.on_login_launch()
+    assert window.calls == [] and controller.provider.started == 0

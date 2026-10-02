@@ -76,6 +76,9 @@ class Controller:
                 self.window.destroy()
 
     def on_login_launch(self) -> None:
+        # Hiding with no tray would leave nothing to bring the window back.
+        if self.tray is None:
+            return
         try:
             installed = self.provider.exists()
         except Exception:

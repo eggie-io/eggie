@@ -139,7 +139,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     if mode == TRAY_ONLY:
         provider.on_window_shown(False)
         controller.start_vm_in_background()
-    elif not resumed:
+    elif not resumed and tray is not None:
         provider.watch_login_launch(controller.on_login_launch)
 
     try:

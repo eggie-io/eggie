@@ -261,6 +261,8 @@ def test_a_tray_that_cannot_start_falls_back_to_a_plain_window(tmp_path, capsys)
     assert window.events.closing.handlers == []
     assert "pystray" in capsys.readouterr().err
     assert not provider.vm_started.wait(0.2)
+    # A login watch would hide the window with no tray to bring it back.
+    assert provider.login_watch is None
 
 
 def test_a_login_launch_starts_the_vm(tmp_path):

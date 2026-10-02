@@ -69,7 +69,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | T11 | macOS: red button, then click the Dock icon; then Cmd+Q; then, with the VM running, Dock → Quit and a logout / restart | The Dock icon disappears while hidden and the window comes back on reopen; Cmd+Q stops the VM and quits; Dock → Quit, logout and restart end the app at once and do not stop the VM (and do not hang the logout) | |
 | T12 | **Update now** while the VM runs | The app restarts on the new version; the VM was never stopped | |
 | T13 | **Destructive.** Uninstall while the app runs | The app closes; the Run value / Login Item is gone | |
-| T14 | Make the tray unable to start (e.g. rename `icon.ico` in a build) and launch | The app runs as a plain window; closing it exits; the reason is on stderr | |
+| T14 | Windows: make the tray unable to start (e.g. rename `icon.ico` in a build) and launch, also once with `--background` | The app runs as a plain window, even with `--background`; closing it exits. `setup.exe` is windowed, so the reason is only visible when the app is started from a console build or with stderr redirected. macOS: a missing icon is not a tray failure — the menu-bar item shows the text "Omelet" instead and the app behaves as in T1–T3 | |
 | T15 | Windows: with the window hidden to the tray, sign out; then restart from the Start menu; then run setup's **Restart now** (after a WSL feature install); then install an app update over the running app | None of them is blocked by Omelet (no "This app is preventing you from signing out" / restart screen); the installer closes Omelet without asking | |
 
 ## Both platforms, once set up

@@ -27,9 +27,15 @@ class MainAppLoginItem:
         return self._service().status() == SMAppServiceStatusEnabled
 
     def register(self) -> None:
-        ok, error = self._service().registerAndReturnError_(None)
+        from ServiceManagement import SMAppServiceStatusRequiresApproval
+        service = self._service()
+        ok, error = service.registerAndReturnError_(None)
         if not ok:
             raise RuntimeError(f"macOS refused to add Omelet to Login Items: {error}")
+        # Registration succeeds but stays off until the user allows it.
+        if service.status() == SMAppServiceStatusRequiresApproval:
+            raise RuntimeError("macOS needs your permission to open Omelet when you sign in. "
+                               "Allow Omelet in System Settings → General → Login Items.")
 
     def unregister(self) -> None:
         from ServiceManagement import SMAppServiceStatusNotRegistered

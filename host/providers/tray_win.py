@@ -29,8 +29,10 @@ def let_session_end_close(on_session_end) -> None:
     CloseReason; sign-out, restart and Restart Manager (installer update,
     uninstall) would be blocked. Patched on the class before the form exists:
     its constructor binds self.on_closing to FormClosing."""
-    import System.Windows.Forms as WinForms
+    # pywebview's module loads pythonnet and references WinForms; System.*
+    # cannot be imported before it.
     from webview.platforms.winforms import BrowserView
+    import System.Windows.Forms as WinForms
 
     form = BrowserView.BrowserForm
     if hasattr(form.on_closing, "omelet_original"):

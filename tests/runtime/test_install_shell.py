@@ -386,3 +386,11 @@ def test_the_boot_update_never_holds_up_boot():
     unit = (ROOT / "runtime" / "install" / "systemd" / "omelet-update.service").read_text()
     assert "Type=exec" in unit
     assert "Type=oneshot" not in unit
+
+
+def test_install_ships_the_shell_start_directory_snippet():
+    # A wrong source path here installs nothing, and shells quietly open in $HOME.
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/profile\.d/omelet-cwd\.sh',
+                      INSTALL.read_text())
+    assert match, "install.sh does not install /etc/profile.d/omelet-cwd.sh"
+    assert (INSTALL.parent / match.group(1)).is_file()

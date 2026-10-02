@@ -16,6 +16,7 @@ from host.core import constants
 from host.core.status import probe
 
 from .jobs import JobRegistry
+from . import lifecycle as _lifecycle, settings as _settings  # noqa: F401
 from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
 
 

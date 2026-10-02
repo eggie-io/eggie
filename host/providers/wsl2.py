@@ -321,16 +321,21 @@ class Wsl2Provider:
         # database. Powering off through systemd stops them first; whether
         # poweroff also ends the distro depends on the WSL version, so
         # --terminate follows either way.
+        # Any `wsl -d` boots a stopped distro, and a hung VM answers nothing:
+        # neither case gets a poweroff or a wait.
         try:
-            self.exec(["systemctl", "poweroff"], root=True)
+            powered = self.running()
+            if powered:
+                self.exec(["systemctl", "poweroff"], root=True)
         except VmUnresponsive:
-            pass
-        deadline = self._clock() + POWEROFF_WAIT
-        try:
-            while self.running() and self._clock() < deadline:
-                self._sleep(1)
-        except VmUnresponsive:
-            pass
+            powered = False
+        if powered:
+            deadline = self._clock() + POWEROFF_WAIT
+            try:
+                while self.running() and self._clock() < deadline:
+                    self._sleep(1)
+            except VmUnresponsive:
+                pass
         self._require(self._meta(["--terminate", self.distro]),
                       f"the virtual machine '{self.distro}' could not be stopped")
 

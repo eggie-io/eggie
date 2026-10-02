@@ -234,8 +234,6 @@ def test_a_command_failing_inside_the_vm_still_returns_its_result():
 def test_recover_restarts_only_this_vm():
     r = FakeRunner()
     make(r).recover()
-    assert r.calls[0] == ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
-                          "systemctl", "poweroff"]
     assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
     assert ["wsl.exe", "--shutdown"] not in r.calls
     assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in r.calls
@@ -305,18 +303,39 @@ def _stopper(runner, clock_values):
 RUNNING = ("omelet-vm\r\n").encode("utf-16-le")
 
 
+class PoweroffEnds(PrefixRunner):
+    """The distro reports running until poweroff has been issued."""
+    def __call__(self, argv):
+        result = super().__call__(argv)
+        if argv[:3] == ["wsl.exe", "-l", "--running"]:
+            ended = any("poweroff" in c for c in self.calls)
+
+            class R:
+                returncode = 1 if ended else 0
+                stdout = b"" if ended else RUNNING
+                stderr = b""
+            return R()
+        return result
+
+
 def test_stop_powers_off_through_systemd_before_terminating():
+    runner = PoweroffEnds({})
+    _stopper(runner, [0, 1]).stop()
+    assert ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
+            "systemctl", "poweroff"] in runner.calls
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+
+
+def test_stop_on_a_stopped_distro_does_not_boot_it():
     runner = PrefixRunner({("wsl.exe", "-l", "--running", "-q"): (1, b"")})
     _stopper(runner, [0, 1]).stop()
-    assert runner.calls[0] == ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
-                               "systemctl", "poweroff"]
+    assert not any(c[:2] == ["wsl.exe", "-d"] for c in runner.calls)
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
 
 
 def test_stop_terminates_even_when_poweroff_fails():
-    runner = PrefixRunner({
+    runner = PoweroffEnds({
         ("wsl.exe", "-d", "omelet-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
-        ("wsl.exe", "-l", "--running", "-q"): (1, b""),
     })
     _stopper(runner, [0, 1]).stop()
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
@@ -326,7 +345,7 @@ def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
     runner = PrefixRunner({("wsl.exe", "-l", "--running", "-q"): (0, RUNNING)})
     _stopper(runner, [0, 10, 20, 31]).stop()
     polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
-    assert len(polls) == 3
+    assert len(polls) == 4  # one to see it up, three while waiting
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
 
 
@@ -344,8 +363,10 @@ def test_stop_terminates_when_the_hung_wsl_rejects_poweroff():
                 return R()
             return result
 
-    runner = Hung({("wsl.exe", "-l", "--running", "-q"): (1, b"")})
+    runner = Hung({("wsl.exe", "-l", "--running", "-q"): (0, RUNNING)})
     _stopper(runner, [0, 1]).stop()
+    polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
+    assert len(polls) == 1, "a hung poweroff must not be waited out"
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
 
 

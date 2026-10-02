@@ -51,7 +51,8 @@ def test_webview_backends_are_platform_scoped():
         return dep
 
     assert "sys_platform == 'win32'" in find("pythonnet")
-    for name in ("pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-WebKit"):
+    for name in ("pyobjc-core", "pyobjc-framework-Cocoa", "pyobjc-framework-WebKit",
+                 "pyobjc-framework-ServiceManagement"):
         assert "sys_platform == 'darwin'" in find(name)
 
 

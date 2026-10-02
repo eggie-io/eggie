@@ -6,6 +6,8 @@ from the open-application Apple event instead of a --background flag.
 """
 from __future__ import annotations
 
+import sys
+import threading
 from typing import Callable
 
 # keyAEPropData / keyAELaunchedAsLogInItem, as four-char codes.
@@ -30,29 +32,61 @@ class MainAppLoginItem:
             raise RuntimeError(f"macOS refused to add Omelet to Login Items: {error}")
 
     def unregister(self) -> None:
-        ok, error = self._service().unregisterAndReturnError_(None)
+        from ServiceManagement import SMAppServiceStatusNotRegistered
+        service = self._service()
+        if service.status() == SMAppServiceStatusNotRegistered:
+            return
+        ok, error = service.unregisterAndReturnError_(None)
         if not ok:
             raise RuntimeError(f"macOS refused to remove Omelet from Login Items: {error}")
+
+
+_open_handler = None
+
+
+def _make_open_handler(on_login: Callable[[], None]):
+    """One ObjC handler instance; the class is created once, as ObjC class names are global."""
+    global _open_handler
+    if _open_handler is None:
+        import objc
+        from Foundation import NSObject
+
+        class OmeletOpenHandler(NSObject):
+            @objc.signature(b"v@:@@")
+            def handleOpen_withReply_(self, event, reply):
+                descriptor = event.paramDescriptorForKeyword_(_PROP_DATA)
+                if descriptor is None or descriptor.enumCodeValue() != _LAUNCHED_AS_LOGIN_ITEM:
+                    return
+                # Off the main thread: the callback probes the VM and must not
+                # stall launch, and an exception must not surface in AppKit dispatch.
+                threading.Thread(target=self._run, daemon=True).start()
+
+            def _run(self):
+                try:
+                    self.on_login()
+                except Exception as e:
+                    print(f"login-launch handler failed: {e!r}", file=sys.stderr)
+
+        _open_handler = OmeletOpenHandler.alloc().init()
+    _open_handler.on_login = on_login
+    return _open_handler
 
 
 def install_login_launch_handler(on_login: Callable[[], None]) -> None:
     """Replace the open-application handler for this launch.
 
     AppKit installs its own oapp handler in finishLaunching, so ours goes in
-    from applicationWillFinishLaunching_, added to pywebview's app delegate,
-    which is the documented point where an app may override it.
+    from applicationWillFinishLaunching_, added to pywebview's app delegate.
+    That only fires if this runs before pywebview creates the delegate.
     """
     import objc
-    from Foundation import NSAppleEventManager, NSObject
+    from Foundation import NSAppleEventManager
     from webview.platforms.cocoa import BrowserView
 
-    class _OpenHandler(NSObject):
-        def handleOpen_withReply_(self, event, reply):
-            descriptor = event.paramDescriptorForKeyword_(_PROP_DATA)
-            if descriptor is not None and descriptor.enumCodeValue() == _LAUNCHED_AS_LOGIN_ITEM:
-                on_login()
+    if BrowserView._shared_app_delegate is not None:
+        raise RuntimeError("install_login_launch_handler must run before webview.start()")
 
-    handler = _OpenHandler.alloc().init()
+    handler = _make_open_handler(on_login)
 
     def applicationWillFinishLaunching_(self, notification):
         NSAppleEventManager.sharedAppleEventManager() \
@@ -60,11 +94,18 @@ def install_login_launch_handler(on_login: Callable[[], None]) -> None:
                 handler, b"handleOpen:withReply:", _CORE_EVENT_CLASS, _OPEN_APPLICATION)
 
     objc.classAddMethods(BrowserView.AppDelegate, [applicationWillFinishLaunching_])
-    # Kept alive for the life of the app: the event manager does not retain it.
-    install_login_launch_handler._handler = handler
 
 
 def set_dock_visible(visible: bool) -> None:
+    from Foundation import NSThread
+    if NSThread.isMainThread():
+        _apply_dock_policy(visible)
+    else:
+        from PyObjCTools import AppHelper
+        AppHelper.callAfter(_apply_dock_policy, visible)
+
+
+def _apply_dock_policy(visible: bool) -> None:
     from AppKit import (NSApplication, NSApplicationActivationPolicyAccessory,
                         NSApplicationActivationPolicyRegular)
     app = NSApplication.sharedApplication()

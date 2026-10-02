@@ -403,6 +403,7 @@ class LimaProvider:
             self._items().unregister()
 
     def watch_login_launch(self, on_login) -> None:
+        """Must be called before webview.start(): it hooks pywebview's app delegate."""
         from .mac_login import install_login_launch_handler
         install_login_launch_handler(on_login)
 

@@ -74,6 +74,10 @@ begin
     // locked and outlive the VM. The purge destroys the VM right after, so a
     // hard stop is fine. Done here, not in [UninstallRun], because Inno runs
     // those entries in reverse order and the kill must come first.
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM setup.exe', '',
-         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Matched by full path: setup.exe is a common installer name.
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+         '-NoProfile -Command "Get-Process setup -ErrorAction SilentlyContinue | ' +
+         'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\setup.exe') + ''' } | ' +
+         'Stop-Process -Force"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

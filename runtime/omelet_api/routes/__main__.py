@@ -17,6 +17,7 @@ def main() -> None:
         raise SystemExit(f"omelet-api will not start: {e}") from None
     app.state.account.resume()
     app.state.sync.start()
+    app.state.resume_projects()
     # Defaults to 0.0.0.0 because the host reaches the API through the VM's
     # port mapping; narrowing the bind address is a later task's decision.
     uvicorn.run(app, host=config.bind_host, port=config.port)

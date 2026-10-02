@@ -51,25 +51,27 @@ def test_with_no_first_instance_startup_proceeds(sock_dir):
 
 
 def test_listener_survives_bad_client(sock_dir):
-    """Listener continues after a bad client; next valid client is served."""
+    """Listener continues after a bad client (connects, sends nothing); next valid client is served."""
     address = socket_path(sock_dir, "bad_client")
     shown = threading.Event()
 
     # First instance starts listening.
     assert claim(address, "AF_UNIX", shown.set, announce=True) is True
 
-    # A bad client connects with wrong authkey and is rejected.
-    from multiprocessing.connection import Client
-    try:
-        bad = Client(address, family="AF_UNIX", authkey=b"wrong-key", timeout=0.5)
-        bad.close()
-    except Exception:
-        pass  # Expected: authkey mismatch.
+    # A bad client connects but sends nothing, keeping the socket open.
+    # Without poll() and a timeout in handle_conn(), this would block the listener forever.
+    import socket
+    bad_sock = socket.socket(socket.AF_UNIX)
+    bad_sock.connect(address)
+    # Connection open but no data sent; keep it open.
 
-    # A valid second instance should still reach the first.
-    time.sleep(0.1)  # Give listener time to process the bad client.
+    # A valid second instance should still reach the first and trigger on_show.
+    # No time.sleep() needed; listener accepts multiple connections at once.
     assert claim(address, "AF_UNIX", lambda: None, announce=True) is False
-    assert shown.wait(timeout=5), "listener died after bad client"
+    assert shown.wait(timeout=5), "listener died or on_show was not called after bad client"
+
+    # Clean up the bad socket.
+    bad_sock.close()
 
 
 def test_claim_handles_stale_socket_file(sock_dir):

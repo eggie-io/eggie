@@ -6,12 +6,16 @@ The guest is always Ubuntu 24.04 running Docker. It's named `omelet-vm` on both 
 |---|---|---|
 | Backend | WSL2 distro | Lima (`vz`) |
 | Host-side data | `%LOCALAPPDATA%\Omelet\` (`vm\`, `cache\`) | `~/.local/share/omelet/` (`vm/`, `cache/`, `lima/`) and `~/.lima/omelet-vm/` |
-| Shell as root | `wsl -d omelet-vm -u root` | `limactl shell omelet-vm -- sudo -i` |
+| Shell as root | `wsl -d omelet-vm -u root --cd ~` | `limactl shell omelet-vm -- sudo -i` |
 
 On Windows, always pass `-d omelet-vm`. Every WSL distro reports the Windows machine name as its
 hostname, so the prompt doesn't tell you which one you're in. On macOS, `sudo` in the VM needs no
 password, and `limactl list` shows the VM's status and ports. **Nothing from the Mac is mounted**
 (`mounts: []`): projects reach the VM over HTTP uploads, not a shared folder.
+
+An interactive login shell that starts in `$HOME` moves to `~/projects` (`/etc/profile.d/omelet-cwd.sh`,
+installed by the runtime). On Windows add `--cd ~` — without it `wsl` opens in the current Windows folder
+and stays there.
 
 ## Creating it by hand
 

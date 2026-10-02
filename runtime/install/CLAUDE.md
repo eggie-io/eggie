@@ -49,7 +49,7 @@ Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `OMELET_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → Node ≥ 22.20 from NodeSource →
-`/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → per account (root + `lib/login-users.sh`):
+`/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
 the Codex block and `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a claude-code codex -y </dev/null`
 (`SKILLS_SOURCE` defaults to `omelet-app/omelet-skills`, unpinned on purpose;

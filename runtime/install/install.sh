@@ -219,10 +219,11 @@ if ! node_ok; then
   node_ok || { echo "Node.js $NODE_MIN or newer did not install" >&2; exit 1; }
 fi
 
-# 9. the in-VM omelet command and the instructions every session loads.
+# 9. the in-VM omelet command, the instructions every session loads, and the shell's start directory.
 install -m 755 "$RUNTIME_DIR/cli/omelet.py" /usr/local/bin/omelet
 install -d /etc/claude-code
 install -m 644 "$RUNTIME_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
+install -m 644 "$INSTALL_DIR/profile/omelet-cwd.sh" /etc/profile.d/omelet-cwd.sh
 
 # 10. copies earlier provisioning made, which npx now owns or nothing reads.
 # The last three are what an engine-v* install left behind: engine.version

@@ -374,7 +374,7 @@ class Wsl2Provider:
             summary=("Your coding agent runs inside the virtual machine, where "
                      "Docker and the omelet command already are. Open a shell "
                      "there with the command below."),
-            command=f"wsl -d {self.distro}",
+            command=f"wsl -d {self.distro} --cd ~",
             fields=(
                 AccessField("Virtual machine", self.distro),
                 AccessField("Projects folder",

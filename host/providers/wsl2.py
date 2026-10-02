@@ -438,6 +438,10 @@ class Wsl2Provider:
     def on_window_shown(self, visible: bool) -> None:
         """The taskbar button follows the window on its own."""
 
+    def tray(self, *, icon, on_open, on_settings, on_quit):
+        from .tray_win import WinTray
+        return WinTray(icon=icon, on_open=on_open, on_settings=on_settings, on_quit=on_quit)
+
     def single_instance(self, on_show, *, announce: bool) -> bool:
         from .instance import claim
         # Pipe names are machine-wide: without the user name, another user's

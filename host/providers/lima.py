@@ -411,6 +411,10 @@ class LimaProvider:
         from .mac_login import set_dock_visible
         set_dock_visible(visible)
 
+    def tray(self, *, icon, on_open, on_settings, on_quit):
+        from .tray_mac import MacTray
+        return MacTray(icon=icon, on_open=on_open, on_settings=on_settings, on_quit=on_quit)
+
     def single_instance(self, on_show, *, announce: bool) -> bool:
         """LaunchServices keeps one instance of a .app; a second open arrives
         as the reopen event, which the tray turns into Open Omelet."""

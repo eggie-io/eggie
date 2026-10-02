@@ -77,3 +77,14 @@ def test_no_host_module_imports_yaml():
             if any(n == "yaml" or n.startswith("yaml.") for n in names):
                 offenders.append(f"{py}:{node.lineno}")
     assert not offenders, f"host/ imported yaml: {offenders}"
+
+
+def test_the_windows_tray_dependencies_are_platform_scoped():
+    # pystray's macOS backend needs the main thread pywebview already owns, so
+    # the mac tray is native; pystray and Pillow are Windows-only at runtime.
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    deps = data["project"]["dependencies"]
+    for name in ("pystray", "Pillow"):
+        dep = next((d for d in deps if d.startswith(name)), None)
+        assert dep, f"{name} is not declared"
+        assert "sys_platform == 'win32'" in dep

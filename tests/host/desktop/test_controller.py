@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from host.desktop.controller import START_FAILED, TRAY_NOTICE, Controller
+from host.desktop.controller import BACKGROUND_DONE, START_FAILED, TRAY_NOTICE, Controller
 from host.desktop.settings import TRAY_NOTICE_SHOWN, Settings
 from host.desktop.shell import Shell
 
@@ -204,3 +204,25 @@ def test_a_login_launch_without_a_tray_keeps_the_window(tmp_path):
     controller.tray = None
     controller.on_login_launch()
     assert window.calls == [] and controller.provider.started == 0
+
+
+def _pushing_controller(tmp_path, provider):
+    pushed = []
+    window = FakeWindow()
+    controller = Controller(provider, Settings(tmp_path / "s.json"), Shell(window),
+                            push=pushed.append)
+    controller.window, controller.tray = window, FakeTray()
+    return controller, pushed
+
+
+def test_a_finished_background_start_tells_the_page_once(tmp_path):
+    controller, pushed = _pushing_controller(tmp_path, FakeProvider())
+    controller.start_vm_in_background().join(timeout=5)
+    assert pushed == [BACKGROUND_DONE]
+
+
+def test_a_failed_background_start_tells_the_page_once(tmp_path):
+    controller, pushed = _pushing_controller(
+        tmp_path, FakeProvider(start_error=RuntimeError("wsl.exe failed")))
+    controller.start_vm_in_background().join(timeout=5)
+    assert pushed == [BACKGROUND_DONE]

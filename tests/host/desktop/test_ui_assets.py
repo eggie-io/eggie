@@ -348,3 +348,13 @@ def test_cancelling_a_tray_route_restores_the_interrupted_screen_before_refreshi
         assert "restoreScreen()" in body and "refresh()" in body, action
         assert body.index("restoreScreen()") < body.index("refresh()"), action
     assert 'data-action="settings-back"' in (UI / "index.html").read_text()
+
+
+def test_the_page_handles_the_end_of_a_background_start():
+    from host.desktop.controller import BACKGROUND_DONE
+    script = (UI / "app.js").read_text()
+    handler = f"window.omelet.handlers.{BACKGROUND_DONE['kind']} ="
+    assert handler in script
+    body = script[script.index(handler):].split("\n};")[0]
+    # Only Home is stale; refreshing anywhere else throws the user off their screen.
+    assert "startsWith('home:')" in body and "refresh()" in body

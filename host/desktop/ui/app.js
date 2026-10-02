@@ -400,6 +400,10 @@ window.omelet.handlers.vm = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
+window.omelet.handlers.background_start = () => {
+  const screen = document.getElementById('screen').dataset.screen || '';
+  if (screen.startsWith('home:')) refresh();
+};
 window.omelet.handlers.repair = (event) => {
   if (event.type === 'progress') return;
   // 'stage' events (bootstrap, connect) mark progress mid-repair, not the

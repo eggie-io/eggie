@@ -82,7 +82,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         settings = Settings(default_install_dir().parent / "settings.json")
 
     shell = Shell()
-    controller = Controller(provider, settings, shell)
+    controller = Controller(provider, settings, shell, push=shell.push)
     if not provider.single_instance(controller.show, announce=not background):
         return 0
 

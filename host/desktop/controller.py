@@ -9,11 +9,14 @@ from .settings import TRAY_NOTICE_SHOWN, Settings
 
 TRAY_NOTICE = "Omelet is still running. Find it in the system tray."
 START_FAILED = "Omelet could not start. Open Omelet to see why."
+# The hidden page drew Home while the VM was still booting.
+BACKGROUND_DONE = {"kind": "background_start", "type": "done"}
 
 
 class Controller:
-    def __init__(self, provider, settings: Settings, shell):
+    def __init__(self, provider, settings: Settings, shell, push=None):
         self.provider = provider
+        self._push = push
         self.settings = settings
         self.shell = shell
         self.window = None
@@ -97,6 +100,14 @@ class Controller:
             print(f"Omelet could not show a notification: {e!r}", file=sys.stderr)
             return False
 
+    def _tell_page(self) -> None:
+        if self._push is None:
+            return
+        try:
+            self._push(BACKGROUND_DONE)
+        except Exception as e:
+            print(f"Omelet could not refresh its window: {e!r}", file=sys.stderr)
+
     def start_vm_in_background(self) -> threading.Thread:
         def run():
             try:
@@ -105,6 +116,8 @@ class Controller:
                 print(f"Omelet could not start the virtual machine: {e!r}", file=sys.stderr)
                 if not self._notify(START_FAILED):
                     self.show()
+            finally:
+                self._tell_page()
 
         self._background = threading.Thread(target=run, daemon=True, name="omelet-autostart")
         self._background.start()

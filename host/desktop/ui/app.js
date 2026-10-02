@@ -266,12 +266,45 @@ ACTIONS['settings'] = async () => {
 };
 
 ACTIONS['toggle-autostart'] = async (node) => {
-  const result = await api().set_autostart(node.checked);
-  // Re-read rather than trust the click: the OS has the final say.
-  const settings = await api().get_settings();
-  node.checked = settings.autostart;
-  fill(document.getElementById('screen'), { error: result.ok ? '' : result.error });
+  let error = '';
+  try {
+    const result = await api().set_autostart(node.checked);
+    if (!result.ok) error = result.error;
+  } finally {
+    // Re-read rather than trust the click: the OS has the final say, and a
+    // rejected call must not leave the box in the clicked state.
+    try {
+      node.checked = (await api().get_settings()).autostart;
+    } catch (_) {
+      node.checked = !node.checked;
+    }
+    document.querySelector('[data-field="error"]').textContent = error;
+  }
 };
+
+// A tray route lands while a job's screen (install, update, import) may be
+// showing; its nodes are parked, not discarded, so the job's live handlers
+// keep a DOM to update and Cancel/Back can put it back.
+let stash = null;
+
+function stashScreen() {
+  const root = document.getElementById('screen');
+  const screen = root.dataset.screen;
+  if (!screen || stash || screen === 'settings' || screen === 'quit-confirm') return;
+  const nodes = document.createDocumentFragment();
+  nodes.append(...root.childNodes);
+  stash = { nodes, screen };
+}
+
+function restoreScreen() {
+  if (!stash) return false;
+  const root = document.getElementById('screen');
+  clearBusy();
+  root.replaceChildren(stash.nodes);
+  root.dataset.screen = stash.screen;
+  stash = null;
+  return true;
+}
 
 async function startQuit(force) {
   const result = await api().quit(force);
@@ -280,9 +313,13 @@ async function startQuit(force) {
 }
 
 ACTIONS['quit-anyway'] = () => startQuit(true);
-ACTIONS['quit-cancel'] = () => refresh();
+ACTIONS['quit-cancel'] = () => { if (!restoreScreen()) return refresh(); };
+ACTIONS['settings-back'] = () => { if (!restoreScreen()) return refresh(); };
 
-const ROUTES = { 'settings': () => ACTIONS.settings(), 'quit': () => startQuit(false) };
+const ROUTES = {
+  'settings': () => { stashScreen(); return ACTIONS.settings(); },
+  'quit': () => { stashScreen(); return startQuit(false); },
+};
 
 window.omelet.route = (name) => {
   const go = ROUTES[name];
@@ -410,6 +447,7 @@ window.omelet.handlers.uninstall = (event) => {
 };
 
 async function refresh() {
+  stash = null;
   if (!busy.timer) setBusy(null);
   let home;
   try {

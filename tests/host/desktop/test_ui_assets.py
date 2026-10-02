@@ -332,7 +332,19 @@ def test_the_settings_copy_is_exact():
 def test_the_page_answers_the_routes_the_tray_sends():
     # controller.open_route() sends exactly these names, by call or by #fragment.
     script = (UI / "app.js").read_text()
-    assert "omelet.route" in script or "route(" in script
+    assert "window.omelet.route =" in script
+    assert "addEventListener('pywebviewready', start)" in script
+    start = script[script.index("function start()"):]
+    assert "window.location.hash" in start.split("\n}\n")[0]
+    routes = script[script.index("const ROUTES"):].split("};")[0]
     for route in ("settings", "quit"):
-        assert f"'{route}'" in script, f"app.js does not handle the {route} route"
-    assert "location.hash" in script
+        assert f"'{route}'" in routes, f"ROUTES does not handle {route}"
+
+
+def test_cancelling_a_tray_route_restores_the_interrupted_screen_before_refreshing():
+    script = (UI / "app.js").read_text()
+    for action in ("quit-cancel", "settings-back"):
+        body = script[script.index(f"ACTIONS['{action}']"):].split("\n")[0]
+        assert "restoreScreen()" in body and "refresh()" in body, action
+        assert body.index("restoreScreen()") < body.index("refresh()"), action
+    assert 'data-action="settings-back"' in (UI / "index.html").read_text()

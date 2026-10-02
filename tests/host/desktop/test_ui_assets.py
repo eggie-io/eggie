@@ -135,14 +135,13 @@ def test_nothing_installed_offers_no_uninstall():
     assert 'data-action="uninstall"' not in markup[start:end]
 
 
-def test_nothing_installed_disables_the_tiles_that_need_a_vm():
+def test_nothing_installed_disables_the_import_tile():
     markup = (UI / "index.html").read_text()
     start = markup.index('data-screen="home:not_installed"')
     end = markup.index("</template>", start)
     screen = markup[start:end]
-    for action in ("import", "ports"):
-        tile = screen.index(f'data-action="{action}"')
-        assert "disabled" in screen[tile:tile + 80], f"{action} tile must be disabled"
+    tile = screen.index('data-action="import"')
+    assert "disabled" in screen[tile:tile + 80], "import tile must be disabled"
 
 
 def test_no_user_facing_copy_names_one_platform():
@@ -214,7 +213,7 @@ def test_only_a_dead_end_removes_the_retry_button():
 
 def test_the_utility_screens_have_templates():
     markup = (UI / "index.html").read_text()
-    for screen in ("import", "import:progress", "ports", "doctor",
+    for screen in ("import", "import:progress", "doctor",
                    "uninstall-confirm", "unresponsive", "recover-confirm"):
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
@@ -236,17 +235,6 @@ def test_replace_is_not_the_preselected_import_mode():
     assert "checked" not in markup[replace:replace + 120]
 
 
-def test_the_ports_table_has_no_project_column():
-    """Providers store (guest, host) pairs and nothing records which project
-    owns a forward, so the board's fourth column could only ever be blank.
-    Scoped to the ports template: "Project name" is legitimate copy on the
-    import screen."""
-    markup = (UI / "index.html").read_text()
-    start = markup.index('data-screen="ports"')
-    end = markup.index("</template>", start)
-    assert "Project" not in markup[start:end]
-
-
 def test_a_crashed_job_tells_the_user_something_went_wrong():
     """import/vm/repair/uninstall crashes used to bounce the user Home with
     the reason discarded."""
@@ -262,11 +250,6 @@ def test_the_notice_survives_a_screen_change():
     notice = markup.index('id="notice"')
     # Everything from the first <template> onwards is swapped out by show().
     assert notice < markup.index("<template"), "notice must precede the templates"
-
-
-def test_no_port_refusal_renders_undefined():
-    js = (UI / "app.js").read_text()
-    assert "PORT_REFUSALS[result.reason] ||" in js
 
 
 def test_hidden_beats_any_display_rule():

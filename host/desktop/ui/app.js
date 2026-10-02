@@ -13,7 +13,12 @@ window.omelet = {
 
 const api = () => window.pywebview.api;
 
+// Bumped on every screen change; a refresh that waited on home() while the
+// screen changed must not draw over it.
+let screenGeneration = 0;
+
 function show(screen, data) {
+  screenGeneration += 1;
   const template = document.querySelector(`template[data-screen="${screen}"]`);
   if (!template) throw new Error(`no template for ${screen}`);
   const root = document.getElementById('screen');
@@ -295,6 +300,7 @@ function stashScreen() {
   const root = document.getElementById('screen');
   const screen = root.dataset.screen;
   if (!screen || stash || screen === 'settings' || screen === 'quit-confirm') return;
+  screenGeneration += 1;
   const nodes = document.createDocumentFragment();
   nodes.append(...root.childNodes);
   stash = { nodes, screen };
@@ -476,6 +482,7 @@ window.omelet.handlers.uninstall = (event) => {
 async function refresh() {
   stash = null;
   if (!busy.timer) setBusy(null);
+  const generation = screenGeneration;
   let home;
   try {
     home = await api().home();
@@ -483,6 +490,7 @@ async function refresh() {
     clearBusy();
     throw error;
   }
+  if (generation !== screenGeneration) return;
   document.title = 'Omelet';
   // A window RunOnce reopened by itself must continue setup, not show Home.
   if (home.resumed) return ACTIONS['start-install'](null, home);

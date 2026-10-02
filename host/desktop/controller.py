@@ -59,15 +59,20 @@ class Controller:
     def show(self) -> None:
         if self.window is None:
             return
+        self._show_window()
+        self._send(WINDOW_SHOWN)
+
+    def _show_window(self) -> None:
         self.provider.on_window_shown(True)
         self.window.show()
         self.shown_once = True
-        self._send(WINDOW_SHOWN)
 
     def open_route(self, route: str) -> None:
         if self.window is None:
             return
-        self.show()
+        # No WINDOW_SHOWN: the route redraws the page, and a refresh racing
+        # it would draw Home over the route's screen.
+        self._show_window()
         if self.shell.is_local():
             self.window.evaluate_js(f"window.omelet.route({json.dumps(route)})")
             return

@@ -236,12 +236,22 @@ def test_showing_the_window_tells_the_page(tmp_path):
     assert pushed == [WINDOW_SHOWN]
 
 
-def test_open_route_tells_the_page_the_window_came_back(tmp_path):
+def test_open_route_does_not_push_window_shown(tmp_path):
+    """The route redraws the page itself; a refresh racing it would draw Home
+    over Settings or the quit confirmation."""
     pushed = []
-    controller, _ = _controller(tmp_path)
+    controller, window = _controller(tmp_path)
     controller._push = pushed.append
     controller.open_route("settings")
-    assert WINDOW_SHOWN in pushed
+    assert WINDOW_SHOWN not in pushed
+    assert "show" in window.calls
+
+
+def test_open_route_still_counts_as_the_first_show(tmp_path):
+    controller, _ = _controller(tmp_path)
+    controller.mark_hidden_launch()
+    controller.open_route("settings")
+    assert controller.shown_once is True
 
 
 def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):

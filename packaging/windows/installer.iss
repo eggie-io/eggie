@@ -61,6 +61,7 @@ begin
 end;
 
 function InitializeUninstall(): Boolean;
+var ResultCode: Integer;
 begin
   Result := MsgBox(
     'Uninstalling Omelet permanently deletes the VM and every ' +
@@ -68,4 +69,11 @@ begin
     'PC, so nothing is recoverable afterward.' + #13#10#13#10 +
     'Continue with uninstall?',
     mbConfirmation, MB_YESNO + MB_DEFBUTTON2) = IDYES;
+  if Result then
+    // CloseApplications is Setup-only, so a running tray app would stay
+    // locked and outlive the VM. The purge destroys the VM right after, so a
+    // hard stop is fine. Done here, not in [UninstallRun], because Inno runs
+    // those entries in reverse order and the kill must come first.
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM setup.exe', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

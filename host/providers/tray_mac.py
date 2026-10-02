@@ -81,11 +81,14 @@ class MacTray:
             menu.addItem_(entry)
 
         self._item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
-        image = NSImage.alloc().initWithContentsOfFile_(str(self._icon_path))
-        image.setSize_((18, 18))
-        self._item.button().setImage_(image)
         self._item.setMenu_(menu)
         self._retarget_cmd_q()
+        image = NSImage.alloc().initWithContentsOfFile_(str(self._icon_path))
+        if image is None:
+            self._item.button().setTitle_("Omelet")
+            return
+        image.setSize_((18, 18))
+        self._item.button().setImage_(image)
 
     def _retarget_cmd_q(self) -> None:
         # pywebview's Quit item calls terminate:, which runs every window's
@@ -113,8 +116,17 @@ class MacTray:
             _run_off_main(on_open)
             return True
 
+        # pywebview's terminate handler runs the windows' closing handlers,
+        # and ours refuses (close means hide). Dock Quit, logout and restart
+        # must go through, and they end the VM at OS level, so they exit
+        # without stopping it here. Cmd+Q is retargeted to Quit Omelet.
+        @objc.signature(b"Q@:@")
+        def applicationShouldTerminate_(self, app):
+            return 1  # NSTerminateNow
+
         objc.classAddMethods(BrowserView.AppDelegate,
-                             [applicationShouldHandleReopen_hasVisibleWindows_])
+                             [applicationShouldHandleReopen_hasVisibleWindows_,
+                              applicationShouldTerminate_])
 
     def stop(self) -> None:
         if self._item is None:

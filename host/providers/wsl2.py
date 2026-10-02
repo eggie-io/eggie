@@ -209,6 +209,16 @@ def run_value(exe_path: str) -> str:
     return f'"{exe_path}" setup --background'
 
 
+def _gui_exe(exe_path: str) -> str:
+    # omelet.exe is the console build; at login it would flash a window.
+    path = Path(exe_path)
+    if path.name.lower() == "omelet.exe":
+        sibling = path.with_name("setup.exe")
+        if sibling.exists():
+            return str(sibling)
+    return exe_path
+
+
 def _default_arch() -> str:
     import platform
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
@@ -537,14 +547,15 @@ class Wsl2Provider:
                              f'"{exe_path}" setup --resume')
 
     def autostart_enabled(self, exe_path: str) -> bool:
-        if self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) != run_value(exe_path):
+        if self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) != run_value(_gui_exe(exe_path)):
             return False
         approved = self._read_registry_binary(STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME)
         return not (approved and approved[0] == _STARTUP_DISABLED)
 
     def set_autostart(self, on: bool, exe_path: str) -> None:
         if on:
-            self._write_registry(RUN_KEY, AUTOSTART_VALUE_NAME, run_value(exe_path))
+            self._write_registry(RUN_KEY, AUTOSTART_VALUE_NAME,
+                                 run_value(_gui_exe(exe_path)))
             self._delete_registry(STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME)
         else:
             self._delete_registry(RUN_KEY, AUTOSTART_VALUE_NAME)

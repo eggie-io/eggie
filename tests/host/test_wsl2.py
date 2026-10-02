@@ -465,3 +465,25 @@ def test_turning_on_from_omelet_clears_the_task_manager_disable():
     provider.set_autostart(True, EXE)
     assert (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME) not in store
     assert provider.autostart_enabled(EXE) is True
+
+
+def test_autostart_registers_the_gui_exe_when_given_the_console_exe(tmp_path):
+    """`omelet setup` runs the window from omelet.exe; a login entry pointing
+    there flashes a console at every sign-in."""
+    (tmp_path / "omelet.exe").write_bytes(b"")
+    (tmp_path / "setup.exe").write_bytes(b"")
+    console, gui = str(tmp_path / "OMELET.EXE"), str(tmp_path / "setup.exe")
+    store = {}
+    provider = _autostart(store)
+    provider.set_autostart(True, console)
+    assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(gui)
+    assert provider.autostart_enabled(gui) is True
+    assert provider.autostart_enabled(console) is True
+
+
+def test_autostart_keeps_the_console_exe_when_there_is_no_gui_sibling(tmp_path):
+    (tmp_path / "omelet.exe").write_bytes(b"")
+    console = str(tmp_path / "omelet.exe")
+    store = {}
+    _autostart(store).set_autostart(True, console)
+    assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(console)

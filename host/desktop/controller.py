@@ -27,9 +27,14 @@ class Controller:
         if self._exiting:
             return True
         self.hide()
-        if not self.settings.get(TRAY_NOTICE_SHOWN) and self.tray is not None:
-            if self.tray.notify(TRAY_NOTICE):
-                self.settings.set(TRAY_NOTICE_SHOWN, True)
+        # An exception escaping a pywebview handler counts as "not False",
+        # which lets the close through; hiding must never turn into quitting.
+        try:
+            if not self.settings.get(TRAY_NOTICE_SHOWN) and self.tray is not None:
+                if self.tray.notify(TRAY_NOTICE):
+                    self.settings.set(TRAY_NOTICE_SHOWN, True)
+        except Exception as e:
+            print(f"Omelet could not show the tray notice: {e!r}", file=sys.stderr)
         return False
 
     def hide(self) -> None:
@@ -44,6 +49,8 @@ class Controller:
         self.window.show()
 
     def open_route(self, route: str) -> None:
+        if self.window is None:
+            return
         self.show()
         if self.shell.is_local():
             self.window.evaluate_js(f"window.omelet.route({json.dumps(route)})")
@@ -56,10 +63,12 @@ class Controller:
 
     def exit(self) -> None:
         self._exiting = True
-        if self.tray is not None:
-            self.tray.stop()
-        if self.window is not None:
-            self.window.destroy()
+        try:
+            if self.tray is not None:
+                self.tray.stop()
+        finally:
+            if self.window is not None:
+                self.window.destroy()
 
     def on_login_launch(self) -> None:
         try:
@@ -71,13 +80,22 @@ class Controller:
         self.hide()
         self.start_vm_in_background()
 
+    def _notify(self, text: str) -> bool:
+        if self.tray is None:
+            return False
+        try:
+            return bool(self.tray.notify(text))
+        except Exception as e:
+            print(f"Omelet could not show a notification: {e!r}", file=sys.stderr)
+            return False
+
     def start_vm_in_background(self) -> threading.Thread:
         def run():
             try:
                 self.provider.start()
             except Exception as e:
                 print(f"Omelet could not start the virtual machine: {e!r}", file=sys.stderr)
-                if self.tray is None or not self.tray.notify(START_FAILED):
+                if not self._notify(START_FAILED):
                     self.show()
 
         self._background = threading.Thread(target=run, daemon=True, name="omelet-autostart")

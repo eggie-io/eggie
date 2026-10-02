@@ -130,3 +130,62 @@ def test_a_login_launch_before_setup_keeps_the_window(tmp_path):
     controller, window = _controller(tmp_path, provider=FakeProvider(exists=False))
     controller.on_login_launch()
     assert window.calls == []
+
+
+class RaisingTray(FakeTray):
+    def __init__(self, *, notify=False, stop=False):
+        super().__init__()
+        self._raise_notify, self._raise_stop = notify, stop
+
+    def notify(self, text):
+        if self._raise_notify:
+            raise RuntimeError("notify failed")
+        return super().notify(text)
+
+    def stop(self):
+        if self._raise_stop:
+            raise RuntimeError("stop failed")
+        super().stop()
+
+
+def test_closing_still_hides_when_the_notice_cannot_be_saved(tmp_path):
+    controller, window = _controller(tmp_path)
+
+    def broken_set(key, value):
+        raise OSError("disk full")
+
+    controller.settings.set = broken_set
+    assert controller.on_closing() is False
+    assert window.calls == ["hide"]
+
+
+def test_closing_still_hides_when_the_tray_notice_raises(tmp_path):
+    controller, window = _controller(tmp_path, tray=RaisingTray(notify=True))
+    assert controller.on_closing() is False
+    assert window.calls == ["hide"]
+
+
+def test_exit_destroys_the_window_even_if_the_tray_will_not_stop(tmp_path):
+    controller, window = _controller(tmp_path, tray=RaisingTray(stop=True))
+    try:
+        controller.exit()
+    except RuntimeError:
+        pass
+    assert window.calls[-1] == "destroy"
+
+
+def test_a_failed_background_start_shows_the_window_when_notify_raises(tmp_path):
+    provider = FakeProvider(start_error=RuntimeError("limactl failed"))
+    controller, window = _controller(tmp_path, provider=provider, tray=RaisingTray(notify=True))
+    controller.start_vm_in_background().join(timeout=5)
+    assert window.calls[-1] == "show"
+
+
+def test_a_login_launch_keeps_the_window_when_the_vm_check_fails(tmp_path):
+    class Broken(FakeProvider):
+        def exists(self): raise RuntimeError("wsl.exe failed")
+
+    provider = Broken()
+    controller, window = _controller(tmp_path, provider=provider)
+    controller.on_login_launch()
+    assert window.calls == [] and provider.started == 0

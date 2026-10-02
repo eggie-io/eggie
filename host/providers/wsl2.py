@@ -438,6 +438,10 @@ class Wsl2Provider:
     def on_window_shown(self, visible: bool) -> None:
         """The taskbar button follows the window on its own."""
 
+    def let_session_end_close(self, on_session_end) -> None:
+        from .tray_win import let_session_end_close
+        let_session_end_close(on_session_end)
+
     def tray(self, *, icon, on_open, on_settings, on_quit):
         from .tray_win import WinTray
         return WinTray(icon=icon, on_open=on_open, on_settings=on_settings, on_quit=on_quit)

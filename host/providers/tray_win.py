@@ -15,6 +15,31 @@ def _guarded(callback):
     return run
 
 
+def session_end_aware(original, reasons, on_session_end):
+    def on_closing(form, sender, args):
+        if args.CloseReason in reasons:
+            on_session_end()
+        return original(form, sender, args)
+    on_closing.omelet_original = original
+    return on_closing
+
+
+def let_session_end_close(on_session_end) -> None:
+    """pywebview cancels every close our handler refuses, whatever its
+    CloseReason; sign-out, restart and Restart Manager (installer update,
+    uninstall) would be blocked. Patched on the class before the form exists:
+    its constructor binds self.on_closing to FormClosing."""
+    import System.Windows.Forms as WinForms
+    from webview.platforms.winforms import BrowserView
+
+    form = BrowserView.BrowserForm
+    if hasattr(form.on_closing, "omelet_original"):
+        return
+    reasons = (WinForms.CloseReason.WindowsShutDown,
+               WinForms.CloseReason.TaskManagerClosing)
+    form.on_closing = session_end_aware(form.on_closing, reasons, on_session_end)
+
+
 class WinTray:
     def __init__(self, *, icon: Path, on_open, on_settings, on_quit):
         self._paths = icon

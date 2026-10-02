@@ -189,3 +189,11 @@ def test_a_login_launch_keeps_the_window_when_the_vm_check_fails(tmp_path):
     controller, window = _controller(tmp_path, provider=provider)
     controller.on_login_launch()
     assert window.calls == [] and provider.started == 0
+
+
+def test_a_session_end_close_is_let_through_without_hiding(tmp_path):
+    controller, window = _controller(tmp_path)
+    controller.allow_exit()
+    assert controller.on_closing() is True
+    assert window.calls == []
+    assert controller.tray.notes == []

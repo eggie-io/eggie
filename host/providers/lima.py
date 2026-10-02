@@ -407,6 +407,9 @@ class LimaProvider:
         from .mac_login import install_login_launch_handler
         install_login_launch_handler(on_login)
 
+    def let_session_end_close(self, on_session_end) -> None:
+        """Nothing to do: tray_mac's NSTerminateNow already lets logout through."""
+
     def on_window_shown(self, visible: bool) -> None:
         from .mac_login import set_dock_visible
         set_dock_visible(visible)

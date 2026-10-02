@@ -37,6 +37,11 @@ class Controller:
             print(f"Omelet could not show the tray notice: {e!r}", file=sys.stderr)
         return False
 
+    def allow_exit(self) -> None:
+        """Sign-out, restart and installers close the window themselves;
+        cancelling that close would block them."""
+        self._exiting = True
+
     def hide(self) -> None:
         if self.window is not None:
             self.window.hide()

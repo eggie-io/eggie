@@ -107,6 +107,11 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         print(f"Omelet could not start its tray icon: {e!r}", file=sys.stderr)
         tray = None
         mode = WINDOW
+    if tray is not None:
+        try:
+            provider.let_session_end_close(controller.allow_exit)
+        except Exception as e:
+            print(f"Omelet could not watch for sign-out: {e!r}", file=sys.stderr)
 
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),

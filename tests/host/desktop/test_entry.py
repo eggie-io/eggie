@@ -35,6 +35,7 @@ class FakeProvider:
         self.vm_started = threading.Event()
         self.tray_made, self.started, self.login_watch = None, 0, None
         self.announce = None
+        self.session_end = None
 
     def exists(self): return self._exists
     def start(self):
@@ -44,6 +45,7 @@ class FakeProvider:
         self.announce = announce
         return self._primary
     def watch_login_launch(self, on_login): self.login_watch = on_login
+    def let_session_end_close(self, on_session_end): self.session_end = on_session_end
     def on_window_shown(self, visible): pass
     def tray(self, **kwargs):
         self.tray_made = (kwargs, FakeTray(self._tray_fails))
@@ -279,3 +281,11 @@ def test_resumed_and_login_launches_do_not_watch_for_login_launches(tmp_path):
     _run(tmp_path, resumed, resumed=True)
     _run(tmp_path, login, background=True)
     assert resumed.login_watch is None and login.login_watch is None
+
+
+def test_a_session_end_lets_the_hiding_close_through(tmp_path):
+    provider = FakeProvider()
+    _, _, window = _run(tmp_path, provider)
+    provider.session_end()
+    assert [h() for h in window.events.closing.handlers] == [True]
+    assert window.calls == []

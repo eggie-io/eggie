@@ -90,7 +90,8 @@ def test_the_install_surface_stays_out_of_the_lifecycle_protocol():
 # login. Not lifecycle and not install, so it is pinned separately; a provider
 # missing one fails only on that platform, at the user's first launch.
 DESKTOP_SURFACE = {"autostart_enabled", "set_autostart", "single_instance",
-                   "watch_login_launch", "on_window_shown", "tray"}
+                   "watch_login_launch", "on_window_shown", "tray",
+                   "let_session_end_close"}
 
 
 def test_every_provider_offers_the_desktop_surface():

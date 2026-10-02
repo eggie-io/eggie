@@ -1,6 +1,6 @@
 {
   "name": "Claude Code",
-  "icon": "icon.svg",
+  "icon": "icon.webp",
   "platforms": {
     "mac": {
       "via_ssh": true,

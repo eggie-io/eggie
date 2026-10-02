@@ -22,3 +22,5 @@ dist/
 # unanchored dist/)
 node_modules/
 .vitest
+
+*.Identifier

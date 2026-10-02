@@ -134,10 +134,12 @@ Both providers implement:
 | Windows | Write the `Omelet` value under `HKCU\...\Run`: `"<exe_path>" setup --background` | Delete the value | The value exists and points at this exe |
 | macOS | `SMAppService.mainApp.registerAndReturnError_` | `unregisterAndReturnError_` | `status == enabled` |
 
-On macOS the login item launches the app with no arguments; the app tells a
-login launch from a user launch by checking whether it was opened as a login
-item (`NSAppleEventManager` current event's `keyAELaunchedAsLogInItem`), and
-treats that as `--background`. This check lives in the provider.
+On macOS the login item launches the app with no arguments. The provider's
+`watch_login_launch(on_login)` replaces the open-application Apple event handler
+(from `applicationWillFinishLaunching_`) and calls `on_login` when the event
+carries `keyAELaunchedAsLogInItem`; the controller then hides the window and
+starts the VM, as `--background` would. The window may show for a moment before
+that event arrives.
 
 ### Stored settings
 `settings.json` next to `install-state.json`:
@@ -186,7 +188,7 @@ Platform code stays in `host/providers/` (`tests/test_no_platform_leak.py`).
 | `host/desktop/lifecycle.py` | Pure: launch mode from args + install state; "turn on once" decision. |
 | `host/desktop/settings.py` | `settings.json` read/write (same pattern as `InstallState`). |
 | `host/providers/tray_win.py`, `tray_mac.py` | The tray per platform, behind `provider.tray(on_open, on_settings, on_quit)` returning an object with `start()`, `stop()`, `notify(text)`. |
-| `host/providers/wsl2.py`, `lima.py` | `autostart_enabled`, `set_autostart`, `single_instance(on_show)`, `launched_at_login()`, window-visibility hook (`on_window_shown(bool)`, macOS Dock policy), graceful `stop()` (WSL). |
+| `host/providers/wsl2.py`, `lima.py` | `autostart_enabled`, `set_autostart`, `single_instance(on_show)`, `watch_login_launch(on_login)`, window-visibility hook (`on_window_shown(bool)`, macOS Dock policy), graceful `stop()` (WSL). |
 | `host/desktop/__main__.py` | Wiring: flags, single instance, hidden window, `closing` handler, tray, both quit paths. |
 | `host/desktop/api.py` | `get_settings`, `set_autostart`, `quit`, `cancel_quit`; turn-on-once after install; update path calls `exit_for_update`. |
 | `host/desktop/ui/` | `settings`, `quitting`, `quit-confirm` screens; Settings button on the home screens; `#settings` route for the tray. |

@@ -6,6 +6,7 @@ import { cardRows } from "../../agents/card";
 import { useAgents } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
 import { AgentMenu } from "./AgentMenu";
+import { AgentStatusLine } from "./AgentStatusLine";
 import s from "./Agents.module.css";
 
 export function AgentGuide() {
@@ -57,6 +58,7 @@ function Steps({ agent, guide, connect }: { agent: Agent; guide: Guide; connect:
             </li>
           ))}
         </ol>
+        <AgentStatusLine agent={agent} />
         {rows && (
           <section className={s.key} aria-label="Connection details">
             <h2 className={s.keyLabel}>Your kitchen's key</h2>

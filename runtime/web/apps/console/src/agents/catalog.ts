@@ -3,7 +3,7 @@ const PLATFORMS: Platform[] = ["windows", "mac"];
 
 export interface Step { title: string; body: string; screenshot: string | null; alt: string }
 export interface Guide { viaSsh: boolean; tagline: string; steps: Step[] }
-export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>> }
+export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
   vm: "wsl" | "lima" | "other";
   ssh: { host: string; port: number; user: string; key_file: string } | null;
@@ -54,7 +54,7 @@ export function parseAgent(id: string, value: unknown, base: string): Agent | nu
     if (guide === null) return null;
     platforms[platform] = guide;
   }
-  return { id, name: value.name, icon: `${folder}/${value.icon}`, platforms };
+  return { id, name: value.name, icon: `${folder}/${value.icon}`, platforms, hasSetup: isObject(value.setup) };
 }
 
 export function platformFor(connect: Connect | undefined, userAgent: string): Platform {

@@ -26,6 +26,13 @@ describe("parseAgent", () => {
     expect(parseAgent("codex", "<!doctype html>", "/agents")).toBeNull();
   });
 
+  it("knows whether an agent has a setup, without exposing the command", () => {
+    const withSetup = parseAgent("codex", { name: "Codex", icon: "i.svg", setup: { run: "curl x | sh" }, platforms: { mac: guide() } }, "/a");
+    const without = parseAgent("cursor", { name: "Cursor", icon: "i.svg", platforms: { mac: guide() } }, "/a");
+    expect(withSetup?.hasSetup).toBe(true);
+    expect(without?.hasSetup).toBe(false);
+  });
+
   it("drops an agent whose guide has no steps", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "icon.svg", platforms: { mac: guide({ steps: [] }) } }, "/agents")).toBeNull();
   });

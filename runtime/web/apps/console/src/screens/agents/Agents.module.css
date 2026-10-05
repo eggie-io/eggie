@@ -84,6 +84,7 @@
 }
 .nav { display: flex; align-items: center; gap: 8px; }
 .count { margin-right: auto; font: 600 13px var(--font-body); color: var(--ink-3); }
+.checkProblem:empty { display: none; }
 .checkProblem { margin-right: auto; font: 600 13.5px/1.35 var(--font-body); color: var(--paprika); text-wrap: pretty; }
 
 .status {

@@ -122,11 +122,9 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
           )}
         </div>
         <div className={s.nav}>
-          {problem ? (
-            <span className={s.checkProblem} role="status">{problem}</span>
-          ) : (
-            <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>
-          )}
+          {/* Mounted before it has text, so screen readers announce the message. */}
+          <span className={s.checkProblem} role="status">{problem}</span>
+          {!problem && <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>}
           <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
           {primary}
         </div>

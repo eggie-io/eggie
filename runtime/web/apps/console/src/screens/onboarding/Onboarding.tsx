@@ -52,9 +52,14 @@ function Decide({ onDecided }: { onDecided: (phase: Phase) => void }) {
       ? projects.data.projects.length + projects.data.discovered.length
       : projects.isError ? null : undefined,
   });
+  const failed = status.isError || projects.isError;
   useEffect(() => {
-    if (phase !== "deciding") onDecided(phase);
-  }, [phase, onDecided]);
+    if (phase === "deciding") return;
+    // Someone already set up is past their first time, even if they later
+    // empty the counter. A failed check decides nothing, so it leaves no mark.
+    if (phase === "off" && !failed) writeMark(localStore);
+    onDecided(phase);
+  }, [phase, failed, onDecided]);
   return null;
 }
 

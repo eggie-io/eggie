@@ -9,7 +9,7 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 
 | Field | Meaning |
 |---|---|
-| `home` | Directory under each account's home, e.g. `.codex`. Detection reads it. |
+| `home` | Directory under each account's home, e.g. `.codex`, or a list of them (Cursor: `.cursor` and its remote server's `.cursor-server`). Detection reads every one; `detect.ignore` applies to each. |
 | `instructions` | Files that get `instructions/omelet.md`: `/abs/path` written whole once, `~/path` as the `<!-- omelet:begin/end -->` block per account. |
 | `skills` | The `npx skills add -a` agent name. |
 | `detect.ignore` | Top-level names under `home` that Omelet's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |

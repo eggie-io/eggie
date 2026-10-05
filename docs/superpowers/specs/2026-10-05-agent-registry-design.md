@@ -52,7 +52,7 @@ assets. `agent.json` gains four install-side fields next to the existing guide f
 
 | Field | Required | Meaning |
 |---|---|---|
-| `home` | yes | Directory under each account's home that detection reads. A relative path, no `..`. |
+| `home` | yes | Directory (or list of directories) under each account's home that detection reads. Relative paths, no `..`. A remote-SSH Cursor session writes `~/.cursor-server`, so Cursor lists both. |
 | `instructions` | no | Files that receive `instructions/omelet.md`. An absolute path is written **whole**, once (a system-wide file Omelet owns, e.g. `/etc/claude-code/CLAUDE.md`). A `~/` path is written **per account** as the `<!-- omelet:begin/end -->` block, leaving the user's own text alone. |
 | `skills` | no | Agent name passed to `npx skills add -a`. All manifests' names go in the one existing call. |
 | `detect.ignore` | no | Top-level entry names under `home` that Omelet's own install creates. |
@@ -64,7 +64,7 @@ The three manifests:
 |---|---|---|---|---|---|
 | claude-code | `.claude` | `/etc/claude-code/CLAUDE.md` | `claude-code` | `skills` | — |
 | codex | `.codex` | `~/.codex/AGENTS.md` | `codex` | `AGENTS.md`, `packages` | `curl -fsSL https://chatgpt.com/codex/install.sh \| CODEX_NON_INTERACTIVE=1 sh` |
-| cursor | `.cursor` | `~/.cursor/AGENTS.md` | `cursor` | `AGENTS.md`, `skills` | — |
+| cursor | `.cursor`, `.cursor-server` | `~/.cursor/AGENTS.md` | `cursor` | `AGENTS.md`, `skills` | — |
 
 Codex ignores `packages` and runs its installer with `CODEX_NON_INTERACTIVE=1` because the installer writes under `~/.codex/packages` and reads prompts from stdin without a tty.
 

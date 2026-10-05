@@ -30,7 +30,7 @@ STATES = {"installing", "ready", "failed"}
 @dataclass(frozen=True)
 class Agent:
     id: str
-    home: str
+    homes: tuple[str, ...]
     instructions: tuple[str, ...]
     skills: str | None
     ignore: frozenset[str]
@@ -56,8 +56,10 @@ def parse(agent_id: str, raw: object) -> Agent:
         raise ValueError("the id is not a plain name")
     if not isinstance(raw, dict):
         raise ValueError("agent.json is not an object")
-    if not _inside(raw.get("home")):
-        raise ValueError("home must be a path inside the account's home")
+    home = raw.get("home")
+    homes = home if isinstance(home, list) else [home]
+    if not homes or not all(_inside(h) for h in homes):
+        raise ValueError("home must be one or more paths inside the account's home")
     instructions = raw.get("instructions", [])
     if not isinstance(instructions, list) or not all(_target(t) for t in instructions):
         raise ValueError("instructions must be /absolute or ~/ paths")
@@ -72,7 +74,7 @@ def parse(agent_id: str, raw: object) -> Agent:
     if setup is not None and not (isinstance(setup, dict) and isinstance(setup.get("run"), str)
                                   and setup["run"].strip()):
         raise ValueError("setup.run must be a command")
-    return Agent(agent_id, raw["home"], tuple(instructions), skills, frozenset(ignore),
+    return Agent(agent_id, tuple(homes), tuple(instructions), skills, frozenset(ignore),
                  setup["run"] if setup else None)
 
 
@@ -92,12 +94,13 @@ def load(agents_dir: Path) -> list[Agent]:
 
 def connected(agent: Agent, homes: list[str]) -> bool:
     for home in homes:
-        try:
-            names = os.listdir(Path(home) / agent.home)
-        except OSError:
-            continue
-        if any(name not in agent.ignore for name in names):
-            return True
+        for directory in agent.homes:
+            try:
+                names = os.listdir(Path(home) / directory)
+            except OSError:
+                continue
+            if any(name not in agent.ignore for name in names):
+                return True
     return False
 
 

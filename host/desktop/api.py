@@ -342,6 +342,10 @@ class DesktopApi:
         from host.core.install import remove_downloads, remove_vm_data
 
         def work(emit):
+            # Lima refuses to delete a running instance, and its raw error
+            # ("expected status `Stopped`, got `Running`") tells the user nothing.
+            if self._provider.running():
+                raise RuntimeError("Stop the kitchen before uninstalling Omelet.")
             self._provider.destroy()
             install_dir = self._install_dir_factory()
             remove_vm_data(install_dir.parent, install_dir)

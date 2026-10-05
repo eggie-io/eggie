@@ -76,6 +76,9 @@ def test_uninstall_removes_the_vm_directory_but_keeps_downloads(tmp_path):
     destroyed = []
 
     class Provider:
+        def running(self):
+            return False
+
         def destroy(self):
             destroyed.append(True)
 
@@ -97,6 +100,33 @@ def test_uninstall_removes_the_vm_directory_but_keeps_downloads(tmp_path):
     assert (root / "lima").exists()
 
 
+def test_uninstall_refuses_a_running_kitchen(tmp_path):
+    """Lima will not delete a running instance; its raw `expected status
+    Stopped, got Running` is no use to the user. Nothing is touched."""
+    install_dir = tmp_path / "omelet" / "vm"
+    install_dir.mkdir(parents=True)
+    destroyed = []
+
+    class Provider:
+        def running(self):
+            return True
+
+        def destroy(self):
+            destroyed.append(True)
+
+    events = []
+    api = DesktopApi(Provider(), InstallState(tmp_path / "s.json"),
+                     push=events.append, probe_fn=lambda p: Readiness(),
+                     install_dir_factory=lambda: install_dir)
+    api.start_uninstall(False)
+    api.jobs.join(timeout=5)
+
+    assert events[-1]["type"] == "crashed", events
+    assert "Stop the kitchen" in events[-1]["message"]
+    assert destroyed == []
+    assert install_dir.exists()
+
+
 def test_purge_also_removes_the_downloads(tmp_path):
     root = tmp_path / "omelet"
     install_dir = root / "vm"
@@ -106,6 +136,9 @@ def test_purge_also_removes_the_downloads(tmp_path):
     (root / "lima").mkdir()
 
     class Provider:
+        def running(self):
+            return False
+
         def destroy(self):
             pass
 
@@ -132,6 +165,9 @@ def test_uninstall_touches_nothing_outside_the_injected_directory(tmp_path, monk
     (root / "vm").mkdir(parents=True)
 
     class Provider:
+        def running(self):
+            return False
+
         def destroy(self):
             pass
 

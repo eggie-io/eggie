@@ -55,10 +55,11 @@ def _digest_for(sums: str, name: str) -> str | None:
 
 def _fetch(url: str) -> bytes:
     from urllib.request import Request, urlopen
+    from . import tls
     # GitHub's API refuses requests without a User-Agent.
     request = Request(url, headers={"User-Agent": f"omelet/{constants.APP_VERSION}",
                                     "Accept": "application/vnd.github+json"})
-    with urlopen(request, timeout=10) as response:
+    with urlopen(request, timeout=10, context=tls.context()) as response:
         return response.read()
 
 

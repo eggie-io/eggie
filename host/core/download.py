@@ -26,8 +26,10 @@ def sha256_of(path: Path) -> str:
 
 def _default_opener(url: str, start_byte: int):
     from urllib.request import Request, urlopen
+    from . import tls
     headers = {"Range": f"bytes={start_byte}-"} if start_byte else {}
-    response = urlopen(Request(url, headers=headers), timeout=_TIMEOUT_SECONDS)
+    response = urlopen(Request(url, headers=headers), timeout=_TIMEOUT_SECONDS,
+                       context=tls.context())
     length = int(response.headers.get("Content-Length", 0)) + start_byte
     return response, length
 

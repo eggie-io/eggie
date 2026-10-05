@@ -15,9 +15,10 @@ function agentGuides(): Plugin {
     name: "agent-guides",
     configureServer(server) {
       server.middlewares.use("/agent-guides", (req, res) => {
-        const file = normalize(join(AGENTS, decodeURIComponent((req.url ?? "/").split("?")[0])));
+        let file = "";
         let isFile = false;
         try {
+          file = normalize(join(AGENTS, decodeURIComponent((req.url ?? "/").split("?")[0])));
           isFile = file.startsWith(AGENTS + sep) && statSync(file).isFile();
         } catch {
           isFile = false;

@@ -65,5 +65,6 @@ packaging/images/build.sh --push --tag dev --only web  # throwaway tag to try in
 ```
 
 Pushing needs `docker buildx` and `docker login ghcr.io`, and either `--version X.Y.Z` (what the
-release workflow passes) or `--tag`. The web image needs `--build-context fixtures=tests/fixtures`, so build
+release workflow passes) or `--tag`. The web image needs `--build-context fixtures=tests/fixtures` and
+`--build-context agents=runtime/agents`, so build
 it with this script rather than a bare `docker build runtime/web`, which fails.

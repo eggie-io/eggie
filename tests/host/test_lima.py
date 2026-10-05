@@ -27,6 +27,7 @@ def make(runner, mac_ver=None):
                         limactl="limactl", runner=runner,
                         mac_ver=mac_ver or _mac(),
                         ssh_dir=Path("/nonexistent/.ssh"),
+                        lima_home=Path("/nonexistent/.lima"),
                         data_root=Path("/nonexistent/omelet"))
 
 

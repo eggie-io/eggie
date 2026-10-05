@@ -286,17 +286,30 @@ class LimaProvider:
     def start(self) -> None:
         self._require(self._cmd(["start", self.name]),
                       f"the virtual machine '{self.name}' could not be started")
+        # A runtime from before `ssh_deletekeys: false` still re-keys on every
+        # boot; this keeps known_hosts in step until it updates.
+        try:
+            self._trust_host_keys()
+        except Exception:
+            pass    # SSH is a convenience; the VM itself started
 
     def stop(self) -> None:
         self._require(self._cmd(["stop", self.name]),
                       f"the virtual machine '{self.name}' could not be stopped")
 
     def destroy(self) -> None:
+        # Read first: `limactl delete` removes the ssh.config it is in.
+        try:
+            address = self._known_hosts_name(self._lima_ssh())
+        except (OSError, ValueError):
+            address = None
         self._require(self._cmd(["delete", self.name]),
                       f"the virtual machine '{self.name}' could not be removed")
         try:
-            ssh_alias.remove(self._alias_file(), self.ssh_dir / "config")
-        except OSError:
+            ssh_alias.remove(self.ssh_dir / "config")
+            if address:
+                ssh_alias.forget(self.ssh_dir / "known_hosts", address, self._spawn)
+        except (OSError, ValueError):
             pass    # a stale `omelet` host is harmless; the VM is what mattered
 
     def recover(self, *, everything: bool = False) -> None:
@@ -323,19 +336,36 @@ class LimaProvider:
     def _ssh_config(self) -> Path:
         return self.lima_home / self.name / "ssh.config"
 
-    def _alias_file(self) -> Path:
-        return self.data_root / "ssh_config"
+    def _lima_ssh(self) -> dict[str, str]:
+        return parse_ssh_config(self._ssh_config().read_text())
+
+    @staticmethod
+    def _known_hosts_name(found: dict[str, str]) -> str:
+        if "Port" not in found:
+            raise ValueError("Lima has not written the SSH port")
+        return ssh_alias.known_hosts_name(found.get("Host", LOOPBACK), found["Port"])
+
+    def _trust_host_keys(self) -> None:
+        """Replace known_hosts' entries for the VM's address with the keys
+        the guest has now, read through `limactl shell`. That is exactly as
+        much trust as Lima itself gives the VM: Lima's connection proves the
+        user to the guest but skips host-key checking, so this does not
+        defend against another local process already holding the port."""
+        name = self._known_hosts_name(self._lima_ssh())
+        keys = self._require(self.exec(["sh", "-c", "cat /etc/ssh/ssh_host_*_key.pub"]),
+                             "the virtual machine's SSH host keys could not be read")
+        ssh_alias.trust(self.ssh_dir / "known_hosts", name, keys.stdout, self._spawn)
 
     def ssh_shortcut(self):
-        """The setup step that adds `Host omelet` to ~/.ssh/config -- see
-        ssh_alias.py for why its host-key checking is off. Rewritten on every
+        """The setup step that adds `Host omelet` to ~/.ssh/config and the
+        VM's host keys to known_hosts -- see ssh_alias.py. Rewritten on every
         run: the values come from the ssh.config Lima writes on each start."""
         def write() -> str:
             user_config = self.ssh_dir / "config"
             try:
-                found = parse_ssh_config(self._ssh_config().read_text())
-                ssh_alias.install(self._alias_file(), user_config, found)
-            except (OSError, ValueError) as e:
+                ssh_alias.install(user_config, self._lima_ssh())
+                self._trust_host_keys()
+            except (OSError, ValueError, RuntimeError) as e:
                 # Never fails setup: the VM works without it, and the status
                 # screen still shows the full `ssh -F` command.
                 return f"Could not add the '{ssh_alias.ALIAS}' host to {user_config}: {e}"
@@ -404,7 +434,7 @@ class LimaProvider:
             AccessField("Identity file", found.get(
                 "Identity file", str(self.lima_home / "_config" / "user"))),
         )
-        if ssh_alias.installed(self._alias_file(), self.ssh_dir / "config"):
+        if ssh_alias.installed(self.ssh_dir / "config"):
             command = f"ssh {ssh_alias.ALIAS}"
             remote = f"choose the '{ssh_alias.ALIAS}' host in an editor's Remote-SSH"
         else:

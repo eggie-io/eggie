@@ -11,7 +11,7 @@ export function Tabs() {
         {PROJECTS}<span className={s.tabLabel}>Projects</span>
       </Link>
       <Link className={cx(s.tab, onAgents && s.active)} to="/agents" aria-current={onAgents ? "page" : undefined}>
-        {PLUG}<span className={s.tabLabel}>Connect an agent</span>
+        {PLUG}<span className={s.tabLabel}>Agents</span>
       </Link>
     </>
   );

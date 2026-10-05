@@ -4,7 +4,10 @@ import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CHEVRON_RIGHT } from "../icons";
 import s from "./Agents.module.css";
 
-export function AgentPicker() {
+export type AgentBase = "/agents" | "/welcome";
+
+export function AgentPicker({ base }: { base: AgentBase }) {
+  const welcome = base === "/welcome";
   const { platform, agents, error } = useAgents();
   const status = useAgentStatus();
 
@@ -17,7 +20,7 @@ export function AgentPicker() {
       <ul className={s.grid}>
         {agents.map((agent) => (
           <li key={agent.id}>
-            <Link className={s.card} to={`/agents/${agent.id}`}>
+            <Link className={s.card} to={`${base}/${agent.id}`}>
               <span className={s.cardTop}>
                 <img className={s.icon} src={agent.icon} alt="" width={40} height={40} />
                 {status.data?.agents[agent.id]?.connected && <span className={s.badge}>Connected</span>}
@@ -37,10 +40,17 @@ export function AgentPicker() {
   return (
     <div className={s.page}>
       <div>
-        <h1 className={s.title}>Which agent do you use?</h1>
-        <p className={s.sub}>Pick one and we'll walk you through it. Takes about two minutes.</p>
+        <h1 className={s.title}>{welcome ? "Which coding agent do you use?" : "Which agent do you use?"}</h1>
+        <p className={s.sub}>
+          {welcome
+            ? "Omelet works with the agent you already have. Pick it and we'll connect it to your kitchen. It takes about two minutes."
+            : "Pick one and we'll walk you through it. Takes about two minutes."}
+        </p>
       </div>
       {body}
+      {welcome && (
+        <p className={s.muted}>Don't see yours? Skip for now. You can connect one any time from Agents.</p>
+      )}
     </div>
   );
 }

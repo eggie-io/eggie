@@ -18,6 +18,7 @@ import { DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
+import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
@@ -65,21 +66,9 @@ function Screens({ handoff }: { handoff: string | null }) {
         <QueryClientProvider client={queryClient}>
           <QueueProvider onSessionLost={(reason) => setResult({ kind: "signedOut", reason })}>
             <BrowserRouter>
-              <Shell
-                signedIn
-                nav={<Tabs />}
-                trailing={<AccountMenu onSignedOut={needAccount} />}
-              >
-                <Routes>
-                  <Route path="/" element={<ProjectList />} />
-                  <Route path="/p/:id" element={<ProjectPage />} />
-                  <Route path="/p/:id/files/*" element={<FilesPage />} />
-                  <Route path="/agents" element={<AgentPicker />} />
-                  <Route path="/agents/:id" element={<AgentGuide />} />
-                  <Route path="/kit" element={<Kit />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Shell>
+              <OnboardingProvider>
+                <Console onSignedOut={needAccount} />
+              </OnboardingProvider>
             </BrowserRouter>
           </QueueProvider>
         </QueryClientProvider>
@@ -95,4 +84,39 @@ function Screens({ handoff }: { handoff: string | null }) {
     case "wrongHost":
       return <WrongHost onRetry={run} />;
   }
+}
+
+function Console({ onSignedOut }: { onSignedOut: () => void }) {
+  const { phase } = useOnboarding();
+  const welcome = phase === "onboarding";
+  return (
+    <Shell
+      signedIn
+      nav={welcome ? <Progress /> : <Tabs />}
+      trailing={
+        <>
+          {welcome && <SkipLink />}
+          <AccountMenu onSignedOut={onSignedOut} />
+        </>
+      }
+    >
+      {phase === "deciding" ? null : welcome ? (
+        <Routes>
+          <Route path="/welcome" element={<AgentPicker base="/welcome" />} />
+          <Route path="/welcome/:id" element={<AgentGuide base="/welcome" />} />
+          <Route path="*" element={<Navigate to="/welcome" replace />} />
+        </Routes>
+      ) : (
+        <Routes>
+          <Route path="/" element={<ProjectList />} />
+          <Route path="/p/:id" element={<ProjectPage />} />
+          <Route path="/p/:id/files/*" element={<FilesPage />} />
+          <Route path="/agents" element={<AgentPicker base="/agents" />} />
+          <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />
+          <Route path="/kit" element={<Kit />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      )}
+    </Shell>
+  );
 }

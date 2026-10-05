@@ -6,6 +6,7 @@ import { baseName, joinPath, parentOf } from "../uploads/paths";
 export const SCENARIOS = [
   "ok",
   "empty",
+  "fresh",
   "expired",
   "handoff-spent",
   "old-api",
@@ -94,12 +95,13 @@ export function handlersFor(scenario: Scenario) {
     url: `https://omelet.example/device?user_code=${MOCK_CODE}`,
     expires_at: nowSec() + 600,
   });
-  let account: Record<string, unknown> = scenario.startsWith("account-")
+  let account: Record<string, unknown> = scenario.startsWith("account-") || scenario === "fresh"
     ? scenario === "account-pending"
       ? pendingAccount()
       : { state: "signed_out", error: null }
     : { state: "signed_in", email: "ada@example.com", sync: { last_ok_at: nowSec(), last_error: null } };
   let approveAt = 0;
+  let agentsConnectAt = 0;
   const GH_CODE = "C0DE-F00D";
   const ghConnected = (setup: string, setup_error: string | null = null) =>
     ({ state: "connected", login: "ada", name: "Ada", email: "1+ada@users.noreply.github.com", setup, setup_error });
@@ -185,7 +187,7 @@ export function handlersFor(scenario: Scenario) {
     return created;
   }
 
-  if (scenario !== "empty") {
+  if (scenario !== "empty" && scenario !== "fresh") {
     const minutesAgo = (n: number) => nowSec() - n * 60;
     for (const p of [
       project("recipe-box", {
@@ -349,6 +351,14 @@ export function handlersFor(scenario: Scenario) {
       if (scenario === "agents-connected") return HttpResponse.json({ agents: { "claude-code": { connected: true, setup: null }, codex: { connected: true, setup: "ready" } } });
       if (scenario === "agents-installing") return HttpResponse.json({ agents: { codex: { connected: false, setup: "installing" } } });
       if (scenario === "agents-failed") return HttpResponse.json({ agents: { codex: { connected: false, setup: "failed" } } });
+      if (scenario === "fresh") {
+        // Long enough to pick an agent and see "not connected yet" before it connects.
+        if (agentsConnectAt === 0) agentsConnectAt = Date.now() + 20_000;
+        if (Date.now() >= agentsConnectAt) {
+          const on = { connected: true, setup: null };
+          return HttpResponse.json({ agents: { "claude-code": on, codex: on, cursor: on } });
+        }
+      }
       return HttpResponse.json({ agents: {} });
     }),
     http.post("/api/agents/:id/setup", () => HttpResponse.json({ requested: true })),

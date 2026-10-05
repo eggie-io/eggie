@@ -1,0 +1,32 @@
+.progress { margin: 0; padding: 0; list-style: none; display: flex; align-items: center; gap: 6px; }
+.item { display: flex; align-items: center; gap: 7px; padding: 6px 8px; font: 600 13.5px var(--font-body); color: var(--ink-3); white-space: nowrap; }
+.item + .item::before { content: ""; width: 18px; height: 1px; margin-right: 6px; background: var(--line-2); }
+.dot {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--ink-3); font: 700 12px var(--font-body);
+}
+.dot svg { width: 13px; height: 13px; }
+.done { color: var(--ink-2); }
+.done .dot { background: var(--basil-soft); color: var(--basil); }
+.current { color: var(--ink); font-weight: 700; }
+.current .dot { background: var(--yolk); color: #2B1E14; }
+
+.skip {
+  cursor: pointer; padding: 7px 12px; border-radius: 10px; border: 0; background: transparent;
+  color: var(--ink-2); font: 600 13.5px var(--font-body); white-space: nowrap;
+}
+.skip:hover { background: var(--surface-2); color: var(--ink); }
+.skip:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 2px; }
+
+@media (max-width: 860px) {
+  .item:not(.current) .label { display: none; }
+  .item + .item::before { width: 10px; margin-right: 2px; }
+}
+@media (max-width: 640px) {
+  .progress { gap: 0; }
+  .item { padding: 6px 3px; }
+  .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .item + .item::before { width: 8px; }
+  .skip { padding: 7px 8px; }
+  .skipTail { display: none; }
+}

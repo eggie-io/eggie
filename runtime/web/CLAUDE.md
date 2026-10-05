@@ -37,7 +37,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     `uploads/QueueProvider.tsx`, so uploads continue across screens but stop when the page closes.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
     `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
-  - `/agents` and `/agents/:id` — the "Connect an agent" guide. All content is in
+  - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
+    connection" last step. `onboarding/onboarding.ts` decides: shown only when no agent is connected,
+    the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.
+  - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab). All content is in
     `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
     `<id>/agent.json` with `windows` and `mac` blocks, `via_ssh`, steps, optional screenshots.
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or

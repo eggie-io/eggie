@@ -3,39 +3,79 @@ import { Navigate, useNavigate, useParams } from "react-router";
 import { Button, cx } from "@omelet/ui";
 import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
-import { useAgents } from "../../agents/queries";
+import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
+import { useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
+import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
 import s from "./Agents.module.css";
 
-export function AgentGuide() {
+export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
 
   if (error) return <p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p>;
   if (agents === undefined) return <p className={s.muted}>Getting the guide…</p>;
   const agent = agents.find((candidate) => candidate.id === id);
-  if (!agent) return <Navigate to="/agents" replace />;
+  if (!agent) return <Navigate to={base} replace />;
 
   return (
     <div className={s.page}>
       <div className={s.guideHead}>
         <h1 className={s.guideTitle}>Connect a coding agent</h1>
-        <AgentMenu agents={agents} current={agent} />
+        <AgentMenu agents={agents} current={agent} base={base} />
       </div>
       {/* Keyed so switching agent starts again at step 1. */}
-      <Steps key={agent.id} agent={agent} guide={agent.platforms[platform]!} connect={connect} />
+      <Steps key={agent.id} agent={agent} guide={agent.platforms[platform]!} connect={connect} welcome={base === "/welcome"} />
     </div>
   );
 }
 
-function Steps({ agent, guide, connect }: { agent: Agent; guide: Guide; connect: Connect | undefined }) {
-  const [active, setActive] = useState(0);
+type Check = "idle" | "checking" | "notYet" | "unreachable";
+
+const CHECK_TEXT: Record<"notYet" | "unreachable", (name: string) => string> = {
+  notYet: (name) => `Not connected yet. Finish the last step in ${name}, then check again.`,
+  unreachable: () => "Couldn't reach your kitchen just now. Check again in a moment.",
+};
+
+function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide; connect: Connect | undefined; welcome: boolean }) {
+  const [active, setActiveStep] = useState(0);
+  const [check, setCheck] = useState<Check>("idle");
   const navigate = useNavigate();
+  const { finish } = useOnboarding();
+  const status = useAgentStatus(agent.id);
+  const connected = status.data?.agents[agent.id]?.connected === true;
   const rows = cardRows(guide, connect);
   const step = guide.steps[active];
   const last = active === guide.steps.length - 1;
+  const setActive = (index: number) => {
+    setActiveStep(index);
+    setCheck("idle");
+  };
+
+  const checkConnection = async () => {
+    setCheck("checking");
+    const result = await status.refetch();
+    if (result.data?.agents[agent.id]?.connected) finish(agent.name);
+    else setCheck(result.isError ? "unreachable" : "notYet");
+  };
+
+  let primary;
+  if (welcome && connected) primary = <Button variant="primary" onClick={() => finish(agent.name)}>Continue</Button>;
+  else if (welcome && last)
+    primary = (
+      <Button variant="primary" disabled={check === "checking"} onClick={checkConnection}>
+        {check === "checking" ? "Checking…" : "Check the connection"}
+      </Button>
+    );
+  else
+    primary = (
+      <Button variant="primary" onClick={() => (last ? navigate("/") : setActive(active + 1))}>
+        {last ? "Done" : "Next"}
+      </Button>
+    );
+  const problem = welcome && !connected && (check === "notYet" || check === "unreachable") ? CHECK_TEXT[check](agent.name) : null;
 
   return (
     <div className={s.guide}>
@@ -82,11 +122,13 @@ function Steps({ agent, guide, connect }: { agent: Agent; guide: Guide; connect:
           )}
         </div>
         <div className={s.nav}>
-          <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>
+          {problem ? (
+            <span className={s.checkProblem} role="status">{problem}</span>
+          ) : (
+            <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>
+          )}
           <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
-          <Button variant="primary" onClick={() => (last ? navigate("/") : setActive(active + 1))}>
-            {last ? "Done" : "Next"}
-          </Button>
+          {primary}
         </div>
       </div>
     </div>

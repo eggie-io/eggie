@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Egg, ProgressBar, StateBadge } from "@omelet/ui";
+import { Egg, ProgressBar, StateBadge } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { phaseCaption } from "../../projects/copy";
 import { useJob } from "../../projects/queries";

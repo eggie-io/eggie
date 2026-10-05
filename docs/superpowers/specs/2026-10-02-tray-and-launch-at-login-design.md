@@ -2,11 +2,11 @@
 
 Date: 2026-10-02
 Status: approved design, not implemented
-Issue: omelet-app/omelet-resources#44
+Issue: eggie-io/eggie-resources#44
 
 ## 1. Problem
 
-Closing the Omelet window quits the app, which users don't expect. Omelet also
+Closing the Eggie window quits the app, which users don't expect. Eggie also
 never starts on its own, so after a reboot nothing is running until the user
 opens it. This spec turns the desktop app into a tray (Windows) / menu-bar
 (macOS) app that can open at login, and ties the VM's lifetime to the app's:
@@ -19,14 +19,14 @@ workarounds for unsigned builds.
 
 | # | Decision | Why |
 |---|----------|-----|
-| 1 | A tray / menu-bar icon is always present while the app runs. Menu: **Open Omelet**, **Settings**, **Quit Omelet**. | Standard for apps that live past their window. |
+| 1 | A tray / menu-bar icon is always present while the app runs. Menu: **Open Eggie**, **Settings**, **Quit Eggie**. | Standard for apps that live past their window. |
 | 2 | The window's close button hides the window; it never quits. | The issue. The tray is how the user gets back. |
-| 3 | **Quit Omelet** stops the VM, then exits. | No hidden VM using RAM/CPU after the user quit. Same as Docker Desktop. |
+| 3 | **Quit Eggie** stops the VM, then exits. | No hidden VM using RAM/CPU after the user quit. Same as Docker Desktop. |
 | 4 | The quit before an app update exits **without** stopping the VM. | The installer relaunches the app at once; a stop would only add a stop + boot. |
 | 5 | Stopping the VM is graceful on both platforms and the host never names Docker. WSL `stop()` asks the guest's systemd to power off, and uses `--terminate` only as the fallback. | Host/runtime seam: the host knows nothing about what runs in the VM. Docker's own shutdown (default 15 s) stops containers when systemd stops it. Fixes the existing **Stop the kitchen** button too, which today pulls the plug. |
 | 6 | Quitting while a job runs (install, import, runtime update, VM start/stop) asks for confirmation first. | A half-finished install or import is worse than a slower quit. |
 | 7 | Open at login is **on by default**. It is turned on once, when the first setup finishes successfully, and never turned on again. | With Quit stopping the VM, this keeps project URLs working after a reboot. A user who turns it off keeps it off. |
-| 8 | The checkbox reads the real state from the OS each time it is shown. The only stored value is "already turned on once". | Turning it off in Task Manager / System Settings must show in Omelet. |
+| 8 | The checkbox reads the real state from the OS each time it is shown. The only stored value is "already turned on once". | Turning it off in Task Manager / System Settings must show in Eggie. |
 | 9 | Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. macOS: `SMAppService.mainApp`. | Per-user, no admin. `SMAppService` is the current Apple API (macOS 13+, our minimum). No LaunchAgent workaround for unsigned builds. |
 | 10 | One running instance. A second launch shows the existing window and exits. | Start menu, Finder, the login entry and the post-update relaunch can all start a second copy. |
 | 11 | `icon.ico` is the tray, window, `.exe`, installer and `.app` icon. | The user's choice; the user will replace the art later. |
@@ -34,7 +34,7 @@ workarounds for unsigned builds.
 
 ## 3. Launch modes
 
-`setup.exe setup` (Windows) / `Omelet.app` (macOS) gain a `--background` flag,
+`setup.exe setup` (Windows) / `Eggie.app` (macOS) gain a `--background` flag,
 which only the login entry passes.
 
 | Launch | VM exists? | Result |
@@ -50,7 +50,7 @@ and it is cheap enough to run before the window is created. A VM that exists but
 is broken still goes tray-only; its failed start raises the notification below.
 
 If the background VM start fails, the app shows a notification; clicking it (or
-**Open Omelet**) shows the window, whose home screen already explains the state.
+**Open Eggie**) shows the window, whose home screen already explains the state.
 
 The decision is a pure function in `host/desktop/lifecycle.py` and is unit-tested.
 
@@ -58,27 +58,27 @@ The decision is a pure function in `host/desktop/lifecycle.py` and is unit-teste
 
 ### Close button
 `window.events.closing` cancels the close and hides the window. On Windows, the
-first time this happens on a machine, the tray shows a notification: *"Omelet is
+first time this happens on a machine, the tray shows a notification: *"Eggie is
 still running. Find it in the system tray."* Whether it was shown is stored in
 `settings.json` (section 6).
 
 ### macOS conventions
 - The red button hides the window; clicking the Dock icon shows it again.
-- Cmd+Q is **Quit Omelet**.
+- Cmd+Q is **Quit Eggie**.
 - The Dock icon is visible only while the window is visible: the app switches
   between the *regular* and *accessory* activation policies on show/hide.
 
 ### Tray menu
-- **Open Omelet**: show and focus the window. Windows: a left-click on the icon
+- **Open Eggie**: show and focus the window. Windows: a left-click on the icon
   does the same; a right-click shows the menu.
 - **Settings**: show the window on the Settings screen. If the window is showing
   the projects console (a page from the VM), it first loads the local UI.
-- **Quit Omelet**: section 4, *Quit*.
+- **Quit Eggie**: section 4, *Quit*.
 
 ### Quit
 1. If a job is running, show the window on a `quit-confirm` screen
    (*Quit anyway* / *Cancel*). Cancel returns to the previous screen.
-2. Show the window on a `quitting` screen: *"Stopping Omelet…"*.
+2. Show the window on a `quitting` screen: *"Stopping Eggie…"*.
 3. If the VM is running, `provider.stop()` on the worker thread.
 4. Remove the tray icon, destroy the window, exit.
 
@@ -114,7 +114,7 @@ manual gate records which happened.
 
 ### Settings screen
 New `settings` template in the local UI with one row:
-**[ ] Open Omelet when I sign in**. A Back button returns to home.
+**[ ] Open Eggie when I sign in**. A Back button returns to home.
 
 `DesktopApi` gains:
 - `get_settings() -> {"autostart": bool, "autostart_available": bool}`
@@ -131,7 +131,7 @@ Both providers implement:
 
 | | On | Off | State |
 |---|----|-----|-------|
-| Windows | Write the `Omelet` value under `HKCU\...\Run`: `"<exe_path>" setup --background` | Delete the value | The value exists and points at this exe |
+| Windows | Write the `Eggie` value under `HKCU\...\Run`: `"<exe_path>" setup --background` | Delete the value | The value exists and points at this exe |
 | macOS | `SMAppService.mainApp.registerAndReturnError_` | `unregisterAndReturnError_` | `status == enabled` |
 
 On macOS the login item launches the app with no arguments. The provider's
@@ -162,8 +162,8 @@ so a broken registry is not retried on every repair.
 
 | | Mechanism |
 |---|---|
-| Windows | The first instance listens on a per-user named pipe, `\\.\pipe\omelet-<username>`, through the standard library's `multiprocessing.connection` (`AF_PIPE`, with an authkey). A second instance connects, sends `show`, and exits 0. Pipe names are machine-wide, hence the user name: another user's Omelet must not answer. If the connect fails, there is no first instance and this one runs normally. |
-| macOS | LaunchServices already keeps one instance of a `.app`. A second open fires the reopen event, handled as **Open Omelet**. |
+| Windows | The first instance listens on a per-user named pipe, `\\.\pipe\eggie-<username>`, through the standard library's `multiprocessing.connection` (`AF_PIPE`, with an authkey). A second instance connects, sends `show`, and exits 0. Pipe names are machine-wide, hence the user name: another user's Eggie must not answer. If the connect fails, there is no first instance and this one runs normally. |
+| macOS | LaunchServices already keeps one instance of a `.app`. A second open fires the reopen event, handled as **Open Eggie**. |
 
 `--background` on a second instance does nothing (no `show`).
 
@@ -176,7 +176,7 @@ so a broken registry is not retried on every repair.
   Pillow at build time.
 - New dependencies: `pystray` and `Pillow`, `sys_platform == 'win32'`. Pillow is
   added to the `dev` extra for the macOS build's icon conversion.
-- `omelet uninstall --purge` (run by the Inno uninstaller and by
+- `eggie uninstall --purge` (run by the Inno uninstaller and by
   `packaging/macos/uninstall.sh`) turns autostart off before destroying the VM.
 
 ## 9. Where the code goes
@@ -208,7 +208,7 @@ Unit tests (no real tray, registry, or VM; fakes as elsewhere):
   `set_autostart` still sets the flag.
 - `settings.json`: missing / corrupt file reads as all false; writing one key
   keeps the other.
-- Quit paths: **Quit Omelet** calls `provider.stop()` when the VM runs and exits
+- Quit paths: **Quit Eggie** calls `provider.stop()` when the VM runs and exits
   even when `stop()` raises; `exit_for_update` never calls `stop()`.
 - WSL `stop()`: argv order is poweroff → poll → `--terminate`; `--terminate` is
   issued even when poweroff fails.

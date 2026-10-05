@@ -1,4 +1,4 @@
-# Omelet web UI — part C: project screens
+# Eggie web UI — part C: project screens
 
 Date: 2026-09-22
 Builds on: `2026-09-21-web-ui-agent-prerequisites-design.md` (§1 decisions, §8 "C"),
@@ -100,13 +100,13 @@ Copy in quotes is final; board copy not repeated here is used verbatim.
 ### Discovered band (03, 16)
 
 Above the list when `discovered` is non-empty. Heading "A folder turned up" /
-"<Two…> folders turned up", sub "Your coding agent made these. Omelet hasn't met
+"<Two…> folders turned up", sub "Your coding agent made these. Eggie hasn't met
 them yet." Per folder, "Turned up <relative time>" from `seen_at`, then:
 
 - adoptable — "· knows how to start itself" + "Adopt it" → `POST
   /projects/{name}/adopt` → `/p/:id`. 409 `project_exists` / `not_adoptable`
   and 404 `folder_not_found` show the agent's message and refetch.
-- `compose_missing` — dashed card, board copy, "What Omelet looks for"
+- `compose_missing` — dashed card, board copy, "What Eggie looks for"
   Collapsible with `~/projects/<name>\n  docker-compose.yml  — missing`,
   disabled "Can't adopt".
 - `bad_name` — dashed card, "Its name has characters an address can't use — ask
@@ -155,10 +155,10 @@ address (disabled, "Needs an account"), Delete. `gone` has none.
   | cause | heading | body |
   |---|---|---|
   | `bound_to_loopback` | "<id> started, but it isn't answering" | board copy |
-  | `service_unreachable` | "<id> started, but nothing answers at its address" | "Its little machines are up, but nothing replies where Omelet sends visitors. It may be listening on a different port, or it fell over after starting." |
+  | `service_unreachable` | "<id> started, but nothing answers at its address" | "Its little machines are up, but nothing replies where Eggie sends visitors. It may be listening on a different port, or it fell over after starting." |
   | `crash_looping` | "<id> keeps falling over" | "It starts, trips, and starts again. The raw details below usually say why — your coding agent can read them." |
   | `failed_to_start` | "<id> couldn't start" | "Docker refused to start it. The raw details below say what it tripped on." |
-  | `unreadable` | "Omelet can't read <id>'s start-up recipe" | "The docker-compose.yml is there, but Omelet can't make sense of it." + `problem.message` |
+  | `unreadable` | "Eggie can't read <id>'s start-up recipe" | "The docker-compose.yml is there, but Eggie can't make sense of it." + `problem.message` |
 
   Each cause has a fix prompt in `projects/prompts.ts`, written to a coding
   agent, naming the project folder `~/projects/<id>` and asking it to fix the
@@ -167,7 +167,7 @@ address (disabled, "Needs an account"), Delete. `gone` has none.
   ~/projects/<id>. Your coding agent fills it in; once there's a
   docker-compose.yml, Start appears here." + PromptCard asking the agent to
   build the project there and add a `docker-compose.yml`.
-- **gone** — "The folder for <id> has gone missing", "Omelet still remembers
+- **gone** — "The folder for <id> has gone missing", "Eggie still remembers
   it, but ~/projects/<id> isn't there any more." Only "Forget it" → plain
   `DELETE /projects/{id}` → list.
 - **stopped** — Start; address rows greyed without Copy.
@@ -191,7 +191,7 @@ pending "Counting what's in there…". Rows, each only when non-empty:
 Board warning and "Other projects aren't touched." "Yes, throw it out" →
 `DELETE /projects/{id}?purge=true` → list. Result `stopped: false` → the list
 shows Notice "<id> is deleted. Some of its little machines may still be
-running — restarting Omelet from the desktop app clears them." (never worded as
+running — restarting Eggie from the desktop app clears them." (never worded as
 a failure). 409 `project_busy` → inline, modal stays. The preview can undercount
 folders the agent can't read; the count is shown as is.
 
@@ -206,8 +206,8 @@ folders the agent can't read; the count is shown as is.
 
 `boot` returns `wrongHost` on 403 `forbidden_host` / `forbidden_origin` from
 `/api/health` or `/api/session`: screen "This page was opened from an address
-Omelet doesn't recognise" / "Open it as http://localhost:39080 — the desktop
-app's Open Omelet button does that for you." with "Try again". Mid-use 403s show
+Eggie doesn't recognise" / "Open it as http://localhost:39080 — the desktop
+app's Open Eggie button does that for you." with "Try again". Mid-use 403s show
 the agent's message in a Notice.
 
 ## 4. Mocks

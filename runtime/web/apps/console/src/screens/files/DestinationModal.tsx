@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Modal, Notice, TextField } from "@omelet/ui";
+import { Button, Modal, Notice, TextField } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { folderNameError, joinPath } from "../../uploads/paths";
 import { useDisk, useListing } from "../../uploads/queries";
@@ -56,7 +56,7 @@ export function DestinationModal({
       {tooBig.length > 0 && free !== undefined && (
         <Notice>
           {tooBig.length === 1 && files.length === 1 ? "This one won't fit — the" : `${tooBig.map((f) => f.name).join(", ")} won't fit — the`}{" "}
-          {tooBig.length === 1 ? `file is ${size(tooBig[0].size)}` : `files need ${size(tooBig.reduce((n, f) => n + f.size, 0))}`} and Omelet has{" "}
+          {tooBig.length === 1 ? `file is ${size(tooBig[0].size)}` : `files need ${size(tooBig.reduce((n, f) => n + f.size, 0))}`} and Eggie has{" "}
           {size(free)} of room left. Make some space in the desktop app, then come back and send it up — we'll still be here.
         </Notice>
       )}

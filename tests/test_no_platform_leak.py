@@ -8,7 +8,7 @@ FORBIDDEN = re.compile(r"sys\.platform|platform\.system\(\)|os\.name")
 ROOT = Path(__file__).resolve().parents[1]
 
 # The one place the host platform is resolved. Matched on the exact path, not
-# on the word "providers" anywhere in it, so a future omelet_api/providers/ package
+# on the word "providers" anywhere in it, so a future eggie_api/providers/ package
 # cannot inherit the exemption by name.
 EXEMPT = ROOT / "host" / "providers"
 
@@ -46,8 +46,8 @@ def test_the_api_never_asks_what_platform_it_is_on():
     # target it will ever have -- the VM today, a cloud container next -- so a
     # platform branch there is a bug by construction, not a portability
     # measure. It also has no host to describe: it cannot see one.
-    scanned, offenders = _hits("runtime/omelet_api")
-    assert scanned, f"scanned nothing under {ROOT / 'runtime' / 'omelet_api'}"
+    scanned, offenders = _hits("runtime/eggie_api")
+    assert scanned, f"scanned nothing under {ROOT / 'runtime' / 'eggie_api'}"
     assert not offenders, (
         "the API asked what platform it is on:\n  "
         + "\n  ".join(offenders)

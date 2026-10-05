@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Applies the API's GitHub desired state to every login account: gh signed in
-# or out, and git's identity. Run as root by omelet-github.service and once by
+# or out, and git's identity. Run as root by eggie-github.service and once by
 # install.sh; re-running it is safe.
 #   github-apply.sh [github-dir]
 # Not -e: one account failing must not leave the others unapplied.
 set -uo pipefail
 
-DIR="${1:-/opt/omelet/github}"
+DIR="${1:-/opt/eggie/github}"
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESIRED="$DIR/desired.json"
 APPLIED="$DIR/applied.json"
 TOKEN="$DIR/token"
-ROOT_HOME="${OMELET_ROOT_HOME:-/root}"
-SHELLS="${OMELET_SHELLS_FILE:-/etc/shells}"
-SAFE_PATH="${OMELET_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+ROOT_HOME="${EGGIE_ROOT_HOME:-/root}"
+SHELLS="${EGGIE_SHELLS_FILE:-/etc/shells}"
+SAFE_PATH="${EGGIE_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 MAX_PASSES=5
 
 field() {

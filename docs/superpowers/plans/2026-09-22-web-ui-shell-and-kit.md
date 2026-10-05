@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A page at `localhost:39080`, served by a new `omelet-web` nginx image, that signs in through the desktop's handoff, shows the "lost track of you" / "needs an update" / "isn't answering" states, and — once signed in — a shell with a placeholder projects list and a `/kit` gallery of a UI kit built from the design board.
+**Goal:** A page at `localhost:39080`, served by a new `eggie-web` nginx image, that signs in through the desktop's handoff, shows the "lost track of you" / "needs an update" / "isn't answering" states, and — once signed in — a shell with a placeholder projects list and a `/kit` gallery of a UI kit built from the design board.
 
 **Architecture:** An npm workspace in `web/`: `packages/ui` (the kit, consumed as TypeScript source, plain CSS Modules over token custom properties) and `apps/console` (React app: a pure `boot()` decides what to render, a thin `fetch` client maps agent errors, TanStack Query carries one session-loss handler). A multi-stage Dockerfile builds it and serves `dist/` from unprivileged nginx; `engine/stack.yml` routes everything that isn't `/api` to it.
 
 **Tech Stack:** Node 24, npm workspaces, TypeScript 7.0, React 19.3, Vite 8.3 + @vitejs/plugin-react 6.1, react-router 8.4, @tanstack/react-query 5.103, MSW 2.15, Vitest 5.0, @fontsource(-variable) 5.3, nginx (nginxinc/nginx-unprivileged:stable-alpine). Python side: pytest + PyYAML (already present).
 
-**Spec:** `docs/superpowers/specs/2026-09-22-web-ui-shell-and-kit-design.md`. Binding decisions for all web parts: `docs/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md` §1. Design board: `docs/design/omelet-web-ui.dc.html` (read it as markup; frame map in `docs/design/README.md`).
+**Spec:** `docs/superpowers/specs/2026-09-22-web-ui-shell-and-kit-design.md`. Binding decisions for all web parts: `docs/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md` §1. Design board: `docs/design/eggie-web-ui.dc.html` (read it as markup; frame map in `docs/design/README.md`).
 
 ## Global Constraints
 
@@ -20,7 +20,7 @@
 - Nothing in `web/` is copied from `host/desktop/ui` — the kit is built from the board, from scratch.
 - The kit (`web/packages/ui/src`) imports only `react`, `react-dom`, `@fontsource*` and its own files, and never calls `fetch`.
 - Nothing in the built page loads from another host. Fonts come from `@fontsource` packages only; no Google Fonts link anywhere.
-- No `omelet://` links; the "Open the Omelet app" button from the board is text, not a button.
+- No `eggie://` links; the "Open the Eggie app" button from the board is text, not a button.
 - Code comments only for edge cases, workarounds or non-obvious logic; no references to tickets, specs or docs in comments.
 - Tests: only ones that can fail for a named bug (see each task). No component snapshot tests.
 - JS commands run from `web/`: `npm test`, `npm run typecheck`, `npm run build`, `npm run check-offline`.
@@ -78,21 +78,21 @@ CLAUDE.md, .gitignore
   - `function createApi(fetchImpl: typeof fetch): Api`
   - `const api: Api` (bound to the browser's fetch), `function signOut(): Promise<unknown>`
 - Produces (`apps/console/src/api/version.ts`): `const SUPPORTED_API: readonly number[]`
-- Produces: workspace package names `@omelet/ui` and `@omelet/console`; `@omelet/ui` exports `.` → `src/index.ts`, `./fonts` → `src/fonts.ts`, `./tokens.css` → `src/tokens.css`.
+- Produces: workspace package names `@eggie/ui` and `@eggie/console`; `@eggie/ui` exports `.` → `src/index.ts`, `./fonts` → `src/fonts.ts`, `./tokens.css` → `src/tokens.css`.
 
 - [ ] **Step 1: Create the workspace root**
 
 `web/package.json`:
 ```json
 {
-  "name": "omelet-web",
+  "name": "eggie-web",
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
   "engines": { "node": ">=22.22" },
   "scripts": {
-    "dev": "npm run dev -w @omelet/console",
-    "build": "npm run build -w @omelet/console",
+    "dev": "npm run dev -w @eggie/console",
+    "build": "npm run build -w @eggie/console",
     "test": "vitest run",
     "typecheck": "tsc -p packages/ui && tsc -p apps/console",
     "check-offline": "node scripts/check-offline.mjs apps/console/dist"
@@ -149,7 +149,7 @@ export default defineConfig({
 `web/packages/ui/package.json`:
 ```json
 {
-  "name": "@omelet/ui",
+  "name": "@eggie/ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -185,7 +185,7 @@ export {};
 `web/apps/console/package.json`:
 ```json
 {
-  "name": "@omelet/console",
+  "name": "@eggie/console",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -195,7 +195,7 @@ export {};
     "preview": "vite preview"
   },
   "dependencies": {
-    "@omelet/ui": "*",
+    "@eggie/ui": "*",
     "@tanstack/react-query": "5.103.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -236,7 +236,7 @@ export default defineConfig(({ command }) => ({
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cellipse cx='20' cy='21' rx='16' ry='13' fill='%23FFF3E2' stroke='%23C9B8A6'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23FFB020'/%3E%3C/svg%3E" />
-    <title>Omelet</title>
+    <title>Eggie</title>
   </head>
   <body>
     <div id="root"></div>
@@ -252,7 +252,7 @@ import { createRoot } from "react-dom/client";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <p>Omelet</p>
+    <p>Eggie</p>
   </StrictMode>,
 );
 ```
@@ -410,7 +410,7 @@ export function createApi(fetchImpl: typeof fetch): Api {
           : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
       });
     } catch {
-      throw new ApiError("unreachable", "Omelet's service isn't answering", 0);
+      throw new ApiError("unreachable", "Eggie's service isn't answering", 0);
     }
     const parsed = parse(await response.text());
     if (!response.ok) {
@@ -722,15 +722,15 @@ Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
 - Test: `web/packages/ui/test/boundary.test.ts`
 
 **Interfaces:**
-- Produces (from `@omelet/ui`):
+- Produces (from `@eggie/ui`):
   - `cx(...names: Array<string | false | null | undefined>): string`
   - `Egg(props: { tone?: "yolk" | "cold"; size?: number; bob?: boolean })`
   - `Button(props: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: "md" | "lg" })`, `type ButtonVariant = "primary" | "secondary" | "quiet" | "danger"` (default variant `secondary`, size `md`, `type="button"`)
   - `Notice(props: { icon?: "info" | "folder"; className?: string; children: ReactNode })`
   - `StateBadge(props: { state: ProjectState })`, `type ProjectState = "running" | "stopped" | "starting" | "wrong"`
   - `SyncMarker(props: { state: SyncState; label?: string })`, `type SyncState = "synced" | "offline"`
-  - CSS custom properties from `@omelet/ui/tokens.css`: the board's 19 colour tokens, `--font-display`, `--font-body`, `--font-mono`, `--ease-lift`; classes `.om-theme-light` / `.om-theme-dark`; keyframes `om-spin`, `om-sizzle`, `om-glow`, `om-bob`, `om-zzz`, `om-bar`, `om-blink`.
-  - Side-effect import `@omelet/ui/fonts`.
+  - CSS custom properties from `@eggie/ui/tokens.css`: the board's 19 colour tokens, `--font-display`, `--font-body`, `--font-mono`, `--ease-lift`; classes `.om-theme-light` / `.om-theme-dark`; keyframes `om-spin`, `om-sizzle`, `om-glow`, `om-bob`, `om-zzz`, `om-bar`, `om-blink`.
+  - Side-effect import `@eggie/ui/fonts`.
 
 - [ ] **Step 1: Write the failing boundary test**
 
@@ -1126,7 +1126,7 @@ No new tests: these are visual components with no branching logic worth a unit t
 
 **Interfaces:**
 - Consumes: `Button`, `cx` (Task 3).
-- Produces (from `@omelet/ui`):
+- Produces (from `@eggie/ui`):
   - `PromptCard(props: { prompt: string; title?: string; hint?: ReactNode; aside?: ReactNode })`
   - `Modal(props: { open: boolean; onClose: () => void; title: string; children: ReactNode })`
   - `RowCard(props: { accent?: "plain" | "attention" | "trouble"; className?: string; children: ReactNode })`
@@ -1467,7 +1467,7 @@ No new unit tests: the logic with branches is `boot()` (Task 2); what remains is
 - Modify: `web/apps/console/src/main.tsx` (replace)
 
 **Interfaces:**
-- Consumes: `api`, `ApiError`, `isSessionLost`, `SessionLoss` (Task 1); `boot`, `takeHandoff`, `BootResult`, `SignedOutReason` (Task 2); `SUPPORTED_API` (Task 1); `Button`, `Egg`, `RowCard`, `cx` from `@omelet/ui`.
+- Consumes: `api`, `ApiError`, `isSessionLost`, `SessionLoss` (Task 1); `boot`, `takeHandoff`, `BootResult`, `SignedOutReason` (Task 2); `SUPPORTED_API` (Task 1); `Button`, `Egg`, `RowCard`, `cx` from `@eggie/ui`.
 - Produces:
   - `createQueryClient(onSessionLost: (reason: SessionLoss) => void): QueryClient`
   - `Shell(props: { tone?: "yolk" | "cold"; children?: ReactNode })`
@@ -1517,7 +1517,7 @@ a:hover { color: var(--ink); text-decoration: underline; }
 `web/apps/console/src/shell/Shell.tsx`:
 ```tsx
 import type { ReactNode } from "react";
-import { Egg, cx } from "@omelet/ui";
+import { Egg, cx } from "@eggie/ui";
 import s from "./Shell.module.css";
 
 export function Shell({ tone = "yolk", children }: { tone?: "yolk" | "cold"; children?: ReactNode }) {
@@ -1525,7 +1525,7 @@ export function Shell({ tone = "yolk", children }: { tone?: "yolk" | "cold"; chi
     <div className={s.page}>
       <header className={cx(s.bar, tone === "cold" && s.muted)}>
         <Egg tone={tone} size={22} />
-        <span className={s.brand}>Omelet</span>
+        <span className={s.brand}>Eggie</span>
       </header>
       <main className={s.content}>{children}</main>
     </div>
@@ -1636,7 +1636,7 @@ export function SleepyEgg() {
 `web/apps/console/src/screens/SignedOut.tsx`:
 ```tsx
 import { useEffect } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
 import { SleepyEgg } from "./SleepyEgg";
 import { StatusScreen } from "./StatusScreen";
@@ -1644,7 +1644,7 @@ import s from "./StatusScreen.module.css";
 
 export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetry: () => void }) {
   useEffect(() => {
-    // "Open Omelet" opens a new tab; this one catches up when it's looked at again.
+    // "Open Eggie" opens a new tab; this one catches up when it's looked at again.
     const onVisible = () => {
       if (document.visibilityState === "visible") onRetry();
     };
@@ -1665,7 +1665,7 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
           : "This page can't tell who you are any more — that happens after a while."}
       </p>
       <p className={s.lead}>
-        Open the Omelet app on your desktop and press <strong>Open Omelet</strong>. It'll hand the keys back.
+        Open the Eggie app on your desktop and press <strong>Open Eggie</strong>. It'll hand the keys back.
       </p>
     </StatusScreen>
   );
@@ -1674,7 +1674,7 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
 
 `web/apps/console/src/screens/NeedsUpdate.tsx`:
 ```tsx
-import { Button, Egg } from "@omelet/ui";
+import { Button, Egg } from "@eggie/ui";
 import { SUPPORTED_API } from "../api/version";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
@@ -1684,12 +1684,12 @@ export function NeedsUpdate({ agentApi, onRetry }: { agentApi: number | null; on
     <StatusScreen
       tone="yolk"
       art={<Egg size={96} bob />}
-      title="Omelet needs an update"
+      title="Eggie needs an update"
       actions={<Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>}
     >
       <p className={s.lead}>
-        This page and the Omelet service on your computer come from different releases, so they can't safely
-        talk to each other. Update Omelet from the desktop app, then try again.
+        This page and the Eggie service on your computer come from different releases, so they can't safely
+        talk to each other. Update Eggie from the desktop app, then try again.
       </p>
       <p className={s.detail}>
         page speaks api {SUPPORTED_API.join(", ")} · service speaks {agentApi === null ? "an older api" : `api ${agentApi}`}
@@ -1702,7 +1702,7 @@ export function NeedsUpdate({ agentApi, onRetry }: { agentApi: number | null; on
 `web/apps/console/src/screens/NotAnswering.tsx`:
 ```tsx
 import { useEffect } from "react";
-import { Button, Egg } from "@omelet/ui";
+import { Button, Egg } from "@eggie/ui";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
 
@@ -1717,7 +1717,7 @@ export function NotAnswering({ onRetry }: { onRetry: () => void }) {
   return (
     <StatusScreen
       art={<Egg tone="cold" size={96} />}
-      title="Omelet isn't answering"
+      title="Eggie isn't answering"
       actions={<Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>}
     >
       <p className={s.lead}>
@@ -1734,7 +1734,7 @@ export function NotAnswering({ onRetry }: { onRetry: () => void }) {
 `web/apps/console/src/screens/Projects.tsx`:
 ```tsx
 import { useQuery } from "@tanstack/react-query";
-import { RowCard } from "@omelet/ui";
+import { RowCard } from "@eggie/ui";
 import { api } from "../api/client";
 import s from "./Projects.module.css";
 
@@ -1850,8 +1850,8 @@ export function App({ handoff }: { handoff: string | null }) {
 
 `web/apps/console/src/main.tsx` (replace the whole file):
 ```tsx
-import "@omelet/ui/fonts";
-import "@omelet/ui/tokens.css";
+import "@eggie/ui/fonts";
+import "@eggie/ui/tokens.css";
 import "./app.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -1923,8 +1923,8 @@ const PROJECTS = ["recipe-box", "weekend-shop", "tiny-crm", "photo-sorter"].map(
 // Same codes and wording as the agent's own refusals.
 const refuse = (code: string, message: string, status: number) =>
   HttpResponse.json({ error: { code, message } }, { status });
-const notSignedIn = () => refuse("not_signed_in", "open Omelet from the desktop app to sign in", 401);
-const expired = () => refuse("session_expired", "your sign-in ran out; open Omelet from the desktop app again", 401);
+const notSignedIn = () => refuse("not_signed_in", "open Eggie from the desktop app to sign in", 401);
+const expired = () => refuse("session_expired", "your sign-in ran out; open Eggie from the desktop app again", 401);
 
 export function handlersFor(scenario: Scenario) {
   let signedIn = scenario === "ok" || scenario === "old-agent" || scenario === "lost-mid-use";
@@ -1942,7 +1942,7 @@ export function handlersFor(scenario: Scenario) {
     ),
     http.post("/api/session", () => {
       if (scenario === "handoff-spent") {
-        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Omelet from the desktop app again", 401);
+        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Eggie from the desktop app again", 401);
       }
       signedIn = true;
       return HttpResponse.json({ signed_in: true });
@@ -1977,8 +1977,8 @@ export async function startMocks(): Promise<void> {
 
 `web/apps/console/src/main.tsx` (replace the whole file):
 ```tsx
-import "@omelet/ui/fonts";
-import "@omelet/ui/tokens.css";
+import "@eggie/ui/fonts";
+import "@eggie/ui/tokens.css";
 import "./app.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -2020,7 +2020,7 @@ import {
   StateBadge,
   SyncMarker,
   cx,
-} from "@omelet/ui";
+} from "@eggie/ui";
 import s from "./Kit.module.css";
 
 const PROMPT = `I uploaded a database dump to data/orders-dump.sql in this
@@ -2078,7 +2078,7 @@ function Column({ theme }: { theme: "light" | "dark" }) {
         <div className={s.wide}><ProgressBar label="Starting" /></div>
       </Section>
       <Section title="Collapsible">
-        <Collapsible summary="What Omelet looks for">A compose file at the top of the folder.</Collapsible>
+        <Collapsible summary="What Eggie looks for">A compose file at the top of the folder.</Collapsible>
         <div className={s.wide}>
           <Collapsible boxed summary="The raw details" aside="for your coding agent, or for us">
             <code>container exited with code 1</code>
@@ -2145,8 +2145,8 @@ Run: `cd web && npm run dev` (leave it running), and open each URL in a browser 
 - `/?scenario=expired` → "We've lost track of you", first line "…that happens after a while."
 - `/?scenario=handoff-spent#handoff=abc` → the hash disappears from the address bar at once; "That sign-in link was already used…".
 - `/?scenario=ok#handoff=abc` → signed in; the hash is gone.
-- `/?scenario=old-agent` → "Omelet needs an update", detail line `page speaks api 1 · service speaks api 2`.
-- `/?scenario=down` → "Omelet isn't answering"; the network tab shows `/api/health` retried every 5 s.
+- `/?scenario=old-agent` → "Eggie needs an update", detail line `page speaks api 1 · service speaks api 2`.
+- `/?scenario=down` → "Eggie isn't answering"; the network tab shows `/api/health` retried every 5 s.
 - `/?scenario=lost-mid-use` → the projects page flips to "We've lost track of you" once `/api/projects` answers.
 - Resize the window across 1040 px: the top bar goes from 52 to 54 px and side padding from 22 to 32 px.
 - Switch the OS (or devtools "prefers-color-scheme") to dark: the whole page follows.
@@ -2164,7 +2164,7 @@ Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
 
 ---
 
-### Task 7: The `omelet-web` image — offline check, Dockerfile, nginx
+### Task 7: The `eggie-web` image — offline check, Dockerfile, nginx
 
 **Files:**
 - Create: `web/scripts/check-offline.mjs`
@@ -2358,13 +2358,13 @@ EXPOSE 8080
 
 Run (from the repo root):
 ```bash
-docker build -t omelet-web:dev web/
-docker run -d --rm --name omelet-web-check omelet-web:dev
-docker exec omelet-web-check wget -qS -O /dev/null http://127.0.0.1:8080/projects/anything 2>&1
-docker exec omelet-web-check sh -c 'wget -qS -O /dev/null http://127.0.0.1:8080/assets/$(ls /usr/share/nginx/html/assets | grep "\.js$" | head -1)' 2>&1
-docker exec omelet-web-check wget -qS -O /dev/null http://127.0.0.1:8080/assets/missing.js 2>&1 | head -1
-docker exec omelet-web-check id -u
-docker stop omelet-web-check
+docker build -t eggie-web:dev web/
+docker run -d --rm --name eggie-web-check eggie-web:dev
+docker exec eggie-web-check wget -qS -O /dev/null http://127.0.0.1:8080/projects/anything 2>&1
+docker exec eggie-web-check sh -c 'wget -qS -O /dev/null http://127.0.0.1:8080/assets/$(ls /usr/share/nginx/html/assets | grep "\.js$" | head -1)' 2>&1
+docker exec eggie-web-check wget -qS -O /dev/null http://127.0.0.1:8080/assets/missing.js 2>&1 | head -1
+docker exec eggie-web-check id -u
+docker stop eggie-web-check
 ```
 Expected:
 - The build runs typecheck, tests, build and `check-offline` inside the image and succeeds.
@@ -2377,7 +2377,7 @@ Expected:
 
 ```bash
 git add web/scripts web/Dockerfile web/.dockerignore web/nginx.conf web/security-headers.inc
-git commit -m "Package the web page as the omelet-web nginx image
+git commit -m "Package the web page as the eggie-web nginx image
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
@@ -2393,7 +2393,7 @@ Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
 - Modify: `CLAUDE.md`
 
 **Interfaces:**
-- Consumes: the image name `ghcr.io/omelet-app/omelet-web`, port 8080 (Task 7); agent version `0.2.0` (`agent/__init__.py`).
+- Consumes: the image name `ghcr.io/eggie-io/eggie-web`, port 8080 (Task 7); agent version `0.2.0` (`agent/__init__.py`).
 
 - [ ] **Step 1: Write the failing Python tests**
 
@@ -2411,8 +2411,8 @@ def test_the_web_page_is_reached_only_through_traefik_below_the_api_route():
     # every API call with index.html. No published port: only Traefik fronts it.
     services = yaml.safe_load(_text())["services"]
     web, agent = _labels(services["web"]), _labels(services["agent"])
-    assert int(web["traefik.http.routers.omelet-web.priority"]) \
-        < int(agent["traefik.http.routers.omelet-api.priority"])
+    assert int(web["traefik.http.routers.eggie-web.priority"]) \
+        < int(agent["traefik.http.routers.eggie-api.priority"])
     assert "ports" not in services["web"]
 ```
 
@@ -2428,15 +2428,15 @@ def test_the_web_image_ships_with_the_agent_it_was_built_against():
     from agent import __version__ as package_version
 
     stack = (Path(__file__).resolve().parent.parent / "engine" / "stack.yml").read_text()
-    web = re.search(r"\$\{OMELET_WEB_IMAGE:-[^}]+:([^}:]+)\}", stack)
-    assert web, "stack.yml must default OMELET_WEB_IMAGE with a tag"
+    web = re.search(r"\$\{EGGIE_WEB_IMAGE:-[^}]+:([^}:]+)\}", stack)
+    assert web, "stack.yml must default EGGIE_WEB_IMAGE with a tag"
     assert web[1] == package_version
 ```
 
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `TMPDIR=$PWD/.superpowers/tmp python3 -m pytest tests/engine/test_stack_yml.py tests/test_constants_agree.py -q`
-Expected: FAIL — `KeyError: 'web'` and "stack.yml must default OMELET_WEB_IMAGE with a tag".
+Expected: FAIL — `KeyError: 'web'` and "stack.yml must default EGGIE_WEB_IMAGE with a tag".
 
 - [ ] **Step 3: Add the web service**
 
@@ -2445,37 +2445,37 @@ In `engine/stack.yml`, insert after the agent service's last label line (before 
 
   # The browser UI: static files only, no secrets, no logic. Released under
   # the agent's version -- the two install as a pair. Its router is the
-  # catch-all for the UI hosts, so it sits below omelet-api's priority.
+  # catch-all for the UI hosts, so it sits below eggie-api's priority.
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:0.2.0}
+    image: ${EGGIE_WEB_IMAGE:-ghcr.io/eggie-io/eggie-web:0.2.0}
     restart: always
     networks:
       - edge
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.omelet-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
-      - "traefik.http.routers.omelet-web.entrypoints=web"
-      - "traefik.http.routers.omelet-web.priority=10"
-      - "traefik.http.services.omelet-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.eggie-web.entrypoints=web"
+      - "traefik.http.routers.eggie-web.priority=10"
+      - "traefik.http.services.eggie-web.loadbalancer.server.port=8080"
 ```
 Also update the agent's label comment in the same file: replace `# The browser UI's API. Same origin as the page (added with the web` / `# service), so the session cookie needs no CORS.` with `# The browser UI's API. Same origin as the page (the web service below),` / `# so the session cookie needs no CORS.` (keep the rest of that comment).
 
 - [ ] **Step 4: Run to verify they pass, then the full suite**
 
 Run: `TMPDIR=$PWD/.superpowers/tmp python3 -m pytest -q`
-Expected: all pass (the previous 727 plus the three new tests from Tasks 1 and 8). Then temporarily set `omelet-web`'s priority to `2000`, rerun `tests/engine/test_stack_yml.py`, see the new test FAIL, and restore `10`.
+Expected: all pass (the previous 727 plus the three new tests from Tasks 1 and 8). Then temporarily set `eggie-web`'s priority to `2000`, rerun `tests/engine/test_stack_yml.py`, see the new test FAIL, and restore `10`.
 
 - [ ] **Step 5: CLAUDE.md**
 
 In `CLAUDE.md`:
 
-1. In "Releasing the engine", the bullet starting `- \`agent/__init__.py\`, the Dockerfile's \`AGENT_VERSION\` and \`engine/stack.yml\` are bumped together` — append to it: ` The stack's \`omelet-web\` tag carries the same version.`
+1. In "Releasing the engine", the bullet starting `- \`agent/__init__.py\`, the Dockerfile's \`AGENT_VERSION\` and \`engine/stack.yml\` are bumped together` — append to it: ` The stack's \`eggie-web\` tag carries the same version.`
 2. Replace release step 1 and 2 with:
 ```
 1. Bump `agent/__init__.py`'s `__version__`, the Dockerfile's `AGENT_VERSION` and
    `engine/stack.yml`'s agent and web image tags together (`tests/test_constants_agree.py` holds them equal).
-2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/omelet-app/omelet-agent:X.Y.Z`,
-   then `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/omelet-app/omelet-web:X.Y.Z --push web/`
+2. `docker build -t ghcr.io/eggie-io/eggie-agent:X.Y.Z agent/ && docker push ghcr.io/eggie-io/eggie-agent:X.Y.Z`,
+   then `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/eggie-io/eggie-web:X.Y.Z --push web/`
 ```
    (read the current wording of step 1 first and keep anything it says beyond this).
 3. In "## Commands", after the pytest block, add:
@@ -2492,7 +2492,7 @@ npm run build && npm run check-offline
 ````
 4. In "### Layers", after the `agent/core/uploads.py` bullet, add:
 ```
-- `web/` — the browser UI at `localhost:<edge>`, shipped as the `omelet-web` nginx image and
+- `web/` — the browser UI at `localhost:<edge>`, shipped as the `eggie-web` nginx image and
   routed by Traefik below the agent's `/api` router. `packages/ui` is the kit (tokens, fonts,
   components; drawn from `docs/design/`, never from `host/desktop/ui`; its imports are held to
   React and its fonts by `packages/ui/test/boundary.test.ts`). `apps/console` is the app:
@@ -2519,4 +2519,4 @@ Claude-Session: https://claude.ai/code/session_011hzoeJBHDyDeBtgqhm7gVY"
 - Kit component rendering, the 1040 px breakpoint, PromptCard's 2.6 s timer, Modal focus behaviour — visual or browser-native; reviewed on `/kit`.
 - MSW handlers — dev-only glue.
 - App wiring (`App.tsx`, `queryClient.ts`) — the branching lives in `boot()` and `isSessionLost()`, which are tested; the rest is glue exercised by the `lost-mid-use` and other scenarios.
-- The real VM pairing (Traefik routing, cookie over the edge port) — checked by deploying `omelet-web:0.2.0` with agent 0.2.0 into a VM; not reachable from this dev shell.
+- The real VM pairing (Traefik routing, cookie over the edge port) — checked by deploying `eggie-web:0.2.0` with agent 0.2.0 into a VM; not reachable from this dev shell.

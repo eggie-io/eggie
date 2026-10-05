@@ -57,7 +57,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
     id,
     status: "stopped",
     domain: DOMAIN,
-    path: `/opt/omelet/projects/${id}`,
+    path: `/opt/eggie/projects/${id}`,
     urls: [address(id)],
     problem: null,
     empty: false,
@@ -81,8 +81,8 @@ const LOGS = `11:04:19 photo-sorter_web  listening on 127.0.0.1:8000
 // Same codes and wording as the API's own refusals.
 const refuse = (code: string, message: string, status: number) =>
   HttpResponse.json({ error: { code, message } }, { status });
-const notSignedIn = () => refuse("not_signed_in", "open Omelet from the desktop app to sign in", 401);
-const expired = () => refuse("session_expired", "your sign-in ran out; open Omelet from the desktop app again", 401);
+const notSignedIn = () => refuse("not_signed_in", "open Eggie from the desktop app to sign in", 401);
+const expired = () => refuse("session_expired", "your sign-in ran out; open Eggie from the desktop app again", 401);
 const notFound = (id: string) => refuse("project_not_found", `no project called ${id}`, 404);
 const busy = () => refuse("project_busy", "this project is busy with another job", 409);
 
@@ -92,7 +92,7 @@ export function handlersFor(scenario: Scenario) {
   const pendingAccount = () => ({
     state: "pending" as const,
     user_code: MOCK_CODE,
-    url: `https://omelet.example/device?user_code=${MOCK_CODE}`,
+    url: `https://eggie.example/device?user_code=${MOCK_CODE}`,
     expires_at: nowSec() + 600,
   });
   let account: Record<string, unknown> = scenario.startsWith("account-") || scenario === "fresh"
@@ -217,7 +217,7 @@ export function handlersFor(scenario: Scenario) {
       const box = projects.get("recipe-box")!;
       box.public = {
         state: "on",
-        urls: [{ url: "https://k3x9m2p7qa.omelet.app", service: "web", local_url: address("recipe-box") }],
+        urls: [{ url: "https://k3x9m2p7qa.eggie.io", service: "web", local_url: address("recipe-box") }],
         expires_at: nowSec() + (scenario === "public-expiring" ? 20 : 42 * 60),
       };
     }
@@ -310,7 +310,7 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.post("/api/session", () => {
       if (scenario === "handoff-spent") {
-        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Omelet from the desktop app again", 401);
+        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Eggie from the desktop app again", 401);
       }
       signedIn = true;
       return HttpResponse.json({ signed_in: true });
@@ -335,7 +335,7 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.post("/api/account/sign-in", () => {
       if (scenario === "account-unreachable") {
-        return refuse("cloud_unavailable", "The Omelet service can't be reached. Check the internet connection and try again.", 503);
+        return refuse("cloud_unavailable", "The Eggie service can't be reached. Check the internet connection and try again.", 503);
       }
       account = pendingAccount();
       approveAt = 0;
@@ -495,7 +495,7 @@ export function handlersFor(scenario: Scenario) {
         target.public =
           scenario === "public-active-elsewhere"
             ? { state: "failed", reason: { code: "public_url_active", message: "One is already on for another project or computer. Turn it off there first." } }
-            : { state: "on", urls: target.web.map((w, i) => ({ url: i === 0 ? "https://k3x9m2p7qa.omelet.app" : `https://${w.service.toLowerCase().replace(/[_.]/g, "-")}--k3x9m2p7qa.omelet.app`, service: w.service, local_url: w.url })), expires_at: nowSec() + 60 * 60 };
+            : { state: "on", urls: target.web.map((w, i) => ({ url: i === 0 ? "https://k3x9m2p7qa.eggie.io" : `https://${w.service.toLowerCase().replace(/[_.]/g, "-")}--k3x9m2p7qa.eggie.io`, service: w.service, local_url: w.url })), expires_at: nowSec() + 60 * 60 };
       }, 2000);
       return HttpResponse.json(target.public, { status: 202 });
     }),
@@ -526,7 +526,7 @@ export function handlersFor(scenario: Scenario) {
       const dir = joinPath(new URL(request.url).searchParams.get("dir") ?? "");
       await delay(250);
       if (scenario === "locked" && dir === "data") {
-        return refuse("permission_denied", "Omelet can't look inside that folder; a program in the project owns it.", 409);
+        return refuse("permission_denied", "Eggie can't look inside that folder; a program in the project owns it.", 409);
       }
       const t = tree(id);
       if (dir !== "" && t.get(dir)?.kind !== "folder") return refuse("folder_not_found", `no folder '${dir}' in project '${id}'`, 404);
@@ -571,7 +571,7 @@ export function handlersFor(scenario: Scenario) {
       if (existing?.kind === "folder") return refuse("path_is_folder", `'${body.path}' is a folder in the project`, 409);
       if (existing && !body.replace) return refuse("file_exists", `'${body.path}' is already in the project`, 409);
       if (body.size + GB > disk.free) {
-        return HttpResponse.json({ error: { code: "not_enough_space", message: "this file is bigger than the room Omelet has left", free_bytes: disk.free } }, { status: 507 });
+        return HttpResponse.json({ error: { code: "not_enough_space", message: "this file is bigger than the room Eggie has left", free_bytes: disk.free } }, { status: 507 });
       }
       if (body.size === 0) {
         put(id, joinPath(body.path), { kind: "file", size: 0, modified: nowSec() });
@@ -603,7 +603,7 @@ export function handlersFor(scenario: Scenario) {
         disk.free = 0;
         // One-shot: the next /disk read reports room again, as if the user freed some.
         window.setTimeout(() => { disk.free = 40 * GB; }, 0);
-        return HttpResponse.json({ error: { code: "disk_full", message: "Omelet ran out of room", offset: up.offset } }, { status: 507 });
+        return HttpResponse.json({ error: { code: "disk_full", message: "Eggie ran out of room", offset: up.offset } }, { status: 507 });
       }
       up.offset += length;
       up.updated_at = nowSec();

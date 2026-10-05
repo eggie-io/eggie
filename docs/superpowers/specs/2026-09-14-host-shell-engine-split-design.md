@@ -5,7 +5,7 @@ Date: 2026-09-14. Status: approved in brainstorming, pending spec review.
 ## Problem
 
 PR #3 put every guest asset under `host/provision/` — `bootstrap.sh`, `stack.yml`, the guest
-`omelet.py`, `install-agents.sh`, `login-users.sh`, `omelet.md`, the `omelet-setup` skill — and the
+`eggie.py`, `install-agents.sh`, `login-users.sh`, `eggie.md`, the `eggie-setup` skill — and the
 frozen host pushes all seven into the VM, gated by `host/core/constants.BOOTSTRAP_VERSION`. Changing
 one line of a skill or of the guest CLI therefore needs a new desktop build, and none of it is
 reusable on a cloud VM that has no desktop host.
@@ -24,14 +24,14 @@ reusable on a cloud VM that has no desktop host.
 | # | Decision |
 |---|---|
 | 1 | The host does not know or care which engine version runs. |
-| 2 | The host carries a tiny bootstrap; the source it fetches is configurable (`OMELET_ENGINE_URL`). |
+| 2 | The host carries a tiny bootstrap; the source it fetches is configurable (`EGGIE_ENGINE_URL`). |
 | 3 | The source is this repository on GitHub (made public). The agent image is always pulled from ghcr. |
 | 4 | An engine version is a git tag `engine-vX.Y.Z`. |
 | 5 | Re-running host setup with the engine already installed does nothing (except repair, below). |
 | 6 | No automatic or self-update for now — see `docs/future/engine-self-update.md`. |
 | 7 | The engine does not install Claude Code or Codex. |
 | 8 | Layout: a new `engine/` folder in this repo; `agent/` stays where it is. Both together are the engine. |
-| 9 | Omelet's own skills install with `npx skills add` from the unpacked engine folder, not from a GitHub URL. |
+| 9 | Eggie's own skills install with `npx skills add` from the unpacked engine folder, not from a GitHub URL. |
 
 ## 1. The contract between host and engine
 
@@ -39,12 +39,12 @@ The only things both sides agree on:
 
 | Item | Value |
 |---|---|
-| Token file | `/opt/omelet/agent.token`, readable by root |
+| Token file | `/opt/eggie/agent.token`, readable by root |
 | Agent API | `127.0.0.1:39099`; `GET /health` returns `"api": <int>` |
 | Edge | port `39080`, domain `127-0-0-1.sslip.io` |
-| Installed marker | `/opt/omelet/engine.version` — the host checks presence only, never the value |
-| Engine entrypoint | the script at `OMELET_ENGINE_URL`, run as root with `bash` |
-| Entrypoint env | `OMELET_ENGINE_REF` (optional), `OMELET_ENGINE_REPAIR=1` (optional) |
+| Installed marker | `/opt/eggie/engine.version` — the host checks presence only, never the value |
+| Engine entrypoint | the script at `EGGIE_ENGINE_URL`, run as root with `bash` |
+| Entrypoint env | `EGGIE_ENGINE_REF` (optional), `EGGIE_ENGINE_REPAIR=1` (optional) |
 
 Everything else — what is installed, in what order, which image tag — is engine-side.
 
@@ -54,22 +54,22 @@ Everything else — what is installed, in what order, which image tag — is eng
 
 ```python
 def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> None:
-    if not repair and _installed(provider):          # test -s /opt/omelet/engine.version
+    if not repair and _installed(provider):          # test -s /opt/eggie/engine.version
         return
-    url = source or os.environ.get("OMELET_ENGINE_URL", constants.ENGINE_URL)
-    _run(provider, ["bash", "-c", _FETCH_AND_RUN, "omelet-bootstrap", url],
-         step="installing Omelet inside the VM")
+    url = source or os.environ.get("EGGIE_ENGINE_URL", constants.ENGINE_URL)
+    _run(provider, ["bash", "-c", _FETCH_AND_RUN, "eggie-bootstrap", url],
+         step="installing Eggie inside the VM")
     if not _installed(provider):
         raise BootstrapError("the installer reported success but left no engine.version")
 ```
 
-- `source` defaults to `os.environ.get("OMELET_ENGINE_URL", constants.ENGINE_URL)`, with
-  `constants.ENGINE_URL = "https://raw.githubusercontent.com/omelet-app/omelet/main/engine/get.sh"`.
+- `source` defaults to `os.environ.get("EGGIE_ENGINE_URL", constants.ENGINE_URL)`, with
+  `constants.ENGINE_URL = "https://raw.githubusercontent.com/eggie-io/eggie/main/engine/get.sh"`.
 - The fetch-and-run command is one `bash -c` line passing the URL as `$1`: `curl -fsSL "$1"` piped
   to `bash`, falling back to `python3 -c 'urllib.request…'` when `curl` is absent. Nothing is
   pushed as a file.
-- `OMELET_ENGINE_REF` is forwarded into the guest environment only when set on the host.
-  `repair=True` forwards `OMELET_ENGINE_REPAIR=1`.
+- `EGGIE_ENGINE_REF` is forwarded into the guest environment only when set on the host.
+  `repair=True` forwards `EGGIE_ENGINE_REPAIR=1`.
 - Failures raise `BootstrapError` carrying the guest's stderr (`_run` is kept as is).
 - `restart_agent`, `read_marker`, `_push_file`, `guest_assets()` are deleted.
 
@@ -81,12 +81,12 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> N
 - `connect` replaces `agent_version_step`:
   - Reads `/health`. `api` missing counts as `1` (today's 0.1.0 agent predates the field). An `api`
     not in `constants.SUPPORTED_API = frozenset({1})` raises one plain sentence saying the app and
-    the Omelet service in the VM do not match; no repair is attempted.
+    the Eggie service in the VM do not match; no repair is attempted.
   - A call answering `unauthorized` / `agent_unconfigured` runs `bootstrap(provider, repair=True)`
     exactly once, rebuilds `AgentClient.for_provider(provider)` (fresh token), and dials again; a
     second refusal raises `AgentNotAccepted` as today.
-- `_ACTIONS["bootstrap"]` becomes "Omelet could not be installed inside the virtual machine…".
-- `omelet vm create` calls the same `bootstrap(provider)`.
+- `_ACTIONS["bootstrap"]` becomes "Eggie could not be installed inside the virtual machine…".
+- `eggie vm create` calls the same `bootstrap(provider)`.
 
 ### 2.3 Removed from the host
 
@@ -96,7 +96,7 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> N
   `EXPECTED_AGENT_VERSION`, and the version-tuple helpers in `install.py`.
 - Added constants: `ENGINE_URL`, `ENGINE_MARKER`, `SUPPORTED_API`.
 - `cli.selfcheck` checks only `host/provision/nginx-hello/docker-compose.yml` and
-  `host/providers/omelet.yaml`.
+  `host/providers/eggie.yaml`.
 - PyInstaller `datas` lose every removed asset.
 
 `host/provision/nginx-hello/` stays: it is the host's own end-to-end check of the contract.
@@ -111,9 +111,9 @@ engine/
   install.sh               # was host/provision/bootstrap.sh, extended
   stack.yml                # was host/provision/stack.yml
   stack.debug.yml          # was host/provision/stack.debug.yml
-  cli/omelet.py            # was host/provision/guest/omelet.py
-  instructions/omelet.md   # was host/provision/agents/omelet.md
-  skills/omelet-setup/     # was host/provision/agents/skills/omelet-setup
+  cli/eggie.py            # was host/provision/guest/eggie.py
+  instructions/eggie.md   # was host/provision/agents/eggie.md
+  skills/eggie-setup/     # was host/provision/agents/skills/eggie-setup
   lib/login-users.sh       # unchanged
   lib/install-agents.sh    # skill copying removed; Codex block + ~/projects link kept
 agent/                     # unchanged: the image source
@@ -126,48 +126,48 @@ agent/                     # unchanged: the image source
 Runs as root, `set -euo pipefail`. Kept minimal so version-specific logic lives in the tarball.
 
 1. `apt-get install -y ca-certificates curl git` when any is missing.
-2. `REPO=${OMELET_ENGINE_REPO:-https://github.com/omelet-app/omelet}`.
+2. `REPO=${EGGIE_ENGINE_REPO:-https://github.com/eggie-io/eggie}`.
 3. Choose the ref, first match wins:
-   1. `OMELET_ENGINE_REF` when set (a branch works — this is how unreleased work is tested);
-   2. `OMELET_ENGINE_REPAIR=1` and `/opt/omelet/engine.version` exists → that installed ref;
+   1. `EGGIE_ENGINE_REF` when set (a branch works — this is how unreleased work is tested);
+   2. `EGGIE_ENGINE_REPAIR=1` and `/opt/eggie/engine.version` exists → that installed ref;
    3. the highest `engine-v*` from `git ls-remote --tags --refs "$REPO" 'engine-v*'`, by `sort -V`.
    No ref found → one sentence to stderr, exit 1.
 4. Download `$REPO/archive/<ref>.tar.gz`, extract its `engine/` into a fresh
-   `/opt/omelet/engine/` (replace, not merge, so deleted files do not linger).
-5. `exec bash /opt/omelet/engine/install.sh <ref> [--repair]`.
+   `/opt/eggie/engine/` (replace, not merge, so deleted files do not linger).
+5. `exec bash /opt/eggie/engine/install.sh <ref> [--repair]`.
 
 ### 3.3 `engine/install.sh <ref> [--repair]`
 
 Idempotent, `set -euo pipefail`, run as root. Steps:
 
 1. **OS and Docker** — today's bootstrap steps 1–6 unchanged: docker-ce from the official repo,
-   `systemctl enable --now docker`, `edge` network, `/opt/omelet` group permissions + setgid, the
-   docker GID into `/opt/omelet/.env`, the token when absent.
-2. **Stack** — copy `stack.yml` to `/opt/omelet/stack.yml`; `docker compose pull && up -d`. Add
+   `systemctl enable --now docker`, `edge` network, `/opt/eggie` group permissions + setgid, the
+   docker GID into `/opt/eggie/.env`, the token when absent.
+2. **Stack** — copy `stack.yml` to `/opt/eggie/stack.yml`; `docker compose pull && up -d`. Add
    `--force-recreate agent` when this run created the token or `--repair` was given (the agent
    reads its token once, at startup).
 3. **Node 22** — NodeSource `node_22.x` apt repo when `node` is missing or older than 22.20
    (`skills@1.5.26` declares `node >=22.20.0`; Ubuntu 24.04's apt ships 18).
-4. **CLI** — `install -m 755 cli/omelet.py /usr/local/bin/omelet`; `git` is already present.
+4. **CLI** — `install -m 755 cli/eggie.py /usr/local/bin/eggie`; `git` is already present.
 5. **Instructions** — `/etc/claude-code/CLAUDE.md`; per account (root + every line from
    `lib/login-users.sh`): `usermod -aG docker`, then `lib/install-agents.sh` for the Codex
    `AGENTS.md` block and the `~/projects` link.
 6. **Migration cleanup** — remove what PR #3 installed and npx would collide with:
-   `/etc/codex/skills/omelet-setup`, per account `~/.claude/skills/omelet-setup` and
-   `~/.agents/skills/omelet-setup` when they are real directories (npx creates a symlink at the
-   first), `/opt/omelet/bin`, `/opt/omelet/agents`, `/opt/omelet/.bootstrapped`. Nothing is copied
+   `/etc/codex/skills/eggie-setup`, per account `~/.claude/skills/eggie-setup` and
+   `~/.agents/skills/eggie-setup` when they are real directories (npx creates a symlink at the
+   first), `/opt/eggie/bin`, `/opt/eggie/agents`, `/opt/eggie/.bootstrapped`. Nothing is copied
    into `/etc/skel` any more.
 7. **Skills** — per account:
-   `runuser -u <user> -- env HOME=<home> DISABLE_TELEMETRY=1 npx -y skills@1.5.26 add /opt/omelet/engine/skills -s '*' -g -a claude-code codex -y`
+   `runuser -u <user> -- env HOME=<home> DISABLE_TELEMETRY=1 npx -y skills@1.5.26 add /opt/eggie/engine/skills -s '*' -g -a claude-code codex -y`
    (root runs it directly with `HOME=/root`). The skills CLI version is pinned.
-8. **Marker, last** — `echo <ref> > /opt/omelet/engine.version`. A failure above leaves no marker.
+8. **Marker, last** — `echo <ref> > /opt/eggie/engine.version`. A failure above leaves no marker.
 
 Every network step (GitHub, NodeSource, npm, ghcr) prints one plain sentence naming what was
 unreachable before exiting non-zero.
 
 ### 3.4 Image version
 
-`stack.yml`'s `OMELET_AGENT_IMAGE` default tag is the single source of which image an engine ref
+`stack.yml`'s `EGGIE_AGENT_IMAGE` default tag is the single source of which image an engine ref
 runs. The test that held `host.constants.AGENT_IMAGE` equal to `stack.yml` is replaced by one
 holding `engine/stack.yml`'s tag equal to `agent/`'s `__version__` and the Dockerfile's
 `AGENT_VERSION`.
@@ -194,7 +194,7 @@ Probed against a throwaway `$HOME`:
 Only tests that can fail on a real bug.
 
 - **Host bootstrap** — skipped when the marker exists; runs the fetch with the configured URL
-  (env override honoured); forwards `OMELET_ENGINE_REF` only when set and `OMELET_ENGINE_REPAIR=1`
+  (env override honoured); forwards `EGGIE_ENGINE_REF` only when set and `EGGIE_ENGINE_REPAIR=1`
   only on repair; raises with the guest's stderr on failure; raises when exit 0 leaves no marker.
 - **Connect step** — unsupported `api` → one-sentence error and no bootstrap call; missing `api`
   treated as 1; a token refusal triggers exactly one repair bootstrap, then dials with the new token.
@@ -214,7 +214,7 @@ Only tests that can fail on a real bug.
 ## 6. Release (manual until CI exists)
 
 1. Bump `agent/` version, the Dockerfile `AGENT_VERSION`, and `engine/stack.yml`'s image tag.
-2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push …`.
+2. `docker build -t ghcr.io/eggie-io/eggie-agent:X.Y.Z agent/ && docker push …`.
 3. `git tag engine-vX.Y.Z && git push origin engine-vX.Y.Z`.
 
 An engine release never touches `host/`.
@@ -229,14 +229,14 @@ Add near the top:
 Two halves, shipped and versioned independently:
 
 - **Host** (`host/`, a frozen desktop binary) — creates and runs the VM, runs one bootstrap
-  command in it (fetch `OMELET_ENGINE_URL` → `bash`), reads the token, forwards ports, and talks
+  command in it (fetch `EGGIE_ENGINE_URL` → `bash`), reads the token, forwards ports, and talks
   to the agent over HTTP. It holds no guest files and no knowledge of what the engine installs.
 - **Engine** (`engine/` + `agent/`) — everything inside the VM: Docker, the Traefik+agent stack,
-  the in-VM `omelet` CLI, agent instructions and skills (via `npx skills add`). Released as
-  `engine-v*` tags with a matching `omelet-agent` image. The same `get.sh` provisions a cloud VM.
+  the in-VM `eggie` CLI, agent instructions and skills (via `npx skills add`). Released as
+  `engine-v*` tags with a matching `eggie-agent` image. The same `get.sh` provisions a cloud VM.
 
 The seam between them is a fixed contract — token path, agent port + `/health` `api` number, edge
-port, `/opt/omelet/engine.version` — and nothing else. A change inside the VM must never need a
+port, `/opt/eggie/engine.version` — and nothing else. A change inside the VM must never need a
 host release; if it does, the logic is on the wrong side.
 ```
 
@@ -247,7 +247,7 @@ Then bring the rest in line: the Layers list (`host/provision/` → `engine/`), 
 ## 8. Known gaps and out of scope
 
 - Accounts created after install get no skills or Codex block until the engine is installed again
-  (host repair, or a future `omelet self-update`).
+  (host repair, or a future `eggie self-update`).
 - No self-update or automatic update — `docs/future/engine-self-update.md`.
 - Installing Claude Code / Codex; the Codex Windows-app gap; Lima verification (still UNVERIFIED).
 - CI for image builds and tags.

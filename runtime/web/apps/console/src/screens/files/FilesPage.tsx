@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Notice, cx } from "@omelet/ui";
+import { Button, Notice, cx } from "@eggie/ui";
 import { api, ApiError } from "../../api/client";
 import { useNow } from "../../projects/useNow";
 import { filesRoute, joinPath } from "../../uploads/paths";
@@ -140,7 +140,7 @@ export function FilesPage() {
         onDrop={onDrop}
       >
         {code === "permission_denied" ? (
-          <Notice>Omelet can't look inside this folder — a program in the project owns it.</Notice>
+          <Notice>Eggie can't look inside this folder — a program in the project owns it.</Notice>
         ) : listing.isError ? (
           <Notice>{listing.error.message}</Notice>
         ) : listing.data === undefined ? (

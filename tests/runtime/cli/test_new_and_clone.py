@@ -53,7 +53,7 @@ def test_a_cloned_repo_with_a_differently_named_compose_file_is_named_not_report
                                cwd=guest.root)
     assert code == 1
     assert "compose.yaml" in err
-    assert "Omelet reads only docker-compose.yml" in err
+    assert "Eggie reads only docker-compose.yml" in err
     assert "no docker-compose.yml yet" not in out
 
 
@@ -72,8 +72,8 @@ def test_new_and_clone_never_reuse_an_existing_folder(guest):
 
 
 def _deny_api():
-    raise cli.OmeletError(
-        "This user can't reach Omelet: it must be in the docker group. "
+    raise cli.EggieError(
+        "This user can't reach Eggie: it must be in the docker group. "
         "Run `sudo usermod -aG docker $USER` and start a new session.")
 
 
@@ -101,5 +101,5 @@ def test_new_on_an_unwritable_projects_root_says_so_without_a_traceback(guest):
     finally:
         guest.root.chmod(0o700)
     assert code == 1
-    assert f"Omelet could not create {guest.root / 'blog'}" in err
+    assert f"Eggie could not create {guest.root / 'blog'}" in err
     assert "Traceback" not in err

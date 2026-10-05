@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { Button, Modal, TextField } from "@omelet/ui";
+import { Button, Modal, TextField } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { useCreateProject } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";

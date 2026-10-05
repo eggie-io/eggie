@@ -32,7 +32,7 @@ def test_host_dependencies_exclude_web_framework():
 
 
 def test_host_declares_no_yaml_parser():
-    # Compose files are parsed by the API; host/providers/omelet.yaml is only
+    # Compose files are parsed by the API; host/providers/eggie.yaml is only
     # ever handed to limactl as a path. A declared parser invites the next
     # host-side parse of a file the API owns.
     assert "pyyaml" not in _dependency_names()
@@ -59,7 +59,7 @@ def test_webview_backends_are_platform_scoped():
 def test_packaging_specs_bundle_the_desktop_ui():
     # host.desktop.__main__.ui_dir() reads host/desktop/ui at runtime; a spec
     # that forgets it ships a window with no HTML to load.
-    for spec_path in ("packaging/windows/omelet.spec", "packaging/macos/omelet.spec"):
+    for spec_path in ("packaging/windows/eggie.spec", "packaging/macos/eggie.spec"):
         spec = (REPO_ROOT / spec_path).read_text()
         assert '"../../host/desktop/ui"' in spec, f"{spec_path} does not bundle host/desktop/ui"
 
@@ -93,7 +93,7 @@ def test_the_windows_tray_dependencies_are_platform_scoped():
 def test_packaging_bundles_the_tray_icon_and_uses_it_as_the_app_icon():
     # The tray loads icon.ico at runtime; a spec without it starts a tray
     # with no image and pystray raises on the first draw.
-    for spec_path in ("packaging/windows/omelet.spec", "packaging/macos/omelet.spec"):
+    for spec_path in ("packaging/windows/eggie.spec", "packaging/macos/eggie.spec"):
         spec = (REPO_ROOT / spec_path).read_text()
         assert '"../../host/desktop/resources"' in spec, f"{spec_path} does not bundle resources"
         assert "icon=" in spec, f"{spec_path} does not set the app icon"

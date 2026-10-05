@@ -221,7 +221,7 @@ def _incompatible(api) -> str:
     from host.core import constants
 
     supported = ", ".join(str(n) for n in sorted(constants.SUPPORTED_API))
-    return ("This app and the Omelet service inside the virtual machine are "
+    return ("This app and the Eggie service inside the virtual machine are "
             "versions that cannot work together.\n"
             f"service API {api}, app supports {supported}")
 
@@ -269,13 +269,13 @@ def connect_step(provider, *, client=None, reconnect=None, update=None,
             if again.code not in _TOKEN_CODES:
                 raise
             raise ApiNotAccepted(
-                "The Omelet service inside the virtual machine did not accept "
+                "The Eggie service inside the virtual machine did not accept "
                 "this computer, and setting the virtual machine up again did "
                 f"not change that.\n{again.message}") from again
-        return ("The Omelet service in the virtual machine was not accepting "
+        return ("The Eggie service in the virtual machine was not accepting "
                 "this computer, and has been reconnected.")
     if updated:
-        return "The Omelet service in the virtual machine was updated."
+        return "The Eggie service in the virtual machine was updated."
     return None
 
 
@@ -358,7 +358,7 @@ def verify_step(provider, template_dir: Path, domain: str, *, client=None,
 
 def _teardown(client) -> None:
     """Remove the smoke-test project, containers and state row alike, so a
-    failed verify leaves nothing running and `omelet status` stays clean."""
+    failed verify leaves nothing running and `eggie status` stays clean."""
     import sys
 
     from host.core.constants import VERIFY_PROJECT_ID
@@ -389,7 +389,7 @@ def finish_step(location, terminal: str) -> str:
         "Setup finished successfully.\n"
         f"The virtual machine and its files are in: {location}\n\n"
         f"To start a project, open {terminal} and run:\n\n"
-        "    omelet up <folder>\n\n"
+        "    eggie up <folder>\n\n"
         "where <folder> is the folder that holds your docker-compose.yml.")
 
 
@@ -416,11 +416,11 @@ _ACTIONS = {
     # prints this action after the detail, the wizard shows this action AS
     # the detail label with the raw error in the log box beneath it -- "above"
     # is true in one front door and false in the other.
-    "bootstrap": "Omelet could not be installed inside the virtual machine. "
+    "bootstrap": "Eggie could not be installed inside the virtual machine. "
                  "The error came from inside it; open the log for the exact "
                  "text. Run setup again; if it fails the same way twice, "
                  "send us that text.",
-    "connect": "The Omelet service inside the virtual machine would not work "
+    "connect": "The Eggie service inside the virtual machine would not work "
                "with this app, or would not accept this computer. Open the "
                "log to see which. Run setup again; if it fails the same way "
                "twice, use Copy diagnostics and send us the text.",
@@ -434,7 +434,7 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
     from .download import fetch
 
     # None when the VM platform fetches its own guest image -- Lima names it in
-    # omelet.yaml and limactl caches it. There is then no rootfs for the host to
+    # eggie.yaml and limactl caches it. There is then no rootfs for the host to
     # download and no download step to run, rather than a step that quietly does
     # nothing.
     image = provider.image()
@@ -503,7 +503,7 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
 
 
 def _ensure_vm_running(provider) -> None:
-    """Existing is not running. `omelet setup`'s summary told a user with a
+    """Existing is not running. `eggie setup`'s summary told a user with a
     stopped VM to "run setup again to start it", but nothing in this list ever
     called `start()` -- Lima's `shell` refuses a stopped instance outright
     ("... is stopped, run 'limactl start ...'"), which is why only a Lima run

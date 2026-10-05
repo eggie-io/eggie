@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `OmeletSetup-<version>.pkg` install Lima itself, land the user on a status screen that hands them the SSH credentials a coding agent needs, and replace the Windows-looking setup window with a drawn one.
+**Goal:** Make `EggieSetup-<version>.pkg` install Lima itself, land the user on a status screen that hands them the SSH credentials a coding agent needs, and replace the Windows-looking setup window with a drawn one.
 
 **Architecture:** Two new install-surface members carry every platform difference — `provider.runtime()` inserts an `install_runtime` step that downloads and verifies a pinned Lima release, and `provider.access()` returns the connection facts the status screen renders without knowing what SSH is. `host/setup_app/` becomes a package of two screens (wizard, status) over a shared theme and widget layer, routed by a readiness probe.
 
@@ -459,7 +459,7 @@ _RELEASE = ("https://github.com/lima-vm/lima/releases/download/"
 #
 # These are the main tarballs, which carry the guest agent for the host's own
 # architecture. lima-additional-guestagents-* exists for running a guest of a
-# different architecture and is deliberately not fetched: omelet.yaml asks for
+# different architecture and is deliberately not fetched: eggie.yaml asks for
 # a native-arch Ubuntu, and the extra download is 38 MB nobody would use.
 ARCHIVES: dict[str, Image] = {
     "arm64": Image(_RELEASE % "arm64",
@@ -621,7 +621,7 @@ Wire Task 2 into the install list, stop dead-ending on a missing Lima, and make 
 - Modify: `host/providers/lima.py` (`default_data_root`, `find_limactl`, `__init__`, `is_supported`, `preflight`, `runtime`)
 - Modify: `host/providers/wsl2.py` (`runtime` returning `None`)
 - Modify: `host/providers/__init__.py` (`default_install_dir`, `get_provider`)
-- Modify: `host/providers/omelet.yaml` (the x86_64 image)
+- Modify: `host/providers/eggie.yaml` (the x86_64 image)
 - Test: `tests/host/test_default_steps.py`, `tests/host/test_lima.py`, `tests/host/test_factory.py`
 
 **Interfaces:**
@@ -691,7 +691,7 @@ def test_find_limactl_prefers_the_managed_copy_over_homebrew(tmp_path):
 
 def test_find_limactl_falls_back_to_the_path_before_setup_has_run(tmp_path):
     # A source checkout that has never run setup has no managed copy; a
-    # developer's brew install is what makes `omelet doctor` answerable there.
+    # developer's brew install is what makes `eggie doctor` answerable there.
     missing = tmp_path / "lima" / "bin" / "limactl"
     found = find_limactl(which=lambda name: "/opt/homebrew/bin/limactl",
                          managed=missing)
@@ -706,7 +706,7 @@ def test_preflight_no_longer_dead_ends_on_a_missing_lima():
 
 
 def test_doctor_still_reports_a_missing_lima_and_names_setup_as_the_fix():
-    provider = LimaProvider(name="omelet-vm", limactl="/nowhere/limactl",
+    provider = LimaProvider(name="eggie-vm", limactl="/nowhere/limactl",
                             runner=FakeRunner(), data_root=Path("/nowhere"))
     diagnosis = provider.is_supported()
     lima_check = next(c for c in diagnosis.checks if "Lima" in c.label)
@@ -724,7 +724,7 @@ def test_runtime_installs_into_the_providers_data_root(tmp_path, monkeypatch):
         return root / "lima" / "bin" / "limactl"
 
     monkeypatch.setattr(lima_install, "install", fake_install)
-    provider = LimaProvider(name="omelet-vm", runner=FakeRunner(), data_root=tmp_path)
+    provider = LimaProvider(name="eggie-vm", runner=FakeRunner(), data_root=tmp_path)
     runtime = provider.runtime()
     assert isinstance(runtime, Runtime)
     assert "Lima" in runtime.label
@@ -811,7 +811,7 @@ def default_data_root() -> Path:
     the download cache and the managed Lima. The single literal -- the provider
     factory's default_install_dir() is derived from it, so the two cannot
     disagree about where setup put limactl."""
-    return Path.home() / ".local" / "share" / "omelet"
+    return Path.home() / ".local" / "share" / "eggie"
 ```
 
 ```python
@@ -851,7 +851,7 @@ Replace `is_supported` and `preflight`:
 
 ```python
     def is_supported(self) -> Diagnosis:
-        """What `omelet doctor` prints: the whole truth about this machine.
+        """What `eggie doctor` prints: the whole truth about this machine.
 
         Wider than preflight() on purpose, and the reverse of the WSL2
         provider, where preflight is the richer of the two. Setup installs Lima
@@ -864,19 +864,19 @@ Replace `is_supported` and `preflight`:
         present = os.access(self.limactl, os.X_OK) or which(self.limactl) is not None
         checks.append(CheckResult(
             f"Lima {lima_install.LIMA_VERSION}", present,
-            None if present else "run Omelet setup, which installs Lima for you"))
+            None if present else "run Eggie setup, which installs Lima for you"))
         return Diagnosis(checks)
 
     def _os_checks(self):
         import platform
         release = platform.mac_ver()[0]
         major = int(release.split(".")[0]) if release.split(".")[0].isdigit() else 0
-        # vz, which omelet.yaml asks for, is macOS 13+. The .pkg refuses to
+        # vz, which eggie.yaml asks for, is macOS 13+. The .pkg refuses to
         # install below that; a source checkout has nothing stopping it.
         yield CheckResult(
             f"macOS 13 or newer (found {release or 'unknown'})", major >= 13,
             None if major >= 13 else
-            "Omelet needs macOS 13 or newer; this Mac cannot run it")
+            "Eggie needs macOS 13 or newer; this Mac cannot run it")
 
     def preflight(self) -> Diagnosis:
         """What setup gates on before it installs anything. Only facts about
@@ -910,19 +910,19 @@ from .lima_install import managed_limactl
 def default_install_dir() -> Path:
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA", str(Path.home()))
-        return Path(base) / "Omelet" / "vm"
+        return Path(base) / "Eggie" / "vm"
     return default_data_root() / "vm"
 ```
 
 ```python
     if sys.platform == "darwin":
         root = default_data_root()
-        return LimaProvider(config=Path(__file__).parent / "omelet.yaml",
+        return LimaProvider(config=Path(__file__).parent / "eggie.yaml",
                             limactl=find_limactl(managed=managed_limactl(root)),
                             data_root=root)
 ```
 
-In `host/providers/omelet.yaml`, add the second image beside the first:
+In `host/providers/eggie.yaml`, add the second image beside the first:
 
 ```yaml
 images:
@@ -995,7 +995,7 @@ class FakeRunner:
 
 SSH_CONFIG = """\
 # This SSH config file is generated by lima
-Host lima-omelet-vm
+Host lima-eggie-vm
   IdentityFile "/Users/you/.lima/_config/user"
   User you
   Hostname 127.0.0.1
@@ -1007,9 +1007,9 @@ Host lima-omelet-vm
 def _provider(tmp_path, *, written=True):
     home = tmp_path / ".lima"
     if written:
-        (home / "omelet-vm").mkdir(parents=True)
-        (home / "omelet-vm" / "ssh.config").write_text(SSH_CONFIG)
-    return LimaProvider(name="omelet-vm", runner=FakeRunner(), lima_home=home,
+        (home / "eggie-vm").mkdir(parents=True)
+        (home / "eggie-vm" / "ssh.config").write_text(SSH_CONFIG)
+    return LimaProvider(name="eggie-vm", runner=FakeRunner(), lima_home=home,
                         data_root=tmp_path)
 
 
@@ -1031,7 +1031,7 @@ def test_lima_reads_the_credentials_lima_wrote(tmp_path):
 def test_lima_hands_over_a_command_that_needs_no_ssh_config_of_the_users(tmp_path):
     access = _provider(tmp_path).access()
     assert access.command == (
-        f"ssh -F {tmp_path / '.lima' / 'omelet-vm' / 'ssh.config'} lima-omelet-vm")
+        f"ssh -F {tmp_path / '.lima' / 'eggie-vm' / 'ssh.config'} lima-eggie-vm")
 
 
 def test_lima_falls_back_to_the_declared_port_before_the_first_boot(tmp_path):
@@ -1044,12 +1044,12 @@ def test_lima_falls_back_to_the_declared_port_before_the_first_boot(tmp_path):
 
 
 def test_lima_parsing_is_case_insensitive_and_unquotes(tmp_path):
-    home = tmp_path / ".lima" / "omelet-vm"
+    home = tmp_path / ".lima" / "eggie-vm"
     home.mkdir(parents=True)
     (home / "ssh.config").write_text(
-        'HOST lima-omelet-vm\n  hostname 127.0.0.1\n  PORT 40022\n'
+        'HOST lima-eggie-vm\n  hostname 127.0.0.1\n  PORT 40022\n'
         '  user someone\n  identityfile "/tmp/key"\n')
-    access = LimaProvider(name="omelet-vm", runner=FakeRunner(),
+    access = LimaProvider(name="eggie-vm", runner=FakeRunner(),
                           lima_home=tmp_path / ".lima",
                           data_root=tmp_path).access()
     assert _fields(access)["Port"] == "40022"
@@ -1057,15 +1057,15 @@ def test_lima_parsing_is_case_insensitive_and_unquotes(tmp_path):
 
 
 def test_wsl2_does_not_pretend_to_have_an_ssh_server():
-    access = Wsl2Provider(distro="omelet-vm", arch="amd64").access()
-    assert access.command == "wsl -d omelet-vm"
+    access = Wsl2Provider(distro="eggie-vm", arch="amd64").access()
+    assert access.command == "wsl -d eggie-vm"
     assert "ssh" not in access.command.lower()
-    assert _fields(access)["Virtual machine"] == "omelet-vm"
-    assert r"\\wsl$\omelet-vm\opt\omelet\projects" in _fields(access).values()
+    assert _fields(access)["Virtual machine"] == "eggie-vm"
+    assert r"\\wsl$\eggie-vm\opt\eggie\projects" in _fields(access).values()
 
 
 def test_both_providers_answer_with_something_a_screen_can_render():
-    for access in (Wsl2Provider(distro="omelet-vm", arch="amd64").access(),):
+    for access in (Wsl2Provider(distro="eggie-vm", arch="amd64").access(),):
         assert access.headline and access.summary and access.command
         assert all(f.label and f.value for f in access.fields)
 ```
@@ -1104,7 +1104,7 @@ class Access:
 In `host/providers/lima.py`:
 
 ```python
-# Declared in omelet.yaml's `ssh.localPort`, and what the screen shows before
+# Declared in eggie.yaml's `ssh.localPort`, and what the screen shows before
 # the VM has ever been started and written its own ssh.config.
 DECLARED_SSH_PORT = "39022"
 
@@ -1143,7 +1143,7 @@ and on the class:
             found = {}
         if not found:
             note = ("The virtual machine has not been started yet, so these are "
-                    "the values Omelet asks Lima for rather than the ones Lima "
+                    "the values Eggie asks Lima for rather than the ones Lima "
                     "has written down. Run setup, then open this window again.")
         import getpass
         fields = (
@@ -1156,7 +1156,7 @@ and on the class:
         return Access(
             headline="Connect a coding agent",
             summary=("Your coding agent runs inside the virtual machine, where "
-                     "Docker and the omelet command already are. Open a shell "
+                     "Docker and the eggie command already are. Open a shell "
                      "there with the command below, or point an editor's "
                      "Remote-SSH at these values."),
             command=f"ssh -F {config} lima-{self.name}",
@@ -1175,7 +1175,7 @@ In `host/providers/wsl2.py`:
         return Access(
             headline="Connect a coding agent",
             summary=("Your coding agent runs inside the virtual machine, where "
-                     "Docker and the omelet command already are. Open a shell "
+                     "Docker and the eggie command already are. Open a shell "
                      "there with the command below."),
             command=f"wsl -d {self.distro}",
             fields=(
@@ -1393,15 +1393,15 @@ and in `host/cli.py`:
 ```python
 @app.command()
 def version():
-    """Print the Omelet version."""
+    """Print the Eggie version."""
     from host.core import constants
-    typer.echo(f"omelet {constants.APP_VERSION}")
+    typer.echo(f"eggie {constants.APP_VERSION}")
 ```
 
 - [ ] **Step 4: Run the tests**
 
 Run: `python3 -m pytest tests/host/test_status_probe.py -q && python3 -m pytest -q`
-Expected: green. Watch `tests/test_setup_cli.py` — if it asserts the literal `omelet 0.1.0`, it still passes, since `APP_VERSION` is that string.
+Expected: green. Watch `tests/test_setup_cli.py` — if it asserts the literal `eggie 0.1.0`, it still passes, since `APP_VERSION` is that string.
 
 - [ ] **Step 5: Commit**
 
@@ -1907,8 +1907,8 @@ LABELS = {
     "reboot_gate": "Restart needed",
     "fetch_image": "Downloading Linux image",
     "create_vm": "Creating the virtual machine",
-    "bootstrap": "Installing Omelet",
-    "connect": "Connecting to the Omelet service",
+    "bootstrap": "Installing Eggie",
+    "connect": "Connecting to the Eggie service",
     "verify": "Testing the setup",
     "finish": "Finishing up",
 }
@@ -1940,7 +1940,7 @@ class WizardScreen(tk.Frame):
         self._done = 0
 
         self._header = widgets.Header(
-            self, palette, fonts, "Omelet",
+            self, palette, fonts, "Eggie",
             RESUME_NOTICE if resumed else "Setting up your local environment")
         self._header.pack(fill="x")
 
@@ -2112,7 +2112,7 @@ from host.setup_app import status
 
 READY = Readiness(vm_exists=True, vm_reachable=True, engine_version="0.1.0", agent_api=1)
 ACCESS = Access(headline="Connect a coding agent", summary="…",
-                command="ssh -F /Users/you/.lima/omelet-vm/ssh.config lima-omelet-vm",
+                command="ssh -F /Users/you/.lima/eggie-vm/ssh.config lima-eggie-vm",
                 fields=(AccessField("Host", "127.0.0.1"),
                         AccessField("Port", "39022")))
 
@@ -2198,27 +2198,27 @@ def summarize(readiness: Readiness) -> tuple[str, str]:
     traceback: this is the first thing a user reads."""
     if readiness.ready:
         return ("Ready",
-                f"Omelet {readiness.engine_version} is running in the virtual machine.")
+                f"Eggie {readiness.engine_version} is running in the virtual machine.")
     if not readiness.vm_exists:
         return ("Not set up yet",
-                "Set up Omelet to create the virtual machine and install it."
+                "Set up Eggie to create the virtual machine and install it."
                 + (f"\n{readiness.problem}" if readiness.problem else ""))
     if not readiness.vm_reachable:
         return ("The virtual machine is not running",
                 "Run setup again to start it."
                 + (f"\n{readiness.problem}" if readiness.problem else ""))
     if not readiness.engine_version:
-        return ("Omelet is not installed in the virtual machine",
+        return ("Eggie is not installed in the virtual machine",
                 "The virtual machine is there, but nothing is installed inside "
                 "it yet. Run setup again.")
     if readiness.agent_api not in constants.SUPPORTED_API:
         if readiness.agent_api is None:
-            return ("The Omelet service is not answering",
+            return ("The Eggie service is not answering",
                     "The virtual machine is running, but the service inside it "
                     "did not respond. Run setup again."
                     + (f"\n{readiness.problem}" if readiness.problem else ""))
         return ("Versions do not match",
-                "This app and the Omelet service inside the virtual machine are "
+                "This app and the Eggie service inside the virtual machine are "
                 f"versions that cannot work together (service API "
                 f"{readiness.agent_api}, this app speaks "
                 f"{', '.join(str(n) for n in sorted(constants.SUPPORTED_API))}).")
@@ -2233,7 +2233,7 @@ def diagnostics_text(readiness: Readiness, access: Access | None, *,
     the installer was written, and no such button existed. It carries facts and
     paths -- never a token, and never the contents of a key file.
     """
-    lines = [f"omelet {version}", ""]
+    lines = [f"eggie {version}", ""]
     for name in ("vm_exists", "vm_reachable", "engine_version", "agent_api", "problem"):
         lines.append(f"{name}: {getattr(readiness, name)!r}")
     if access is not None:
@@ -2256,7 +2256,7 @@ class StatusScreen(tk.Frame):
         self._version, self._log = version, log
 
         headline, detail = summarize(readiness)
-        widgets.Header(self, palette, fonts, "Omelet", headline).pack(fill="x")
+        widgets.Header(self, palette, fonts, "Eggie", headline).pack(fill="x")
 
         body = tk.Frame(self, bg=palette.bg)
         body.pack(fill="both", expand=True, padx=theme.PAD, pady=theme.PAD)
@@ -2273,7 +2273,7 @@ class StatusScreen(tk.Frame):
         widgets.Button(buttons, palette, fonts, "Copy diagnostics",
                        self._copy_diagnostics, width=160).pack(side="left", padx=(0, 8))
         widgets.Button(buttons, palette, fonts,
-                       "Re-run setup" if readiness.ready else "Set up Omelet",
+                       "Re-run setup" if readiness.ready else "Set up Eggie",
                        on_setup, primary=True, width=150).pack(side="left", padx=(0, 8))
         widgets.Button(buttons, palette, fonts, "Close", on_close,
                        width=100).pack(side="left")
@@ -2323,7 +2323,7 @@ git commit -m "feat(setup-app): a status screen that hands over the SSH details"
 **Files:**
 - Modify: `host/setup_app/app.py` (replace `run_window` entirely)
 - Modify: `host/cli.py` (`setup` builds a steps factory)
-- Modify: `packaging/macos/omelet.spec`, `packaging/windows/omelet.spec` (hidden imports)
+- Modify: `packaging/macos/eggie.spec`, `packaging/windows/eggie.spec` (hidden imports)
 - Test: `tests/test_setup_cli.py` (extend)
 
 **Interfaces:**
@@ -2397,7 +2397,7 @@ from . import theme, wizard
 
 def run_window(provider, steps_factory, state, *, resumed: bool = False) -> int:
     root = tk.Tk()
-    root.title("Omelet Setup")
+    root.title("Eggie Setup")
     root.geometry("620x620")
     root.minsize(560, 560)
 
@@ -2489,7 +2489,7 @@ class _Spinner(tk.Frame):
     def __init__(self, parent, palette: theme.Palette, fonts):
         super().__init__(parent, bg=palette.bg)
         from . import widgets
-        widgets.Header(self, palette, fonts, "Omelet", "Checking this computer…").pack(fill="x")
+        widgets.Header(self, palette, fonts, "Eggie", "Checking this computer…").pack(fill="x")
         self._list = widgets.StepList(self, palette, fonts, [("probe", "Looking for the virtual machine")])
         self._list.set_state("probe", "running")
         self._list.pack(fill="x", padx=theme.PAD, pady=theme.PAD)
@@ -2522,7 +2522,7 @@ In `host/cli.py`'s `setup`, build a factory instead of a list:
 
 and use `steps` for the headless path below, unchanged.
 
-In both `packaging/macos/omelet.spec` and `packaging/windows/omelet.spec`, extend the hidden imports — `setup_app` is reached only by a function-local import, so PyInstaller does not see the new modules:
+In both `packaging/macos/eggie.spec` and `packaging/windows/eggie.spec`, extend the hidden imports — `setup_app` is reached only by a function-local import, so PyInstaller does not see the new modules:
 
 ```python
 HIDDEN = ["host.setup_app.app", "host.setup_app.wizard", "host.setup_app.status",
@@ -2584,7 +2584,7 @@ git commit -m "feat(setup-app): open on a status screen, run setup from a button
 bash packaging/macos/build.sh
 ```
 
-Expected: exits 0; `omelet version`, `omelet selfcheck` both pass against the frozen binary; the two executable names and the two plist assertions still hold.
+Expected: exits 0; `eggie version`, `eggie selfcheck` both pass against the frozen binary; the two executable names and the two plist assertions still hold.
 
 - [ ] **Step 3: Update `CLAUDE.md`**
 
@@ -2592,15 +2592,15 @@ Three edits, in the sections that are now wrong:
 
 1. In the "install step list is built from the provider" bullet, change "five members" to seven and add:
    `runtime()` returning None means the VM platform ships with the host OS and `install_runtime` disappears; a value names the step and installs what the platform needs. `access()` is how the status screen shows a user the way into the VM without knowing what SSH is.
-2. Replace the "A Mac app gets no shell PATH" bullet's conclusion — Lima is now installed by setup into `~/.local/share/omelet/lima`, and `find_limactl` prefers that copy over any Homebrew one. The PATH finding still holds for anything else the host shells out to by name.
+2. Replace the "A Mac app gets no shell PATH" bullet's conclusion — Lima is now installed by setup into `~/.local/share/eggie/lima`, and `find_limactl` prefers that copy over any Homebrew one. The PATH finding still holds for anything else the host shells out to by name.
 3. Add to "Things that will bite you":
    **The setup window is two screens, and the app opens on the status one.** `host/setup_app/app.py` routes on `host/core/status.py::probe` — VM exists, guest reachable, `engine.version` present, agent API supported — and starts the wizard by itself only when nothing is provisioned. `theme.py` picks light or dark from the luminance of the ttk background rather than by asking which OS this is, which is what keeps the no-platform-branching invariant true in the UI layer. Fonts are tkinter's named system fonts; a hardcoded family name is how every label came to ask macOS for "Segoe UI".
 
 - [ ] **Step 4: Update `docs/macos-install-test-matrix.md`**
 
-- **Case 4 changes meaning.** It currently passes by printing `install Lima (brew install lima)`. Rewrite it: *Setup on a Mac without Lima* now proves setup **installs** Lima — pass condition is that `install_runtime` completes and `~/.local/share/omelet/lima/bin/limactl --version` prints 2.2.0. Mark the old result superseded; do not delete it.
+- **Case 4 changes meaning.** It currently passes by printing `install Lima (brew install lima)`. Rewrite it: *Setup on a Mac without Lima* now proves setup **installs** Lima — pass condition is that `install_runtime` completes and `~/.local/share/eggie/lima/bin/limactl --version` prints 2.2.0. Mark the old result superseded; do not delete it.
 - **New case 9:** *Setup with no network at `install_runtime`.* Pass condition: the step fails with the sentence from `_ACTIONS["install_runtime"]`, no stack trace, and a re-run with the network back resumes the partial download rather than restarting it.
-- **New case 10:** *Open Omelet.app on a provisioned Mac.* Pass condition: the status screen appears within a few seconds without running an install; the SSH command and the four fields are populated from `~/.lima/omelet-vm/ssh.config`; Copy puts them on the clipboard; `ssh -F … lima-omelet-vm` from Terminal gets a shell.
+- **New case 10:** *Open Eggie.app on a provisioned Mac.* Pass condition: the status screen appears within a few seconds without running an install; the SSH command and the four fields are populated from `~/.lima/eggie-vm/ssh.config`; Copy puts them on the clipboard; `ssh -F … lima-eggie-vm` from Terminal gets a shell.
 - **New case 11:** *The window in dark mode and in light mode.* Pass condition: text is legible in both, with no white-on-white card and no black-on-black label, switched live via System Settings with the app reopened.
 - **Update the Notes section:** the `--deep` signing hazard for a bundled `limactl` no longer applies, because Lima is fetched rather than bundled. Keep the paragraph and say why it is now moot — it is the reason the decision went the way it did.
 
@@ -2610,7 +2610,7 @@ Add a section for this work saying exactly this much and no more:
 
 - `install_runtime` is the first macOS path that can be verified without booting a VM: it ends by running the downloaded `limactl` and reading its version back. Record the result of that run.
 - `~/.lima/<name>/ssh.config` now has two readers — `forward()` and `access()` — so the layout assumption is visible on the status screen instead of only inside a port forward.
-- **Everything else is unchanged.** No VM has been created. `create_vm` is still the first unproven step, and `vz`, Rosetta, the port forwards and the ssh control master are all still assumptions. **The UNVERIFIED banners in `host/providers/lima.py` and `host/providers/omelet.yaml` stay.**
+- **Everything else is unchanged.** No VM has been created. `create_vm` is still the first unproven step, and `vz`, Rosetta, the port forwards and the ssh control master are all still assumptions. **The UNVERIFIED banners in `host/providers/lima.py` and `host/providers/eggie.yaml` stay.**
 - `forwards()` still returns an empty list on Lima; that open question is not touched by this work.
 
 - [ ] **Step 6: Run everything and commit**

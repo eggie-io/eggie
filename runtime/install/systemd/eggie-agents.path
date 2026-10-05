@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Eggie's coding agents when the API asks
+
+[Path]
+PathChanged=/opt/eggie/agent-status/check
+
+[Install]
+WantedBy=multi-user.target

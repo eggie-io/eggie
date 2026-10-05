@@ -7,7 +7,7 @@ function project(over: Partial<Project> = {}): Project {
     id: "recipe-box",
     status: "stopped",
     domain: "127-0-0-1.sslip.io",
-    path: "/opt/omelet/projects/recipe-box",
+    path: "/opt/eggie/projects/recipe-box",
     urls: [],
     problem: null,
     empty: false,
@@ -56,7 +56,7 @@ describe("projectView", () => {
     }
   });
 
-  it("groups files Omelet can't read under 'unreadable' and keeps the API's message", () => {
+  it("groups files Eggie can't read under 'unreadable' and keeps the API's message", () => {
     for (const code of ["invalid_compose", "invalid_project", "compose_missing"]) {
       expect(projectView(project({ problem: problem(code) }))).toEqual({
         kind: "wrong",

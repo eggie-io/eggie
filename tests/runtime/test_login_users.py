@@ -1,4 +1,4 @@
-"""login-users.sh selects the accounts install.sh should provision Omelet's
+"""login-users.sh selects the accounts install.sh should provision Eggie's
 agent files into: real login accounts, on both WSL2 (uid 1000) and Lima, whose
 guest user carries the macOS host uid (often 501, always < 1000). Lowering the
 old uid>=1000 bound alone would sweep in system accounts whose home is `/`, so

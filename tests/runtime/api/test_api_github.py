@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.core.exec import Completed
-from omelet_api.core.github import GitHubUnavailable
-from omelet_api.core.github_link import GitHubLink
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.exec import Completed
+from eggie_api.core.github import GitHubUnavailable
+from eggie_api.core.github_link import GitHubLink
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
@@ -126,7 +126,7 @@ def test_clone_passes_the_token_only_through_the_environment_then_starts_the_pro
     assert dest != str(env.config.projects_root / "app")
     assert "https://github.com/octo/app.git" in clone
     env_used = runner.envs[runner.calls.index(clone)]
-    assert env_used == {"OMELET_GH_TOKEN": TOKEN, "GIT_TERMINAL_PROMPT": "0"}
+    assert env_used == {"EGGIE_GH_TOKEN": TOKEN, "GIT_TERMINAL_PROMPT": "0"}
     assert client.get("/projects/app").status_code == 200
     assert runner.argv_containing("up")
     assert _staging_dirs(env) == []

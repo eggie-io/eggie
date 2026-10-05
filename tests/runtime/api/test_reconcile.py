@@ -1,7 +1,7 @@
 import shutil
 
-import omelet_api.core.reconcile as reconcile
-from omelet_api.core import constants
+import eggie_api.core.reconcile as reconcile
+from eggie_api.core import constants
 from tests.runtime.api.conftest import COMPOSE_ONE_WEB, _create, _write_compose
 
 

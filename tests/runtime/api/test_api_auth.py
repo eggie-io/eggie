@@ -4,8 +4,8 @@ import re
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from omelet_api.routes.app import create_app
-from omelet_api.core.config import ApiConfig
+from eggie_api.routes.app import create_app
+from eggie_api.core.config import ApiConfig
 from tests.runtime.api.route_sweep import every_route
 
 

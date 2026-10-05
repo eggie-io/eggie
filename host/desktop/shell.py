@@ -50,7 +50,7 @@ class Shell:
         # json.dumps, never a format string: a message carrying a quote would
         # otherwise close the call and inject whatever followed.
         if self.window is not None and self.is_local():
-            self.window.evaluate_js(f"window.omelet.on({json.dumps(event)})")
+            self.window.evaluate_js(f"window.eggie.on({json.dumps(event)})")
 
 
 def public_methods(cls: type) -> list[str]:
@@ -72,7 +72,7 @@ def guarded(api: object, shell: Shell) -> list:
 def _guard(method, name: str, shell: Shell):
     def call(*args, **kwargs):
         if not shell.is_local():
-            raise NotLocalPage(f"{name} is only available to Omelet's own screens")
+            raise NotLocalPage(f"{name} is only available to Eggie's own screens")
         return method(*args, **kwargs)
     call.__name__ = name
     return call

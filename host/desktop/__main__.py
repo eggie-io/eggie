@@ -11,19 +11,19 @@ import argparse
 import sys
 from pathlib import Path
 
-WINDOW_TITLE = "Omelet"
+WINDOW_TITLE = "Eggie"
 # The board's frames are 880x620. The OS draws the title bar, so that is the
 # content size; min_size keeps the nine-row install panel from clipping.
 WINDOW_SIZE = (880, 620)
 MIN_SIZE = (800, 560)
 
 WEBVIEW_MISSING = (
-    "Omelet could not open its window because this computer is missing the "
+    "Eggie could not open its window because this computer is missing the "
     "Microsoft Edge WebView2 runtime.\n"
     "Install it from https://developer.microsoft.com/microsoft-edge/webview2/ "
-    "and open Omelet again.\n"
-    "In the meantime you can still set up Omelet by running: "
-    "omelet setup --headless"
+    "and open Eggie again.\n"
+    "In the meantime you can still set up Eggie by running: "
+    "eggie setup --headless"
 )
 
 
@@ -106,14 +106,14 @@ def run(provider, state, *, create=_default_create, start=_default_start,
                              on_quit=lambda: controller.open_route("quit"))
         tray.start()
     except Exception as e:
-        print(f"Omelet could not start its tray icon: {e!r}", file=sys.stderr)
+        print(f"Eggie could not start its tray icon: {e!r}", file=sys.stderr)
         tray = None
         mode = WINDOW
     if tray is not None:
         try:
             provider.let_session_end_close(controller.allow_exit)
         except Exception as e:
-            print(f"Omelet could not watch for sign-out: {e!r}", file=sys.stderr)
+            print(f"Eggie could not watch for sign-out: {e!r}", file=sys.stderr)
 
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),
@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     from host.core.install import VERIFY_TEMPLATE, InstallState, default_steps
     from host.providers import default_install_dir, get_provider
 
-    parser = argparse.ArgumentParser(prog="omelet-desktop")
+    parser = argparse.ArgumentParser(prog="eggie-desktop")
     # Written by provider.register_resume() into Windows RunOnce. The flag
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     provider = get_provider()
 
     # Mirrors host.cli.setup's build_steps exactly: launching this module
-    # directly and launching it via `omelet setup` must install identically.
+    # directly and launching it via `eggie setup` must install identically.
     def build_steps():
         return default_steps(
             provider,

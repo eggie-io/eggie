@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { useAgentStatus } from "../../agents/queries";
 import { decide, readMark, writeMark, type Phase } from "../../onboarding/onboarding";
 import { useProjects } from "../../projects/queries";

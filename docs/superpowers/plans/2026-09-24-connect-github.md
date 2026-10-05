@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** One "Connect GitHub" button in the console signs every VM login account into `gh` and git over https as the user's GitHub account, and lets the user clone one of their repos as an Omelet project.
+**Goal:** One "Connect GitHub" button in the console signs every VM login account into `gh` and git over https as the user's GitHub account, and lets the user clone one of their repos as an Eggie project.
 
 **Architecture:** The API (uid 1000, in a container) runs GitHub's OAuth Device Flow and keeps the token in a `0600` file. It writes a token-free `desired.json` with a monotonic generation. A root systemd path unit runs `github-apply.sh`, which applies that state to each account through `runuser` and echoes the generation back in `applied.json`. The console polls `/api/github` and shows "ready" only when the generations match. The clone runs as an API job with the token only in the child's environment.
 
@@ -13,11 +13,11 @@
 ## Global Constraints
 
 - No host change. Nothing under `host/` is touched. `API_VERSION` stays `1`.
-- No client secret anywhere. `client_id` default `Ov23lie5k9VqSCKI52Ci`, overridable with `OMELET_GITHUB_CLIENT_ID`.
+- No client secret anywhere. `client_id` default `Ov23lie5k9VqSCKI52Ci`, overridable with `EGGIE_GITHUB_CLIENT_ID`.
 - Scopes exactly `repo read:org workflow`.
 - `user.name` = GitHub profile `name`, else `login`. `user.email` = the profile's public `email`, else `<id>+<login>@users.noreply.github.com`.
 - The token never appears in an API response, a log line, job output, argv, a remote URL or `.git/config`.
-- Token file `/opt/omelet/github/token` mode `0600`. `desired.json` `0640`. `applied.json` `0644`. The directory is `root:docker 2770`.
+- Token file `/opt/eggie/github/token` mode `0600`. `desired.json` `0640`. `applied.json` `0644`. The directory is `root:docker 2770`.
 - Every write in a user home goes through `runuser -u <name>` with that account's `HOME`.
 - `SETUP_TIMEOUT` = 30 s; token re-check interval = 300 s; UI poll = 2 s while pending or applying.
 - No test reaches the network or GitHub. HTTP goes through fakes; shell scripts run with `bash` against fakes on `PATH`.
@@ -26,7 +26,7 @@
 
 ## Review Focus
 
-1. **The `install.sh` permission sweep re-widens the token.** Step 4 runs `chmod -R g+rwX /opt/omelet` on every install, which would turn `0600` into `0660`. Expect the modes to be reasserted after the sweep. Pinned in Task 6's install test.
+1. **The `install.sh` permission sweep re-widens the token.** Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which would turn `0600` into `0660`. Expect the modes to be reasserted after the sweep. Pinned in Task 6's install test.
 2. **`state.db` recreated while `applied.json` survives.** Someone deleting the db resets `generation` to 0. A new desired state must still go above the applied generation, or the UI shows "ready" for a state that was never applied. Pinned in Task 3.
 3. **First install with no `desired.json`.** The apply script must not log out a `gh` the user signed into by hand before this feature existed. Pinned in Task 6.
 4. **A clone that fails on a private repo.** The partial folder must be removed and no project row left. git's error text must reach the UI with the token redacted, and an auth failure moves the status to `needs_reconnect`. Pinned in Task 4.
@@ -38,19 +38,19 @@
 
 | File | Responsibility |
 |---|---|
-| `runtime/omelet_api/core/constants.py` (modify) | `GITHUB_DIR`, `GITHUB_CLIENT_ID` |
-| `runtime/omelet_api/core/config.py` (modify) | `github_client_id`, `github_url`, `github_api_url`, `github_dir` |
-| `runtime/omelet_api/core/migrate.py`, `state.py` (modify) | `github` row, `get_github()` / `update_github()` |
-| `runtime/omelet_api/core/github.py` (create) | GitHub HTTP client, `identity_from`, `clone_argv`, `redact`, repo-name check |
-| `runtime/omelet_api/core/github_link.py` (create) | Device-flow state machine, token/desired/applied files, setup state |
-| `runtime/omelet_api/core/exec.py` (modify) | `LocalRunner.exec(..., env=None)` |
-| `runtime/omelet_api/routes/app.py` (modify) | `/github*` routes, clone job |
-| `runtime/omelet_api/Dockerfile` (modify) | `git` in the image |
-| `runtime/stack.yml` (modify) | pass `OMELET_GITHUB_CLIENT_ID` |
+| `runtime/eggie_api/core/constants.py` (modify) | `GITHUB_DIR`, `GITHUB_CLIENT_ID` |
+| `runtime/eggie_api/core/config.py` (modify) | `github_client_id`, `github_url`, `github_api_url`, `github_dir` |
+| `runtime/eggie_api/core/migrate.py`, `state.py` (modify) | `github` row, `get_github()` / `update_github()` |
+| `runtime/eggie_api/core/github.py` (create) | GitHub HTTP client, `identity_from`, `clone_argv`, `redact`, repo-name check |
+| `runtime/eggie_api/core/github_link.py` (create) | Device-flow state machine, token/desired/applied files, setup state |
+| `runtime/eggie_api/core/exec.py` (modify) | `LocalRunner.exec(..., env=None)` |
+| `runtime/eggie_api/routes/app.py` (modify) | `/github*` routes, clone job |
+| `runtime/eggie_api/Dockerfile` (modify) | `git` in the image |
+| `runtime/stack.yml` (modify) | pass `EGGIE_GITHUB_CLIENT_ID` |
 | `runtime/install/lib/github-apply.sh` (create) | root apply of the desired state per account |
-| `runtime/install/systemd/omelet-github.{path,service}` (create) | trigger on `desired.json` |
+| `runtime/install/systemd/eggie-github.{path,service}` (create) | trigger on `desired.json` |
 | `runtime/install/install.sh` (modify) | dir + modes, `safe.directory`, units, one apply |
-| `runtime/instructions/omelet.md` (modify) | "never `gh auth login`" rule |
+| `runtime/instructions/eggie.md` (modify) | "never `gh auth login`" rule |
 | `runtime/web/apps/console/src/github/github.ts` (create) | types, queries, mutations |
 | `runtime/web/apps/console/src/github/view.ts` (create) | status → screen state + copy |
 | `runtime/web/apps/console/src/screens/github/GitHubModal.tsx`, `RepoPicker.tsx`, `GitHubModal.module.css` (create) | connect flow, repo list, clone progress |
@@ -63,11 +63,11 @@
 ### Task 1: Config, constants and the `github` state row
 
 **Files:**
-- Modify: `runtime/omelet_api/core/constants.py`, `runtime/omelet_api/core/config.py`, `runtime/omelet_api/core/migrate.py`, `runtime/omelet_api/core/state.py`, `runtime/stack.yml`
+- Modify: `runtime/eggie_api/core/constants.py`, `runtime/eggie_api/core/config.py`, `runtime/eggie_api/core/migrate.py`, `runtime/eggie_api/core/state.py`, `runtime/stack.yml`
 - Test: `tests/runtime/api/test_config.py`, `tests/runtime/test_stack_yml.py`
 
 **Interfaces:**
-- Produces: `constants.GITHUB_DIR = "/opt/omelet/github"`, `constants.GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"`; `ApiConfig.github_client_id: str`, `.github_url: str`, `.github_api_url: str`, `.github_dir: Path`; `State.get_github() -> dict` with keys `generation, desired_at, login, gh_id, name, email, needs_reconnect, last_error, checked_at`; `State.update_github(**fields) -> None` (raises `ValueError` on unknown fields).
+- Produces: `constants.GITHUB_DIR = "/opt/eggie/github"`, `constants.GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"`; `ApiConfig.github_client_id: str`, `.github_url: str`, `.github_api_url: str`, `.github_dir: Path`; `State.get_github() -> dict` with keys `generation, desired_at, login, gh_id, name, email, needs_reconnect, last_error, checked_at`; `State.update_github(**fields) -> None` (raises `ValueError` on unknown fields).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -75,7 +75,7 @@ Append to `tests/runtime/api/test_config.py`:
 
 ```python
 def test_github_client_id_can_be_overridden_for_a_fork():
-    config = ApiConfig.from_env({"OMELET_GITHUB_CLIENT_ID": "Iv1.fork"})
+    config = ApiConfig.from_env({"EGGIE_GITHUB_CLIENT_ID": "Iv1.fork"})
     assert config.github_client_id == "Iv1.fork"
     assert ApiConfig.from_env({}).github_client_id == "Ov23lie5k9VqSCKI52Ci"
 ```
@@ -85,7 +85,7 @@ Append to `tests/runtime/test_stack_yml.py`, reusing whatever helper that file a
 ```python
 def test_the_api_receives_the_github_client_id_with_the_same_default():
     api = _services()["api"]
-    assert ("OMELET_GITHUB_CLIENT_ID=${OMELET_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}"
+    assert ("EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}"
             in api["environment"])
 ```
 
@@ -102,7 +102,7 @@ Expected: FAIL — `AttributeError: 'ApiConfig' object has no attribute 'github_
 
 ```python
 GITHUB_DIR = f"{GUEST_ROOT}/github"
-# Omelet's OAuth App. Public by design: the Device Flow needs no secret.
+# Eggie's OAuth App. Public by design: the Device Flow needs no secret.
 GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"
 ```
 
@@ -118,12 +118,12 @@ GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"
 and in `from_env` after `cloud_url=...`:
 
 ```python
-            github_client_id=env.get("OMELET_GITHUB_CLIENT_ID",
+            github_client_id=env.get("EGGIE_GITHUB_CLIENT_ID",
                                      constants.GITHUB_CLIENT_ID),
-            github_url=env.get("OMELET_GITHUB_URL", "https://github.com"),
-            github_api_url=env.get("OMELET_GITHUB_API_URL",
+            github_url=env.get("EGGIE_GITHUB_URL", "https://github.com"),
+            github_api_url=env.get("EGGIE_GITHUB_API_URL",
                                    "https://api.github.com"),
-            github_dir=Path(env.get("OMELET_GITHUB_DIR", constants.GITHUB_DIR)),
+            github_dir=Path(env.get("EGGIE_GITHUB_DIR", constants.GITHUB_DIR)),
 ```
 
 `core/migrate.py`: add before `MIGRATIONS`, and append `_v5_github` to the list:
@@ -175,10 +175,10 @@ and methods after `update_account`:
             self._conn.commit()
 ```
 
-`runtime/stack.yml`, in the `api` service's `environment:` list after `OMELET_EDGE_PORT`:
+`runtime/stack.yml`, in the `api` service's `environment:` list after `EGGIE_EDGE_PORT`:
 
 ```yaml
-      - OMELET_GITHUB_CLIENT_ID=${OMELET_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
+      - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
 ```
 
 - [ ] **Step 4: Run to verify they pass, plus the migration suite**
@@ -189,7 +189,7 @@ Expected: PASS. If `test_migrate.py` pins `SCHEMA_VERSION == 4`, update that lit
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/constants.py runtime/omelet_api/core/config.py runtime/omelet_api/core/migrate.py runtime/omelet_api/core/state.py runtime/stack.yml tests/runtime/api/test_config.py tests/runtime/test_stack_yml.py tests/runtime/api/test_migrate.py
+git add runtime/eggie_api/core/constants.py runtime/eggie_api/core/config.py runtime/eggie_api/core/migrate.py runtime/eggie_api/core/state.py runtime/stack.yml tests/runtime/api/test_config.py tests/runtime/test_stack_yml.py tests/runtime/api/test_migrate.py
 git commit -m "Add GitHub config and state row"
 ```
 
@@ -198,7 +198,7 @@ git commit -m "Add GitHub config and state row"
 ### Task 2: GitHub HTTP client and pure helpers
 
 **Files:**
-- Create: `runtime/omelet_api/core/github.py`
+- Create: `runtime/eggie_api/core/github.py`
 - Test: `tests/runtime/api/test_github.py`
 
 **Interfaces:**
@@ -230,7 +230,7 @@ from pathlib import Path
 
 import pytest
 
-from omelet_api.core.github import (GitHub, GitHubError, GitHubUnavailable,
+from eggie_api.core.github import (GitHub, GitHubError, GitHubUnavailable,
                                     auth_failed, clone_argv, identity_from,
                                     redact, valid_repo)
 
@@ -323,11 +323,11 @@ def test_repo_names_that_are_not_owner_slash_name_are_refused(name):
 
 
 def test_clone_argv_keeps_the_token_out_of_argv_and_the_url():
-    argv = clone_argv("octo/app", Path("/opt/omelet/projects/app"))
+    argv = clone_argv("octo/app", Path("/opt/eggie/projects/app"))
     assert "https://github.com/octo/app.git" in argv
     assert not any("@github.com" in word for word in argv)
-    assert "$OMELET_GH_TOKEN" in " ".join(argv)
-    assert argv[-1] == "/opt/omelet/projects/app"
+    assert "$EGGIE_GH_TOKEN" in " ".join(argv)
+    assert argv[-1] == "/opt/eggie/projects/app"
 
 
 def test_redact_and_auth_failed():
@@ -340,9 +340,9 @@ def test_redact_and_auth_failed():
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_github.py -q`
-Expected: FAIL — `ModuleNotFoundError: omelet_api.core.github`.
+Expected: FAIL — `ModuleNotFoundError: eggie_api.core.github`.
 
-- [ ] **Step 3: Implement `runtime/omelet_api/core/github.py`**
+- [ ] **Step 3: Implement `runtime/eggie_api/core/github.py`**
 
 ```python
 from __future__ import annotations
@@ -361,7 +361,7 @@ _REPO = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.-]*/[A-Za-z0-9_.][A-Za-z0-9_.-]*")
 # The helper reads the token from the child's environment at call time, so it
 # is never in argv, the remote URL or .git/config.
 _HELPER = ('!f() { test "$1" = get && printf "username=x-access-token\\npassword=%s\\n" '
-           '"$OMELET_GH_TOKEN"; }; f')
+           '"$EGGIE_GH_TOKEN"; }; f')
 
 
 class GitHubError(Exception):
@@ -389,7 +389,7 @@ class GitHub:
     def _call(self, method: str, url: str, *, form: dict | None = None,
               token: str | None = None):
         data = None if form is None else urllib.parse.urlencode(form).encode()
-        headers = {"Accept": "application/json", "User-Agent": "omelet",
+        headers = {"Accept": "application/json", "User-Agent": "eggie",
                    "X-GitHub-Api-Version": "2022-11-28"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -489,7 +489,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/github.py tests/runtime/api/test_github.py
+git add runtime/eggie_api/core/github.py tests/runtime/api/test_github.py
 git commit -m "Add GitHub HTTP client and clone helpers"
 ```
 
@@ -498,7 +498,7 @@ git commit -m "Add GitHub HTTP client and clone helpers"
 ### Task 3: `GitHubLink` — device flow, files, setup state
 
 **Files:**
-- Create: `runtime/omelet_api/core/github_link.py`, `tests/runtime/api/fake_github.py`
+- Create: `runtime/eggie_api/core/github_link.py`, `tests/runtime/api/fake_github.py`
 - Test: `tests/runtime/api/test_github_link.py`
 
 **Interfaces:**
@@ -523,7 +523,7 @@ git commit -m "Add GitHub HTTP client and clone helpers"
 `tests/runtime/api/fake_github.py`:
 
 ```python
-from omelet_api.core.github import GitHubError
+from eggie_api.core.github import GitHubError
 
 CODE = {"device_code": "dc-1", "user_code": "WDJB-MJHT",
         "verification_uri": "https://github.com/login/device",
@@ -574,10 +574,10 @@ import stat
 
 import pytest
 
-from omelet_api.core.github import GitHubUnavailable
-from omelet_api.core.github_link import (SETUP_TIMEOUT, GitHubLink,
+from eggie_api.core.github import GitHubUnavailable
+from eggie_api.core.github_link import (SETUP_TIMEOUT, GitHubLink,
                                          NotConnected, setup_state)
-from omelet_api.core.state import State
+from eggie_api.core.state import State
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
 
@@ -754,9 +754,9 @@ def test_setup_state(applied, now, expected):
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_github_link.py -q`
-Expected: FAIL — `ModuleNotFoundError: omelet_api.core.github_link`.
+Expected: FAIL — `ModuleNotFoundError: eggie_api.core.github_link`.
 
-- [ ] **Step 3: Implement `runtime/omelet_api/core/github_link.py`**
+- [ ] **Step 3: Implement `runtime/eggie_api/core/github_link.py`**
 
 ```python
 from __future__ import annotations
@@ -775,7 +775,7 @@ CHECK_EVERY = 300.0
 SLOW_DOWN_STEP = 5.0
 _REFUSED = {"access_denied", "expired_token"}
 
-log = logging.getLogger("omelet.github")
+log = logging.getLogger("eggie.github")
 
 
 class NotConnected(Exception):
@@ -783,7 +783,7 @@ class NotConnected(Exception):
 
 
 def _daemon(fn) -> None:
-    threading.Thread(target=fn, name="omelet-github", daemon=True).start()
+    threading.Thread(target=fn, name="eggie-github", daemon=True).start()
 
 
 def _write(path: Path, text: str, mode: int) -> None:
@@ -1029,7 +1029,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/github_link.py tests/runtime/api/fake_github.py tests/runtime/api/test_github_link.py
+git add runtime/eggie_api/core/github_link.py tests/runtime/api/fake_github.py tests/runtime/api/test_github_link.py
 git commit -m "Add GitHub device-flow link and desired-state files"
 ```
 
@@ -1038,7 +1038,7 @@ git commit -m "Add GitHub device-flow link and desired-state files"
 ### Task 4: Routes, the clone job, `LocalRunner` env, `git` in the image
 
 **Files:**
-- Modify: `runtime/omelet_api/routes/app.py`, `runtime/omelet_api/core/exec.py`, `runtime/omelet_api/Dockerfile`, `tests/runtime/api/conftest.py`
+- Modify: `runtime/eggie_api/routes/app.py`, `runtime/eggie_api/core/exec.py`, `runtime/eggie_api/Dockerfile`, `tests/runtime/api/conftest.py`
 - Test: `tests/runtime/api/test_api_github.py`, `tests/runtime/api/test_dockerfile.py`
 
 **Interfaces:**
@@ -1085,11 +1085,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.core.exec import Completed
-from omelet_api.core.github import GitHubUnavailable
-from omelet_api.core.github_link import GitHubLink
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.exec import Completed
+from eggie_api.core.github import GitHubUnavailable
+from eggie_api.core.github_link import GitHubLink
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
@@ -1178,7 +1178,7 @@ def test_clone_passes_the_token_only_through_the_environment_then_starts_the_pro
     assert TOKEN not in " ".join(clone)
     assert "https://github.com/octo/app.git" in clone
     env_used = runner.envs[runner.calls.index(clone)]
-    assert env_used == {"OMELET_GH_TOKEN": TOKEN, "GIT_TERMINAL_PROMPT": "0"}
+    assert env_used == {"EGGIE_GH_TOKEN": TOKEN, "GIT_TERMINAL_PROMPT": "0"}
     assert client.get("/projects/app").status_code == 200
     assert runner.argv_containing("up")
 
@@ -1283,7 +1283,7 @@ def _github_down() -> ApiError:
 
 
 def _reconnect() -> ApiError:
-    return ApiError("github_reconnect", "GitHub stopped accepting Omelet's "
+    return ApiError("github_reconnect", "GitHub stopped accepting Eggie's "
                     "access. Reconnect GitHub and try again.", 409)
 ```
 
@@ -1379,7 +1379,7 @@ Routes, placed after `account_sign_out`:
                 write.phase("cloning")
                 write(f"git clone https://github.com/{body.repo}.git\n")
                 result = runner.exec(clone_argv(body.repo, directory),
-                                     env={"OMELET_GH_TOKEN": token,
+                                     env={"EGGIE_GH_TOKEN": token,
                                           "GIT_TERMINAL_PROMPT": "0"})
                 if not result.ok:
                     output = redact((result.stderr or result.stdout).strip(), token)
@@ -1422,7 +1422,7 @@ Expected: PASS (all API tests, including the existing ones against the changed `
 - [ ] **Step 6: Commit**
 
 ```bash
-git add runtime/omelet_api/routes/app.py runtime/omelet_api/core/exec.py runtime/omelet_api/Dockerfile tests/runtime/api/conftest.py tests/runtime/api/test_api_github.py tests/runtime/api/test_dockerfile.py
+git add runtime/eggie_api/routes/app.py runtime/eggie_api/core/exec.py runtime/eggie_api/Dockerfile tests/runtime/api/conftest.py tests/runtime/api/test_api_github.py tests/runtime/api/test_dockerfile.py
 git commit -m "Add GitHub routes and the clone job"
 ```
 
@@ -1431,12 +1431,12 @@ git commit -m "Add GitHub routes and the clone job"
 ### Task 5: `github-apply.sh` — root apply per account
 
 **Files:**
-- Create: `runtime/install/lib/github-apply.sh`, `runtime/install/systemd/omelet-github.path`, `runtime/install/systemd/omelet-github.service`
+- Create: `runtime/install/lib/github-apply.sh`, `runtime/install/systemd/eggie-github.path`, `runtime/install/systemd/eggie-github.service`
 - Test: `tests/runtime/test_github_apply.py`
 
 **Interfaces:**
 - Consumes: `desired.json` / `token` written by Task 3; `runtime/install/lib/login-users.sh`.
-- Produces: `applied.json` `{"generation": int, "ok": bool, "error": str|null, "name": str|null, "email": str|null, "accounts": [{"name", "ok"}]}`. Test knobs (env): `OMELET_ROOT_HOME`, `OMELET_SHELLS_FILE`, `OMELET_APPLY_PATH`.
+- Produces: `applied.json` `{"generation": int, "ok": bool, "error": str|null, "name": str|null, "email": str|null, "accounts": [{"name", "ok"}]}`. Test knobs (env): `EGGIE_ROOT_HOME`, `EGGIE_SHELLS_FILE`, `EGGIE_APPLY_PATH`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1485,9 +1485,9 @@ def setup(tmp_path, desired=None, applied=None):
     if applied is not None:
         (gh_dir / "applied.json").write_text(json.dumps(applied))
     path = f"{bin_dir}:/usr/bin:/bin"
-    env = {**os.environ, "PATH": path, "OMELET_APPLY_PATH": path,
-           "OMELET_ROOT_HOME": str(tmp_path / "root"),
-           "OMELET_SHELLS_FILE": str(shells), "LOG": str(log),
+    env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path,
+           "EGGIE_ROOT_HOME": str(tmp_path / "root"),
+           "EGGIE_SHELLS_FILE": str(shells), "LOG": str(log),
            "ADA_HOME": str(tmp_path / "ada"),
            "TOKEN_FILE": str(gh_dir / "token")}
     return env, gh_dir, log
@@ -1577,20 +1577,20 @@ Expected: FAIL — the script does not exist.
 ```bash
 #!/usr/bin/env bash
 # Applies the API's GitHub desired state to every login account: gh signed in
-# or out, and git's identity. Run as root by omelet-github.service and once by
+# or out, and git's identity. Run as root by eggie-github.service and once by
 # install.sh; re-running it is safe.
 #   github-apply.sh [github-dir]
 # Not -e: one account failing must not leave the others unapplied.
 set -uo pipefail
 
-DIR="${1:-/opt/omelet/github}"
+DIR="${1:-/opt/eggie/github}"
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESIRED="$DIR/desired.json"
 APPLIED="$DIR/applied.json"
 TOKEN="$DIR/token"
-ROOT_HOME="${OMELET_ROOT_HOME:-/root}"
-SHELLS="${OMELET_SHELLS_FILE:-/etc/shells}"
-SAFE_PATH="${OMELET_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+ROOT_HOME="${EGGIE_ROOT_HOME:-/root}"
+SHELLS="${EGGIE_SHELLS_FILE:-/etc/shells}"
+SAFE_PATH="${EGGIE_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 field() {
   python3 -c 'import json, sys
@@ -1697,28 +1697,28 @@ fi
 
 Note: `out="$(...)"` followed by `$?` reads the command substitution's status. Keep the assignment on its own line exactly as written; a `local out=...` would swallow the status.
 
-`runtime/install/systemd/omelet-github.path`:
+`runtime/install/systemd/eggie-github.path`:
 
 ```ini
 [Unit]
-Description=Apply Omelet's GitHub connection when it changes
+Description=Apply Eggie's GitHub connection when it changes
 
 [Path]
-PathChanged=/opt/omelet/github/desired.json
+PathChanged=/opt/eggie/github/desired.json
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-`runtime/install/systemd/omelet-github.service`:
+`runtime/install/systemd/eggie-github.service`:
 
 ```ini
 [Unit]
-Description=Apply Omelet's GitHub connection to this machine's accounts
+Description=Apply Eggie's GitHub connection to this machine's accounts
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /opt/omelet/runtime/install/lib/github-apply.sh
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/github-apply.sh
 ```
 
 - [ ] **Step 4: Run to verify it passes**
@@ -1738,7 +1738,7 @@ git commit -m "Add root apply of the GitHub desired state per account"
 ### Task 6: `install.sh` wiring and the agent rule
 
 **Files:**
-- Modify: `runtime/install/install.sh`, `runtime/instructions/omelet.md`
+- Modify: `runtime/install/install.sh`, `runtime/instructions/eggie.md`
 - Test: `tests/runtime/test_install_shell.py`
 
 **Interfaces:**
@@ -1751,14 +1751,14 @@ Append to `tests/runtime/test_install_shell.py`:
 ```python
 def test_install_reasserts_the_github_file_modes_after_the_permission_sweep():
     text = INSTALL.read_text()
-    sweep = text.index("chmod -R g+rwX /opt/omelet")
-    assert text.index("chmod 600 /opt/omelet/github/token") > sweep
-    assert "install -d -m 2770 -o root -g docker /opt/omelet/github" in text
+    sweep = text.index("chmod -R g+rwX /opt/eggie")
+    assert text.index("chmod 600 /opt/eggie/github/token") > sweep
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/github" in text
 
 
 def test_install_enables_the_github_path_unit_and_applies_before_the_marker():
     text = INSTALL.read_text()
-    assert "systemctl enable --now omelet-github.path" in text
+    assert "systemctl enable --now eggie-github.path" in text
     apply = text.index('bash "$INSTALL_DIR/lib/github-apply.sh"')
     assert apply < text.index(f"> {constants.RUNTIME_MARKER}")
 
@@ -1768,7 +1768,7 @@ def test_install_trusts_repositories_owned_by_the_api():
 
 
 def test_the_agent_instructions_never_ask_for_a_github_login():
-    text = (ROOT / "runtime" / "instructions" / "omelet.md").read_text()
+    text = (ROOT / "runtime" / "instructions" / "eggie.md").read_text()
     assert "Connect GitHub" in text
     assert "run\n  `gh auth login`" not in text and "run `gh auth login`" not in text
 ```
@@ -1780,15 +1780,15 @@ Expected: the four new tests FAIL.
 
 - [ ] **Step 3: Implement**
 
-In `install.sh`, directly after step 4's `find /opt/omelet -type d -exec chmod g+s {} +`:
+In `install.sh`, directly after step 4's `find /opt/eggie -type d -exec chmod g+s {} +`:
 
 ```bash
 # The GitHub token is the API's alone: the sweep above just widened it, so
 # its modes are put back every run.
-install -d -m 2770 -o root -g docker /opt/omelet/github
-chmod 2770 /opt/omelet/github
-[[ -e /opt/omelet/github/token ]] && chmod 600 /opt/omelet/github/token
-[[ -e /opt/omelet/github/desired.json ]] && chmod 640 /opt/omelet/github/desired.json
+install -d -m 2770 -o root -g docker /opt/eggie/github
+chmod 2770 /opt/eggie/github
+[[ -e /opt/eggie/github/token ]] && chmod 600 /opt/eggie/github/token
+[[ -e /opt/eggie/github/desired.json ]] && chmod 640 /opt/eggie/github/desired.json
 ```
 
 In step 8, after the `gh` install block:
@@ -1807,34 +1807,34 @@ Between step 11's loop and the marker, renumbering the marker step to 13:
 ```bash
 # 12. GitHub: apply on every change of the API's desired state, and once now
 # so a repair or a newly added account catches up.
-install -m 644 "$INSTALL_DIR/systemd/omelet-github.path" \
-  "$INSTALL_DIR/systemd/omelet-github.service" /etc/systemd/system/
+install -m 644 "$INSTALL_DIR/systemd/eggie-github.path" \
+  "$INSTALL_DIR/systemd/eggie-github.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now omelet-github.path
+systemctl enable --now eggie-github.path
 if ! bash "$INSTALL_DIR/lib/github-apply.sh"; then
   echo "could not apply the GitHub connection to this machine's accounts" >&2
   exit 1
 fi
 ```
 
-`runtime/instructions/omelet.md` — replace the last bullet (three lines starting `- GitHub —`) with:
+`runtime/instructions/eggie.md` — replace the last bullet (three lines starting `- GitHub —`) with:
 
 ```markdown
 - GitHub — repositories, pull requests, issues: use `gh` and plain `git` over https.
   If `gh auth status` fails or GitHub says unauthorized, do not run `gh auth login`
-  and do not ask for a token: tell the user to click **Connect GitHub** in Omelet,
+  and do not ask for a token: tell the user to click **Connect GitHub** in Eggie,
   then try again.
 ```
 
 - [ ] **Step 4: Run to verify they pass, plus the other runtime script tests**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime -q`
-Expected: PASS (`test_install_agents.py` re-reads `omelet.md` and must still pass).
+Expected: PASS (`test_install_agents.py` re-reads `eggie.md` and must still pass).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/install/install.sh runtime/instructions/omelet.md tests/runtime/test_install_shell.py
+git add runtime/install/install.sh runtime/instructions/eggie.md tests/runtime/test_install_shell.py
 git commit -m "Wire GitHub apply into install and tell agents never to log in"
 ```
 
@@ -2037,15 +2037,15 @@ export function githubView(status: GitHubStatus): GitHubView {
       if (status.setup === "runtime_outdated") {
         return {
           kind: "setupFailed", login: status.login, canRetry: false,
-          message: "This machine's Omelet runtime needs an update before GitHub can be set up. " +
+          message: "This machine's Eggie runtime needs an update before GitHub can be set up. " +
             "Open the desktop app and choose Repair.",
         };
       }
       return {
         kind: "setupFailed", login: status.login, canRetry: true,
         message: status.setup_error === "setup_timeout"
-          ? "GitHub setup inside Omelet didn't finish."
-          : `GitHub setup inside Omelet failed: ${status.setup_error ?? "no reason given"}`,
+          ? "GitHub setup inside Eggie didn't finish."
+          : `GitHub setup inside Eggie failed: ${status.setup_error ?? "no reason given"}`,
       };
   }
 }
@@ -2081,7 +2081,7 @@ git commit -m "Add console GitHub queries and status mapping"
 - Modify: `screens/list/EmptyCounter.tsx`, `screens/list/ProjectList.tsx`, `shell/AccountMenu.tsx`, `mocks/handlers.ts`
 
 **Interfaces:**
-- Consumes: Task 7; `openExternal` (`desktop/desktop.ts`); `useJob` (`projects/queries.ts`); `relativeTime` (`projects/format.ts`); `Modal`, `Button`, `Notice` from `@omelet/ui`.
+- Consumes: Task 7; `openExternal` (`desktop/desktop.ts`); `useJob` (`projects/queries.ts`); `relativeTime` (`projects/format.ts`); `Modal`, `Button`, `Notice` from `@eggie/ui`.
 - Produces: `<GitHubModal open onClose />`.
 
 No component tests (spec §9): every decision lives in `view.ts`. Verification is typecheck plus clicking through the mock scenarios.
@@ -2090,7 +2090,7 @@ No component tests (spec §9): every decision lives in `view.ts`. Verification i
 
 ```tsx
 import { useState } from "react";
-import { Button, Modal } from "@omelet/ui";
+import { Button, Modal } from "@eggie/ui";
 import { openExternal } from "../../desktop/desktop";
 import { DEVICE_URL, useConnectGitHub, useGitHub, useReapplyGitHub } from "../../github/github";
 import { githubView } from "../../github/view";
@@ -2129,7 +2129,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
         body = <Code code={view.code} expiresAt={view.expiresAt} />;
         break;
       case "applying":
-        body = <p>Connected as @{view.login}. Setting up GitHub inside Omelet…</p>;
+        body = <p>Connected as @{view.login}. Setting up GitHub inside Eggie…</p>;
         break;
       case "ready":
         body = <RepoPicker login={view.login} onDone={onClose} />;
@@ -2147,7 +2147,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
       case "reconnect":
         body = (
           <>
-            <p>GitHub stopped accepting Omelet's access for @{view.login}.</p>
+            <p>GitHub stopped accepting Eggie's access for @{view.login}.</p>
             <Button variant="primary" onClick={start} disabled={connect.isPending}>Reconnect GitHub</Button>
           </>
         );
@@ -2192,7 +2192,7 @@ function Code({ code, expiresAt }: { code: string; expiresAt: number }) {
 ```tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import { useCloneRepo, useRepos } from "../../github/github";
 import { relativeTime } from "../../projects/format";
 import { useJob } from "../../projects/queries";
@@ -2304,7 +2304,7 @@ function GitHubLine() {
       <span>
         GitHub disconnected.{" "}
         <a href={REVOKE_URL} onClick={(e) => { e.preventDefault(); openExternal(REVOKE_URL); }}>
-          Remove Omelet's access on GitHub
+          Remove Eggie's access on GitHub
         </a>{" "}
         to revoke it fully.
       </span>
@@ -2437,10 +2437,10 @@ git commit -m "Add Connect GitHub modal, repo picker and entry points"
 Add a layer bullet after the `core/cloud.py / account.py / sync.py` bullet:
 
 ```markdown
-- `runtime/omelet_api/core/github.py` / `github_link.py` — Connect GitHub. The API runs GitHub's
-  Device Flow (`OMELET_GITHUB_CLIENT_ID`, no secret) and keeps the token in
-  `/opt/omelet/github/token` (0600). It never reaches a user home itself: it writes a token-free
-  `desired.json` with a rising `generation`, `omelet-github.path` runs
+- `runtime/eggie_api/core/github.py` / `github_link.py` — Connect GitHub. The API runs GitHub's
+  Device Flow (`EGGIE_GITHUB_CLIENT_ID`, no secret) and keeps the token in
+  `/opt/eggie/github/token` (0600). It never reaches a user home itself: it writes a token-free
+  `desired.json` with a rising `generation`, `eggie-github.path` runs
   `runtime/install/lib/github-apply.sh` as root, and that echoes the generation into
   `applied.json`. The UI says "ready" only when the two match; `applied.json` missing after 30 s
   means the runtime predates the feature. `POST /github/clone` passes the token to git only
@@ -2450,8 +2450,8 @@ Add a layer bullet after the `core/cloud.py / account.py / sync.py` bullet:
 Add under "Things that will bite you":
 
 ```markdown
-- `install.sh` step 4 runs `chmod -R g+rwX /opt/omelet` on every install, which widens
-  `/opt/omelet/github/token`. The modes are reasserted right after the sweep; keep that order.
+- `install.sh` step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
+  `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order.
 - Login accounts are never the API's uid 1000: WSL2 has only root, and Lima's user carries the
   macOS uid. The API writes into projects through the docker group, so anything it creates there
   needs `umask 002` (see `clone_argv`), and `/etc/gitconfig` trusts `safe.directory '*'`.
@@ -2476,7 +2476,7 @@ gh pr create --base main --title "Connect GitHub" --body-file <body>
 ```
 
 The PR body must:
-- link `https://github.com/omelet-app/omelet-resources/issues/12`;
+- link `https://github.com/eggie-io/eggie-resources/issues/12`;
 - explain where each piece lives and why (spec §2), and that no host release is needed;
 - list what was left untested: the systemd units and modal components;
 - include the live acceptance checklist from spec §10;

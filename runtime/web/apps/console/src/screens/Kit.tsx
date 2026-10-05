@@ -12,7 +12,7 @@ import {
   SyncMarker,
   TextField,
   cx,
-} from "@omelet/ui";
+} from "@eggie/ui";
 import s from "./Kit.module.css";
 
 const PROMPT = `I uploaded a database dump to data/orders-dump.sql in this
@@ -78,7 +78,7 @@ function Column({ theme }: { theme: "light" | "dark" }) {
         <div className={s.wide}><ProgressBar label="Starting" /></div>
       </Section>
       <Section title="Collapsible">
-        <Collapsible summary="What Omelet looks for">A compose file at the top of the folder.</Collapsible>
+        <Collapsible summary="What Eggie looks for">A compose file at the top of the folder.</Collapsible>
         <div className={s.wide}>
           <Collapsible boxed summary="The raw details" aside="for your coding agent, or for us">
             <code>container exited with code 1</code>

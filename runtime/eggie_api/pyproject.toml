@@ -1,0 +1,13 @@
+[project]
+name = "eggie-api"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.30", "pyyaml>=6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"eggie_api" = "."}
+packages = ["eggie_api", "eggie_api.core", "eggie_api.routes"]

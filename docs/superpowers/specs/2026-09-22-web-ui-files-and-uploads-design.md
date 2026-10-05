@@ -1,4 +1,4 @@
-# Omelet web UI — part D: files and uploads
+# Eggie web UI — part D: files and uploads
 
 Date: 2026-09-22
 Builds on: `2026-09-21-web-ui-agent-prerequisites-design.md` (§1 decisions, §5
@@ -43,7 +43,7 @@ work). No agent changes.
 - Footer line: "N things in here" and "Drag files in from your desktop, or use
   Upload to choose where they land."
 - States: empty folder shows the drag line alone; `permission_denied` (409) →
-  "Omelet can't look inside this folder — a program in the project owns it.";
+  "Eggie can't look inside this folder — a program in the project owns it.";
   `folder_not_found` (404) → replace the URL with the project's top;
   `project_not_found` → back to the list, as the project page does.
 - The "Carrying things in" panel (below) sits above the listing whenever the
@@ -81,7 +81,7 @@ work). No agent changes.
 ### Won't fit (frame 13)
 
 The destination dialog body is replaced for the file that won't fit: "This one
-won't fit — the file is 6.4 GB and Omelet has 2.1 GB of room left. Make some
+won't fit — the file is 6.4 GB and Eggie has 2.1 GB of room left. Make some
 space in the desktop app, then come back and send it up." Buttons: "Pick a
 smaller file" (reopens the picker) and "Cancel". The desktop line is text, not a
 link. With several files, the ones that fit still go; the dialog lists the ones
@@ -103,7 +103,7 @@ summary). One row per item, for this project only:
 | failed | plain reason (below) | Remove; Replace for `file_exists` |
 | done | "In data/ · 84 MB" | Show me (opens that folder) |
 
-`noRoom` also shows the frame-14 banner above the panel: "Omelet ran out of room
+`noRoom` also shows the frame-14 banner above the panel: "Eggie ran out of room
 partway through — `<name>` got 71% of the way in. What made it is safe, and it
 can carry on from there, but you'll need to free up space in the desktop app
 first." with "I've freed some up — carry on".
@@ -113,9 +113,9 @@ close this page, uploads pick up where they stopped when you're back."
 
 While an item is `going`, the page sets a `beforeunload` warning.
 
-Failed reasons: `permission_denied` → "Omelet can't write into that folder — pick
+Failed reasons: `permission_denied` → "Eggie can't write into that folder — pick
 another."; `project_not_found` → "The project is gone."; `path_is_folder` →
-"There's a folder with that name already."; `upload_not_found` twice → "Omelet
+"There's a folder with that name already."; `upload_not_found` twice → "Eggie
 lost this upload — send it again."; anything else → the agent's message.
 
 ### Done with a prompt (frame 10)

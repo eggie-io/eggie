@@ -20,7 +20,7 @@ def _run_off_main(callback: Callable[[], None]) -> None:
         except Exception as e:
             print(f"tray callback failed: {e!r}", file=sys.stderr)
 
-    threading.Thread(target=run, daemon=True, name="omelet-tray-action").start()
+    threading.Thread(target=run, daemon=True, name="eggie-tray-action").start()
 
 
 _target_class = None
@@ -33,7 +33,7 @@ def _menu_target_class():
         import objc
         from Foundation import NSObject
 
-        class OmeletTrayTarget(NSObject):
+        class EggieTrayTarget(NSObject):
             @objc.signature(b"v@:@")
             def open_(self, sender):
                 _run_off_main(self.on_open)
@@ -46,7 +46,7 @@ def _menu_target_class():
             def quit_(self, sender):
                 _run_off_main(self.on_quit)
 
-        _target_class = OmeletTrayTarget
+        _target_class = EggieTrayTarget
     return _target_class
 
 
@@ -71,8 +71,8 @@ class MacTray:
         self._target.on_quit = self._on_quit
 
         menu = NSMenu.alloc().init()
-        for title, action in (("Open Omelet", b"open:"), ("Settings", b"settings:"),
-                              (None, None), ("Quit Omelet", b"quit:")):
+        for title, action in (("Open Eggie", b"open:"), ("Settings", b"settings:"),
+                              (None, None), ("Quit Eggie", b"quit:")):
             if title is None:
                 menu.addItem_(NSMenuItem.separatorItem())
                 continue
@@ -85,7 +85,7 @@ class MacTray:
         self._retarget_cmd_q()
         image = NSImage.alloc().initWithContentsOfFile_(str(self._icon_path))
         if image is None:
-            self._item.button().setTitle_("Omelet")
+            self._item.button().setTitle_("Eggie")
             return
         image.setSize_((18, 18))
         self._item.button().setImage_(image)
@@ -93,7 +93,7 @@ class MacTray:
     def _retarget_cmd_q(self) -> None:
         # pywebview's Quit item calls terminate:, which runs every window's
         # closing handler -- and ours turns a close into a hide. Cmd+Q must
-        # mean Quit Omelet instead.
+        # mean Quit Eggie instead.
         from AppKit import NSApplication
         main_menu = NSApplication.sharedApplication().mainMenu()
         if main_menu is None:
@@ -119,7 +119,7 @@ class MacTray:
         # pywebview's terminate handler runs the windows' closing handlers,
         # and ours refuses (close means hide). Dock Quit, logout and restart
         # must go through, and they end the VM at OS level, so they exit
-        # without stopping it here. Cmd+Q is retargeted to Quit Omelet.
+        # without stopping it here. Cmd+Q is retargeted to Quit Eggie.
         @objc.signature(b"Q@:@")
         def applicationShouldTerminate_(self, app):
             return 1  # NSTerminateNow

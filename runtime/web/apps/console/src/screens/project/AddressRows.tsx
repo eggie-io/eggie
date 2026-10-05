@@ -1,4 +1,4 @@
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { CopyButton } from "../../components/CopyButton";
 import { hostOf } from "../../projects/format";
 import type { PublicUrl, WebEntry } from "../../projects/types";

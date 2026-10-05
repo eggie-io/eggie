@@ -2,10 +2,10 @@ import ipaddress
 
 import pytest
 
-from omelet_api.core import health
-from omelet_api.core.detect import WebSpec
-from omelet_api.core.exec import Completed
-from omelet_api.core.project import Project
+from eggie_api.core import health
+from eggie_api.core.detect import WebSpec
+from eggie_api.core.exec import Completed
+from eggie_api.core.project import Project
 
 # Real `cat /proc/net/tcp` output, trimmed: the header line every reader has to
 # skip, then one LISTEN row (st 0A). Port 80 is 0x0050.
@@ -241,7 +241,7 @@ def test_an_ipv6_service_on_all_interfaces_is_not_read_as_loopback():
 
 def test_answers_asks_once_and_never_waits_out_a_window():
     # This one runs inside a read the CLI is blocked on; a retry window here
-    # would make every `omelet status` on a broken project take 30 seconds.
+    # would make every `eggie status` on a broken project take 30 seconds.
     probe = Probe(502)
     assert health.answers(PROJECT, "test.local", edge_port=41080,
                           http_probe=probe) is False

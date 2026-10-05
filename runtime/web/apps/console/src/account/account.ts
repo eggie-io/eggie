@@ -9,7 +9,7 @@ export type Account =
       sync: { last_ok_at: number | null; last_error: string | null };
     };
 
-// The link comes from the Omelet service; anything but https is refused, never repaired.
+// The link comes from the Eggie service; anything but https is refused, never repaired.
 export function signInLink(url: string): string | null {
   try {
     return new URL(url).protocol === "https:" ? url : null;
@@ -22,7 +22,7 @@ const REASONS: Record<string, string> = {
   access_denied: "The sign-in was turned down.",
   expired_token: "That code ran out before it was approved.",
   invalid_grant: "That code is no longer valid.",
-  revoked: "This computer was signed out of your Omelet account.",
+  revoked: "This computer was signed out of your Eggie account.",
 };
 
 export function signInError(code: string | null): string | null {
@@ -42,7 +42,7 @@ export function startError(error: unknown): StartOutcome {
   if (error instanceof ApiError && error.code === "cloud_unavailable") {
     return {
       kind: "unreachable",
-      message: "The Omelet service can't be reached right now. Check the internet connection.",
+      message: "The Eggie service can't be reached right now. Check the internet connection.",
     };
   }
   if (error instanceof ApiError) {

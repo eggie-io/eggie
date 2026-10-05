@@ -22,7 +22,7 @@
       "steps": [
         {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
         {"title": "Run it in WSL", "body": "In Codex's settings, choose to run the agent in WSL.", "alt": "Screenshot · Codex settings with WSL"},
-        {"title": "Pick omelet-vm", "body": "Choose the omelet-vm machine.", "alt": "Screenshot · WSL machine list with omelet-vm"},
+        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine.", "alt": "Screenshot · WSL machine list with eggie-vm"},
         {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
       ]
     }

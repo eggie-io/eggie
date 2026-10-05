@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds the two images a VM runs from runtime/stack.yml: omelet-api and
-# omelet-web. They release as a pair under the runtime tag's number, which is
+# Builds the two images a VM runs from runtime/stack.yml: eggie-api and
+# eggie-web. They release as a pair under the runtime tag's number, which is
 # the only place that number lives; .github/workflows/release-runtime.yml
 # passes it here.
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-registry="ghcr.io/omelet-app"
+registry="ghcr.io/eggie-io"
 platforms="linux/amd64,linux/arm64"
 
 usage() {
@@ -64,8 +64,8 @@ build() {
   fi
 }
 
-[[ "$only" == web ]] || build omelet-api "$repo/runtime/omelet_api" --build-arg "SERVICE_VERSION=$version"
-[[ "$only" == api ]] || build omelet-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures" --build-context "agents=$repo/runtime/agents"
+[[ "$only" == web ]] || build eggie-api "$repo/runtime/eggie_api" --build-arg "SERVICE_VERSION=$version"
+[[ "$only" == api ]] || build eggie-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures" --build-context "agents=$repo/runtime/agents"
 
 if (( push )); then
   echo

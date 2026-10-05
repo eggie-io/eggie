@@ -24,7 +24,7 @@ _RELEASE = ("https://github.com/lima-vm/lima/releases/download/"
 #
 # These are the main tarballs, which carry the guest agent for the host's own
 # architecture. lima-additional-guestagents-* exists for running a guest of a
-# different architecture and is deliberately not fetched: omelet.yaml asks for
+# different architecture and is deliberately not fetched: eggie.yaml asks for
 # a native-arch Ubuntu, and the extra download is 38 MB nobody would use.
 ARCHIVES: dict[str, Image] = {
     "arm64": Image(_RELEASE % "arm64",
@@ -127,7 +127,7 @@ def _extract(archive: Path, into: Path) -> None:
         for member in tar.getmembers():
             # `filter="data"` below rejects a `..` escape and a link out of the
             # tree, but silently *normalizes* an absolute name rather than
-            # refusing it -- the same finding as omelet_api/core/files.py. Refusing
+            # refusing it -- the same finding as eggie_api/core/files.py. Refusing
             # it here is the check that is actually missing.
             if member.name.startswith("/") or Path(member.name).is_absolute():
                 raise LimaInstallError(

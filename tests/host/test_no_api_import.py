@@ -26,6 +26,6 @@ def test_host_never_imports_from_the_api():
     assert scanned, f"scanned nothing under {HOST}"
     for py in scanned:
         for lineno, module in _imported_modules(ast.parse(py.read_text())):
-            if module == "omelet_api" or module.startswith("omelet_api."):
+            if module == "eggie_api" or module.startswith("eggie_api."):
                 offenders.append(f"{py}:{lineno} imports {module}")
     assert not offenders, f"host/ imported API code: {offenders}"

@@ -194,7 +194,7 @@ def test_the_progress_bar_tracks_completed_steps_not_the_download():
     the download step, so the bar sat full through the several minutes after
     it. Assert the specific expression, not tokens that predate the fix."""
     js = (UI / "app.js").read_text()
-    assert "window.omelet.done / window.omelet.total" in js, \
+    assert "window.eggie.done / window.eggie.total" in js, \
         "the overall bar must be driven by completed steps"
 
 
@@ -326,7 +326,7 @@ def test_every_home_state_can_open_settings():
 def test_the_page_answers_the_routes_the_tray_sends():
     # controller.open_route() sends exactly these names, by call or by #fragment.
     script = (UI / "app.js").read_text()
-    assert "window.omelet.route =" in script
+    assert "window.eggie.route =" in script
     routes = script[script.index("const ROUTES"):].split("};")[0]
     for route in ("settings", "quit"):
         assert f"'{route}'" in routes, f"ROUTES does not handle {route}"
@@ -336,7 +336,7 @@ def test_the_page_handles_the_events_the_controller_pushes():
     from host.desktop.controller import BACKGROUND_DONE, WINDOW_SHOWN
     script = (UI / "app.js").read_text()
     for event in (BACKGROUND_DONE, WINDOW_SHOWN):
-        assert f"window.omelet.handlers.{event['kind']} =" in script, event
+        assert f"window.eggie.handlers.{event['kind']} =" in script, event
 
 
 

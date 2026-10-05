@@ -1,10 +1,10 @@
 """The host and the API service each own a constants module (a hard invariant
-forbids `host/` importing `omelet_api/`), so a handful of names are declared
+forbids `host/` importing `eggie_api/`), so a handful of names are declared
 twice. Nothing stops the two copies drifting except this test: a guest path or
 port that disagrees across the seam produces a VM the host cannot talk to,
 with no error naming the cause.
 """
-from omelet_api.core import constants as api_constants
+from eggie_api.core import constants as api_constants
 from host.core import constants as host_constants
 
 
@@ -27,7 +27,7 @@ def test_the_runtime_entrypoint_constants_live_only_on_the_host():
     # The API has no use for either, and must not become a second source of
     # truth for where the runtime comes from.
     for name in ("RUNTIME_URL", "RUNTIME_MARKER"):
-        assert not hasattr(api_constants, name), f"{name} must not live in omelet_api/core/constants.py"
+        assert not hasattr(api_constants, name), f"{name} must not live in eggie_api/core/constants.py"
         assert hasattr(host_constants, name), f"{name} must live in host/core/constants.py"
 
 
@@ -45,7 +45,7 @@ def test_the_readiness_window_is_the_same_on_both_sides_of_the_seam():
     # Traefik publishing a router a beat after the container starts -- so an
     # api service with the shorter window would diagnose a fault the host's
     # own check waits out.
-    from omelet_api.core.health import READY_TIMEOUT as api_timeout
+    from eggie_api.core.health import READY_TIMEOUT as api_timeout
     from host.core.install import READY_TIMEOUT as host_timeout
 
     assert host_timeout == api_timeout
@@ -95,7 +95,7 @@ def test_the_ssh_port_the_console_shows_is_the_one_lima_is_asked_for():
     import yaml
     from pathlib import Path
     declared = yaml.safe_load(
-        (Path(__file__).resolve().parents[1] / "host" / "providers" / "omelet.yaml").read_text())
+        (Path(__file__).resolve().parents[1] / "host" / "providers" / "eggie.yaml").read_text())
     assert api_constants.LIMA_SSH_PORT == declared["ssh"]["localPort"]
 
 

@@ -7,7 +7,7 @@ from host.core.status import Readiness
 from host.desktop.api import DesktopApi
 from host.desktop.settings import Settings
 
-EXE = r"C:\Omelet\setup.exe"
+EXE = r"C:\Eggie\setup.exe"
 
 
 class FakeProvider:
@@ -43,7 +43,7 @@ def test_settings_read_the_real_state(tmp_path):
     provider = FakeProvider()
     api = _api(tmp_path, provider)
     assert api.get_settings() == {"autostart": False, "autostart_available": True}
-    provider.autostart[EXE] = True     # turned on outside Omelet
+    provider.autostart[EXE] = True     # turned on outside Eggie
     assert api.get_settings()["autostart"] is True
 
 
@@ -56,9 +56,9 @@ def test_a_source_checkout_cannot_register_itself(tmp_path):
 def test_set_autostart_reports_a_refusal_as_text(tmp_path):
     class Refusing(FakeProvider):
         def set_autostart(self, on, exe):
-            raise RuntimeError("macOS refused to add Omelet to Login Items")
+            raise RuntimeError("macOS refused to add Eggie to Login Items")
     result = _api(tmp_path, Refusing()).set_autostart(True)
-    assert result == {"ok": False, "error": "macOS refused to add Omelet to Login Items"}
+    assert result == {"ok": False, "error": "macOS refused to add Eggie to Login Items"}
 
 
 def test_the_first_successful_install_turns_autostart_on(tmp_path):

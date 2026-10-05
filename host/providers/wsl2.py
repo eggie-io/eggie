@@ -18,10 +18,10 @@ RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # switch here: first byte 0x03 = disabled; missing or anything else = enabled.
 STARTUP_APPROVED_KEY = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
 _STARTUP_DISABLED = 0x03
-AUTOSTART_VALUE_NAME = "Omelet"
+AUTOSTART_VALUE_NAME = "Eggie"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
 POWEROFF_WAIT = 30.0
-_RESUME_VALUE_NAME = "OmeletSetup"
+_RESUME_VALUE_NAME = "EggieSetup"
 
 # The user clicked No on the UAC prompt (ERROR_CANCELLED).
 ELEVATION_DECLINED = 1223
@@ -37,7 +37,7 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 # WSL terminates a distro seconds after its last attached wsl.exe exits, even
 # with systemd and Docker running inside. This session is that attached
 # process; its argv[0] is how start() finds one already holding the VM.
-HOLD_NAME = "omelet-hold"
+HOLD_NAME = "eggie-hold"
 
 # WSAETIMEDOUT from WSL's service: the utility VM behind every distro stopped
 # answering. `wsl -l --running` still lists the distro; `wsl --shutdown` clears it.
@@ -210,9 +210,9 @@ def run_value(exe_path: str) -> str:
 
 
 def _gui_exe(exe_path: str) -> str:
-    # omelet.exe is the console build; at login it would flash a window.
+    # eggie.exe is the console build; at login it would flash a window.
     path = Path(exe_path)
-    if path.name.lower() == "omelet.exe":
+    if path.name.lower() == "eggie.exe":
         sibling = path.with_name("setup.exe")
         if sibling.exists():
             return str(sibling)
@@ -225,7 +225,7 @@ def _default_arch() -> str:
 
 
 class Wsl2Provider:
-    def __init__(self, distro="omelet-vm", install_dir: Path | None = None,
+    def __init__(self, distro="eggie-vm", install_dir: Path | None = None,
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=_default_registry_writer, arch=None,
@@ -270,7 +270,7 @@ class Wsl2Provider:
     @staticmethod
     def _require(result: Completed, what: str) -> Completed:
         """`exec()` and `_meta()` return a `Completed` and never raise, so a
-        dropped result is a silent success: `omelet vm start` printed "VM
+        dropped result is a silent success: `eggie vm start` printed "VM
         started." for a distro that does not exist, and an unchecked wsl.conf
         write surfaced minutes later as `systemctl enable --now docker`
         failing for no visible reason."""
@@ -466,7 +466,7 @@ class Wsl2Provider:
         return Access(
             headline="Connect a coding agent",
             summary=("Your coding agent runs inside the virtual machine, where "
-                     "Docker and the omelet command already are. Open a shell "
+                     "Docker and the eggie command already are. Open a shell "
                      "there with the command below."),
             command=f"wsl -d {self.distro} --cd ~",
             fields=(
@@ -497,8 +497,8 @@ class Wsl2Provider:
         except Exception:
             user = "user"
         # Pipe names are machine-wide: without the user name, another user's
-        # Omelet would answer and show its window instead.
-        address = rf"\\.\pipe\omelet-{user}"
+        # Eggie would answer and show its window instead.
+        address = rf"\\.\pipe\eggie-{user}"
         return instance.claim(address, "AF_PIPE", on_show, announce=announce,
                               before_show=_allow_any_foreground)
 
@@ -534,7 +534,7 @@ class Wsl2Provider:
         self._run(["shutdown", "/r", "/t", "0"])
 
     def installer_asset(self, version: str) -> str:
-        return f"OmeletSetup-{version}.exe"
+        return f"EggieSetup-{version}.exe"
 
     def launch_installer(self, path: Path) -> None:
         # The installer closes this app itself and relaunches it when done

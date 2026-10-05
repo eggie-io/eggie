@@ -16,9 +16,9 @@
 - No `sys.platform` / `platform.system()` / `os.name` outside `host/providers/` (`tests/test_no_platform_leak.py`).
 - Every non-2xx body is `{"error": {"code": ..., "message": ...}}`; extra fields may sit inside `error`.
 - `API_VERSION` stays `1`; every change adds a route or a field. `DELETE /projects/{id}` keeps its synchronous `{id, stopped, detail}` response.
-- Cookie: name `omelet_session`, `HttpOnly`, `SameSite=Strict`, `Path=/api`, no `Secure`. Session lifetime 7 days, sliding. Handoff code lifetime 60 s, single use, memory only.
+- Cookie: name `eggie_session`, `HttpOnly`, `SameSite=Strict`, `Path=/api`, no `Secure`. Session lifetime 7 days, sliding. Handoff code lifetime 60 s, single use, memory only.
 - Allowed hosts: `localhost:<edge_port>`, `127.0.0.1:<edge_port>`; allowed origins: `http://` + each.
-- Upload chunk size 8 MiB; free-space reserve 1 GiB; abandoned uploads swept after 7 days; staging root `/opt/omelet/uploads`.
+- Upload chunk size 8 MiB; free-space reserve 1 GiB; abandoned uploads swept after 7 days; staging root `/opt/eggie/uploads`.
 - Python conventions: `from __future__ import annotations`, frozen dataclasses for value types, comments only for non-obvious edge cases.
 - Tests follow the user's rules: each test names the bug it catches; no tests of framework behaviour.
 - Run tests with `TMPDIR=$PWD/.tmp python3 -m pytest -q` (the sandbox's `/tmp/pytest-of-$USER` is root-owned). Create `.tmp` once: `mkdir -p .tmp`.
@@ -39,7 +39,7 @@
 | `agent/core/files.py` (modify) | One-level directory listing, tree stats |
 | `agent/core/config.py` (modify) | `uploads_root` |
 | `host/client.py` (modify) | `handoff_code()` |
-| `host/desktop/api.py` (modify) | `open_omelet` uses the handoff |
+| `host/desktop/api.py` (modify) | `open_eggie` uses the handoff |
 | `engine/stack.yml` (modify) | Agent Traefik labels for `/api`; image tag |
 | `agent/__init__.py`, `agent/Dockerfile` (modify) | Version 0.2.0 |
 | `tests/agent/test_api_browser_auth.py` (create) | Allowlist and mount separation |
@@ -199,12 +199,12 @@ Middleware block (replaces the existing `@app.middleware("http")` function; keep
     def _browser_refusal(request: Request) -> JSONResponse | None:
         if request.headers.get("host", "") not in allowed_hosts:
             return _body("forbidden_host",
-                         "this address is not where Omelet's page lives", 403)
+                         "this address is not where Eggie's page lives", 403)
         if (request.method not in ("GET", "HEAD")
                 and request.headers.get("origin", "") not in allowed_origins):
             return _body("forbidden_origin",
                          "requests that change something must come from "
-                         "Omelet's own page", 403)
+                         "Eggie's own page", 403)
         return None
 
     @app.middleware("http")
@@ -216,7 +216,7 @@ Middleware block (replaces the existing `@app.middleware("http")` function; keep
                 return refusal
             if path in open_browser_paths:
                 return await call_next(request)
-            return _body("not_signed_in", "open Omelet from the desktop app "
+            return _body("not_signed_in", "open Eggie from the desktop app "
                          "to sign in", 401)
         if path == "/health":
             return await call_next(request)
@@ -253,7 +253,7 @@ git commit -m "Mount the agent API a second time under /api behind a host and or
 **Interfaces:**
 - Consumes: Task 1's middleware and `open_browser_paths`.
 - Produces:
-  - `agent.core.sessions.Sessions(state, *, clock=time.time)` with `issue_handoff() -> str`, `redeem(code: str) -> str | None` (new session id), `check(session_id: str | None) -> str` returning `"ok" | "expired" | "missing"` (slides expiry on `"ok"`), `end(session_id: str | None) -> None`. Constants `COOKIE = "omelet_session"`, `SESSION_TTL = 7 * 24 * 3600`, `HANDOFF_TTL = 60`.
+  - `agent.core.sessions.Sessions(state, *, clock=time.time)` with `issue_handoff() -> str`, `redeem(code: str) -> str | None` (new session id), `check(session_id: str | None) -> str` returning `"ok" | "expired" | "missing"` (slides expiry on `"ok"`), `end(session_id: str | None) -> None`. Constants `COOKIE = "eggie_session"`, `SESSION_TTL = 7 * 24 * 3600`, `HANDOFF_TTL = 60`.
   - `State.add_session(id_hash, expires_at)`, `State.get_session(id_hash) -> dict | None`, `State.set_session_expiry(id_hash, expires_at)`, `State.remove_session(id_hash)`.
   - Migration v3 also adds `projects.last_started_at REAL` and `projects.compose_name TEXT` (used in Task 5).
   - Routes: `POST /sessions/handoff` (bearer only) → `{"code", "expires_in"}`; `POST /api/session` `{code}` → 200 `{"signed_in": true}` + cookie, or 401 `handoff_invalid`; `GET /api/session` → 200 `{"signed_in": true}` or 401 `not_signed_in` / `session_expired`; `DELETE /api/session` → 200 `{"signed_in": false}` and clears the cookie.
@@ -441,7 +441,7 @@ import secrets
 import threading
 import time
 
-COOKIE = "omelet_session"
+COOKIE = "eggie_session"
 SESSION_TTL = 7 * 24 * 3600
 HANDOFF_TTL = 60
 
@@ -510,8 +510,8 @@ In `agent/api/app.py`:
                 return await call_next(request)
             if verdict == "expired":
                 return _body("session_expired", "your sign-in ran out; open "
-                             "Omelet from the desktop app again", 401)
-            return _body("not_signed_in", "open Omelet from the desktop app "
+                             "Eggie from the desktop app again", 401)
+            return _body("not_signed_in", "open Eggie from the desktop app "
                          "to sign in", 401)
 ```
 
@@ -530,7 +530,7 @@ In `agent/api/app.py`:
         session_id = sessions.redeem(body.code)
         if session_id is None:
             raise ApiError("handoff_invalid", "that sign-in link has already "
-                           "been used or has run out; open Omelet from the "
+                           "been used or has run out; open Eggie from the "
                            "desktop app again", 401)
         response.set_cookie(COOKIE, session_id, max_age=SESSION_TTL,
                             httponly=True, samesite="strict", path="/api")
@@ -566,7 +566,7 @@ git commit -m "Sign the browser in with a one-time handoff code and a session co
 
 ---
 
-### Task 3: The desktop's "Open Omelet" hands a session over
+### Task 3: The desktop's "Open Eggie" hands a session over
 
 **Files:**
 - Modify: `host/client.py`, `host/desktop/api.py`
@@ -574,7 +574,7 @@ git commit -m "Sign the browser in with a one-time handoff code and a session co
 
 **Interfaces:**
 - Consumes: `POST /sessions/handoff` → `{"code": str, "expires_in": int}`.
-- Produces: `AgentClient.handoff_code() -> str`. `DesktopApi.open_omelet()` opens `http://localhost:<EDGE_PORT>/#handoff=<code>`, or the bare URL when no code could be had.
+- Produces: `AgentClient.handoff_code() -> str`. `DesktopApi.open_eggie()` opens `http://localhost:<EDGE_PORT>/#handoff=<code>`, or the bare URL when no code could be had.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -599,21 +599,21 @@ def _api_with_client(tmp_path, client, opened):
                       client_factory=lambda provider: client)
 
 
-def test_open_omelet_carries_a_handoff_code_in_the_fragment(tmp_path):
+def test_open_eggie_carries_a_handoff_code_in_the_fragment(tmp_path):
     from host.core import constants
     opened = []
-    _api_with_client(tmp_path, _HandoffClient(code="abc"), opened).open_omelet()
+    _api_with_client(tmp_path, _HandoffClient(code="abc"), opened).open_eggie()
     assert opened == [f"http://localhost:{constants.EDGE_PORT}/#handoff=abc"]
 
 
-def test_open_omelet_still_opens_the_page_on_an_agent_without_handoff(tmp_path):
+def test_open_eggie_still_opens_the_page_on_an_agent_without_handoff(tmp_path):
     # An agent older than the route answers 404; the page must still open and
     # show its own sign-in screen.
     from host.client import AgentError
     from host.core import constants
     opened = []
     client = _HandoffClient(error=AgentError("not_found", "no route", 404))
-    _api_with_client(tmp_path, client, opened).open_omelet()
+    _api_with_client(tmp_path, client, opened).open_eggie()
     assert opened == [f"http://localhost:{constants.EDGE_PORT}"]
 ```
 
@@ -631,10 +631,10 @@ In `host/client.py`, in the routes section after `version`:
         return str(self._call("POST", "/sessions/handoff")["code"])
 ```
 
-In `host/desktop/api.py`, replace `open_omelet`:
+In `host/desktop/api.py`, replace `open_eggie`:
 
 ```python
-    def open_omelet(self) -> dict:
+    def open_eggie(self) -> dict:
         # The edge port, never the agent port: the page and its /api live
         # behind Traefik.
         url = f"http://localhost:{constants.EDGE_PORT}"
@@ -652,13 +652,13 @@ In `host/desktop/api.py`, replace `open_omelet`:
 - [ ] **Step 4: Run tests**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/host -q`
-Expected: PASS, including the existing `test_open_omelet_opens_the_edge_port_not_the_agent_port` (its `FakeProvider` makes the default client factory fail, so it gets the bare URL).
+Expected: PASS, including the existing `test_open_eggie_opens_the_edge_port_not_the_agent_port` (its `FakeProvider` makes the default client factory fail, so it gets the bare URL).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add host/client.py host/desktop/api.py tests/host/desktop/test_api_home.py
-git commit -m "Hand the browser a sign-in code when the desktop opens Omelet"
+git commit -m "Hand the browser a sign-in code when the desktop opens Eggie"
 ```
 
 ---
@@ -821,7 +821,7 @@ def discover(root: Path, known: set[str]) -> list[Discovered]:
 ```python
     @router.get("/projects")
     def list_projects() -> dict:
-        # `omelet status` is the surface users actually read, so a stale
+        # `eggie status` is the surface users actually read, so a stale
         # diagnosis has to clear here too. payload() only probes a row that
         # carries a stored problem -- normally none -- so an ordinary listing
         # still pays no round trips at all.
@@ -1206,7 +1206,7 @@ def test_remove_tree_falls_back_to_root_for_files_a_container_owns(tmp_path):
         def exec(self, argv, *, root=False):
             self.calls.append(argv)
             if argv[:2] == [lifecycle.DOCKER, "inspect"]:
-                return Completed(0, "ghcr.io/x/omelet-agent:9\n", "")
+                return Completed(0, "ghcr.io/x/eggie-agent:9\n", "")
             return Completed(0, "", "")
 
     runner = Runner()
@@ -1434,7 +1434,7 @@ def is_disk_full(exc: BaseException) -> bool:
 
 ```python
     def _disk_full() -> ApiError:
-        return ApiError("disk_full", "Omelet's disk is full. Free up space in "
+        return ApiError("disk_full", "Eggie's disk is full. Free up space in "
                         "the desktop app, then try again.", 507)
 ```
 
@@ -1687,7 +1687,7 @@ class UploadStore:
         free = self._free_bytes()
         if size + RESERVE > free:
             raise UploadError("not_enough_space",
-                              "this file is bigger than the room Omelet has left",
+                              "this file is bigger than the room Eggie has left",
                               507, free_bytes=free)
         upload_id = secrets.token_hex(16)
         folder = self._root / upload_id
@@ -1722,7 +1722,7 @@ class UploadStore:
             # offset the client was told, not from wherever the write died.
             os.truncate(target, offset)
             if is_disk_full(e):
-                raise UploadError("disk_full", "Omelet ran out of room", 507,
+                raise UploadError("disk_full", "Eggie ran out of room", 507,
                                   offset=offset) from e
             raise
         return self._load(folder)
@@ -1765,7 +1765,7 @@ class UploadStore:
             shutil.rmtree(self._root / up.id, ignore_errors=True)
 ```
 
-Note: `os.replace` across `uploads/` and `projects/` is atomic because both sit under `/opt/omelet` on one filesystem; `finish` raises `OSError` (`EXDEV`) otherwise, which the route reports as an internal error. In production both are the same mount.
+Note: `os.replace` across `uploads/` and `projects/` is atomic because both sit under `/opt/eggie` on one filesystem; `finish` raises `OSError` (`EXDEV`) otherwise, which the route reports as an internal error. In production both are the same mount.
 
 - [ ] **Step 4: Run tests**
 
@@ -1791,8 +1791,8 @@ git commit -m "Add a resumable upload store whose offset is the bytes on disk"
 **Interfaces:**
 - Consumes: `UploadStore`, `UploadError`, `CHUNK_SIZE` (Task 8), `disk.usage` (Task 7), `locks`, `resolve_path`, `require_row`.
 - Produces:
-  - `AgentConfig.uploads_root: Path = Path(f"{constants.GUEST_ROOT}/uploads")`, env `OMELET_UPLOADS_ROOT`.
-  - `files.list_dir(root: Path, rel: str) -> list[dict]` → `[{"name", "kind": "folder"|"file", "size": int|None, "items": int|None, "modified": float}]`, folders first then by name, `.omelet` hidden. Raises `PathTraversalError` on escape, `FileNotFoundError` when not a folder.
+  - `AgentConfig.uploads_root: Path = Path(f"{constants.GUEST_ROOT}/uploads")`, env `EGGIE_UPLOADS_ROOT`.
+  - `files.list_dir(root: Path, rel: str) -> list[dict]` → `[{"name", "kind": "folder"|"file", "size": int|None, "items": int|None, "modified": float}]`, folders first then by name, `.eggie` hidden. Raises `PathTraversalError` on escape, `FileNotFoundError` when not a folder.
   - Routes: `POST /projects/{id}/uploads`, `GET /projects/{id}/uploads`, `GET /uploads/{uid}`, `PATCH /uploads/{uid}`, `DELETE /uploads/{uid}`; `GET /projects/{id}/files?dir=` one level; `GET /projects/{id}/files/{path}` sends `Content-Disposition: attachment`.
   - `UploadError` bodies: `{"error": {"code", "message", **extra}}`.
   - `DELETE /projects/{id}?purge=true` also drops the project's pending uploads.
@@ -1878,7 +1878,7 @@ def test_one_folder_level_is_listed_with_counts(blog):
     root = blog.config.projects_root / "blog"
     (root / "data").mkdir(parents=True)
     (root / "data" / "x.csv").write_bytes(b"12345")
-    (root / ".omelet").mkdir()
+    (root / ".eggie").mkdir()
     (root / "README.md").write_text("hi")
     entries = blog.client.get("/projects/blog/files", params={"dir": ""}).json()["entries"]
     assert [(e["name"], e["kind"], e["items"], e["size"]) for e in entries] == [
@@ -1908,14 +1908,14 @@ In `AgentConfig`, after `token_path`:
     uploads_root: Path = Path(f"{constants.GUEST_ROOT}/uploads")
 ```
 
-and in `from_env`: `uploads_root=Path(env.get("OMELET_UPLOADS_ROOT", f"{constants.GUEST_ROOT}/uploads")),`.
+and in `from_env`: `uploads_root=Path(env.get("EGGIE_UPLOADS_ROOT", f"{constants.GUEST_ROOT}/uploads")),`.
 
 In `tests/agent/conftest.py`'s `env` fixture config add `uploads_root=tmp_path / "uploads",`.
 
 - [ ] **Step 4: `files.list_dir`**
 
 ```python
-_HIDDEN = {".omelet"}
+_HIDDEN = {".eggie"}
 
 
 def list_dir(root: Path, rel: str) -> list[dict]:
@@ -2075,13 +2075,13 @@ git commit -m "Add resumable upload routes, one-level listings and attachment do
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: agent image tag `0.2.0` in `stack.yml`; Traefik router `omelet-api` for `/api` on the page's host.
+- Produces: agent image tag `0.2.0` in `stack.yml`; Traefik router `eggie-api` for `/api` on the page's host.
 
 - [ ] **Step 1: Bump the version in all three places**
 
 - `agent/__init__.py`: `__version__ = "0.2.0"`
 - `agent/Dockerfile`: `ARG AGENT_VERSION=0.2.0`
-- `engine/stack.yml`: `image: ${OMELET_AGENT_IMAGE:-ghcr.io/omelet-app/omelet-agent:0.2.0}`
+- `engine/stack.yml`: `image: ${EGGIE_AGENT_IMAGE:-ghcr.io/eggie-io/eggie-agent:0.2.0}`
 
 - [ ] **Step 2: Add the agent's Traefik labels and the uploads root**
 
@@ -2093,13 +2093,13 @@ Under the `agent:` service in `engine/stack.yml`, after `networks:`:
     # page's catch-all route; project hosts never match these two names.
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.omelet-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
-      - "traefik.http.routers.omelet-api.entrypoints=web"
-      - "traefik.http.routers.omelet-api.priority=1000"
-      - "traefik.http.services.omelet-api.loadbalancer.server.port=${OMELET_AGENT_PORT:-39099}"
+      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.eggie-api.entrypoints=web"
+      - "traefik.http.routers.eggie-api.priority=1000"
+      - "traefik.http.services.eggie-api.loadbalancer.server.port=${EGGIE_AGENT_PORT:-39099}"
 ```
 
-No new environment entry is needed: `uploads_root` defaults under `/opt/omelet`, which is already bind-mounted at the identical path.
+No new environment entry is needed: `uploads_root` defaults under `/opt/eggie`, which is already bind-mounted at the identical path.
 
 - [ ] **Step 3: Run the constants and engine tests**
 
@@ -2112,7 +2112,7 @@ In the `agent/api/` bullet, after "produced by one exception handler.", add:
 
 ```markdown
   Every route is on one `APIRouter` mounted twice: at `/` behind the bearer token
-  (host, in-VM CLI) and at `/api` behind the `omelet_session` cookie plus a
+  (host, in-VM CLI) and at `/api` behind the `eggie_session` cookie plus a
   `Host`/`Origin` allowlist (the browser UI, reached through Traefik on the edge
   port). The desktop gets the browser a session through `POST /sessions/handoff`;
   see `docs/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`.
@@ -2121,7 +2121,7 @@ In the `agent/api/` bullet, after "produced by one exception handler.", add:
 And a new layer bullet after `agent/core/files.py`:
 
 ```markdown
-- `agent/core/uploads.py` — resumable chunked uploads staged in `/opt/omelet/uploads`,
+- `agent/core/uploads.py` — resumable chunked uploads staged in `/opt/eggie/uploads`,
   outside `projects_root`; the staged file's size is the offset.
   `agent/core/reconcile.py` lists project folders with no state row (made by a
   coding agent) for the UI's adopt flow.

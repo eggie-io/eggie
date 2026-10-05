@@ -1,7 +1,7 @@
 """The wiring of the real step list — the seam where findings survived review.
 
 Every other install test builds its own toy steps, so nothing exercised the
-list `omelet setup` actually runs.
+list `eggie setup` actually runs.
 """
 import pytest
 
@@ -13,7 +13,7 @@ IMAGE = Image("https://example.invalid/ubuntu-24.04.4-wsl-amd64.wsl", "0" * 64)
 
 
 class FakeProvider:
-    location = r"C:\Users\you\AppData\Local\Omelet\vm"
+    location = r"C:\Users\you\AppData\Local\Eggie\vm"
     terminal = "PowerShell"
     remediable = True
     runtime_value = None
@@ -50,7 +50,7 @@ class SelfImagingProvider(FakeProvider):
     guest image -- Lima. The install list must not contain the steps that would
     do either, rather than showing steps that quietly do nothing."""
 
-    location = "/Users/you/.lima/omelet-vm"
+    location = "/Users/you/.lima/eggie-vm"
     terminal = "Terminal"
     remediable = False
 
@@ -63,7 +63,7 @@ def build(provider, tmp_path, **overrides):
         cache_dir=tmp_path / "cache",
         template_dir=tmp_path / "template",
         domain="127-0-0-1.sslip.io",
-        exe_path=r"C:\Apps\Omelet\setup.exe",
+        exe_path=r"C:\Apps\Eggie\setup.exe",
     )
     return default_steps(provider, **{**kwargs, **overrides})
 
@@ -143,7 +143,7 @@ def test_finish_names_the_install_location_and_the_next_command(tmp_path):
                   "connect": lambda: None, "verify": lambda: None})
     finish = next(e for e in events if e.step == "finish" and e.status == "done")
     assert provider.location in finish.message
-    assert "omelet up" in finish.message
+    assert "eggie up" in finish.message
     assert "succe" in finish.message.lower()
 
 
@@ -157,15 +157,15 @@ def test_finish_names_the_place_the_vm_really_is_and_this_platform_s_terminal(tm
                  {"bootstrap": lambda: None, "connect": lambda: None,
                   "verify": lambda: None})
     finish = next(e for e in events if e.step == "finish" and e.status == "done")
-    assert "/Users/you/.lima/omelet-vm" in finish.message
+    assert "/Users/you/.lima/eggie-vm" in finish.message
     assert "open Terminal" in finish.message
     assert "PowerShell" not in finish.message
 
 
 def test_a_provider_that_fetches_its_own_image_gets_no_download_step(tmp_path):
-    # Lima downloads the image named in omelet.yaml itself. Keeping fetch_image
+    # Lima downloads the image named in eggie.yaml itself. Keeping fetch_image
     # in the list would mean calling provider.image() for a URL nobody reads --
-    # and LimaProvider had no image() at all, so `omelet setup` on macOS died
+    # and LimaProvider had no image() at all, so `eggie setup` on macOS died
     # with an AttributeError before its first step ran.
     provider = SelfImagingProvider()
     names = [s.name for s in build(provider, tmp_path)]
@@ -229,11 +229,11 @@ def test_the_gate_registers_resume_before_asking_for_a_restart(tmp_path):
     state = InstallState(tmp_path / "state.json")
     with pytest.raises(RebootRequired):
         run(build(provider, tmp_path), state, {})
-    assert provider.resumed_with == r"C:\Apps\Omelet\setup.exe"
+    assert provider.resumed_with == r"C:\Apps\Eggie\setup.exe"
 
 
 def test_create_vm_starts_an_existing_but_stopped_vm(tmp_path):
-    # `omelet setup`'s status summary tells a user with a stopped VM to "run
+    # `eggie setup`'s status summary tells a user with a stopped VM to "run
     # setup again to start it", but nothing in this list ever called start()
     # on a VM that merely existed -- Lima's `shell` refuses a stopped
     # instance outright, and only WSL2 hid the gap (`wsl.exe -d` auto-starts

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, cx } from "@omelet/ui";
+import { Button, cx } from "@eggie/ui";
 import type { Agent } from "../../agents/catalog";
 import { POLL_MS, useAgentStatus, useEnsureSetup } from "../../agents/queries";
 import { statusLine, type LineKind } from "../../agents/status";

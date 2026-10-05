@@ -16,7 +16,7 @@ same shape later), rewriting guide content (the onboarding flow changes in a lat
 
 - "Connected" means the agent's directory in the VM user's home is not empty — not a credentials
   file, which a desktop-app connection may never write.
-- Files Omelet's install puts into those directories (instructions, skills) don't count.
+- Files Eggie's install puts into those directories (instructions, skills) don't count.
 - Cursor is supported like Codex, with an `AGENTS.md`.
 - Codex needs its CLI in the VM (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`). It is
   installed automatically when the user picks Codex, and the command lives in Codex's manifest, not
@@ -53,9 +53,9 @@ assets. `agent.json` gains four install-side fields next to the existing guide f
 | Field | Required | Meaning |
 |---|---|---|
 | `home` | yes | Directory (or list of directories) under each account's home that detection reads. Relative paths, no `..`. A remote-SSH Cursor session writes `~/.cursor-server`, so Cursor lists both. |
-| `instructions` | no | Files that receive `instructions/omelet.md`. An absolute path is written **whole**, once (a system-wide file Omelet owns, e.g. `/etc/claude-code/CLAUDE.md`). A `~/` path is written **per account** as the `<!-- omelet:begin/end -->` block, leaving the user's own text alone. |
+| `instructions` | no | Files that receive `instructions/eggie.md`. An absolute path is written **whole**, once (a system-wide file Eggie owns, e.g. `/etc/claude-code/CLAUDE.md`). A `~/` path is written **per account** as the `<!-- eggie:begin/end -->` block, leaving the user's own text alone. |
 | `skills` | no | Agent name passed to `npx skills add -a`. All manifests' names go in the one existing call. |
-| `detect.ignore` | no | Top-level entry names under `home` that Omelet's own install creates. |
+| `detect.ignore` | no | Top-level entry names under `home` that Eggie's own install creates. |
 | `setup.run` | no | Shell command run once per account when the user picks the agent. |
 
 The three manifests:
@@ -95,8 +95,8 @@ The console keeps validating the guide fields in `catalog.ts`; each side validat
 The API runs as a non-root user and never touches a user home (`/root/.claude` is `0700`), so the
 work happens in a root-side runner, the same desired/applied shape as GitHub.
 
-**Files** in `/opt/omelet/agent-status/` (created by `install.sh`, `2770 root:docker`; not
-`/opt/omelet/agents`, which `install.sh` deletes as a leftover of an old layout):
+**Files** in `/opt/eggie/agent-status/` (created by `install.sh`, `2770 root:docker`; not
+`/opt/eggie/agents`, which `install.sh` deletes as a leftover of an old layout):
 
 - `check` — written by the API: a rising integer. Its change triggers the runner.
 - `setup/<id>` — written by the API: a rising integer, the agent's setup request.
@@ -109,8 +109,8 @@ work happens in a root-side runner, the same desired/applied shape as GitHub.
   never file names or anything read from inside an agent's directory.
 - `setup-<id>.log` — the last setup's output, `0600`, for whoever debugs the VM.
 
-**Units:** `omelet-agents.path` (`PathChanged=/opt/omelet/agent-status/check`) starts
-`omelet-agents.service` (oneshot, `StartLimitIntervalSec=0`), which runs `agents.py run` over root
+**Units:** `eggie-agents.path` (`PathChanged=/opt/eggie/agent-status/check`) starts
+`eggie-agents.service` (oneshot, `StartLimitIntervalSec=0`), which runs `agents.py run` over root
 plus `login-users.sh`'s accounts. `install.sh` installs and enables both and starts the service
 once.
 
@@ -133,7 +133,7 @@ calls neither:
 - `GET /agents/status` — writes `check` + 1, returns `status.json`'s `agents` as it is now (one
   poll behind is fine). Missing or unreadable `status.json` returns `{"agents": {}}`.
 - `POST /agents/{id}/setup` — ensures setup. `404 agent_not_found` when
-  `/opt/omelet/runtime/agents/<id>/agent.json` is missing or has no `setup`. A no-op when the
+  `/opt/eggie/runtime/agents/<id>/agent.json` is missing or has no `setup`. A no-op when the
   agent is connected or its setup is `installing` or `ready`; otherwise writes `setup/<id>` + 1 and
   `check` + 1. So a retry after `failed` is the same call.
 
@@ -159,11 +159,11 @@ Counter writes are serialized by a lock and written via temp file + rename. Logi
 ## 6. Install changes
 
 - Step 9: `/etc/claude-code/CLAUDE.md` is no longer hard-coded; every `instructions --system`
-  target is written whole from `instructions/omelet.md`.
+  target is written whole from `instructions/eggie.md`.
 - Step 11: `install-agents.sh` takes the per-account targets from `agents.py` instead of its
   hard-coded `~/.codex/AGENTS.md` (the marker-block writer is unchanged), and `npx skills add`
   takes `-a $(agents.py skills)`.
-- New step: `/opt/omelet/agent-status/` and the two units.
+- New step: `/opt/eggie/agent-status/` and the two units.
 
 ## 7. Error handling
 
@@ -192,4 +192,4 @@ Untested on purpose: the systemd units and the real Codex installer (live-VM acc
 
 New `runtime/agents/CLAUDE.md` (manifest fields, trust, how to add an agent). Update
 `runtime/CLAUDE.md` (what lives here), `runtime/install/CLAUDE.md` (steps, runner),
-`runtime/omelet_api/CLAUDE.md` (feature area) and `runtime/web/CLAUDE.md` (guides' new source).
+`runtime/eggie_api/CLAUDE.md` (feature area) and `runtime/web/CLAUDE.md` (guides' new source).

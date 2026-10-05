@@ -2,7 +2,7 @@ import errno
 import os
 from types import SimpleNamespace
 
-from omelet_api.core import disk
+from eggie_api.core import disk
 
 
 def _fake_statvfs(_path):

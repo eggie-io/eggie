@@ -16,9 +16,9 @@ import urllib.error
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.routes.app import create_app
-from omelet_api.core.config import ApiConfig
-from omelet_api.core.exec import Completed
+from eggie_api.routes.app import create_app
+from eggie_api.core.config import ApiConfig
+from eggie_api.core.exec import Completed
 from host.client import ApiClient, ApiError
 
 from tests.runtime.api.conftest import COMPOSE_ONE_WEB, FakeProbe, FakeRunner

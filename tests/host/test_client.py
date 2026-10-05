@@ -18,7 +18,7 @@ def test_read_token_reads_as_root_from_the_token_path_and_strips_it():
     provider = FakeProvider(Completed(0, "sekret\n", ""))
     assert read_token(provider) == "sekret"
     (argv, root), = provider.execs
-    assert argv == ["cat", "/opt/omelet/api.token"]
+    assert argv == ["cat", "/opt/eggie/api.token"]
     assert root is True
 
 
@@ -282,8 +282,8 @@ def test_the_upload_leaves_out_repositories_caches_and_the_generated_overlay(
     (tmp_path / "docker-compose.yml").write_text("services: {}\n")
     for rel in (".git/objects/blob", "node_modules/pkg/index.js",
                 "app/node_modules/nested/index.js", ".venv/bin/python",
-                "app/__pycache__/x.pyc", ".omelet/overlay.yml",
-                ".omelet/project.yml", "app/index.html"):
+                "app/__pycache__/x.pyc", ".eggie/overlay.yml",
+                ".eggie/project.yml", "app/index.html"):
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x")
@@ -294,10 +294,10 @@ def test_the_upload_leaves_out_repositories_caches_and_the_generated_overlay(
         names = {n for n in tar.getnames()}
 
     assert names == {"docker-compose.yml", "app", "app/index.html",
-                     ".omelet", ".omelet/project.yml"}, names
+                     ".eggie", ".eggie/project.yml"}, names
     # project.yml is the user's own configuration and the API resolves web
     # services from it; only the generated overlay is dropped.
-    assert ".omelet/project.yml" in names
+    assert ".eggie/project.yml" in names
 
 
 def test_a_stale_token_is_reported_with_the_command_that_fixes_it():
@@ -308,7 +308,7 @@ def test_a_stale_token_is_reported_with_the_command_that_fixes_it():
         raise AssertionError("expected ApiError")
     except ApiError as e:
         assert e.code == "unauthorized"
-        assert "omelet setup" in str(e)
+        assert "eggie setup" in str(e)
         # The API's own wording is kept, not replaced.
         assert "bearer token" in str(e)
 
@@ -320,7 +320,7 @@ def test_an_unconfigured_api_says_setup_has_not_finished():
         c.list_projects()
         raise AssertionError("expected ApiError")
     except ApiError as e:
-        assert "omelet setup" in str(e)
+        assert "eggie setup" in str(e)
 
 
 def test_ensure_project_tolerates_one_that_already_exists():
@@ -338,6 +338,6 @@ def test_ensure_project_tolerates_one_that_already_exists():
 
 
 def test_project_id_matches_the_rule_the_api_slugs_with():
-    from omelet_api.core.project import _slug
+    from eggie_api.core.project import _slug
     for name in ("My Blog", "blog", "  Spaced Out  ", "a_b.c", "UPPER"):
         assert project_id_for(name) == _slug(name)

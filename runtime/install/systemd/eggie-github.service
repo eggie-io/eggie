@@ -1,0 +1,7 @@
+[Unit]
+Description=Apply Eggie's GitHub connection to this machine's accounts
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/github-apply.sh

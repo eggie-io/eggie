@@ -1,4 +1,4 @@
-"""The `omelet` host and the VM's host keys, as macOS setup writes them.
+"""The `eggie` host and the VM's host keys, as macOS setup writes them.
 
 Lima regenerates the guest's host keys on a new cloud-init instance, which it
 declares on every start; a reinstall is a new VM either way. A known_hosts
@@ -11,7 +11,7 @@ from host.providers.lima import LimaProvider
 from host.providers.wsl2 import Wsl2Provider
 
 LIMA_SSH_CONFIG = """\
-Host lima-omelet-vm
+Host lima-eggie-vm
   IdentityFile "/Users/you/.lima/_config/user"
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
@@ -24,9 +24,9 @@ FOUND = {"Host": "127.0.0.1", "Port": "39022", "User": "you",
          "Identity file": "/Users/you/.lima/_config/user"}
 
 PUBKEYS = """\
-ecdsa-sha2-nistp256 AAAAE2VjZHNh root@lima-omelet-vm
-ssh-ed25519 AAAAC3NzaC1l root@lima-omelet-vm
-ssh-rsa AAAAB3NzaC1y root@lima-omelet-vm
+ecdsa-sha2-nistp256 AAAAE2VjZHNh root@lima-eggie-vm
+ssh-ed25519 AAAAC3NzaC1l root@lima-eggie-vm
+ssh-rsa AAAAB3NzaC1y root@lima-eggie-vm
 """
 
 USER_CONFIG = """\
@@ -64,9 +64,9 @@ class Guest:
 def _provider(tmp_path, *, written=True, runner=None):
     home = tmp_path / ".lima"
     if written:
-        (home / "omelet-vm").mkdir(parents=True)
-        (home / "omelet-vm" / "ssh.config").write_text(LIMA_SSH_CONFIG)
-    return LimaProvider(name="omelet-vm", runner=runner or Guest(), lima_home=home,
+        (home / "eggie-vm").mkdir(parents=True)
+        (home / "eggie-vm" / "ssh.config").write_text(LIMA_SSH_CONFIG)
+    return LimaProvider(name="eggie-vm", runner=runner or Guest(), lima_home=home,
                         data_root=tmp_path / "data", ssh_dir=tmp_path / ".ssh")
 
 
@@ -74,7 +74,7 @@ def _provider(tmp_path, *, written=True, runner=None):
 
 def test_the_host_names_what_lima_wrote():
     text = ssh_alias.render(FOUND)
-    assert "Host omelet\n" in text
+    assert "Host eggie\n" in text
     for line in ("  HostName 127.0.0.1", "  Port 39022", "  User you",
                  "  IdentityFile /Users/you/.lima/_config/user"):
         assert line + "\n" in text
@@ -91,27 +91,27 @@ def test_the_block_is_written_into_the_config_not_included(tmp_path):
     config.write_text(USER_CONFIG)
     ssh_alias.install(config, FOUND)
     text = config.read_text()
-    assert "Host omelet\n" in text
+    assert "Host eggie\n" in text
     assert text.count("Include") == 1          # the user's own only
     assert ssh_alias.installed(config)
 
 
 def test_the_block_goes_after_global_options_and_before_every_host(tmp_path):
-    # Above the user's Include, that Include would apply to omelet alone; after
+    # Above the user's Include, that Include would apply to eggie alone; after
     # a `Host *` with a User line, ssh would take that User instead of ours.
     config = tmp_path / "config"
     config.write_text(USER_CONFIG + "\nHost *\n  User someone\n")
     ssh_alias.install(config, FOUND)
     text = config.read_text()
-    assert text.index("Include ~/.ssh/config.d") < text.index("Host omelet")
-    assert text.index("Host omelet") < text.index("Host work") < text.index("Host *")
+    assert text.index("Include ~/.ssh/config.d") < text.index("Host eggie")
+    assert text.index("Host eggie") < text.index("Host work") < text.index("Host *")
 
 
 def test_a_config_with_no_hosts_gets_the_block_at_the_end(tmp_path):
     config = tmp_path / "config"
     config.write_text("AddKeysToAgent yes")          # no trailing newline
     ssh_alias.install(config, FOUND)
-    assert config.read_text().startswith("AddKeysToAgent yes\n# >>> Omelet")
+    assert config.read_text().startswith("AddKeysToAgent yes\n# >>> Eggie")
 
 
 def test_a_block_whose_end_marker_was_deleted_takes_nothing_with_it(tmp_path):
@@ -139,7 +139,7 @@ def test_installing_again_replaces_the_block(tmp_path):
     ssh_alias.install(config, FOUND)
     ssh_alias.install(config, {**FOUND, "Port": "40000"})
     text = config.read_text()
-    assert text.count("Host omelet") == 1
+    assert text.count("Host eggie") == 1
     assert "  Port 40000\n" in text and "  Port 39022\n" not in text
 
 
@@ -167,7 +167,7 @@ def test_a_symlinked_config_is_written_through(tmp_path):
     link.symlink_to(real)
     ssh_alias.install(link, FOUND)
     assert link.is_symlink()
-    assert "Host omelet" in real.read_text()
+    assert "Host eggie" in real.read_text()
 
 
 def test_remove_restores_the_file_it_found(tmp_path):
@@ -223,16 +223,16 @@ def test_no_keys_from_the_guest_leaves_known_hosts_alone(tmp_path):
 
 def test_the_lima_step_writes_the_host_and_the_keys(tmp_path):
     provider = _provider(tmp_path)
-    assert provider.ssh_shortcut()() == "Connect with: ssh omelet"
+    assert provider.ssh_shortcut()() == "Connect with: ssh eggie"
     assert "  User you\n" in (tmp_path / ".ssh" / "config").read_text()
     assert "[127.0.0.1]:39022 ssh-rsa AAAAB3NzaC1y\n" in (
         tmp_path / ".ssh" / "known_hosts").read_text()
-    assert provider.access().command == "ssh omelet"
+    assert provider.access().command == "ssh eggie"
 
 
 def test_the_lima_step_never_fails_setup(tmp_path):
     message = _provider(tmp_path, written=False).ssh_shortcut()()
-    assert message.startswith("Could not add the 'omelet' host")
+    assert message.startswith("Could not add the 'eggie' host")
     assert not (tmp_path / ".ssh" / "config").exists()
 
 
@@ -257,7 +257,7 @@ def test_destroy_takes_the_host_and_its_keys_away(tmp_path):
         # `limactl delete` removes the instance directory, ssh.config included.
         def __call__(self, argv):
             if argv[:2] == ["limactl", "delete"]:
-                shutil.rmtree(tmp_path / ".lima" / "omelet-vm")
+                shutil.rmtree(tmp_path / ".lima" / "eggie-vm")
             return super().__call__(argv)
 
     config = tmp_path / ".ssh" / "config"

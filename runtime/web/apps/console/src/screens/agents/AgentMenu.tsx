@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import type { Agent } from "../../agents/catalog";
 import type { AgentBase } from "./AgentPicker";
 import { CHECK, CHEVRON_DOWN } from "../icons";

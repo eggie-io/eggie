@@ -23,36 +23,36 @@ def _mac(version="14.5"):
 
 
 def make(runner, mac_ver=None):
-    return LimaProvider(name="omelet-vm", config=Path("/tmp/omelet.yaml"),
+    return LimaProvider(name="eggie-vm", config=Path("/tmp/eggie.yaml"),
                         limactl="limactl", runner=runner,
                         mac_ver=mac_ver or _mac(),
                         ssh_dir=Path("/nonexistent/.ssh"),
                         lima_home=Path("/nonexistent/.lima"),
-                        data_root=Path("/nonexistent/omelet"))
+                        data_root=Path("/nonexistent/eggie"))
 
 
 def test_exec_uses_limactl_shell():
     r = FakeRunner(stdout=b"ok\n")
     make(r).exec(["uname", "-sr"])
-    assert r.calls[-1] == ["limactl", "shell", "omelet-vm", "uname", "-sr"]
+    assert r.calls[-1] == ["limactl", "shell", "eggie-vm", "uname", "-sr"]
 
 
 def test_exec_root_uses_sudo():
     r = FakeRunner()
     make(r).exec(["id", "-un"], root=True)
-    assert r.calls[-1] == ["limactl", "shell", "omelet-vm", "sudo", "id", "-un"]
+    assert r.calls[-1] == ["limactl", "shell", "eggie-vm", "sudo", "id", "-un"]
 
 
 def test_create_calls_start_with_config():
     r = FakeRunner()
     make(r).create()
-    assert r.calls[-1] == ["limactl", "start", "--name=omelet-vm",
-                           "--tty=false", "/tmp/omelet.yaml"]
+    assert r.calls[-1] == ["limactl", "start", "--name=eggie-vm",
+                           "--tty=false", "/tmp/eggie.yaml"]
 
 
 def test_a_failed_vm_command_raises_instead_of_reporting_success():
     # `_cmd()` returns a Completed and never raises, so an unchecked result is
-    # a silent success -- `omelet vm start` printing "VM started." for a VM
+    # a silent success -- `eggie vm start` printing "VM started." for a VM
     # limactl refused to boot. The WSL2 provider learned this the hard way.
     import pytest
 
@@ -66,13 +66,13 @@ def test_stop_and_destroy():
     r = FakeRunner()
     p = make(r)
     p.stop()
-    assert r.calls[-1] == ["limactl", "stop", "omelet-vm"]
+    assert r.calls[-1] == ["limactl", "stop", "eggie-vm"]
     p.destroy()
-    assert r.calls[-1] == ["limactl", "delete", "omelet-vm"]
+    assert r.calls[-1] == ["limactl", "delete", "eggie-vm"]
 
 
 def test_the_lima_config_forwards_exactly_the_ports_the_host_dials():
-    # The literals in omelet.yaml are the only thing making the guest sockets
+    # The literals in eggie.yaml are the only thing making the guest sockets
     # reachable from the host. Both are declared equal on the two sides on
     # purpose; a distinct-port forward is made at runtime over ssh instead and
     # never belongs in this file. Held against the constants, not against
@@ -83,7 +83,7 @@ def test_the_lima_config_forwards_exactly_the_ports_the_host_dials():
     from host.core import constants
 
     config = (Path(__file__).resolve().parents[2] / "host" / "providers"
-              / "omelet.yaml").read_text()
+              / "eggie.yaml").read_text()
     pairs = {(int(g), int(h)) for g, h in re.findall(
         r"guestPort:\s*(\d+)\s*\n\s*hostPort:\s*(\d+)", config)}
     assert pairs == {(constants.EDGE_PORT, constants.EDGE_PORT),
@@ -125,8 +125,8 @@ def test_a_missing_limactl_comes_back_as_the_bare_name(tmp_path):
 
 def test_an_explicit_path_is_never_second_guessed():
     from host.providers.lima import find_limactl
-    assert find_limactl("/opt/omelet/limactl", which=lambda name: "/usr/bin/limactl") \
-        == "/opt/omelet/limactl"
+    assert find_limactl("/opt/eggie/limactl", which=lambda name: "/usr/bin/limactl") \
+        == "/opt/eggie/limactl"
 
 
 def test_a_resolved_path_still_satisfies_the_installed_check(tmp_path):
@@ -177,7 +177,7 @@ def test_find_limactl_prefers_the_managed_copy_over_homebrew(tmp_path):
 
 def test_find_limactl_falls_back_to_the_path_before_setup_has_run(tmp_path):
     # A source checkout that has never run setup has no managed copy; a
-    # developer's brew install is what makes `omelet doctor` answerable there.
+    # developer's brew install is what makes `eggie doctor` answerable there.
     missing = tmp_path / "lima" / "bin" / "limactl"
     found = find_limactl(which=lambda name: "/opt/homebrew/bin/limactl",
                          managed=missing)
@@ -192,8 +192,8 @@ def test_preflight_no_longer_dead_ends_on_a_missing_lima():
 
 
 def test_preflight_refuses_a_mac_too_old_for_the_virtualization_framework():
-    # vz, which omelet.yaml asks Lima for, is macOS 13+.
-    provider = LimaProvider(name="omelet-vm", runner=FakeRunner(),
+    # vz, which eggie.yaml asks Lima for, is macOS 13+.
+    provider = LimaProvider(name="eggie-vm", runner=FakeRunner(),
                             mac_ver=_mac("12.7"))
     assert provider.preflight().dead_ends
 
@@ -213,13 +213,13 @@ def test_preflight_parses_mac_ver_the_same_way_on_every_named_case():
         ("12.7", False),
     ]
     for release, expect_ok in cases:
-        provider = LimaProvider(name="omelet-vm", runner=FakeRunner(),
+        provider = LimaProvider(name="eggie-vm", runner=FakeRunner(),
                                 mac_ver=_mac(release))
         assert provider.preflight().ok is expect_ok, release
 
 
 def test_doctor_still_reports_a_missing_lima_and_names_setup_as_the_fix():
-    provider = LimaProvider(name="omelet-vm", limactl="/nowhere/limactl",
+    provider = LimaProvider(name="eggie-vm", limactl="/nowhere/limactl",
                             runner=FakeRunner(), data_root=Path("/nowhere"),
                             mac_ver=_mac())
     diagnosis = provider.is_supported()
@@ -238,7 +238,7 @@ def test_runtime_installs_into_the_providers_data_root(tmp_path, monkeypatch):
         return root / "lima" / "bin" / "limactl"
 
     monkeypatch.setattr(lima_install, "install", fake_install)
-    provider = LimaProvider(name="omelet-vm", runner=FakeRunner(), data_root=tmp_path)
+    provider = LimaProvider(name="eggie-vm", runner=FakeRunner(), data_root=tmp_path)
     runtime = provider.runtime()
     assert isinstance(runtime, Runtime)
     assert "Lima" in runtime.label
@@ -260,7 +260,7 @@ def test_runtime_rebinds_limactl_to_the_path_the_install_produced(monkeypatch):
 
     monkeypatch.setattr(lima_install, "install", fake_install)
     data_root = Path("/wherever")
-    provider = LimaProvider(name="omelet-vm", limactl="limactl",
+    provider = LimaProvider(name="eggie-vm", limactl="limactl",
                             runner=FakeRunner(), data_root=data_root)
     emit = lambda done, total: None
     result = provider.runtime().run(emit)
@@ -277,7 +277,7 @@ def test_the_wsl2_provider_has_nothing_to_install():
 def test_running_reads_the_status_column():
     r = FakeRunner(stdout=b"Running\n")
     assert make(r).running() is True
-    assert r.calls[-1] == ["limactl", "list", "--format", "{{.Status}}", "omelet-vm"]
+    assert r.calls[-1] == ["limactl", "list", "--format", "{{.Status}}", "eggie-vm"]
 
 
 def test_running_false_for_a_stopped_vm():
@@ -292,9 +292,9 @@ def test_the_mac_installer_is_the_package_for_this_architecture():
 
     provider = LimaProvider(runner=lambda argv: ran.append(argv) or Result(),
                             machine=lambda: "arm64")
-    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0-arm64.pkg"
-    provider.launch_installer(Path("/cache/OmeletSetup-0.2.0-arm64.pkg"))
-    assert ran == [["open", "/cache/OmeletSetup-0.2.0-arm64.pkg"]]
+    assert provider.installer_asset("0.2.0") == "EggieSetup-0.2.0-arm64.pkg"
+    provider.launch_installer(Path("/cache/EggieSetup-0.2.0-arm64.pkg"))
+    assert ran == [["open", "/cache/EggieSetup-0.2.0-arm64.pkg"]]
 
 
 class FakeLoginItems:
@@ -316,7 +316,7 @@ class FakeLoginItems:
 
 
 def _with_login_items(items):
-    return LimaProvider(name="omelet-vm", config=Path("/tmp/omelet.yaml"),
+    return LimaProvider(name="eggie-vm", config=Path("/tmp/eggie.yaml"),
                         limactl="limactl", runner=FakeRunner(), mac_ver=_mac(),
                         login_items=items)
 

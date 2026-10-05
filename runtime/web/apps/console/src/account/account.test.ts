@@ -4,7 +4,7 @@ import { signInLink, startError } from "./account";
 
 describe("signInLink", () => {
   it("accepts an https sign-in page", () => {
-    const url = "https://omelet.bridgie.chat/device?user_code=ABCD-EFGH";
+    const url = "https://app.eggie.io/device?user_code=ABCD-EFGH";
     expect(signInLink(url)).toBe(url);
   });
 

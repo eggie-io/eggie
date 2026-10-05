@@ -1,4 +1,4 @@
-import type { ProjectState } from "@omelet/ui";
+import type { ProjectState } from "@eggie/ui";
 import type { ActiveJob, Project } from "./types";
 
 export type Cause = "bound_to_loopback" | "service_unreachable" | "crash_looping" | "failed_to_start" | "unreadable";

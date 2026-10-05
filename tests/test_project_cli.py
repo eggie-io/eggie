@@ -106,7 +106,7 @@ def test_up_reports_the_guests_own_output_when_the_stack_does_not_stay_up(
         "a bare status code is not a sentence anyone can act on"
     assert "crash_looping" in result.output, "support still needs the raw status"
     assert "bind: address in use" in result.output
-    assert "omelet logs blog" in result.output
+    assert "eggie logs blog" in result.output
 
 
 def test_up_without_a_compose_file_imports_and_says_so(monkeypatch, tmp_path):
@@ -127,7 +127,7 @@ def test_up_without_a_compose_file_imports_and_says_so(monkeypatch, tmp_path):
 def test_an_unreachable_api_is_reported_in_words_not_a_socket_error(
         monkeypatch, tmp_path):
     def boom():
-        raise ApiUnavailableError("could not reach the Omelet API (refused). "
+        raise ApiUnavailableError("could not reach the Eggie API (refused). "
                                     "The VM may be stopped")
     monkeypatch.setattr(cli, "_client_factory", boom)
     result = runner.invoke(cli.app, ["up", str(project_dir(tmp_path))])

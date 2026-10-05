@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.routes.app import create_app
-from omelet_api.core import files
-from omelet_api.core.config import ApiConfig
-from omelet_api.core.exec import Completed
+from eggie_api.routes.app import create_app
+from eggie_api.core import files
+from eggie_api.core.config import ApiConfig
+from eggie_api.core.exec import Completed
 
 
 def _tar_bytes(*, add_default_file=True, entries=None) -> bytes:
@@ -37,7 +37,7 @@ def _entry(name, **kw):
 
 
 # ---------------------------------------------------------------------------
-# Core-level: omelet_api.core.files.extract_archive
+# Core-level: eggie_api.core.files.extract_archive
 # ---------------------------------------------------------------------------
 
 def test_relative_traversal_entry_is_rejected(tmp_path):
@@ -147,8 +147,8 @@ def test_resolve_within_rejects_absolute_and_traversal_paths(tmp_path):
 def test_resolve_within_allows_a_nested_relative_path(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
-    resolved = files.resolve_within(root, ".omelet/project.yml")
-    assert resolved == (root / ".omelet" / "project.yml").resolve()
+    resolved = files.resolve_within(root, ".eggie/project.yml")
+    assert resolved == (root / ".eggie" / "project.yml").resolve()
 
 
 def test_list_dir_skips_an_entry_whose_stat_raises(tmp_path, monkeypatch):
@@ -289,15 +289,15 @@ def test_put_get_delete_single_file_round_trip(env):
     client, _config = env
     _create(client)
 
-    put = client.put("/projects/blog/files/.omelet/project.yml", content=b"id: blog\n")
+    put = client.put("/projects/blog/files/.eggie/project.yml", content=b"id: blog\n")
     assert put.status_code == 200, put.text
 
-    got = client.get("/projects/blog/files/.omelet/project.yml")
+    got = client.get("/projects/blog/files/.eggie/project.yml")
     assert got.status_code == 200
     assert got.content == b"id: blog\n"
 
-    assert client.delete("/projects/blog/files/.omelet/project.yml").status_code == 200
-    assert client.get("/projects/blog/files/.omelet/project.yml").status_code == 404
+    assert client.delete("/projects/blog/files/.eggie/project.yml").status_code == 200
+    assert client.get("/projects/blog/files/.eggie/project.yml").status_code == 404
 
 
 def test_get_missing_file_is_file_not_found(env):
@@ -323,7 +323,7 @@ def test_a_5mb_archive_round_trips_proving_the_command_line_ceiling_is_gone(env)
     client, _config = env
     _create(client)
 
-    payload = (b"omelet-poc-" * 500_000)  # ~5.5 MB, well past the old ~24 KB cap
+    payload = (b"eggie-poc-" * 500_000)  # ~5.5 MB, well past the old ~24 KB cap
     assert len(payload) > 5 * 1024 * 1024
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
@@ -412,7 +412,7 @@ def test_browsing_a_permission_denied_folder_is_409_not_a_500(env):
 
 
 def test_remove_tree_falls_back_to_root_for_files_a_container_owns(tmp_path):
-    from omelet_api.core import lifecycle
+    from eggie_api.core import lifecycle
 
     class Runner:
         def __init__(self):
@@ -421,7 +421,7 @@ def test_remove_tree_falls_back_to_root_for_files_a_container_owns(tmp_path):
         def exec(self, argv, *, root=False):
             self.calls.append(argv)
             if argv[:2] == [lifecycle.DOCKER, "inspect"]:
-                return Completed(0, "ghcr.io/x/omelet-api:9\n", "")
+                return Completed(0, "ghcr.io/x/eggie-api:9\n", "")
             return Completed(0, "", "")
 
     runner = Runner()

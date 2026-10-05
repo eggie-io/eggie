@@ -4,7 +4,7 @@
 
 **Goal:** Let a signed-in user turn a temporary public URL on and off for a project from the web console, with the tunnel client, token and state all inside the VM.
 
-**Architecture:** A new platform-free `runtime/omelet_api/core/public.py` owns the state machine (enable / disable / reconcile), the tunnel token file and a thin `TunnelClient` that drives a profile-gated `tunnel` service in `runtime/stack.yml` through the existing runner. `core/cloud.py` gains the three tunnel calls. `routes/app.py` exposes `/projects/{id}/public`, adds `public` to the project payload, and hooks delete, sign-out and the sync loop. The console maps the `public` field to one view in a pure `projects/public.ts` and renders it in the tile, a modal, the address rows and the project list.
+**Architecture:** A new platform-free `runtime/eggie_api/core/public.py` owns the state machine (enable / disable / reconcile), the tunnel token file and a thin `TunnelClient` that drives a profile-gated `tunnel` service in `runtime/stack.yml` through the existing runner. `core/cloud.py` gains the three tunnel calls. `routes/app.py` exposes `/projects/{id}/public`, adds `public` to the project payload, and hooks delete, sign-out and the sync loop. The console maps the `public` field to one view in a pure `projects/public.ts` and renders it in the tile, a modal, the address rows and the project list.
 
 **Tech Stack:** Python 3.12 (FastAPI, sqlite3, stdlib urllib), Docker Compose profiles, cloudflared, React + TanStack Query + MSW + Vitest.
 
@@ -13,14 +13,14 @@
 ## Global Constraints
 
 - Everything lives in `runtime/`. No change under `host/`. `API_VERSION` stays `1`. `get.sh` is unchanged.
-- `host/` never imports `omelet_api`, and `omelet_api` never imports `host` (existing AST tests).
-- No platform branching (`sys.platform`, `platform.system()`, `os.name`) anywhere in `runtime/omelet_api/`.
-- No test calls the Omelet service, Cloudflare or a real `docker`: use `FakeCloud`, fake runners and fake clocks.
+- `host/` never imports `eggie_api`, and `eggie_api` never imports `host` (existing AST tests).
+- No platform branching (`sys.platform`, `platform.system()`, `os.name`) anywhere in `runtime/eggie_api/`.
+- No test calls the Eggie service, Cloudflare or a real `docker`: use `FakeCloud`, fake runners and fake clocks.
 - Repo files are reached from tests via `Path(__file__).resolve()`, never cwd-relative paths.
 - The VM hardcodes no limits: no duration constant and no "one at a time" check. `expires_at` and the 409 come from the service.
 - Public URLs are stored only while the row is `on`; leaving `on` clears `urls` and `expires_at`.
-- Token file: `/opt/omelet/tunnel.token`, mode `0640`, written temp-then-rename, present only while a URL is on.
-- The in-VM `omelet` CLI does not print or change public URLs.
+- Token file: `/opt/eggie/tunnel.token`, mode `0640`, written temp-then-rename, present only while a URL is on.
+- The in-VM `eggie` CLI does not print or change public URLs.
 - Service error body: `{"error": {"code", "message"}}`; our API's error body is the same shape via `ApiError`.
 - cloudflared image pinned: `cloudflare/cloudflared:2026.9.3`.
 - Release version for this work: `0.3.0` (api package, Dockerfile `SERVICE_VERSION`, `pyproject.toml`, stack api and web image tags).
@@ -41,13 +41,13 @@
 
 | File | Responsibility |
 |---|---|
-| `runtime/omelet_api/core/cloud.py` (modify) | Three tunnel calls on the service client |
-| `runtime/omelet_api/core/migrate.py` (modify) | `_v5_public_urls` |
-| `runtime/omelet_api/core/state.py` (modify) | `public_urls` row access |
-| `runtime/omelet_api/core/public.py` (create) | Token file, `TunnelClient`, `Public` state machine, wording |
-| `runtime/omelet_api/core/account.py` (modify) | `on_forget` hook |
-| `runtime/omelet_api/core/config.py` (modify) | `stack_file`, `tunnel_token_path` |
-| `runtime/omelet_api/routes/app.py` (modify) | Routes, payload field, delete/sign-out/sync hooks |
+| `runtime/eggie_api/core/cloud.py` (modify) | Three tunnel calls on the service client |
+| `runtime/eggie_api/core/migrate.py` (modify) | `_v5_public_urls` |
+| `runtime/eggie_api/core/state.py` (modify) | `public_urls` row access |
+| `runtime/eggie_api/core/public.py` (create) | Token file, `TunnelClient`, `Public` state machine, wording |
+| `runtime/eggie_api/core/account.py` (modify) | `on_forget` hook |
+| `runtime/eggie_api/core/config.py` (modify) | `stack_file`, `tunnel_token_path` |
+| `runtime/eggie_api/routes/app.py` (modify) | Routes, payload field, delete/sign-out/sync hooks |
 | `runtime/stack.yml` (modify) | `tunnel` service and network |
 | `runtime/install/install.sh` (modify) | Pull with `--profile tunnel` |
 | `runtime/web/apps/console/src/projects/types.ts` (modify) | `PublicStatus` |
@@ -64,7 +64,7 @@
 ### Task 1: Service client tunnel calls
 
 **Files:**
-- Modify: `runtime/omelet_api/core/cloud.py`
+- Modify: `runtime/eggie_api/core/cloud.py`
 - Modify: `tests/runtime/api/fake_cloud.py`
 - Test: `tests/runtime/api/test_cloud.py`
 
@@ -113,7 +113,7 @@ def test_releasing_a_public_url_accepts_an_empty_204():
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_cloud.py -q`
 Expected: 3 failures with `AttributeError: 'Cloud' object has no attribute 'create_public_url'`.
 
-- [ ] **Step 3: Implement** (append to the `Cloud` class in `runtime/omelet_api/core/cloud.py`)
+- [ ] **Step 3: Implement** (append to the `Cloud` class in `runtime/eggie_api/core/cloud.py`)
 
 ```python
     def _public_url_path(self, cloud_id: str) -> str:
@@ -152,7 +152,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/cloud.py tests/runtime/api/fake_cloud.py tests/runtime/api/test_cloud.py
+git add runtime/eggie_api/core/cloud.py tests/runtime/api/fake_cloud.py tests/runtime/api/test_cloud.py
 git commit -m "Add the service's public URL calls to the cloud client"
 ```
 
@@ -161,8 +161,8 @@ git commit -m "Add the service's public URL calls to the cloud client"
 ### Task 2: `public_urls` table and state access
 
 **Files:**
-- Modify: `runtime/omelet_api/core/migrate.py`
-- Modify: `runtime/omelet_api/core/state.py`
+- Modify: `runtime/eggie_api/core/migrate.py`
+- Modify: `runtime/eggie_api/core/state.py`
 - Test: `tests/runtime/api/test_migrate.py`
 
 **Interfaces:**
@@ -211,7 +211,7 @@ Expected: FAIL — `public_urls` missing / `State` has no `put_public`.
 
 - [ ] **Step 3: Implement**
 
-In `runtime/omelet_api/core/migrate.py`, after `_v4_account`:
+In `runtime/eggie_api/core/migrate.py`, after `_v4_account`:
 
 ```python
 def _v5_public_urls(conn: sqlite3.Connection) -> None:
@@ -229,7 +229,7 @@ def _v5_public_urls(conn: sqlite3.Connection) -> None:
 
 and append `_v5_public_urls,` to `MIGRATIONS`.
 
-In `runtime/omelet_api/core/state.py`, add `import json` at the top and these methods before `close`:
+In `runtime/eggie_api/core/state.py`, add `import json` at the top and these methods before `close`:
 
 ```python
     @staticmethod
@@ -279,7 +279,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/migrate.py runtime/omelet_api/core/state.py tests/runtime/api/test_migrate.py
+git add runtime/eggie_api/core/migrate.py runtime/eggie_api/core/state.py tests/runtime/api/test_migrate.py
 git commit -m "Store public URL rows in the state database"
 ```
 
@@ -288,7 +288,7 @@ git commit -m "Store public URL rows in the state database"
 ### Task 3: `core/public.py` — token, tunnel client, status, enable, disable
 
 **Files:**
-- Create: `runtime/omelet_api/core/public.py`
+- Create: `runtime/eggie_api/core/public.py`
 - Test: `tests/runtime/api/test_public.py`
 
 **Interfaces:**
@@ -310,12 +310,12 @@ import stat
 
 import pytest
 
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.exec import Completed
-from omelet_api.core.public import (MESSAGES, Public, PublicBusy, TunnelClient,
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.exec import Completed
+from eggie_api.core.public import (MESSAGES, Public, PublicBusy, TunnelClient,
                                     Unavailable)
-from omelet_api.core.state import State
+from eggie_api.core.state import State
 from tests.runtime.api.fake_cloud import FakeCloud
 
 HOSTS = [{"service": "web", "hostname": "blog.d.io", "local_url": "http://blog.d.io:39080"}]
@@ -438,7 +438,7 @@ def test_an_unknown_service_refusal_shows_the_services_own_message(tmp_path):
     public.enable("blog")
 
     assert public.status("blog")["reason"] == {
-        "code": "weird", "message": "The Omelet service refused: try later"}
+        "code": "weird", "message": "The Eggie service refused: try later"}
 
 
 def test_a_client_that_will_not_start_is_released_on_the_service(tmp_path):
@@ -513,9 +513,9 @@ def test_an_expired_url_reads_as_off_before_anything_cleans_up(tmp_path):
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_public.py -q`
-Expected: collection error — `No module named 'omelet_api.core.public'`.
+Expected: collection error — `No module named 'eggie_api.core.public'`.
 
-- [ ] **Step 3: Implement** — create `runtime/omelet_api/core/public.py`
+- [ ] **Step 3: Implement** — create `runtime/eggie_api/core/public.py`
 
 ```python
 from __future__ import annotations
@@ -533,22 +533,22 @@ from .account import NotSignedIn
 from .cloud import CloudError, CloudUnavailable
 from .lifecycle import DOCKER
 
-log = logging.getLogger("omelet.public")
+log = logging.getLogger("eggie.public")
 
 MESSAGES = {
-    "signed_out": "Public addresses need an Omelet account. Sign in to use them.",
+    "signed_out": "Public addresses need an Eggie account. Sign in to use them.",
     "not_registered": "This project isn't linked to your account yet. Try again in a minute.",
     "no_web": "This project has no web page to share.",
     "public_url_active": "One is already on for another project or computer. "
                          "Turn it off there first.",
     "public_url_unavailable": "Your plan doesn't include public addresses.",
-    "cloud_unavailable": "The Omelet service couldn't be reached. Check the "
+    "cloud_unavailable": "The Eggie service couldn't be reached. Check the "
                          "internet connection and try again.",
     "client_failed": "The public connection couldn't start on this computer.",
-    "interrupted": "Omelet restarted while turning this on. Try again.",
+    "interrupted": "Eggie restarted while turning this on. Try again.",
     "expired": "The public address expired. Start a new one; it will be a "
                "different address.",
-    "released_elsewhere": "The public address was turned off from the Omelet website.",
+    "released_elsewhere": "The public address was turned off from the Eggie website.",
 }
 
 
@@ -564,7 +564,7 @@ class Unavailable(Exception):
 
 
 def _daemon(fn) -> None:
-    threading.Thread(target=fn, name="omelet-public", daemon=True).start()
+    threading.Thread(target=fn, name="eggie-public", daemon=True).start()
 
 
 def write_token(path: Path, token: str) -> None:
@@ -742,7 +742,7 @@ class Public:
             self._fail(local_id, cloud_id, e.code)
         else:
             self._fail(local_id, cloud_id, e.code,
-                       f"The Omelet service refused: {e.message}")
+                       f"The Eggie service refused: {e.message}")
 
     # --- turning off -----------------------------------------------------
 
@@ -792,7 +792,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/public.py tests/runtime/api/test_public.py
+git add runtime/eggie_api/core/public.py tests/runtime/api/test_public.py
 git commit -m "Turn a project's public URL on and off inside the runtime"
 ```
 
@@ -801,8 +801,8 @@ git commit -m "Turn a project's public URL on and off inside the runtime"
 ### Task 4: Reconcile, sign-out and forget
 
 **Files:**
-- Modify: `runtime/omelet_api/core/public.py`
-- Modify: `runtime/omelet_api/core/account.py`
+- Modify: `runtime/eggie_api/core/public.py`
+- Modify: `runtime/eggie_api/core/account.py`
 - Test: `tests/runtime/api/test_public.py`
 
 **Interfaces:**
@@ -917,7 +917,7 @@ Expected: the new tests fail with `AttributeError` (`reconcile`, `release_all`, 
 
 - [ ] **Step 3: Implement**
 
-In `runtime/omelet_api/core/account.py`, in `__init__` after `self.on_signed_in = lambda: None`:
+In `runtime/eggie_api/core/account.py`, in `__init__` after `self.on_signed_in = lambda: None`:
 
 ```python
         self.on_forget = lambda: None
@@ -929,7 +929,7 @@ and at the end of `_forget`, after `self._state.clear_cloud_projects()` and outs
         self.on_forget()
 ```
 
-Append to `Public` in `runtime/omelet_api/core/public.py`:
+Append to `Public` in `runtime/eggie_api/core/public.py`:
 
 ```python
     # --- keeping it true -------------------------------------------------
@@ -1004,7 +1004,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/public.py runtime/omelet_api/core/account.py tests/runtime/api/test_public.py
+git add runtime/eggie_api/core/public.py runtime/eggie_api/core/account.py tests/runtime/api/test_public.py
 git commit -m "Keep public URLs true across expiry, restarts and sign-out"
 ```
 
@@ -1013,14 +1013,14 @@ git commit -m "Keep public URLs true across expiry, restarts and sign-out"
 ### Task 5: Config, routes, payload and hooks in the API
 
 **Files:**
-- Modify: `runtime/omelet_api/core/config.py`
-- Modify: `runtime/omelet_api/routes/app.py`
+- Modify: `runtime/eggie_api/core/config.py`
+- Modify: `runtime/eggie_api/routes/app.py`
 - Create: `tests/runtime/api/test_api_public.py`
 
 **Interfaces:**
 - Consumes: `Public`, `TunnelClient`, `PublicBusy`, `Unavailable` (Tasks 3–4); `Account.on_forget` (Task 4).
 - Produces:
-  - `ApiConfig.stack_file: Path` (env `OMELET_STACK_FILE`, default `/opt/omelet/stack.yml`), `ApiConfig.tunnel_token_path: Path` (env `OMELET_TUNNEL_TOKEN`, default `/opt/omelet/tunnel.token`).
+  - `ApiConfig.stack_file: Path` (env `EGGIE_STACK_FILE`, default `/opt/eggie/stack.yml`), `ApiConfig.tunnel_token_path: Path` (env `EGGIE_TUNNEL_TOKEN`, default `/opt/eggie/tunnel.token`).
   - `create_app(..., public: Public | None = None)`; `app.state.public`.
   - Routes `GET|POST|DELETE /projects/{id}/public` on the shared router.
   - Project payload key `"public"` (the `Public.status` dict).
@@ -1030,10 +1030,10 @@ git commit -m "Keep public URLs true across expiry, restarts and sign-out"
 ```python
 from fastapi.testclient import TestClient
 
-from omelet_api.core.account import Account
-from omelet_api.core.public import Public, TunnelClient
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.account import Account
+from eggie_api.core.public import Public, TunnelClient
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.api.test_public import ON, TunnelRunner
@@ -1107,7 +1107,7 @@ Expected: FAIL — `ApiConfig` has no `stack_file` / `create_app()` got an unexp
 
 - [ ] **Step 3: Implement**
 
-`runtime/omelet_api/core/config.py` — add fields after `cloud_url`:
+`runtime/eggie_api/core/config.py` — add fields after `cloud_url`:
 
 ```python
     stack_file: Path = Path(f"{constants.GUEST_ROOT}/stack.yml")
@@ -1117,13 +1117,13 @@ Expected: FAIL — `ApiConfig` has no `stack_file` / `create_app()` got an unexp
 and in `from_env`:
 
 ```python
-            stack_file=Path(env.get("OMELET_STACK_FILE",
+            stack_file=Path(env.get("EGGIE_STACK_FILE",
                                     f"{constants.GUEST_ROOT}/stack.yml")),
-            tunnel_token_path=Path(env.get("OMELET_TUNNEL_TOKEN",
+            tunnel_token_path=Path(env.get("EGGIE_TUNNEL_TOKEN",
                                            f"{constants.GUEST_ROOT}/tunnel.token")),
 ```
 
-`runtime/omelet_api/routes/app.py`:
+`runtime/eggie_api/routes/app.py`:
 
 1. Import: `from ..core.public import Public, PublicBusy, TunnelClient, Unavailable`.
 2. Signature: add `public: Public | None = None` to `create_app`.
@@ -1215,7 +1215,7 @@ Expected: all pass. If an existing test asserts the exact payload keys, add `"pu
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/config.py runtime/omelet_api/routes/app.py tests/runtime/api/test_api_public.py
+git add runtime/eggie_api/core/config.py runtime/eggie_api/routes/app.py tests/runtime/api/test_api_public.py
 git commit -m "Expose public URL routes and release them on delete and sign-out"
 ```
 
@@ -1229,7 +1229,7 @@ git commit -m "Expose public URL routes and release them on delete and sign-out"
 - Test: `tests/runtime/test_stack_yml.py`, `tests/runtime/test_install_shell.py`
 
 **Interfaces:**
-- Consumes: `TunnelClient`'s compose invocation from Task 3 (`--profile tunnel`, service name `tunnel`), `ApiConfig.tunnel_token_path` default `/opt/omelet/tunnel.token`.
+- Consumes: `TunnelClient`'s compose invocation from Task 3 (`--profile tunnel`, service name `tunnel`), `ApiConfig.tunnel_token_path` default `/opt/eggie/tunnel.token`.
 - Produces: a `tunnel` compose service and a `tunnel` network.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1241,7 +1241,7 @@ def test_the_tunnel_client_runs_only_on_demand_from_a_token_file():
     tunnel = yaml.safe_load(_text())["services"]["tunnel"]
     assert tunnel["profiles"] == ["tunnel"]
     assert "--token-file" in tunnel["command"]
-    assert "/opt/omelet/tunnel.token:/run/omelet/tunnel.token:ro" in tunnel["volumes"]
+    assert "/opt/eggie/tunnel.token:/run/eggie/tunnel.token:ro" in tunnel["volumes"]
     assert "environment" not in tunnel, "the token must not travel in the environment"
 
 
@@ -1286,12 +1286,12 @@ Expected: the two stack tests fail with `KeyError: 'tunnel'`; the pull test fail
     image: cloudflare/cloudflared:2026.9.3
     profiles: [tunnel]
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token-file /run/omelet/tunnel.token
+    command: tunnel --no-autoupdate run --token-file /run/eggie/tunnel.token
     volumes:
-      - /opt/omelet/tunnel.token:/run/omelet/tunnel.token:ro
+      - /opt/eggie/tunnel.token:/run/eggie/tunnel.token:ro
     # cloudflared runs as a non-root user; the token is 0640 root:docker.
     group_add:
-      - "${OMELET_DOCKER_GID:-999}"
+      - "${EGGIE_DOCKER_GID:-999}"
     networks:
       - tunnel
 ```
@@ -1305,7 +1305,7 @@ and under the top-level `networks:`:
 `runtime/install/install.sh` — change the pull line inside the `if !` to:
 
 ```bash
-if ! /usr/bin/docker compose -f /opt/omelet/stack.yml --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
+if ! /usr/bin/docker compose -f /opt/eggie/stack.yml --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
 ```
 
 and add one line to the comment above it: `# --profile tunnel: the first public URL must not wait on an image download.`
@@ -1550,7 +1550,7 @@ git commit -m "Map a project's public URL status to what the console shows"
 - Modify: `runtime/web/apps/console/src/screens/list/ProjectRow.tsx`
 
 **Interfaces:**
-- Consumes: `publicView`, `tileLine`, `PublicView` (Task 7); `usePublic` (Task 7); `useNow` (`projects/useNow.ts`); `openExternal` (`desktop/desktop.ts`); `Modal`, `Button`, `Notice` from `@omelet/ui`; `hostOf` (`projects/format.ts`); `actionError` (`projects/copy.ts`).
+- Consumes: `publicView`, `tileLine`, `PublicView` (Task 7); `usePublic` (Task 7); `useNow` (`projects/useNow.ts`); `openExternal` (`desktop/desktop.ts`); `Modal`, `Button`, `Notice` from `@eggie/ui`; `hostOf` (`projects/format.ts`); `actionError` (`projects/copy.ts`).
 - Produces: `PublicModal({ project, open, onClose })`; `Tiles` gains `publicLine: string`, `publicDisabled: boolean`, `onPublic: () => void`; `AddressRows` gains an optional `publicUrls?: PublicUrl[]`.
 
 No new tests: these components are rendering glue over `publicView`, which Task 7 tests (per the repo's testing rules).
@@ -1559,7 +1559,7 @@ No new tests: these components are rendering glue over `publicView`, which Task 
 
 ```tsx
 import type { ReactNode } from "react";
-import { Button, Modal, Notice } from "@omelet/ui";
+import { Button, Modal, Notice } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";
@@ -1722,12 +1722,12 @@ git commit -m "Show and control a project's public address in the console"
 ### Task 9: Release bump and docs
 
 **Files:**
-- Modify: `runtime/omelet_api/__init__.py`, `runtime/omelet_api/Dockerfile`, `runtime/omelet_api/pyproject.toml`, `runtime/stack.yml` (api and web tags), `runtime/omelet_api/Dockerfile.debug` if it names the version
+- Modify: `runtime/eggie_api/__init__.py`, `runtime/eggie_api/Dockerfile`, `runtime/eggie_api/pyproject.toml`, `runtime/stack.yml` (api and web tags), `runtime/eggie_api/Dockerfile.debug` if it names the version
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Bump 0.2.0 → 0.3.0 in all version places**
 
-Run: `grep -rn "0\.2\.0" runtime/omelet_api runtime/stack.yml runtime/web/package.json runtime/web/apps/console/package.json 2>/dev/null` and change each release number to `0.3.0` (leave unrelated dependency versions alone).
+Run: `grep -rn "0\.2\.0" runtime/eggie_api runtime/stack.yml runtime/web/package.json runtime/web/apps/console/package.json 2>/dev/null` and change each release number to `0.3.0` (leave unrelated dependency versions alone).
 
 - [ ] **Step 2: Verify the constants test holds them equal**
 
@@ -1737,9 +1737,9 @@ Expected: pass.
 - [ ] **Step 3: `CLAUDE.md`** — under Architecture → Layers, add after the `cloud.py / account.py / sync.py` bullet:
 
 ```markdown
-- `runtime/omelet_api/core/public.py` — a project's temporary public URL. The service owns the
+- `runtime/eggie_api/core/public.py` — a project's temporary public URL. The service owns the
   Cloudflare tunnel and its routing; the VM asks for a URL, keeps the token in
-  `/opt/omelet/tunnel.token` (0640, present only while a URL is on) and starts the
+  `/opt/eggie/tunnel.token` (0640, present only while a URL is on) and starts the
   profile-gated `tunnel` service in `stack.yml` through compose. The service rewrites Host to the
   project's local hostname, so overlays are unchanged; apps that build absolute URLs from Host
   send public visitors to `*.127-0-0-1.sslip.io`. Only the console turns it on; the CLI never
@@ -1762,7 +1762,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api runtime/stack.yml CLAUDE.md
+git add runtime/eggie_api runtime/stack.yml CLAUDE.md
 git commit -m "Release the runtime with public URLs as 0.3.0"
 ```
 

@@ -59,7 +59,7 @@ def test_closing_hides_instead_of_closing(tmp_path):
     assert window.calls == ["hide"]
 
 
-def test_the_first_hide_tells_the_user_where_omelet_went_once(tmp_path):
+def test_the_first_hide_tells_the_user_where_eggie_went_once(tmp_path):
     controller, _ = _controller(tmp_path)
     controller.on_closing()
     controller.on_closing()
@@ -93,7 +93,7 @@ def test_show_brings_the_window_and_dock_back(tmp_path):
 def test_a_route_on_the_local_ui_is_handed_to_the_page(tmp_path):
     controller, window = _controller(tmp_path)
     controller.open_route("settings")
-    assert ("js", 'window.omelet.route("settings")') in window.calls
+    assert ("js", 'window.eggie.route("settings")') in window.calls
 
 
 def test_a_route_from_the_console_reloads_the_local_ui(tmp_path):

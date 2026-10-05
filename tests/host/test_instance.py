@@ -15,7 +15,7 @@ from host.providers.instance import claim
 def address():
     # Linux abstract namespace: no socket file, so multiprocessing has nothing
     # to unlink at exit after the test is gone (its finalizer printed tracebacks).
-    return f"\0omelet-test-{uuid.uuid4().hex}"
+    return f"\0eggie-test-{uuid.uuid4().hex}"
 
 
 def test_the_first_instance_claims_and_a_second_is_turned_away(address):
@@ -49,7 +49,7 @@ def test_a_silent_client_does_not_block_later_shows(address):
 
 
 def test_a_path_that_cannot_be_listened_on_still_runs_the_app():
-    sock_dir = tempfile.mkdtemp(dir="/tmp", prefix="omelet_sock_")
+    sock_dir = tempfile.mkdtemp(dir="/tmp", prefix="eggie_sock_")
     try:
         address = f"{sock_dir}/stale.sock"
         with open(address, "w") as f:
@@ -62,7 +62,7 @@ def test_a_path_that_cannot_be_listened_on_still_runs_the_app():
 def test_the_lima_provider_leaves_single_instance_to_launchservices():
     from pathlib import Path
     from host.providers.lima import LimaProvider
-    provider = LimaProvider(config=Path("/tmp/omelet.yaml"), runner=lambda a: None)
+    provider = LimaProvider(config=Path("/tmp/eggie.yaml"), runner=lambda a: None)
     assert provider.single_instance(lambda: None, announce=True) is True
 
 
@@ -100,4 +100,4 @@ def test_the_wsl_pipe_name_survives_an_unreadable_user_name(monkeypatch):
     monkeypatch.setattr(getpass, "getuser", no_user)
     monkeypatch.setattr(instance, "claim", fake_claim)
     assert Wsl2Provider(runner=lambda a: None).single_instance(lambda: None, announce=True)
-    assert seen["address"].startswith(r"\\.\pipe\omelet-")
+    assert seen["address"].startswith(r"\\.\pipe\eggie-")

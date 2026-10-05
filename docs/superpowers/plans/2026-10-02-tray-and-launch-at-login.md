@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the Omelet desktop app into a tray / menu-bar app whose close button hides the window, whose Quit stops the VM, and which opens at login (on by default after the first setup).
+**Goal:** Turn the Eggie desktop app into a tray / menu-bar app whose close button hides the window, whose Quit stops the VM, and which opens at login (on by default after the first setup).
 
 **Architecture:** Pure decisions (`lifecycle.py`, `settings.py`) and a testable `Controller` sit in `host/desktop/`. Everything platform-specific is a provider method in `host/providers/` (tray, autostart, single instance, login-launch detection, Dock policy, graceful stop). `__main__.run()` wires them; `DesktopApi` gains settings and quit; the local UI gains three screens.
 
@@ -15,14 +15,14 @@
 - Platform branching (`sys.platform`, `platform.system()`, `os.name`) only inside `host/providers/` — `tests/test_no_platform_leak.py`.
 - No test spawns `wsl.exe`/`limactl`, touches the registry, a real tray, AppKit or the network. Fakes are injected; assert constructed argv / values.
 - Tests reach repo files via `__file__`, never cwd-relative paths.
-- `host/` never imports `omelet_api`.
+- `host/` never imports `eggie_api`.
 - Every module under `host/` must be reachable by import from `host.cli` (`tests/host/test_no_dead_modules.py`; function-local imports count).
 - macOS-only and Windows-only imports (`AppKit`, `Foundation`, `ServiceManagement`, `objc`, `winreg`, `pystray`, `PIL`) are function-local, so the suite imports every module on Linux.
-- Run value (exact): `"<exe_path>" setup --background`, under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value name `Omelet`.
-- Copy (exact): tray items `Open Omelet`, `Settings`, `Quit Omelet`; checkbox `Open Omelet when I sign in`; first-close notice `Omelet is still running. Find it in the system tray.`; quitting screen `Stopping Omelet…`; background-start failure `Omelet could not start. Open Omelet to see why.`
+- Run value (exact): `"<exe_path>" setup --background`, under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value name `Eggie`.
+- Copy (exact): tray items `Open Eggie`, `Settings`, `Quit Eggie`; checkbox `Open Eggie when I sign in`; first-close notice `Eggie is still running. Find it in the system tray.`; quitting screen `Stopping Eggie…`; background-start failure `Eggie could not start. Open Eggie to see why.`
 - `settings.json` lives next to `install-state.json` (`default_install_dir().parent`), keys `autostart_set_once`, `tray_notice_shown`; missing/corrupt = all false.
 - WSL graceful stop: `systemctl poweroff` (root) → poll `running()` up to 30 s → `wsl --terminate <distro>` always.
-- Quit Omelet stops the VM only if `running()`; exits even if `stop()` raises. The app-update quit never stops the VM.
+- Quit Eggie stops the VM only if `running()`; exits even if `stop()` raises. The app-update quit never stops the VM.
 - Comments only for non-obvious edge cases/workarounds; no ticket references (user rule).
 - Test command (the sandbox's `/tmp/pytest-of-$USER` is root-owned):
   `mkdir -p .superpowers/tmp && TMPDIR=$PWD/.superpowers/tmp .venv/bin/python -m pytest -q` — written below as `$PYTEST`.
@@ -30,7 +30,7 @@
 ## Review Focus
 
 1. **Cmd+Q / app-update destroy hitting the close-to-tray handler** — `closing` fires for every close, including `window.destroy()` and macOS Cmd+Q; without an "exiting" flag the app can never quit and an update runs against a live app. Pinned in Task 6 (`test_exit_is_not_turned_into_a_hide`).
-2. **Tray Settings/Quit while the projects console (a VM page) is showing** — `window.omelet.route` does not exist there and the bridge is guarded; the controller must load the local UI with a `#route` fragment instead. Pinned in Task 6 (`test_a_route_from_the_console_reloads_the_local_ui`).
+2. **Tray Settings/Quit while the projects console (a VM page) is showing** — `window.eggie.route` does not exist there and the bridge is guarded; the controller must load the local UI with a `#route` fragment instead. Pinned in Task 6 (`test_a_route_from_the_console_reloads_the_local_ui`).
 3. **Quit while a job runs, then "Quit anyway"** — `JobRegistry` allows one job, so quit must not be a job; it runs on its own thread. Pinned in Task 7 (`test_quit_anyway_runs_while_a_job_is_still_running`).
 4. **A user who turned autostart off gets it back after a repair/reinstall** — the flag must survive `InstallState.clear()` / `remove_vm_data`. Pinned in Task 7 (`test_a_second_successful_install_does_not_turn_autostart_back_on`).
 5. **Install path with spaces in the Run value** — unquoted, Windows runs `C:\Users\Jane` and fails silently at login. Pinned in Task 2 (`test_run_value_quotes_a_path_with_spaces`).
@@ -46,7 +46,7 @@
 | `host/desktop/controller.py` | create | Window/tray choreography: hide on close, show, routes, exit, background start |
 | `host/desktop/__main__.py` | modify | Wiring: flags, single instance, hidden window, tray, controller |
 | `host/desktop/api.py` | modify | `get_settings`, `set_autostart`, `quit`; turn-on-once after install |
-| `host/desktop/ui/index.html`, `app.js`, `app.css` | modify | `settings`, `quit-confirm`, `quitting` screens; Settings tile; `window.omelet.route` |
+| `host/desktop/ui/index.html`, `app.js`, `app.css` | modify | `settings`, `quit-confirm`, `quitting` screens; Settings tile; `window.eggie.route` |
 | `host/desktop/resources/icon.ico` | create (copy) | App + tray icon |
 | `host/providers/instance.py` | create | Single-instance claim over `multiprocessing.connection` |
 | `host/providers/tray_win.py` | create | pystray tray |
@@ -56,7 +56,7 @@
 | `host/providers/lima.py` | modify | Autostart, login watch, Dock policy, tray, single instance (no-op) |
 | `host/cli.py` | modify | `setup --background`; `uninstall` turns autostart off |
 | `pyproject.toml` | modify | `pystray`, `Pillow` (win32); `Pillow` in `dev` |
-| `packaging/windows/omelet.spec`, `installer.iss`, `packaging/macos/omelet.spec` | modify | Icon, bundled resources, hidden imports |
+| `packaging/windows/eggie.spec`, `installer.iss`, `packaging/macos/eggie.spec` | modify | Icon, bundled resources, hidden imports |
 | `docs/release-testing.md`, `host/desktop/CLAUDE.md`, `host/CLAUDE.md` | modify | Manual gates, module roles, gotchas |
 
 ### Provider desktop surface (Tasks 2–5 build it; Task 4 pins it)
@@ -309,7 +309,7 @@ git commit -m "feat: settings store and launch-mode decision for the tray app"
 **Interfaces:**
 - Produces on `Wsl2Provider`:
   - constructor kwargs `registry_reader=_default_registry_reader`, `registry_deleter=_default_registry_deleter`, `sleep=time.sleep`, `clock=time.monotonic`
-  - `RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"`, `AUTOSTART_VALUE_NAME = "Omelet"` (module constants)
+  - `RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"`, `AUTOSTART_VALUE_NAME = "Eggie"` (module constants)
   - `run_value(exe_path: str) -> str` (module function)
   - `autostart_enabled(exe_path: str) -> bool`, `set_autostart(on: bool, exe_path: str) -> None`
   - `stop()` new behaviour
@@ -341,29 +341,29 @@ class ScriptedRunner:
 
 def _stopper(runner, clock_values):
     ticks = iter(clock_values)
-    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=runner,
+    return Wsl2Provider(distro="eggie-vm", wsl="wsl.exe", runner=runner,
                         spawner=[].append, sleep=lambda s: None,
                         clock=lambda: next(ticks))
 
 
-RUNNING = ("omelet-vm\r\n").encode("utf-16-le")
+RUNNING = ("eggie-vm\r\n").encode("utf-16-le")
 
 
 def test_stop_powers_off_through_systemd_before_terminating():
     runner = ScriptedRunner({("wsl.exe", "-l", "--running", "-q"): (1, b"")})
     _stopper(runner, [0, 1]).stop()
-    assert runner.calls[0] == ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
+    assert runner.calls[0] == ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--",
                                "systemctl", "poweroff"]
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_terminates_even_when_poweroff_fails():
     runner = ScriptedRunner({
-        ("wsl.exe", "-d", "omelet-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
+        ("wsl.exe", "-d", "eggie-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
         ("wsl.exe", "-l", "--running", "-q"): (1, b""),
     })
     _stopper(runner, [0, 1]).stop()
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
@@ -371,11 +371,11 @@ def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
     _stopper(runner, [0, 10, 20, 31]).stop()
     polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
     assert len(polls) == 3
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_run_value_quotes_a_path_with_spaces():
-    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Omelet\setup.exe"
+    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Eggie\setup.exe"
     assert run_value(exe) == f'"{exe}" setup --background'
 
 
@@ -389,12 +389,12 @@ def _autostart(store):
     def deleter(key, name):
         store.pop((key, name), None)
 
-    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=lambda a: None,
+    return Wsl2Provider(distro="eggie-vm", wsl="wsl.exe", runner=lambda a: None,
                         spawner=[].append, registry_reader=reader,
                         registry_writer=writer, registry_deleter=deleter)
 
 
-EXE = r"C:\Program Files\Omelet\setup.exe"
+EXE = r"C:\Program Files\Eggie\setup.exe"
 
 
 def test_set_autostart_on_writes_the_run_value():
@@ -431,7 +431,7 @@ Expected: FAIL — `ImportError: cannot import name 'AUTOSTART_VALUE_NAME'`
 Add `import time` to the imports. Next to `RUNONCE_KEY`:
 ```python
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-AUTOSTART_VALUE_NAME = "Omelet"
+AUTOSTART_VALUE_NAME = "Eggie"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
 POWEROFF_WAIT = 30.0
 ```
@@ -521,7 +521,7 @@ git commit -m "feat: graceful WSL stop and Run-key autostart"
 **Interfaces:**
 - Produces:
   - `claim(address: str, family: str, on_show: Callable[[], None], *, announce: bool, authkey: bytes = AUTHKEY) -> bool` — True when this process is the first instance (and now listens); False when another instance answered (and was sent `"show"` if `announce`).
-  - `Wsl2Provider.single_instance(on_show, *, announce) -> bool` using `\\.\pipe\omelet-<username>`, family `"AF_PIPE"`.
+  - `Wsl2Provider.single_instance(on_show, *, announce) -> bool` using `\\.\pipe\eggie-<username>`, family `"AF_PIPE"`.
   - `LimaProvider.single_instance(on_show, *, announce) -> bool` → always `True` (LaunchServices already keeps one instance; the reopen event is handled by the tray, Task 5).
 
 - [ ] **Step 1: Write the failing tests** — `tests/host/test_instance.py`. AF_UNIX stands in for AF_PIPE: same `multiprocessing.connection` code path, available on Linux.
@@ -535,7 +535,7 @@ from host.providers.instance import claim
 
 
 def _address(tmp_path):
-    return str(tmp_path / "omelet.sock")
+    return str(tmp_path / "eggie.sock")
 
 
 def test_the_first_instance_claims_and_a_second_is_turned_away(tmp_path):
@@ -559,7 +559,7 @@ def test_with_no_first_instance_startup_proceeds(tmp_path):
 def test_the_lima_provider_leaves_single_instance_to_launchservices():
     from pathlib import Path
     from host.providers.lima import LimaProvider
-    provider = LimaProvider(config=Path("/tmp/omelet.yaml"), runner=lambda a: None)
+    provider = LimaProvider(config=Path("/tmp/eggie.yaml"), runner=lambda a: None)
     assert provider.single_instance(lambda: None, announce=True) is True
 ```
 
@@ -571,7 +571,7 @@ Run: `$PYTEST tests/host/test_instance.py` → FAIL (`No module named 'host.prov
 
 `host/providers/instance.py`:
 ```python
-"""One running Omelet per user.
+"""One running Eggie per user.
 
 A second launch (Start menu, the login entry, the post-update relaunch) hands
 the first one a "show" and exits instead of opening a second tray icon.
@@ -582,7 +582,7 @@ import threading
 from multiprocessing.connection import Client, Listener
 from typing import Callable
 
-AUTHKEY = b"omelet-single-instance"
+AUTHKEY = b"eggie-single-instance"
 SHOW = "show"
 HELLO = "hello"
 
@@ -612,7 +612,7 @@ def _listen(address, family, on_show, authkey) -> bool:
             except Exception:
                 continue
 
-    threading.Thread(target=serve, daemon=True, name="omelet-instance").start()
+    threading.Thread(target=serve, daemon=True, name="eggie-instance").start()
     return True
 ```
 
@@ -621,8 +621,8 @@ def _listen(address, family, on_show, authkey) -> bool:
     def single_instance(self, on_show, *, announce: bool) -> bool:
         from .instance import claim
         # Pipe names are machine-wide: without the user name, another user's
-        # Omelet would answer and show its window instead.
-        address = rf"\\.\pipe\omelet-{getpass.getuser()}"
+        # Eggie would answer and show its window instead.
+        address = rf"\\.\pipe\eggie-{getpass.getuser()}"
         return claim(address, "AF_PIPE", on_show, announce=announce)
 ```
 
@@ -630,7 +630,7 @@ def _listen(address, family, on_show, authkey) -> bool:
 ```python
     def single_instance(self, on_show, *, announce: bool) -> bool:
         """LaunchServices keeps one instance of a .app; a second open arrives
-        as the reopen event, which the tray turns into Open Omelet."""
+        as the reopen event, which the tray turns into Open Eggie."""
         return True
 ```
 
@@ -702,7 +702,7 @@ class FakeLoginItems:
 
 
 def _with_login_items(items):
-    return LimaProvider(name="omelet-vm", config=Path("/tmp/omelet.yaml"),
+    return LimaProvider(name="eggie-vm", config=Path("/tmp/eggie.yaml"),
                         limactl="limactl", runner=FakeRunner(), mac_ver=_mac(),
                         login_items=items)
 
@@ -763,12 +763,12 @@ class MainAppLoginItem:
     def register(self) -> None:
         ok, error = self._service().registerAndReturnError_(None)
         if not ok:
-            raise RuntimeError(f"macOS refused to add Omelet to Login Items: {error}")
+            raise RuntimeError(f"macOS refused to add Eggie to Login Items: {error}")
 
     def unregister(self) -> None:
         ok, error = self._service().unregisterAndReturnError_(None)
         if not ok:
-            raise RuntimeError(f"macOS refused to remove Omelet from Login Items: {error}")
+            raise RuntimeError(f"macOS refused to remove Eggie from Login Items: {error}")
 
 
 def install_login_launch_handler(on_login: Callable[[], None]) -> None:
@@ -920,15 +920,15 @@ class WinTray:
         on_open, on_settings, on_quit = self._callbacks
         menu = pystray.Menu(
             # default=True is what a left-click on the icon runs.
-            pystray.MenuItem("Open Omelet", lambda: on_open(), default=True),
+            pystray.MenuItem("Open Eggie", lambda: on_open(), default=True),
             pystray.MenuItem("Settings", lambda: on_settings()),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit Omelet", lambda: on_quit()),
+            pystray.MenuItem("Quit Eggie", lambda: on_quit()),
         )
-        self._icon = pystray.Icon("Omelet", Image.open(self._paths), "Omelet", menu)
+        self._icon = pystray.Icon("Eggie", Image.open(self._paths), "Eggie", menu)
         # The Win32 backend runs its own message loop, so it can live off the
         # main thread that webview.start() owns.
-        threading.Thread(target=self._icon.run, daemon=True, name="omelet-tray").start()
+        threading.Thread(target=self._icon.run, daemon=True, name="eggie-tray").start()
 
     def stop(self) -> None:
         if self._icon is not None:
@@ -937,7 +937,7 @@ class WinTray:
     def notify(self, text: str) -> bool:
         if self._icon is None:
             return False
-        self._icon.notify(text, "Omelet")
+        self._icon.notify(text, "Eggie")
         return True
 ```
 
@@ -978,8 +978,8 @@ class MacTray:
 
         self._target = _Target.alloc().init()
         menu = NSMenu.alloc().init()
-        for title, action in (("Open Omelet", b"open:"), ("Settings", b"settings:"),
-                              (None, None), ("Quit Omelet", b"quit:")):
+        for title, action in (("Open Eggie", b"open:"), ("Settings", b"settings:"),
+                              (None, None), ("Quit Eggie", b"quit:")):
             if title is None:
                 menu.addItem_(NSMenuItem.separatorItem())
                 continue
@@ -997,7 +997,7 @@ class MacTray:
     def _retarget_cmd_q(self) -> None:
         # pywebview's Quit item calls terminate:, which runs every window's
         # closing handler -- and ours turns a close into a hide. Cmd+Q must
-        # mean Quit Omelet instead.
+        # mean Quit Eggie instead.
         from AppKit import NSApplication
         main_menu = NSApplication.sharedApplication().mainMenu()
         if main_menu is None:
@@ -1082,7 +1082,7 @@ git commit -m "feat: tray icon for Windows and menu-bar item for macOS"
       def on_login_launch(self) -> None # macOS: a login launch detected after start
       def start_vm_in_background(self) -> threading.Thread
   ```
-  Notice texts: `TRAY_NOTICE = "Omelet is still running. Find it in the system tray."`, `START_FAILED = "Omelet could not start. Open Omelet to see why."` (module constants).
+  Notice texts: `TRAY_NOTICE = "Eggie is still running. Find it in the system tray."`, `START_FAILED = "Eggie could not start. Open Eggie to see why."` (module constants).
 
 - [ ] **Step 1: Write the failing tests** — `tests/host/desktop/test_controller.py`
 
@@ -1148,7 +1148,7 @@ def test_closing_hides_instead_of_closing(tmp_path):
     assert window.calls == ["hide"]
 
 
-def test_the_first_hide_tells_the_user_where_omelet_went_once(tmp_path):
+def test_the_first_hide_tells_the_user_where_eggie_went_once(tmp_path):
     controller, _ = _controller(tmp_path)
     controller.on_closing()
     controller.on_closing()
@@ -1182,7 +1182,7 @@ def test_show_brings_the_window_and_dock_back(tmp_path):
 def test_a_route_on_the_local_ui_is_handed_to_the_page(tmp_path):
     controller, window = _controller(tmp_path)
     controller.open_route("settings")
-    assert ("js", 'window.omelet.route("settings")') in window.calls
+    assert ("js", 'window.eggie.route("settings")') in window.calls
 
 
 def test_a_route_from_the_console_reloads_the_local_ui(tmp_path):
@@ -1235,8 +1235,8 @@ import threading
 
 from .settings import TRAY_NOTICE_SHOWN, Settings
 
-TRAY_NOTICE = "Omelet is still running. Find it in the system tray."
-START_FAILED = "Omelet could not start. Open Omelet to see why."
+TRAY_NOTICE = "Eggie is still running. Find it in the system tray."
+START_FAILED = "Eggie could not start. Open Eggie to see why."
 
 
 class Controller:
@@ -1274,9 +1274,9 @@ class Controller:
     def open_route(self, route: str) -> None:
         self.show()
         if self.shell.is_local():
-            self.window.evaluate_js(f"window.omelet.route({json.dumps(route)})")
+            self.window.evaluate_js(f"window.eggie.route({json.dumps(route)})")
             return
-        # The console is a page from the VM: no window.omelet there, and the
+        # The console is a page from the VM: no window.eggie there, and the
         # bridge refuses it. Back to our own page, which reads the fragment.
         local = self.shell.local_url()
         if local:
@@ -1304,11 +1304,11 @@ class Controller:
             try:
                 self.provider.start()
             except Exception as e:
-                print(f"Omelet could not start the virtual machine: {e!r}", file=sys.stderr)
+                print(f"Eggie could not start the virtual machine: {e!r}", file=sys.stderr)
                 if self.tray is None or not self.tray.notify(START_FAILED):
                     self.show()
 
-        self._background = threading.Thread(target=run, daemon=True, name="omelet-autostart")
+        self._background = threading.Thread(target=run, daemon=True, name="eggie-autostart")
         self._background.start()
         return self._background
 ```
@@ -1353,7 +1353,7 @@ from host.core.status import Readiness
 from host.desktop.api import DesktopApi
 from host.desktop.settings import Settings
 
-EXE = r"C:\Omelet\setup.exe"
+EXE = r"C:\Eggie\setup.exe"
 
 
 class FakeProvider:
@@ -1388,7 +1388,7 @@ def test_settings_read_the_real_state(tmp_path):
     provider = FakeProvider()
     api = _api(tmp_path, provider)
     assert api.get_settings() == {"autostart": False, "autostart_available": True}
-    provider.autostart[EXE] = True     # turned on outside Omelet
+    provider.autostart[EXE] = True     # turned on outside Eggie
     assert api.get_settings()["autostart"] is True
 
 
@@ -1401,9 +1401,9 @@ def test_a_source_checkout_cannot_register_itself(tmp_path):
 def test_set_autostart_reports_a_refusal_as_text(tmp_path):
     class Refusing(FakeProvider):
         def set_autostart(self, on, exe):
-            raise RuntimeError("macOS refused to add Omelet to Login Items")
+            raise RuntimeError("macOS refused to add Eggie to Login Items")
     result = _api(tmp_path, Refusing()).set_autostart(True)
-    assert result == {"ok": False, "error": "macOS refused to add Omelet to Login Items"}
+    assert result == {"ok": False, "error": "macOS refused to add Eggie to Login Items"}
 
 
 def test_the_first_successful_install_turns_autostart_on(tmp_path):
@@ -1552,7 +1552,7 @@ New methods (place under a `# --- settings and quit ---` section):
 
     def set_autostart(self, on: bool) -> dict:
         if self._autostart_exe is None:
-            return {"ok": False, "error": "Only an installed Omelet can open when you sign in."}
+            return {"ok": False, "error": "Only an installed Eggie can open when you sign in."}
         try:
             self._provider.set_autostart(bool(on), self._autostart_exe)
         except Exception as e:
@@ -1567,7 +1567,7 @@ New methods (place under a `# --- settings and quit ---` section):
             # Not a job: JobRegistry runs one at a time, and Quit anyway must
             # work while an install still holds it.
             self._quit_thread = threading.Thread(target=self._stop_then_exit,
-                                                 daemon=True, name="omelet-quit")
+                                                 daemon=True, name="eggie-quit")
             self._quit_thread.start()
         return {"quitting": True}
 
@@ -1577,7 +1577,7 @@ New methods (place under a `# --- settings and quit ---` section):
                 self._provider.stop()
         except Exception as e:
             # A VM that will not stop must not leave an app that cannot close.
-            print(f"Omelet could not stop the virtual machine: {e!r}", file=sys.stderr)
+            print(f"Eggie could not stop the virtual machine: {e!r}", file=sys.stderr)
         finally:
             self._quit_app()
 ```
@@ -1600,8 +1600,8 @@ git commit -m "feat: settings, quit and turn-on-once in the desktop bridge"
 - Test: `tests/host/desktop/test_ui_assets.py` (append)
 
 **Interfaces:**
-- Consumes: `get_settings`, `set_autostart`, `quit` (Task 7); `Controller.open_route` calls `window.omelet.route(name)` or loads `#name` (Task 6).
-- Produces: templates `settings`, `quit-confirm`, `quitting`; actions `settings`, `toggle-autostart`, `quit-anyway`, `quit-cancel`; `window.omelet.route(name)` for `"settings"` and `"quit"`; a `Settings` tile on every home screen (`home:running`, `home:stopped`, `home:not_installed`, `home:wrong`).
+- Consumes: `get_settings`, `set_autostart`, `quit` (Task 7); `Controller.open_route` calls `window.eggie.route(name)` or loads `#name` (Task 6).
+- Produces: templates `settings`, `quit-confirm`, `quitting`; actions `settings`, `toggle-autostart`, `quit-anyway`, `quit-cancel`; `window.eggie.route(name)` for `"settings"` and `"quit"`; a `Settings` tile on every home screen (`home:running`, `home:stopped`, `home:not_installed`, `home:wrong`).
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/host/desktop/test_ui_assets.py`)
 
@@ -1622,14 +1622,14 @@ def test_every_home_state_can_open_settings():
 
 def test_the_settings_copy_is_exact():
     markup = (UI / "index.html").read_text()
-    assert "Open Omelet when I sign in" in markup
-    assert "Stopping Omelet…" in markup
+    assert "Open Eggie when I sign in" in markup
+    assert "Stopping Eggie…" in markup
 
 
 def test_the_page_answers_the_routes_the_tray_sends():
     # controller.open_route() sends exactly these names, by call or by #fragment.
     script = (UI / "app.js").read_text()
-    assert "omelet.route" in script or "route(" in script
+    assert "eggie.route" in script or "route(" in script
     for route in ("settings", "quit"):
         assert f"'{route}'" in script, f"app.js does not handle the {route} route"
     assert "location.hash" in script
@@ -1652,9 +1652,9 @@ Add three templates before `<template data-screen="install:running">`:
     <h2 class="title">Settings</h2>
     <label class="setting">
       <input type="checkbox" data-setting="autostart" data-action="toggle-autostart">
-      <span>Open Omelet when I sign in</span>
+      <span>Open Eggie when I sign in</span>
     </label>
-    <p class="hint" data-when="unavailable">Only an installed Omelet can open when you sign in.</p>
+    <p class="hint" data-when="unavailable">Only an installed Eggie can open when you sign in.</p>
     <p class="hint" data-field="error"></p>
     <div class="row"><button class="btn-secondary" data-action="go-home">Back</button></div>
   </section>
@@ -1662,7 +1662,7 @@ Add three templates before `<template data-screen="install:running">`:
 
 <template data-screen="quit-confirm">
   <section class="pad centered">
-    <h2 class="title">Omelet is still working</h2>
+    <h2 class="title">Eggie is still working</h2>
     <p class="lede">Quitting now stops what it is doing and turns the kitchen off.</p>
     <div class="row">
       <button class="btn-primary" data-action="quit-anyway">Quit anyway</button>
@@ -1673,7 +1673,7 @@ Add three templates before `<template data-screen="install:running">`:
 
 <template data-screen="quitting">
   <section class="pad centered">
-    <h2 class="title">Stopping Omelet…</h2>
+    <h2 class="title">Stopping Eggie…</h2>
     <p class="lede">Turning the kitchen off. The window closes by itself.</p>
   </section>
 </template>
@@ -1719,7 +1719,7 @@ ACTIONS['quit-cancel'] = () => refresh();
 
 const ROUTES = { settings: () => ACTIONS.settings(), quit: () => startQuit(false) };
 
-window.omelet.route = (name) => {
+window.eggie.route = (name) => {
   const go = ROUTES[name];
   if (go) go();
 };
@@ -1766,8 +1766,8 @@ git commit -m "feat: settings, quit-confirm and quitting screens"
   - `resource_dir() -> Path` in `__main__` (same `_MEIPASS` rule as `ui_dir()`), `icon_path() -> Path`
   - `run(provider, state, *, create=..., start=..., resumed=False, background=False, steps_factory=None, app_update_fn=None, settings=None) -> int`
   - `main()` parses `--background`
-  - `omelet setup --background`
-  - `omelet uninstall --purge` calls `provider.set_autostart(False, sys.executable)` first, ignoring errors
+  - `eggie setup --background`
+  - `eggie uninstall --purge` calls `provider.set_autostart(False, sys.executable)` first, ignoring errors
 
 - [ ] **Step 1: Copy the icon**
 
@@ -1889,9 +1889,9 @@ def test_the_tray_menu_carries_open_settings_and_quit(tmp_path):
     assert set(kwargs) == {"icon", "on_open", "on_settings", "on_quit"}
     assert kwargs["icon"].is_file()
     kwargs["on_settings"]()
-    assert window.evaluated[-1] == 'window.omelet.route("settings")'
+    assert window.evaluated[-1] == 'window.eggie.route("settings")'
     kwargs["on_quit"]()
-    assert window.evaluated[-1] == 'window.omelet.route("quit")'
+    assert window.evaluated[-1] == 'window.eggie.route("quit")'
 
 
 def test_the_tray_stops_when_the_loop_ends(tmp_path):
@@ -2046,7 +2046,7 @@ git commit -m "feat: run the desktop app from the tray, with --background for lo
 ### Task 10: Packaging and docs
 
 **Files:**
-- Modify: `packaging/windows/omelet.spec`, `packaging/windows/installer.iss`, `packaging/macos/omelet.spec`, `docs/release-testing.md`, `host/desktop/CLAUDE.md`, `host/CLAUDE.md`
+- Modify: `packaging/windows/eggie.spec`, `packaging/windows/installer.iss`, `packaging/macos/eggie.spec`, `docs/release-testing.md`, `host/desktop/CLAUDE.md`, `host/CLAUDE.md`
 - Test: `tests/host/test_host_dependencies.py` (append)
 
 **Interfaces:**
@@ -2058,7 +2058,7 @@ git commit -m "feat: run the desktop app from the tray, with --background for lo
 def test_packaging_bundles_the_tray_icon_and_uses_it_as_the_app_icon():
     # The tray loads icon.ico at runtime; a spec without it starts a tray
     # with no image and pystray raises on the first draw.
-    for spec_path in ("packaging/windows/omelet.spec", "packaging/macos/omelet.spec"):
+    for spec_path in ("packaging/windows/eggie.spec", "packaging/macos/eggie.spec"):
         spec = (REPO_ROOT / spec_path).read_text()
         assert '"../../host/desktop/resources"' in spec, f"{spec_path} does not bundle resources"
         assert "icon=" in spec, f"{spec_path} does not set the app icon"
@@ -2070,12 +2070,12 @@ def test_packaging_bundles_the_tray_icon_and_uses_it_as_the_app_icon():
 
 - [ ] **Step 3: Implement**
 
-`packaging/windows/omelet.spec`:
+`packaging/windows/eggie.spec`:
 - `datas` gains `("../../host/desktop/resources", "host/desktop/resources"),`
 - `HIDDEN` gains `"host.desktop.controller", "host.desktop.lifecycle", "host.desktop.settings", "host.providers.tray_win", "host.providers.instance", "pystray._win32", "PIL.Image"`
 - both `EXE(...)` calls gain `icon="../../host/desktop/resources/icon.ico"`
 
-`packaging/macos/omelet.spec`:
+`packaging/macos/eggie.spec`:
 - `DATAS` gains the same resources tuple
 - `HIDDEN` gains `"host.desktop.controller", "host.desktop.lifecycle", "host.desktop.settings", "host.providers.tray_mac", "host.providers.mac_login", "ServiceManagement"`
 - `BUNDLE(...)` gains `icon="../../host/desktop/resources/icon.ico"` (PyInstaller converts to `.icns` via Pillow, from the `dev` extra)
@@ -2092,16 +2092,16 @@ UninstallDisplayIcon={app}\setup.exe
 
 | # | Action | Pass when | Result |
 |---|---|---|---|
-| T1 | Close the window with the title-bar button | The window hides; the tray / menu-bar icon stays; projects still answer. Windows: the first time only, a notification says Omelet is still in the tray | |
-| T2 | Tray icon: left-click (Windows) / menu **Open Omelet** | The window comes back where it was | |
-| T3 | Tray menu **Settings** while the projects console is showing | The window shows Omelet's Settings screen, not the console | |
-| T4 | Finish a first setup, then open Settings | **Open Omelet when I sign in** is ticked. Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Omelet` shows `"<install dir>\setup.exe" setup --background`. macOS: Omelet is listed in System Settings → General → Login Items | |
+| T1 | Close the window with the title-bar button | The window hides; the tray / menu-bar icon stays; projects still answer. Windows: the first time only, a notification says Eggie is still in the tray | |
+| T2 | Tray icon: left-click (Windows) / menu **Open Eggie** | The window comes back where it was | |
+| T3 | Tray menu **Settings** while the projects console is showing | The window shows Eggie's Settings screen, not the console | |
+| T4 | Finish a first setup, then open Settings | **Open Eggie when I sign in** is ticked. Windows: `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Eggie` shows `"<install dir>\setup.exe" setup --background`. macOS: Eggie is listed in System Settings → General → Login Items | |
 | T5 | Sign out and back in (and once: reboot) | Only the tray icon appears, no window; within a minute the VM is running and projects answer | |
 | T6 | Untick the checkbox; turn it back on in Task Manager / System Settings | Reopening Settings shows the OS state each time | |
 | T7 | Untick, then run **Repair** and an app update | It stays unticked | |
-| T8 | Open Omelet again from the Start menu / Finder while it runs | The existing window comes forward; still one tray icon | |
-| T9 | Tray **Quit Omelet** with the VM running | "Stopping Omelet…" shows, then the app exits; `wsl -l --running` / `limactl list` shows the VM stopped. Record whether `systemctl poweroff` alone ended the WSL distro | |
-| T10 | **Quit Omelet** during an import | "Omelet is still working" asks first; Cancel returns; Quit anyway exits | |
+| T8 | Open Eggie again from the Start menu / Finder while it runs | The existing window comes forward; still one tray icon | |
+| T9 | Tray **Quit Eggie** with the VM running | "Stopping Eggie…" shows, then the app exits; `wsl -l --running` / `limactl list` shows the VM stopped. Record whether `systemctl poweroff` alone ended the WSL distro | |
+| T10 | **Quit Eggie** during an import | "Eggie is still working" asks first; Cancel returns; Quit anyway exits | |
 | T11 | macOS: red button, then click the Dock icon; then Cmd+Q | The Dock icon disappears while hidden and the window comes back on reopen; Cmd+Q stops the VM and quits | |
 | T12 | **Update now** while the VM runs | The app restarts on the new version; the VM was never stopped | |
 | T13 | **Destructive.** Uninstall while the app runs | The app closes; the Run value / Login Item is gone | |
@@ -2110,7 +2110,7 @@ UninstallDisplayIcon={app}\setup.exe
 `host/desktop/CLAUDE.md` — under "Module roles" add:
 ```markdown
 - `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
-  routes reach the page via `window.omelet.route()` or a `#route` reload when the console shows.
+  routes reach the page via `window.eggie.route()` or a `#route` reload when the console shows.
 - `lifecycle.py` / `settings.py` — pure launch-mode decision and the `settings.json` flags that
   must outlive the VM (`install-state.json` is deleted on reset).
 ```
@@ -2118,7 +2118,7 @@ and under "Things that will bite you":
 ```markdown
 - **`events.closing` fires for every close** — the title-bar button, `window.destroy()` and macOS
   Cmd+Q (via `applicationShouldTerminate_`). `Controller` lets one through only after `exit()`;
-  the mac tray re-points the Cmd+Q menu item at Quit Omelet. A new close path must go through
+  the mac tray re-points the Cmd+Q menu item at Quit Eggie. A new close path must go through
   `Controller.exit()` or it becomes a hide.
 - **Quit is not a job.** `JobRegistry` runs one job; Quit anyway must work while an install holds it.
 ```

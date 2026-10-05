@@ -107,7 +107,7 @@ describe("boot", () => {
     expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "notAnswering" });
   });
 
-  it("needs an account until the Omelet sign-in has finished", async () => {
+  it("needs an account until the Eggie sign-in has finished", async () => {
     for (const state of ["signed_out", "pending"]) {
       const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": OK, "GET /api/account": ACCOUNT(state) });
       expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsAccount" });

@@ -1,9 +1,9 @@
 [project]
-name = "omelet"
+name = "eggie"
 version = "0.1.6"
 requires-python = ">=3.12"
 # The host parses no YAML: compose files are read by the API, and
-# host/providers/omelet.yaml is handed to limactl as a path.
+# host/providers/eggie.yaml is handed to limactl as a path.
 #
 # pywebview is the desktop window; it has no bindings of its own and needs a
 # native backend per platform, so pythonnet (Windows, EdgeChromium) and the
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-omelet = "host.cli:app"
+eggie = "host.cli:app"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pyinstaller>=6.10", "Pillow>=10.0"]

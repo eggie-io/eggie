@@ -2,7 +2,7 @@ import type { AgentStatuses } from "../agents/status";
 
 export type Phase = "deciding" | "onboarding" | "off";
 
-const KEY = "omelet.onboarded";
+const KEY = "eggie.onboarded";
 
 // A query that hasn't answered is undefined; one that failed is null.
 export function decide({

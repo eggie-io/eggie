@@ -13,9 +13,9 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.routes.app import create_app
-from omelet_api.core.config import ApiConfig
-from omelet_api.core.exec import Completed
+from eggie_api.routes.app import create_app
+from eggie_api.core.config import ApiConfig
+from eggie_api.core.exec import Completed
 from host.client import ApiClient, ApiError
 from host.core.constants import DEFAULT_DOMAIN, EDGE_PORT
 from host.core.install import VerificationFailed, verify_step
@@ -24,7 +24,7 @@ from tests.runtime.api.conftest import PS_RESTARTING, FakeProbe, FakeRunner
 from tests.host.test_client_seam import AppOpener
 
 TOKEN = "test-token"
-SELFTEST_URL = f"http://omelet-selftest.{DEFAULT_DOMAIN}:{EDGE_PORT}"
+SELFTEST_URL = f"http://eggie-selftest.{DEFAULT_DOMAIN}:{EDGE_PORT}"
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_verify_passes_on_200_and_removes_the_smoke_test_project(api, template):
         "the smoke test must use a reserved id, not the template's folder name"
     assert client.list_projects() == [], \
         "the smoke-test project must not be left behind in the VM"
-    assert any("label=com.docker.compose.project=omelet-selftest" in a
+    assert any("label=com.docker.compose.project=eggie-selftest" in a
                for a in runner.calls), \
         "the smoke-test containers must not be left running"
 
@@ -143,7 +143,7 @@ class RefusesTeardown:
 def test_a_teardown_failure_on_the_success_path_is_reported_not_swallowed(
         api, template):
     # Otherwise setup says "finished successfully" while the smoke-test
-    # containers keep running and omelet-selftest sits in `omelet status`
+    # containers keep running and eggie-selftest sits in `eggie status`
     # with nothing to explain it.
     client, _runner, _probe = api
     with pytest.raises(VerificationFailed, match="could not be removed"):

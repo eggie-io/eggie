@@ -25,13 +25,13 @@ export function failure(item: UploadItem): string {
     case "file_exists":
       return `${item.name} is already in ${item.dir === "" ? "the top of the project" : `${item.dir}/`}. Replace it?`;
     case "permission_denied":
-      return "Omelet can't write into that folder — pick another.";
+      return "Eggie can't write into that folder — pick another.";
     case "project_not_found":
       return "The project is gone.";
     case "path_is_folder":
       return "There's a folder with that name already.";
     case "upload_not_found":
-      return "Omelet lost this upload — send it again.";
+      return "Eggie lost this upload — send it again.";
     default:
       return item.message ?? "Something went wrong.";
   }

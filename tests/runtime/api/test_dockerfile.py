@@ -1,6 +1,6 @@
 from pathlib import Path
 
-DOCKERFILE = Path(__file__).resolve().parents[3] / "runtime" / "omelet_api" / "Dockerfile"
+DOCKERFILE = Path(__file__).resolve().parents[3] / "runtime" / "eggie_api" / "Dockerfile"
 
 
 def _text() -> str:
@@ -19,8 +19,8 @@ def test_dockerfile_puts_the_docker_cli_at_the_absolute_path_lifecycle_expects()
     assert "/usr/local/bin/docker /usr/bin/docker" in _text()
 
 
-def test_dockerfile_never_touches_opt_omelet():
-    # /opt/omelet is a bind mount holding user projects and the state db. A
+def test_dockerfile_never_touches_opt_eggie():
+    # /opt/eggie is a bind mount holding user projects and the state db. A
     # COPY, VOLUME or WORKDIR targeting it would let an image pull mask or
     # destroy it. Checking only the instructions that matter, rather than the
     # raw file text, leaves room for an explanatory comment that mentions the
@@ -29,7 +29,7 @@ def test_dockerfile_never_touches_opt_omelet():
     for line in _text().splitlines():
         instruction = line.strip()
         if instruction.startswith(("COPY", "WORKDIR")):
-            assert "/opt/omelet" not in instruction, line
+            assert "/opt/eggie" not in instruction, line
 
 
 def test_dockerfile_installs_git_for_the_github_clone_job():

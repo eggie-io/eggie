@@ -3,12 +3,12 @@
 Date: 2026-09-23
 Issue: #14
 
-> **Update (same day):** the native "Omelet" menu (§3) was removed in favour
+> **Update (same day):** the native "Eggie" menu (§3) was removed in favour
 > of the console's own top bar (§7): **‹ Home** replaces
-> *Machine*, **↗** replaces *Open in browser*, and `DesktopApi.open_omelet`
+> *Machine*, **↗** replaces *Open in browser*, and `DesktopApi.open_eggie`
 > and `Shell.load_local` went with it. Sections below that mention the menu
 > describe the first iteration. The bar needs a runtime release: the
-> published `omelet-web:0.2.0` (pinned by `runtime-v0.0.5`) predates it, and a
+> published `eggie-web:0.2.0` (pinned by `runtime-v0.0.5`) predates it, and a
 > console without the bar has no way back to Home inside the window.
 
 ## 1. Why
@@ -16,13 +16,13 @@ Issue: #14
 A user today meets two interfaces: the desktop app (install, start/stop, ports,
 Doctor, uninstall, folder import) and the browser console at
 `http://localhost:39080` (projects, files, uploads), which the desktop's
-**Open Omelet** button opens in the system browser. For a non-technical user
+**Open Eggie** button opens in the system browser. For a non-technical user
 those read as two different products. The console moves into the desktop
 window; the browser stays available as a secondary route.
 
 What the user decided:
 
-- Host-only controls live behind a **native "Omelet" menu**, not a strip drawn
+- Host-only controls live behind a **native "Eggie" menu**, not a strip drawn
   around the console and not a "Machine" section inside the console.
 - **Import folder stays** in the desktop app for now, even though the console
   has uploads.
@@ -64,8 +64,8 @@ A new `DesktopApi.enter_console()`:
 If the handoff throws (stopped VM, unreadable token, older API) it returns
 `{"ok": False, "message": ...}` and the window stays where it is. It never
 loads the console without a code: inside the app, the console's signed-out
-screen tells the user to open Omelet from the desktop app — which is where
-they already are — so a bare load is a dead end. `open_omelet` keeps its
+screen tells the user to open Eggie from the desktop app — which is where
+they already are — so a bare load is a dead end. `open_eggie` keeps its
 bare-URL fallback, because in a real browser that screen is the right one.
 
 ### When it happens
@@ -76,12 +76,12 @@ bare-URL fallback, because in a real browser that screen is the right one.
   calls `enter_console()` when it is set. One-shot for the same reason
   `resumed` is: without it, choosing *Machine* from the menu reloads the local
   UI, re-probes, sees "running" and bounces straight back into the console.
-- **From the "The kitchen is open" screen**: its **Open Omelet** button calls
-  `enter_console()` instead of `open_omelet()`. On `ok: false` the screen shows
+- **From the "The kitchen is open" screen**: its **Open Eggie** button calls
+  `enter_console()` instead of `open_eggie()`. On `ok: false` the screen shows
   the message in the existing notice.
 - **From the menu**, below.
 
-### The Omelet menu
+### The Eggie menu
 
 Passed to `webview.start(menu=...)`. Callbacks are Python functions; nothing
 crosses the JS bridge.
@@ -90,20 +90,20 @@ crosses the JS bridge.
 |---|---|
 | Projects | `enter_console()`; on failure a notice on the local UI, or — from the console — back to the local UI, whose Home state explains it |
 | Machine | `window.load_url(<local UI>)` — the local UI boots, re-probes and shows Home in its real state; nothing when the local UI already shows |
-| Open in browser | `open_omelet()` (today's behaviour: handoff, system browser) |
+| Open in browser | `open_eggie()` (today's behaviour: handoff, system browser) |
 
 *Projects* does nothing while a desktop job (install, import, VM start/stop,
 repair, uninstall) is running: the local screen is showing that job's
 progress, which is the explanation, and leaving it would lose the job's
 events (§4).
 
-The window title is "Omelet" while the console is showing.
+The window title is "Eggie" while the console is showing.
 
 ## 4. Security: the bridge is not the console's
 
 pywebview injects `window.pywebview.api` into **every** page loaded in the
 window, the console included. The console is served from inside the VM, where
-coding agents run with root; anything there can replace the `omelet-web`
+coding agents run with root; anything there can replace the `eggie-web`
 container. Unguarded, a page from the VM could call `reboot_now`,
 `start_uninstall`, or `start_import` with an arbitrary host path.
 
@@ -130,13 +130,13 @@ So:
   pass. Closing that needs the rejected two-window shape.
 - **Job events are pushed only to the local UI.** `push` checks the current
   URL the same way before `evaluate_js`, so a console page that defines its
-  own `window.omelet.on` never receives progress events.
+  own `window.eggie.on` never receives progress events.
 - `private_mode` stays at its default (on): the console's session cookie does
   not outlive the app, and every launch starts from a fresh handoff.
 
 ## 5. Edge cases
 
-- **VM dies while the console is open.** The console shows its own "Omelet
+- **VM dies while the console is open.** The console shows its own "Eggie
   isn't answering" screen. *Machine* re-probes and shows the real state with
   its buttons. No background polling.
 - **Session expired or handoff spent.** The console shows "We've lost track of
@@ -149,7 +149,7 @@ So:
   (`desktop/desktop.ts`'s `openExternal`), never `window.open`.
 - **Install finishing.** The install screen returns to Home as today; there is
   no automatic jump into the console after an install (the launch flag is
-  already spent). The user presses **Open Omelet**.
+  already spent). The user presses **Open Eggie**.
 
 ## 6. Testing
 

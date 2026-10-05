@@ -1,4 +1,4 @@
-import { Button, Egg } from "@omelet/ui";
+import { Button, Egg } from "@eggie/ui";
 import { CHECK, FOLDER, GITHUB, PLUS } from "../icons";
 import s from "./ProjectList.module.css";
 

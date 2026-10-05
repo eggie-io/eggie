@@ -1,8 +1,8 @@
-# Omelet Desktop App Implementation Plan
+# Eggie Desktop App Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the tkinter `host/setup_app/` with a pywebview desktop app that renders the Omelet Desktop design board on Windows and macOS.
+**Goal:** Replace the tkinter `host/setup_app/` with a pywebview desktop app that renders the Eggie Desktop design board on Windows and macOS.
 
 **Architecture:** A native window hosting local HTML/CSS/JS over the system webview (WebView2 / WKWebView). `host/desktop/api.py` is the only object JavaScript can reach; slow work runs on worker threads registered in `host/desktop/jobs.py` and pushes events back with `evaluate_js`. All branching logic lives in `host/desktop/view.py`, which is pure and therefore the only part with tests. `host/core/**` is called as-is.
 
@@ -417,7 +417,7 @@ git commit -m "Add desktop job registry with coalesced progress"
 
 **Interfaces:**
 - Consumes: `route_for` (Task 1), `JobRegistry`/`JobBusy` (Task 2), `host.core.status.probe`, `host.core.install.InstallState`, `host.core.constants`.
-- Produces: `class DesktopApi` with `__init__(self, provider, state, *, push, probe_fn=probe, browser_open=webbrowser.open)` and methods `home(self) -> dict`, `open_omelet(self) -> dict`.
+- Produces: `class DesktopApi` with `__init__(self, provider, state, *, push, probe_fn=probe, browser_open=webbrowser.open)` and methods `home(self) -> dict`, `open_eggie(self) -> dict`.
   - `home()` returns `{"route", "state", "first_run", "app_version", "engine_version", "problem"}`.
   - `first_run` is True only when nothing has ever been recorded — `not readiness.vm_exists and not state.completed()`.
 
@@ -488,10 +488,10 @@ def test_home_passes_the_probe_problem_through_for_the_log(tmp_path):
     assert home["problem"] == "connection refused"
 
 
-def test_open_omelet_opens_the_edge_port_not_the_agent_port(tmp_path):
+def test_open_eggie_opens_the_edge_port_not_the_agent_port(tmp_path):
     from host.core import constants
     opened = []
-    _api(tmp_path, READY, opened=opened).open_omelet()
+    _api(tmp_path, READY, opened=opened).open_eggie()
     assert opened == [f"http://localhost:{constants.EDGE_PORT}"]
 ```
 
@@ -554,7 +554,7 @@ class DesktopApi:
 
     # --- actions ------------------------------------------------------
 
-    def open_omelet(self) -> dict:
+    def open_eggie(self) -> dict:
         # The edge port, never the agent port: this is whatever Traefik is
         # routing, and becomes the web app for free when that ships.
         self._open(f"http://localhost:{constants.EDGE_PORT}")
@@ -570,7 +570,7 @@ Expected: PASS — 6 passed
 
 ```bash
 git add host/desktop/api.py tests/host/desktop/test_api_home.py
-git commit -m "Add desktop bridge home and open-omelet"
+git commit -m "Add desktop bridge home and open-eggie"
 ```
 
 ---
@@ -627,7 +627,7 @@ def test_a_missing_webview_runtime_is_a_sentence_not_a_traceback(tmp_path, capsy
 
 def test_the_fallback_names_the_headless_command():
     # Without this the user is told the app is broken and nothing else.
-    assert "omelet setup --headless" in WEBVIEW_MISSING
+    assert "eggie setup --headless" in WEBVIEW_MISSING
 
 
 def test_a_working_window_starts_the_loop_and_returns_zero(tmp_path):
@@ -653,7 +653,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'host.desktop.__main__'
 Create `host/desktop/ui/index.html` as a one-line stub for now (Task 5 fills it):
 
 ```html
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>Omelet</title></head><body></body></html>
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Eggie</title></head><body></body></html>
 ```
 
 ```python
@@ -670,19 +670,19 @@ import argparse
 import sys
 from pathlib import Path
 
-WINDOW_TITLE = "Omelet"
+WINDOW_TITLE = "Eggie"
 # The board's frames are 880x620. The OS draws the title bar, so that is the
 # content size; min_size keeps the nine-row install panel from clipping.
 WINDOW_SIZE = (880, 620)
 MIN_SIZE = (800, 560)
 
 WEBVIEW_MISSING = (
-    "Omelet could not open its window because this computer is missing the "
+    "Eggie could not open its window because this computer is missing the "
     "Microsoft Edge WebView2 runtime.\n"
     "Install it from https://developer.microsoft.com/microsoft-edge/webview2/ "
-    "and open Omelet again.\n"
-    "In the meantime you can still set up Omelet by running: "
-    "omelet setup --headless"
+    "and open Eggie again.\n"
+    "In the meantime you can still set up Eggie by running: "
+    "eggie setup --headless"
 )
 
 
@@ -721,7 +721,7 @@ def run(provider, state, *, create=_default_create, start=_default_start) -> int
         import json
         window = holder.get("window")
         if window is not None:
-            window.evaluate_js(f"window.omelet.on({json.dumps(event)})")
+            window.evaluate_js(f"window.eggie.on({json.dumps(event)})")
 
     api = DesktopApi(provider, state, push=push)
 
@@ -742,7 +742,7 @@ def main(argv: list[str] | None = None) -> int:
     from host.core.install import InstallState
     from host.providers import default_install_dir, get_provider
 
-    parser = argparse.ArgumentParser(prog="omelet-desktop")
+    parser = argparse.ArgumentParser(prog="eggie-desktop")
     # Written by provider.register_resume() into Windows RunOnce. The flag
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
@@ -781,8 +781,8 @@ git commit -m "Add desktop entrypoint with WebView2 fallback"
 - Test: `tests/host/desktop/test_ui_assets.py`
 
 **Interfaces:**
-- Consumes: `DesktopApi.home()`, `DesktopApi.open_omelet()` (Task 3).
-- Produces: `window.omelet.on(event)` — the global the Python `push` calls; `data-screen` attributes on each `<template>` naming a route+state pair.
+- Consumes: `DesktopApi.home()`, `DesktopApi.open_eggie()` (Task 3).
+- Produces: `window.eggie.on(event)` — the global the Python `push` calls; `data-screen` attributes on each `<template>` naming a route+state pair.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -991,7 +991,7 @@ body {
 // The one global Python reaches, and the one place a pushed event lands.
 // Handlers register by event kind; an unknown kind is ignored rather than
 // thrown, so an older UI paired with a newer bridge degrades quietly.
-window.omelet = {
+window.eggie = {
   handlers: {},
   on(event) {
     const handler = this.handlers[event.kind];
@@ -1028,13 +1028,13 @@ function wire(root) {
 }
 
 const ACTIONS = {
-  'open-omelet': () => api().open_omelet(),
+  'open-eggie': () => api().open_eggie(),
   'go-home': () => refresh(),
 };
 
 async function refresh() {
   const home = await api().home();
-  document.title = 'Omelet';
+  document.title = 'Eggie';
   if (home.first_run) return show('first-run', home);
   show(home.route === 'unreachable' ? 'unreachable' : `home:${home.state}`, home);
 }
@@ -1053,7 +1053,7 @@ window.addEventListener('pywebviewready', refresh);
      out, and it takes scalars. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self';">
-<title>Omelet</title>
+<title>Eggie</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -1061,8 +1061,8 @@ window.addEventListener('pywebviewready', refresh);
 
 <template data-screen="first-run">
   <section class="pad">
-    <h1 class="display">Welcome to Omelet</h1>
-    <p class="lede">Omelet sets up a tiny private computer inside your computer,
+    <h1 class="display">Welcome to Eggie</h1>
+    <p class="lede">Eggie sets up a tiny private computer inside your computer,
       so you can build real, working apps just by chatting with it.</p>
     <ol class="steps">
       <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
@@ -1085,7 +1085,7 @@ window.addEventListener('pywebviewready', refresh);
     <h1 class="display">The kitchen is open</h1>
     <p class="lede">Your machine is up and the cook is at the counter.</p>
     <div class="row">
-      <button class="btn-primary" data-action="open-omelet">Open Omelet</button>
+      <button class="btn-primary" data-action="open-eggie">Open Eggie</button>
       <button class="btn-secondary" data-action="stop-vm">Stop the kitchen</button>
     </div>
     <footer class="odds"><span data-field="app_version"></span></footer>
@@ -1099,7 +1099,7 @@ window.addEventListener('pywebviewready', refresh);
     <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
     <div class="row">
       <button class="btn-primary" data-action="start-vm">Start the kitchen</button>
-      <button class="btn-secondary" disabled>Open Omelet</button>
+      <button class="btn-secondary" disabled>Open Eggie</button>
       <span class="hint">Opens by itself once the pan is hot.</span>
     </div>
     <footer class="odds"><span data-field="app_version"></span></footer>
@@ -1139,7 +1139,7 @@ window.addEventListener('pywebviewready', refresh);
   <section class="pad">
     <span class="badge badge-warm">Running, but quiet</span>
     <h1 class="display">Nobody's answering the door</h1>
-    <p class="lede">Your machine is on — we can see it humming — but Omelet can't
+    <p class="lede">Your machine is on — we can see it humming — but Eggie can't
       get a word in. Nine times out of ten a retry sorts it out. Nothing is lost
       either way.</p>
     <div class="row">
@@ -1185,7 +1185,7 @@ Each Home template's `<footer class="odds">` carries the board's "Odds and ends"
 <template data-screen="updates-unavailable">
   <section class="pad centered">
     <h2 class="title">Nothing to check yet</h2>
-    <p class="lede">Omelet updates itself when a new version is released.
+    <p class="lede">Eggie updates itself when a new version is released.
       There's nothing to check for yet.</p>
     <p class="hint"><span data-field="app_version"></span> ·
       <span data-field="engine_version"></span></p>
@@ -1291,7 +1291,7 @@ def test_a_provider_that_names_its_own_step_wins():
 
 
 def test_a_step_without_a_label_uses_the_table():
-    assert step_label(_step("bootstrap")) == "Installing Omelet"
+    assert step_label(_step("bootstrap")) == "Installing Eggie"
 
 
 def test_an_unknown_step_falls_back_to_its_name():
@@ -1320,8 +1320,8 @@ STEP_LABELS = {
     "reboot_gate": "Restart needed",
     "fetch_image": "Downloading Linux image",
     "create_vm": "Preparing the virtual machine",
-    "bootstrap": "Installing Omelet",
-    "connect": "Connecting to the Omelet service",
+    "bootstrap": "Installing Eggie",
+    "connect": "Connecting to the Eggie service",
     "verify": "Testing the setup",
     "finish": "Finishing up",
 }
@@ -1854,8 +1854,8 @@ ACTIONS['start-install'] = async () => {
   });
   // "Step N of M" comes from the list the factory returned, never a literal:
   // seven on Lima, nine on WSL2.
-  window.omelet.total = started.rows.length;
-  window.omelet.done = 0;
+  window.eggie.total = started.rows.length;
+  window.eggie.done = 0;
 };
 
 ACTIONS['reboot-now'] = () => api().reboot_now();
@@ -1865,7 +1865,7 @@ const STATE_WORDS = {
   failed: "Didn't work", reboot: 'Needs restart',
 };
 
-window.omelet.handlers.install = (event) => {
+window.eggie.handlers.install = (event) => {
   if (event.type === 'step') {
     const li = rowsByName[event.step];
     if (li) {
@@ -1873,10 +1873,10 @@ window.omelet.handlers.install = (event) => {
       li.querySelector('.state').textContent = STATE_WORDS[event.status] || '';
     }
     if (event.status === 'done' || event.status === 'skipped') {
-      window.omelet.done += 1;
+      window.eggie.done += 1;
       const counter = document.querySelector('[data-field="counter"]');
       if (counter) {
-        counter.textContent = `Step ${window.omelet.done + 1} of ${window.omelet.total}`;
+        counter.textContent = `Step ${window.eggie.done + 1} of ${window.eggie.total}`;
       }
     }
     if (event.fraction !== null && event.fraction !== undefined) {
@@ -2170,7 +2170,7 @@ Expected: FAIL — `ImportError: cannot import name 'inspect_folder'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-`host/client.py` already exposes both exclusion sets module-level — `EXCLUDED_DIRS` (`.git`, `node_modules`, `.venv`, `__pycache__`, matched on any path component) and `EXCLUDED_FILES` (`.omelet/overlay.yml`). Import them rather than restating them; a second copy would drift from what `_uploadable` actually filters. Append to `host/desktop/view.py`:
+`host/client.py` already exposes both exclusion sets module-level — `EXCLUDED_DIRS` (`.git`, `node_modules`, `.venv`, `__pycache__`, matched on any path component) and `EXCLUDED_FILES` (`.eggie/overlay.yml`). Import them rather than restating them; a second copy would drift from what `_uploadable` actually filters. Append to `host/desktop/view.py`:
 
 ```python
 from pathlib import Path
@@ -2200,7 +2200,7 @@ def inspect_folder(path) -> dict:
                     stack.append(entry)
                 continue
             # EXCLUDED_FILES holds paths relative to the project root
-            # (".omelet/overlay.yml"), so compare the same way the tar filter
+            # (".eggie/overlay.yml"), so compare the same way the tar filter
             # sees them -- posix separators, relative to root.
             if entry.relative_to(root).as_posix() in EXCLUDED_FILES:
                 continue
@@ -2641,7 +2641,7 @@ Add to `host/desktop/api.py`:
         from host.core.diagnose import render_diagnosis
 
         diagnosis = self._provider.preflight()
-        # Rendered by host/core so the modal shows exactly what `omelet doctor`
+        # Rendered by host/core so the modal shows exactly what `eggie doctor`
         # prints -- one wording for the user to read out to whoever helps them.
         return {"ok": diagnosis.ok, "text": render_diagnosis(diagnosis)}
 
@@ -2829,11 +2829,11 @@ Add four templates to `index.html`, with the board's copy verbatim. Key fragment
       Your own files, outside the kitchen, are untouched.</p>
     <label class="choice"><input type="checkbox" name="purge">
       <b>Also delete downloads and settings</b>
-      <span>Frees the disk space Omelet used. You'd start from scratch next time.</span></label>
+      <span>Frees the disk space Eggie used. You'd start from scratch next time.</span></label>
     <p class="warn"><b>There's no undo.</b> Any project the cook made in there
       goes with it.</p>
     <div class="row">
-      <button class="btn-danger" data-action="do-uninstall">Remove Omelet</button>
+      <button class="btn-danger" data-action="do-uninstall">Remove Eggie</button>
       <button class="btn-secondary" data-action="go-home">Keep it</button>
     </div>
   </section>
@@ -2876,7 +2876,7 @@ ACTIONS['do-import'] = async () => {
   show('import:progress', { name: started.name, counter: '' });
 };
 
-window.omelet.handlers.import = (event) => {
+window.eggie.handlers.import = (event) => {
   if (event.type === 'progress') {
     const percent = event.total ? Math.round((event.done / event.total) * 100) : 0;
     const bar = document.querySelector('[data-field="fraction"]');
@@ -2918,7 +2918,7 @@ function portRow(port) {
 const PORT_REFUSALS = {
   range: 'Ports must be between 1 and 65535.',
   duplicate: 'That port on this computer is already in use by another hatch.',
-  reserved: 'Omelet needs that port for itself. Pick another.',
+  reserved: 'Eggie needs that port for itself. Pick another.',
 };
 
 ACTIONS['doctor'] = async () => show('doctor', await api().doctor());
@@ -2927,9 +2927,9 @@ ACTIONS['start-vm'] = async () => { await api().start_vm(); };
 ACTIONS['stop-vm'] = async () => { await api().stop_vm(); };
 ACTIONS['restart-vm'] = async () => { await api().restart_vm(); };
 
-window.omelet.handlers.vm = (event) => { if (event.type !== 'progress') refresh(); };
-window.omelet.handlers.repair = (event) => { if (event.type !== 'progress') refresh(); };
-window.omelet.handlers.uninstall = () => refresh();
+window.eggie.handlers.vm = (event) => { if (event.type !== 'progress') refresh(); };
+window.eggie.handlers.repair = (event) => { if (event.type !== 'progress') refresh(); };
+window.eggie.handlers.uninstall = () => refresh();
 ```
 
 `add-port-row` appends an editable row whose Save calls `api().add_port(...)` and, on `{ok: false}`, renders `PORT_REFUSALS[result.reason]` under the row in `--paprika`.
@@ -2948,14 +2948,14 @@ git commit -m "Add import, ports and doctor screens"
 
 ---
 
-### Task 16: Relax `omelet up`'s compose guard
+### Task 16: Relax `eggie up`'s compose guard
 
 **Files:**
 - Modify: `host/cli.py:164-180`
 - Test: `tests/test_up_cli.py` (find the existing test covering the guard first: `grep -rn "no docker-compose" tests/`)
 
 **Interfaces:**
-- Produces: `omelet up` no longer refuses a folder without `docker-compose.yml`; it uploads and reports the agent's refusal as "imported, nothing to start yet".
+- Produces: `eggie up` no longer refuses a folder without `docker-compose.yml`; it uploads and reports the agent's refusal as "imported, nothing to start yet".
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3030,7 +3030,7 @@ Expected: PASS
 
 ```bash
 git add host/cli.py tests/test_up_cli.py
-git commit -m "Let omelet up import a folder without a compose file"
+git commit -m "Let eggie up import a folder without a compose file"
 ```
 
 ---
@@ -3107,7 +3107,7 @@ In `host/cli.py::setup`, replace the tkinter branch:
         raise typer.Exit(code=run(provider, state))
 ```
 
-`run` builds its own `DesktopApi`, so `build_steps` must reach it. Pass it through: give `run` a `steps_factory=None` parameter forwarded to `DesktopApi(..., steps_factory=steps_factory)`, and have `cli.setup` call `run(provider, state, steps_factory=build_steps)`. Update `__main__.main()` to build the same factory (it already has `provider`, `root` and the constants `cli.setup` uses) so launching the app directly and launching it through `omelet setup` produce identical step lists.
+`run` builds its own `DesktopApi`, so `build_steps` must reach it. Pass it through: give `run` a `steps_factory=None` parameter forwarded to `DesktopApi(..., steps_factory=steps_factory)`, and have `cli.setup` call `run(provider, state, steps_factory=build_steps)`. Update `__main__.main()` to build the same factory (it already has `provider`, `root` and the constants `cli.setup` uses) so launching the app directly and launching it through `eggie setup` produce identical step lists.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -3126,7 +3126,7 @@ git commit -m "Retire the tkinter setup app"
 ### Task 18: Dependencies and packaging
 
 **Files:**
-- Modify: `pyproject.toml`, `packaging/windows/omelet.spec`, `packaging/windows/installer.iss`, `packaging/windows/build.ps1`, `packaging/macos/omelet.spec`, `packaging/macos/setup_main.py`, `packaging/macos/build.sh`
+- Modify: `pyproject.toml`, `packaging/windows/eggie.spec`, `packaging/windows/installer.iss`, `packaging/windows/build.ps1`, `packaging/macos/eggie.spec`, `packaging/macos/setup_main.py`, `packaging/macos/build.sh`
 - Test: extend `tests/host/test_host_dependencies.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -3159,8 +3159,8 @@ def test_the_ui_assets_are_bundled_by_both_specs():
     from pathlib import Path
 
     packaging = Path(__file__).resolve().parents[2] / "packaging"
-    for spec in (packaging / "windows" / "omelet.spec",
-                 packaging / "macos" / "omelet.spec"):
+    for spec in (packaging / "windows" / "eggie.spec",
+                 packaging / "macos" / "eggie.spec"):
         assert "host/desktop/ui" in spec.read_text().replace("\\", "/"), spec
 ```
 
@@ -3188,12 +3188,12 @@ dependencies = [
 ]
 ```
 
-Both `omelet.spec` files: add the UI tree to `datas` and the backend to `hiddenimports`:
+Both `eggie.spec` files: add the UI tree to `datas` and the backend to `hiddenimports`:
 
 ```python
 datas = [
     ("../../host/provision", "host/provision"),
-    ("../../host/providers/omelet.yaml", "host/providers"),
+    ("../../host/providers/eggie.yaml", "host/providers"),
     ("../../host/desktop/ui", "host/desktop/ui"),
 ]
 hiddenimports = ["webview", "webview.platforms.edgechromium"]  # winforms on Windows
@@ -3226,7 +3226,7 @@ Expected: PASS
 
 - [ ] **Step 5: Verify a frozen build**
 
-On Windows: `powershell packaging/windows/build.ps1`, then run the produced installer on a clean VM and confirm the app opens. On macOS: `bash packaging/macos/build.sh`, install the pkg, open Omelet. Both are out of reach from the WSL dev shell — record the result.
+On Windows: `powershell packaging/windows/build.ps1`, then run the produced installer on a clean VM and confirm the app opens. On macOS: `bash packaging/macos/build.sh`, install the pkg, open Eggie. Both are out of reach from the WSL dev shell — record the result.
 
 - [ ] **Step 6: Commit**
 
@@ -3290,7 +3290,7 @@ Per the repo's git rules, run a code review by a separate agent after the PR is 
 | 4. Routes and readiness table | 1, 3, 5 |
 | 5. Install flow, platform step counts, restart | 6, 7, 8, 9 |
 | 6. Import / Ports / Doctor / repair / uninstall | 10–15 |
-| `omelet up` consequence | 16 |
+| `eggie up` consequence | 16 |
 | 7. Deliberately inert (updates, project column) | 5 (`app_version` only), 15 (no Project column) |
 | 8. Testing table | 1, 2, 5, 6, 7, 8, 12, 13 |
 | 9. Packaging | 18 |

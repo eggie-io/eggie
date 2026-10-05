@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The web console is locked until the user signs in to the Omelet service by code/QR, and every local project gets a record on that service that is created and deleted with it.
+**Goal:** The web console is locked until the user signs in to the Eggie service by code/QR, and every local project gets a record on that service that is created and deleted with it.
 
-**Architecture:** Everything lives in the runtime API (`runtime/omelet_api`). `core/cloud.py` is a stdlib HTTP client for the service; `core/account.py` runs the RFC 8628 device flow and keeps tokens in `state.db`; `core/sync.py` is a reconcile loop on a daemon thread that creates and deletes service records. The console asks the local API `GET /api/account` at boot and shows a sign-in screen for anything but `signed_in`. No host change.
+**Architecture:** Everything lives in the runtime API (`runtime/eggie_api`). `core/cloud.py` is a stdlib HTTP client for the service; `core/account.py` runs the RFC 8628 device flow and keeps tokens in `state.db`; `core/sync.py` is a reconcile loop on a daemon thread that creates and deletes service records. The console asks the local API `GET /api/account` at boot and shows a sign-in screen for anything but `signed_in`. No host change.
 
 **Tech Stack:** Python 3.12, FastAPI, sqlite3, `urllib.request`; React 19 + Vite + Vitest + msw; `qrcode-generator` 2.0.4.
 
@@ -12,10 +12,10 @@
 
 ## Global Constraints
 
-- Service base URL default: `https://omelet.bridgie.chat/api`, overridable by env `OMELET_CLOUD_URL`. Nothing else may hardcode it.
+- Service base URL default: `https://app.eggie.io/api`, overridable by env `EGGIE_CLOUD_URL`. Nothing else may hardcode it.
 - **No client-side workarounds for service gaps** (spec decision 10). Never rewrite, repair or substitute a URL or response from the service. The one allowed check is refusing a non-`https:` sign-in link in the console.
-- `host/` is not touched. `host/` never imports `omelet_api` and vice versa (existing AST tests).
-- No `sys.platform` / `platform.system()` / `os.name` anywhere in `runtime/omelet_api/` (`tests/test_no_platform_leak.py`).
+- `host/` is not touched. `host/` never imports `eggie_api` and vice versa (existing AST tests).
+- No `sys.platform` / `platform.system()` / `os.name` anywhere in `runtime/eggie_api/` (`tests/test_no_platform_leak.py`).
 - The API's only new dependency is none: `cloud.py` uses stdlib `urllib` only.
 - `create_app()` must not start a thread. Threads start from `routes/__main__.py`.
 - `API_VERSION` does not change; the new routes are additive and the host never calls them.
@@ -28,7 +28,7 @@
 ## Review Focus
 
 1. **API restarted while a sign-in code is pending** — the user approves on their phone and nothing polls; expected: the poller resumes at startup (`Account.resume()`), test in Task 3.
-2. **The install smoke-test project `omelet-selftest`** — every install creates and deletes it; expected: never sent to the service, test in Task 4.
+2. **The install smoke-test project `eggie-selftest`** — every install creates and deletes it; expected: never sent to the service, test in Task 4.
 3. **Access token rejected mid-use (`401 invalid_token`)** — expected: one refresh and one retry, and a second 401 surfaces as an error rather than looping, test in Task 3.
 4. **A service record deleted by someone else** — local delete then answers 404; expected: the mapping is dropped as if deleted, test in Task 4.
 5. **A proxy in front of the service answering 502/503/504 with an HTML page** — expected: treated as "unreachable" (account stays signed in), not as a service refusal, test in Task 2.
@@ -37,14 +37,14 @@
 
 | File | Responsibility |
 |---|---|
-| `runtime/omelet_api/core/migrate.py` (modify) | `_v4_account`: `account` row with `device_id`, `cloud_projects` mapping |
-| `runtime/omelet_api/core/state.py` (modify) | read/update the account row; read/write the mapping |
-| `runtime/omelet_api/core/config.py` (modify) | `cloud_url` |
-| `runtime/omelet_api/core/cloud.py` (create) | the service client; error body → `CloudError`, unreachable → `CloudUnavailable` |
-| `runtime/omelet_api/core/account.py` (create) | device flow, poller, token refresh, sign-out |
-| `runtime/omelet_api/core/sync.py` (create) | `plan()`, `apply()`, `run_pass()`, `SyncLoop` |
-| `runtime/omelet_api/routes/app.py` (modify) | `/account` routes, wiring, wake sync on create/adopt/delete |
-| `runtime/omelet_api/routes/__main__.py` (modify) | resume poller, start sync thread |
+| `runtime/eggie_api/core/migrate.py` (modify) | `_v4_account`: `account` row with `device_id`, `cloud_projects` mapping |
+| `runtime/eggie_api/core/state.py` (modify) | read/update the account row; read/write the mapping |
+| `runtime/eggie_api/core/config.py` (modify) | `cloud_url` |
+| `runtime/eggie_api/core/cloud.py` (create) | the service client; error body → `CloudError`, unreachable → `CloudUnavailable` |
+| `runtime/eggie_api/core/account.py` (create) | device flow, poller, token refresh, sign-out |
+| `runtime/eggie_api/core/sync.py` (create) | `plan()`, `apply()`, `run_pass()`, `SyncLoop` |
+| `runtime/eggie_api/routes/app.py` (modify) | `/account` routes, wiring, wake sync on create/adopt/delete |
+| `runtime/eggie_api/routes/__main__.py` (modify) | resume poller, start sync thread |
 | `tests/runtime/api/fake_cloud.py` (create) | scripted `FakeCloud` shared by account/sync/route tests |
 | `tests/runtime/api/test_cloud.py`, `test_account.py`, `test_sync.py`, `test_api_account.py` (create) | tests |
 | `tests/runtime/api/test_migrate.py` (modify) | v3 → v4 keeps projects |
@@ -65,8 +65,8 @@
 ### Task 1: Storage — account row and project mapping
 
 **Files:**
-- Modify: `runtime/omelet_api/core/migrate.py`
-- Modify: `runtime/omelet_api/core/state.py`
+- Modify: `runtime/eggie_api/core/migrate.py`
+- Modify: `runtime/eggie_api/core/state.py`
 - Test: `tests/runtime/api/test_migrate.py`, `tests/runtime/api/test_state.py`
 
 **Interfaces:**
@@ -128,7 +128,7 @@ Expected: FAIL with `AttributeError: 'State' object has no attribute 'get_accoun
 
 - [ ] **Step 3: Add the migration**
 
-In `runtime/omelet_api/core/migrate.py`, add `import uuid` next to `import sqlite3`, add after `_v3_web_ui`:
+In `runtime/eggie_api/core/migrate.py`, add `import uuid` next to `import sqlite3`, add after `_v3_web_ui`:
 
 ```python
 def _v4_account(conn: sqlite3.Connection) -> None:
@@ -166,7 +166,7 @@ and append `_v4_account,` to `MIGRATIONS`.
 
 - [ ] **Step 4: Add the State methods**
 
-In `runtime/omelet_api/core/state.py`, add at module level after the imports:
+In `runtime/eggie_api/core/state.py`, add at module level after the imports:
 
 ```python
 ACCOUNT_FIELDS = frozenset({
@@ -229,7 +229,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add runtime/omelet_api/core/migrate.py runtime/omelet_api/core/state.py tests/runtime/api/test_migrate.py tests/runtime/api/test_state.py
+git add runtime/eggie_api/core/migrate.py runtime/eggie_api/core/state.py tests/runtime/api/test_migrate.py tests/runtime/api/test_state.py
 git commit -m "API: store the account and the project mapping
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -240,8 +240,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 2: The service client
 
 **Files:**
-- Create: `runtime/omelet_api/core/cloud.py`
-- Modify: `runtime/omelet_api/core/config.py`
+- Create: `runtime/eggie_api/core/cloud.py`
+- Modify: `runtime/eggie_api/core/config.py`
 - Test: `tests/runtime/api/test_cloud.py`
 
 **Interfaces:**
@@ -252,7 +252,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - `device_code(client_name: str)`, `device_token(device_code: str)`, `refresh(refresh_token: str)`,
     - `logout(token: str)`, `me(token: str)`,
     - `create_project(token: str, name: str, client_ref: str)`, `delete_project(token: str, cloud_id: str)`.
-  - `ApiConfig.cloud_url: str`, env `OMELET_CLOUD_URL`.
+  - `ApiConfig.cloud_url: str`, env `EGGIE_CLOUD_URL`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -265,7 +265,7 @@ import urllib.error
 
 import pytest
 
-from omelet_api.core.cloud import Cloud, CloudError, CloudUnavailable
+from eggie_api.core.cloud import Cloud, CloudError, CloudUnavailable
 
 
 class _Response:
@@ -347,11 +347,11 @@ def test_create_sends_the_token_the_name_and_the_client_ref():
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_cloud.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'omelet_api.core.cloud'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'eggie_api.core.cloud'`.
 
 - [ ] **Step 3: Write the client**
 
-Create `runtime/omelet_api/core/cloud.py`:
+Create `runtime/eggie_api/core/cloud.py`:
 
 ```python
 from __future__ import annotations
@@ -384,7 +384,7 @@ def _error_from(status: int, raw: bytes) -> Exception:
         return CloudError(str(error["code"]), str(error["message"]), status)
     except (ValueError, KeyError, TypeError):
         if status in _GATEWAY:
-            return CloudUnavailable(f"the Omelet service answered {status}")
+            return CloudUnavailable(f"the Eggie service answered {status}")
         text = raw.decode("utf-8", errors="replace").strip()[:200]
         return CloudError(f"http_{status}", text or f"status {status}", status)
 
@@ -418,7 +418,7 @@ class Cloud:
             return json.loads(raw)
         except ValueError:
             raise CloudError("bad_response",
-                             "the Omelet service sent something that is not JSON",
+                             "the Eggie service sent something that is not JSON",
                              200) from None
 
     def device_code(self, client_name: str):
@@ -451,16 +451,16 @@ class Cloud:
 
 - [ ] **Step 4: Add `cloud_url` to the config**
 
-In `runtime/omelet_api/core/config.py`, add the field after `max_upload_bytes`:
+In `runtime/eggie_api/core/config.py`, add the field after `max_upload_bytes`:
 
 ```python
-    cloud_url: str = "https://omelet.bridgie.chat/api"
+    cloud_url: str = "https://app.eggie.io/api"
 ```
 
 and in `from_env`, after the `max_upload_bytes=` argument:
 
 ```python
-            cloud_url=env.get("OMELET_CLOUD_URL", "https://omelet.bridgie.chat/api"),
+            cloud_url=env.get("EGGIE_CLOUD_URL", "https://app.eggie.io/api"),
 ```
 
 - [ ] **Step 5: Run the tests**
@@ -471,8 +471,8 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add runtime/omelet_api/core/cloud.py runtime/omelet_api/core/config.py tests/runtime/api/test_cloud.py
-git commit -m "API: a client for the Omelet service
+git add runtime/eggie_api/core/cloud.py runtime/eggie_api/core/config.py tests/runtime/api/test_cloud.py
+git commit -m "API: a client for the Eggie service
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -482,7 +482,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 3: Account — device flow, tokens, sign-out
 
 **Files:**
-- Create: `runtime/omelet_api/core/account.py`
+- Create: `runtime/eggie_api/core/account.py`
 - Create: `tests/runtime/api/fake_cloud.py`
 - Test: `tests/runtime/api/test_account.py`
 
@@ -564,9 +564,9 @@ Create `tests/runtime/api/test_account.py`:
 ```python
 import pytest
 
-from omelet_api.core.account import Account, NotSignedIn
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.state import State
+from eggie_api.core.account import Account, NotSignedIn
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.state import State
 from tests.runtime.api.fake_cloud import CODE, ME, TOKENS, FakeCloud
 
 
@@ -744,11 +744,11 @@ def test_sign_out_forgets_everything_but_the_device_even_if_logout_fails(tmp_pat
 - [ ] **Step 3: Run them to see them fail**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_account.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'omelet_api.core.account'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'eggie_api.core.account'`.
 
 - [ ] **Step 4: Write the account**
 
-Create `runtime/omelet_api/core/account.py`:
+Create `runtime/eggie_api/core/account.py`:
 
 ```python
 from __future__ import annotations
@@ -759,7 +759,7 @@ import time
 
 from .cloud import CloudError, CloudUnavailable
 
-CLIENT_NAME = "Omelet"
+CLIENT_NAME = "Eggie"
 REFRESH_MARGIN = 60.0
 SLOW_DOWN_STEP = 5.0
 DEFAULT_INTERVAL = 5.0
@@ -767,7 +767,7 @@ _REFUSED = {"access_denied", "expired_token", "invalid_grant"}
 _CLEARED_CODE = {"device_code": None, "user_code": None, "verification_url": None,
                  "code_expires_at": None, "poll_interval": None}
 
-log = logging.getLogger("omelet.account")
+log = logging.getLogger("eggie.account")
 
 
 class NotSignedIn(Exception):
@@ -775,7 +775,7 @@ class NotSignedIn(Exception):
 
 
 def _daemon(fn) -> None:
-    threading.Thread(target=fn, name="omelet-sign-in", daemon=True).start()
+    threading.Thread(target=fn, name="eggie-sign-in", daemon=True).start()
 
 
 class Account:
@@ -958,8 +958,8 @@ Expected: PASS (16 tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add runtime/omelet_api/core/account.py tests/runtime/api/fake_cloud.py tests/runtime/api/test_account.py
-git commit -m "API: sign in to the Omelet service with a device code
+git add runtime/eggie_api/core/account.py tests/runtime/api/fake_cloud.py tests/runtime/api/test_account.py
+git commit -m "API: sign in to the Eggie service with a device code
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -969,7 +969,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 4: The sync pass and loop
 
 **Files:**
-- Create: `runtime/omelet_api/core/sync.py`
+- Create: `runtime/eggie_api/core/sync.py`
 - Test: `tests/runtime/api/test_sync.py`
 
 **Interfaces:**
@@ -987,11 +987,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 Create `tests/runtime/api/test_sync.py`:
 
 ```python
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.constants import VERIFY_PROJECT_ID
-from omelet_api.core.state import State
-from omelet_api.core.sync import Create, Delete, Forget, plan, run_pass
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.constants import VERIFY_PROJECT_ID
+from eggie_api.core.state import State
+from eggie_api.core.sync import Create, Delete, Forget, plan, run_pass
 from tests.runtime.api.fake_cloud import FakeCloud
 
 M = lambda cloud_id, org="org-1": {"cloud_id": cloud_id, "org_id": org}
@@ -1084,11 +1084,11 @@ def test_nothing_happens_when_signed_out(tmp_path):
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `TMPDIR=$PWD/.tmp python3 -m pytest tests/runtime/api/test_sync.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'omelet_api.core.sync'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'eggie_api.core.sync'`.
 
 - [ ] **Step 3: Write the sync module**
 
-Create `runtime/omelet_api/core/sync.py`:
+Create `runtime/eggie_api/core/sync.py`:
 
 ```python
 from __future__ import annotations
@@ -1102,7 +1102,7 @@ from .account import NotSignedIn
 from .cloud import CloudError, CloudUnavailable
 from .constants import VERIFY_PROJECT_ID
 
-log = logging.getLogger("omelet.sync")
+log = logging.getLogger("eggie.sync")
 
 
 @dataclass(frozen=True)
@@ -1210,7 +1210,7 @@ class SyncLoop:
             self._wake.wait(self._interval)
 
     def start(self) -> None:
-        threading.Thread(target=self.run_forever, name="omelet-sync",
+        threading.Thread(target=self.run_forever, name="eggie-sync",
                          daemon=True).start()
 ```
 
@@ -1222,7 +1222,7 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/omelet_api/core/sync.py tests/runtime/api/test_sync.py
+git add runtime/eggie_api/core/sync.py tests/runtime/api/test_sync.py
 git commit -m "API: keep a service record for every local project
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -1233,8 +1233,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 5: Routes and wiring
 
 **Files:**
-- Modify: `runtime/omelet_api/routes/app.py`
-- Modify: `runtime/omelet_api/routes/__main__.py`
+- Modify: `runtime/eggie_api/routes/app.py`
+- Modify: `runtime/eggie_api/routes/__main__.py`
 - Test: `tests/runtime/api/test_api_account.py`
 
 **Interfaces:**
@@ -1250,10 +1250,10 @@ Create `tests/runtime/api/test_api_account.py`:
 ```python
 from fastapi.testclient import TestClient
 
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudUnavailable
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudUnavailable
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, FakeRunner
 from tests.runtime.api.fake_cloud import CODE, FakeCloud
 
@@ -1288,7 +1288,7 @@ Expected: FAIL with `TypeError: create_app() got an unexpected keyword argument 
 
 - [ ] **Step 3: Wire the account and sync into `create_app`**
 
-In `runtime/omelet_api/routes/app.py`, add to the imports:
+In `runtime/eggie_api/routes/app.py`, add to the imports:
 
 ```python
 from ..core.account import Account
@@ -1340,10 +1340,10 @@ After the `disk_usage` route add:
             return account.start_sign_in()
         except CloudUnavailable:
             raise ApiError("cloud_unavailable",
-                           "The Omelet service can't be reached. Check the "
+                           "The Eggie service can't be reached. Check the "
                            "internet connection and try again.", 503) from None
         except CloudError as e:
-            raise ApiError("cloud_error", "The Omelet service would not start "
+            raise ApiError("cloud_error", "The Eggie service would not start "
                            f"a sign-in: {e.message}", 502) from None
 
     @router.post("/account/sign-out")
@@ -1353,7 +1353,7 @@ After the `disk_usage` route add:
 
 - [ ] **Step 6: Start the threads in the entrypoint**
 
-In `runtime/omelet_api/routes/__main__.py`, after the `try/except SchemaTooNew` block and before `uvicorn.run(...)`:
+In `runtime/eggie_api/routes/__main__.py`, after the `try/except SchemaTooNew` block and before `uvicorn.run(...)`:
 
 ```python
     app.state.account.resume()
@@ -1368,7 +1368,7 @@ Expected: PASS, including `test_no_platform_leak.py`, `test_no_host_import.py` a
 - [ ] **Step 8: Commit**
 
 ```bash
-git add runtime/omelet_api/routes/app.py runtime/omelet_api/routes/__main__.py tests/runtime/api/test_api_account.py
+git add runtime/eggie_api/routes/app.py runtime/eggie_api/routes/__main__.py tests/runtime/api/test_api_account.py
 git commit -m "API: account routes, and sync after every project change
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -1403,7 +1403,7 @@ import { signInLink } from "./account";
 
 describe("signInLink", () => {
   it("accepts an https sign-in page", () => {
-    const url = "https://omelet.bridgie.chat/device?user_code=ABCD-EFGH";
+    const url = "https://app.eggie.io/device?user_code=ABCD-EFGH";
     expect(signInLink(url)).toBe(url);
   });
 
@@ -1438,7 +1438,7 @@ Change the test "signs in with a fresh handoff code without asking for the sessi
 In "is still signed in when the handoff was spent but the cookie is good" add `"GET /api/account": ACCOUNT("signed_in"),` to its routes. Then add inside `describe("boot", ...)`:
 
 ```ts
-  it("needs an account until the Omelet sign-in has finished", async () => {
+  it("needs an account until the Eggie sign-in has finished", async () => {
     for (const state of ["signed_out", "pending"]) {
       const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": OK, "GET /api/account": ACCOUNT(state) });
       expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsAccount" });
@@ -1474,7 +1474,7 @@ export type Account =
       sync: { last_ok_at: number | null; last_error: string | null };
     };
 
-// The link comes from the Omelet service; anything but https is refused, never repaired.
+// The link comes from the Eggie service; anything but https is refused, never repaired.
 export function signInLink(url: string): string | null {
   try {
     return new URL(url).protocol === "https:" ? url : null;
@@ -1487,7 +1487,7 @@ const REASONS: Record<string, string> = {
   access_denied: "The sign-in was turned down.",
   expired_token: "That code ran out before it was approved.",
   invalid_grant: "That code is no longer valid.",
-  revoked: "This computer was signed out of your Omelet account.",
+  revoked: "This computer was signed out of your Eggie account.",
 };
 
 export function signInError(code: string | null): string | null {
@@ -1530,7 +1530,7 @@ Expected: PASS.
 
 - [ ] **Step 6: Add the QR dependency and component**
 
-Run: `cd runtime/web && npm install -w @omelet/console qrcode-generator@2.0.4 --save-exact`
+Run: `cd runtime/web && npm install -w @eggie/console qrcode-generator@2.0.4 --save-exact`
 
 Create `runtime/web/apps/console/src/components/Qr.tsx`:
 
@@ -1575,7 +1575,7 @@ Create `runtime/web/apps/console/src/screens/account/SignIn.tsx`:
 
 ```tsx
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import { type Account, signInError, signInLink } from "../../account/account";
 import { ApiError, createApi } from "../../api/client";
 import { Qr } from "../../components/Qr";
@@ -1624,12 +1624,12 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   if (account?.state === "pending") return <Pending account={account} onRestart={start} />;
 
   const reason = view.unreachable
-    ? "The Omelet service can't be reached right now. Check the internet connection."
+    ? "The Eggie service can't be reached right now. Check the internet connection."
     : signInError(account?.state === "signed_out" ? account.error : null);
   return (
     <StatusScreen
       art={<SleepyEgg />}
-      title="Sign in to Omelet"
+      title="Sign in to Eggie"
       actions={
         <Button variant="primary" size="lg" onClick={start} disabled={view.starting}>
           {view.unreachable ? "Try again" : "Sign in"}
@@ -1638,7 +1638,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
       footer="Your projects keep running while you sign in."
     >
       {reason && <p className={own.error}>{reason}</p>}
-      <p className={s.lead}>Your Omelet account keeps track of your projects. Sign in once on this computer.</p>
+      <p className={s.lead}>Your Eggie account keeps track of your projects. Sign in once on this computer.</p>
     </StatusScreen>
   );
 }
@@ -1650,7 +1650,7 @@ function Pending({ account, onRestart }: { account: Extract<Account, { state: "p
   if (link === null) {
     return (
       <StatusScreen art={<SleepyEgg />} title="Sign-in isn't available" actions={<Button onClick={onRestart}>Try again</Button>}>
-        <p className={s.lead}>The sign-in link from the Omelet service is not valid.</p>
+        <p className={s.lead}>The sign-in link from the Eggie service is not valid.</p>
         <p className={s.detail}>{account.url}</p>
       </StatusScreen>
     );
@@ -1696,7 +1696,7 @@ export function Shell({
     <div className={s.page}>
       <header className={cx(s.bar, tone === "cold" && s.muted)}>
         <Egg tone={tone} size={22} />
-        <span className={s.brand}>Omelet</span>
+        <span className={s.brand}>Eggie</span>
         {trailing && <div className={s.trailing}>{trailing}</div>}
       </header>
       <main className={s.content}>{children}</main>
@@ -1716,7 +1716,7 @@ Create `runtime/web/apps/console/src/shell/AccountMenu.tsx`:
 ```tsx
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import type { Account } from "../account/account";
 import { createApi } from "../api/client";
 
@@ -1795,7 +1795,7 @@ At the top of `handlersFor`, after `let signedIn = ...`:
   const pendingAccount = () => ({
     state: "pending" as const,
     user_code: MOCK_CODE,
-    url: `https://omelet.example/device?user_code=${MOCK_CODE}`,
+    url: `https://eggie.example/device?user_code=${MOCK_CODE}`,
     expires_at: nowSec() + 600,
   });
   let account: Record<string, unknown> = scenario.startsWith("account-")
@@ -1821,7 +1821,7 @@ In the returned array after the `http.delete("/api/session", ...)` handler:
     }),
     http.post("/api/account/sign-in", () => {
       if (scenario === "account-unreachable") {
-        return refuse("cloud_unavailable", "The Omelet service can't be reached. Check the internet connection and try again.", 503);
+        return refuse("cloud_unavailable", "The Eggie service can't be reached. Check the internet connection and try again.", 503);
       }
       account = pendingAccount();
       approveAt = 0;
@@ -1844,7 +1844,7 @@ Then `npm run dev`, open `/?scenario=account-needed`: press Sign in → the code
 
 ```bash
 git add runtime/web
-git commit -m "Console: sign in to Omelet before the projects show
+git commit -m "Console: sign in to Eggie before the projects show
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1859,15 +1859,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Bring the spec in line with the code**
 
-In the spec's section 4 "Storage" block, add `poll_interval REAL`, `sync_ok_at REAL`, `sync_error TEXT` to the `account` table. In section 6 "Where it runs", change the `plan(...)` signature to `plan(local_ids, mapping, org_id) -> list[Action]` and add: "`omelet-selftest` (the install smoke test) is never sent."
+In the spec's section 4 "Storage" block, add `poll_interval REAL`, `sync_ok_at REAL`, `sync_error TEXT` to the `account` table. In section 6 "Where it runs", change the `plan(...)` signature to `plan(local_ids, mapping, org_id) -> list[Action]` and add: "`eggie-selftest` (the install smoke test) is never sent."
 
 - [ ] **Step 2: Add the architecture notes to `CLAUDE.md`**
 
-Under `### Layers`, after the `runtime/omelet_api/core/uploads.py` bullet, add:
+Under `### Layers`, after the `runtime/eggie_api/core/uploads.py` bullet, add:
 
 ```markdown
-- `runtime/omelet_api/core/cloud.py` / `account.py` / `sync.py` — the Omelet service
-  (`OMELET_CLOUD_URL`, default `https://omelet.bridgie.chat/api`). `account.py` runs the
+- `runtime/eggie_api/core/cloud.py` / `account.py` / `sync.py` — the Eggie service
+  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). `account.py` runs the
   device-code sign-in and keeps the tokens in `state.db`; `sync.py` gives each local project
   a service record (created with `client_ref = <device_id>/<local_id>`, deleted with it) on a
   thread `routes/__main__.py` starts — `create_app()` never starts one. Only the console is

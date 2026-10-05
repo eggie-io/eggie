@@ -16,7 +16,7 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 - `jobs.py` — runs **one** slow job at a time on a worker thread (`JobBusy` otherwise):
   `InstallState` is a JSON file and two installs writing it would race.
 - `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
-  routes reach the page via `window.omelet.route()` or a `#route` reload when the console shows.
+  routes reach the page via `window.eggie.route()` or a `#route` reload when the console shows.
   If the tray cannot start, the app runs as a plain window for that run (close exits) and the
   failure goes to stderr.
 - `lifecycle.py` / `settings.py` — pure launch-mode decision and the `settings.json` flags that
@@ -45,7 +45,7 @@ system browser — there is no native menu.
   outside the CSP), fatal on macOS. Pinned by `tests/host/desktop/test_ui_assets.py`.
 - **`events.closing` decides closes** — on Windows the title-bar button and `window.destroy()`
   both fire it; on Cocoa only the red button does (`destroy()` is `NSWindow.close`, which skips
-  `windowShouldClose_`, and the mac tray re-points Cmd+Q at Quit Omelet and overrides
+  `windowShouldClose_`, and the mac tray re-points Cmd+Q at Quit Eggie and overrides
   `applicationShouldTerminate_`, so neither reaches it). `Controller` lets a close through only after
   `exit()` or `allow_exit()`. A new close path must go through one of them or it becomes a hide.
 - **Windows sign-out, restart and installers close the window themselves.** pywebview cancels any

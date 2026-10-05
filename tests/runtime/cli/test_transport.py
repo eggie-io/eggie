@@ -26,8 +26,8 @@ def test_a_stopped_service_is_named_with_the_command_that_starts_it(tmp_path):
     assert cli.START_STACK in err.getvalue()
 
 
-def test_a_vm_without_a_token_says_omelet_is_not_set_up(tmp_path):
-    with pytest.raises(cli.OmeletError, match="not set up"):
+def test_a_vm_without_a_token_says_eggie_is_not_set_up(tmp_path):
+    with pytest.raises(cli.EggieError, match="not set up"):
         cli.read_token(tmp_path / "api.token")
 
 
@@ -36,5 +36,5 @@ def test_an_unreadable_token_points_at_the_docker_group(tmp_path):
     token = tmp_path / "api.token"
     token.write_text("secret")
     token.chmod(0)
-    with pytest.raises(cli.OmeletError, match="docker group"):
+    with pytest.raises(cli.EggieError, match="docker group"):
         cli.read_token(token)

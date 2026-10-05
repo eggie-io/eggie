@@ -10,7 +10,7 @@ python3.12 -m venv .venv
 ```
 
 The API's dependencies aren't part of `.[dev]`, which covers only the host. They're declared in
-`runtime/omelet_api/pyproject.toml`. The API tests also need `httpx`, because FastAPI's
+`runtime/eggie_api/pyproject.toml`. The API tests also need `httpx`, because FastAPI's
 `TestClient` uses it:
 
 ```bash
@@ -46,20 +46,20 @@ In the WSL sandbox, `/tmp/pytest-of-$USER` can be owned by root, which breaks `t
 ### Running the host from a checkout
 
 ```bash
-omelet doctor
-omelet setup              # opens the desktop window
-omelet setup --headless   # terminal only
+eggie doctor
+eggie setup              # opens the desktop window
+eggie setup --headless   # terminal only
 python -m host.desktop    # the window on its own
 ```
 
 On Windows, run these from Windows (PowerShell), not from a WSL shell. The host drives `wsl.exe`,
 and from inside WSL it fails with `unsupported host platform: linux`. `setup.ps1` does a full dev
 install: it finds a Python, builds `.venv`, downloads the Ubuntu rootfs into
-`%LOCALAPPDATA%\Omelet\cache`, creates the VM and drops an `omelet.cmd` shim in the repo. Flags:
+`%LOCALAPPDATA%\Eggie\cache`, creates the VM and drops an `eggie.cmd` shim in the repo. Flags:
 `-Rootfs <path>` reuses a rootfs you already have; `-NoCreate` skips creating the VM.
 
-To install a runtime other than the latest release, set `OMELET_RUNTIME_REF=<branch|tag>`. To
-fetch the installer from somewhere else, set `OMELET_RUNTIME_URL`.
+To install a runtime other than the latest release, set `EGGIE_RUNTIME_REF=<branch|tag>`. To
+fetch the installer from somewhere else, set `EGGIE_RUNTIME_URL`.
 
 ## Web console (`runtime/web/`)
 
@@ -87,10 +87,10 @@ in. Build the image to see them (`packaging/images/build.sh --only web`).
 Inside the VM, as root:
 
 ```bash
-. /opt/omelet/.env && docker build -t omelet-api:debug \
-  --build-arg SERVICE_IMAGE=ghcr.io/omelet-app/omelet-api:$OMELET_VERSION \
-  - < /opt/omelet/runtime/omelet_api/Dockerfile.debug
-docker compose -f /opt/omelet/stack.yml -f /opt/omelet/runtime/stack.debug.yml up -d
+. /opt/eggie/.env && docker build -t eggie-api:debug \
+  --build-arg SERVICE_IMAGE=ghcr.io/eggie-io/eggie-api:$EGGIE_VERSION \
+  - < /opt/eggie/runtime/eggie_api/Dockerfile.debug
+docker compose -f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.debug.yml up -d
 ```
 
 Then attach to `127.0.0.1:5678` from the host. On WSL2, localhost forwarding makes that port
@@ -99,8 +99,8 @@ reachable.
 To try a web image you pushed with `--tag dev` without cutting a release:
 
 ```bash
-OMELET_WEB_IMAGE=ghcr.io/omelet-app/omelet-web:dev \
-  docker compose -f /opt/omelet/stack.yml up -d web
+EGGIE_WEB_IMAGE=ghcr.io/eggie-io/eggie-web:dev \
+  docker compose -f /opt/eggie/stack.yml up -d web
 ```
 
 The next `get.sh` run puts the released image back.

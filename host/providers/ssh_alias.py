@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-# The `omelet` host in the user's ~/.ssh/config, and the VM's real host keys in
-# ~/.ssh/known_hosts, so `ssh omelet` and an editor's Remote-SSH reach the VM
+# The `eggie` host in the user's ~/.ssh/config, and the VM's real host keys in
+# ~/.ssh/known_hosts, so `ssh eggie` and an editor's Remote-SSH reach the VM
 # by name and keep reaching it.
 #
 # Lima gives cloud-init a fresh instance-id on every `limactl start`, and
@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ALIAS = "omelet"
-_BEGIN = "# >>> Omelet: the 'omelet' host, rewritten by Omelet setup >>>"
-_END = "# <<< Omelet <<<"
+ALIAS = "eggie"
+_BEGIN = "# >>> Eggie: the 'eggie' host, rewritten by Eggie setup >>>"
+_END = "# <<< Eggie <<<"
 
 # Labels as parse_ssh_config() returns them, to the ssh_config keyword.
 _FIELDS = (("Host", "HostName"), ("Port", "Port"), ("User", "User"),
@@ -42,7 +42,7 @@ def render(found: dict[str, str]) -> str:
 
 
 def _split(text: str) -> tuple[list[str], int | None]:
-    """The lines with Omelet's block taken out, and where it was.
+    """The lines with Eggie's block taken out, and where it was.
 
     Only a complete block is ours: a BEGIN whose END the user deleted is left
     alone, rather than taking everything after it with it."""
@@ -64,7 +64,7 @@ def _first_host(lines: list[str]) -> int:
     """Where a new block has to go: before the first Host or Match line.
 
     Not at the top -- every global option and Include after it would then
-    apply to `omelet` alone. Not at the end either --
+    apply to `eggie` alone. Not at the end either --
     ssh takes the first value it finds, so a `Host *` with a User line above
     it would override ours."""
     for i, line in enumerate(lines):

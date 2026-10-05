@@ -1,7 +1,7 @@
 """Host-side constants.
 
-Deliberately separate from `omelet_api/core/constants.py`: nothing under `host/`
-may import `omelet_api/`. Names appearing in both modules are held equal by
+Deliberately separate from `eggie_api/core/constants.py`: nothing under `host/`
+may import `eggie_api/`. Names appearing in both modules are held equal by
 `tests/test_constants_agree.py` -- that test, not a shared import, is what stops
 the two copies drifting.
 
@@ -15,9 +15,9 @@ the runtime cannot end up pointing at different files.
 APP_VERSION = "0.1.6"
 
 # Desktop app releases are tagged app-vX.Y.Z on this repository.
-HOST_RELEASES_URL = "https://api.github.com/repos/omelet-app/omelet/releases"
+HOST_RELEASES_URL = "https://api.github.com/repos/eggie-io/eggie/releases"
 
-GUEST_ROOT = "/opt/omelet"
+GUEST_ROOT = "/opt/eggie"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 API_PORT = 39099
 # Forwarded by the providers, not used to build URLs on the host: the api
@@ -26,7 +26,7 @@ EDGE_PORT = 39080
 # The host only needs the domain to hand the installer's smoke test a value;
 # every project URL it prints comes from the api service's own payload.
 DEFAULT_DOMAIN = "127-0-0-1.sslip.io"
-VERIFY_PROJECT_ID = "omelet-selftest"
+VERIFY_PROJECT_ID = "eggie-selftest"
 # The api service decides what a project must contain; the host only needs the
 # name to refuse an empty folder before uploading it. Declared on both sides so
 # the constants test fails if the api service ever accepts a second spelling.
@@ -34,8 +34,8 @@ COMPOSE_FILE = "docker-compose.yml"
 
 # The host knows only where the runtime's entrypoint lives and which file says
 # it finished; what gets installed, and which version, is decided in the VM.
-RUNTIME_URL = ("https://raw.githubusercontent.com/omelet-app/"
-               "omelet/main/runtime/install/get.sh")
+RUNTIME_URL = ("https://raw.githubusercontent.com/eggie-io/"
+               "eggie/main/runtime/install/get.sh")
 RUNTIME_MARKER = f"{GUEST_ROOT}/runtime.version"
 
 # Written by the host on every connect; the VM's boot-time updater reads it to

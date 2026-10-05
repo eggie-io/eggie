@@ -4,7 +4,7 @@ Date: 2026-09-15. Status: approved in brainstorming, pending spec review. Issue 
 
 ## Problem
 
-The VM ships one skill, `omelet-setup`. It gets a project into `~/projects` and running, but for a
+The VM ships one skill, `eggie-setup`. It gets a project into `~/projects` and running, but for a
 new app its whole guidance on what to build and with what is one line: "pick the simplest
 mainstream stack for the job yourself". That produces three failures with a non-technical owner:
 
@@ -28,8 +28,8 @@ no host change; no change to `engine/install.sh`, which installs every folder un
 
 ## Decisions
 
-- Five skills, all under `engine/skills/`: `omelet-setup` (rewritten, the orchestrator),
-  `omelet-brainstorm`, `omelet-stack`, `omelet-rules`, `omelet-plan` (new).
+- Five skills, all under `engine/skills/`: `eggie-setup` (rewritten, the orchestrator),
+  `eggie-brainstorm`, `eggie-stack`, `eggie-rules`, `eggie-plan` (new).
 - Every project carries its own documents: `docs/brief.md`, `docs/stack.md`,
   `docs/specs/<date>-<slug>.md`, `docs/plans/<date>-<slug>.md`, `AGENTS.md`, and a `CLAUDE.md`
   holding only `@AGENTS.md`. These are the owner's files in the owner's project; writing them
@@ -40,29 +40,29 @@ no host change; no change to `engine/install.sh`, which installs every folder un
   that grows is re-sized up, never finished at the smaller size.
 - The owner is never asked a technical question. Every question is about needs, people, content,
   money, or what "done" looks like.
-- Skills cross-reference each other by name only (`omelet-stack`), never by path.
+- Skills cross-reference each other by name only (`eggie-stack`), never by path.
 
 ## 1. Flows
 
 ### New app from a description
 
 ```
-omelet new <name>
-  → omelet-brainstorm   writes docs/brief.md (confirmed with the owner first)
-  → omelet-stack        writes docs/stack.md (decision)
-  → omelet-rules        writes AGENTS.md, CLAUDE.md, git init
-  → omelet-plan         writes docs/plans/<date>-first-slice.md, then executes it
-       step 1 is always: scaffold + docker-compose.yml + .omelet/project.yml, omelet up, URL answers
+eggie new <name>
+  → eggie-brainstorm   writes docs/brief.md (confirmed with the owner first)
+  → eggie-stack        writes docs/stack.md (decision)
+  → eggie-rules        writes AGENTS.md, CLAUDE.md, git init
+  → eggie-plan         writes docs/plans/<date>-first-slice.md, then executes it
+       step 1 is always: scaffold + docker-compose.yml + .eggie/project.yml, eggie up, URL answers
   → tell the owner the URL in one plain sentence
 ```
 
 ### Imported project (repository URL, archive, folder)
 
 ```
-omelet clone <url>  (or unpack / move into ~/projects)
-  → has docker-compose.yml?  yes: omelet up, prove the URL
-                             no:  omelet-stack "existing project" path → compose → omelet up
-  → omelet-rules "existing project" path: explore, reconstruct docs/brief.md (confirm),
+eggie clone <url>  (or unpack / move into ~/projects)
+  → has docker-compose.yml?  yes: eggie up, prove the URL
+                             no:  eggie-stack "existing project" path → compose → eggie up
+  → eggie-rules "existing project" path: explore, reconstruct docs/brief.md (confirm),
     docs/stack.md (detected), AGENTS.md (extend, never overwrite)
 ```
 
@@ -73,16 +73,16 @@ The docs come after the URL because the URL is the deliverable and analysis take
 ```
 size it (see §6)
   small   → confirm in one message, do it, verify, commit
-  feature → omelet-brainstorm writes docs/specs/<date>-<slug>.md
-          → omelet-plan writes docs/plans/<date>-<slug>.md and executes it
+  feature → eggie-brainstorm writes docs/specs/<date>-<slug>.md
+          → eggie-plan writes docs/plans/<date>-<slug>.md and executes it
 ```
 
-A project with no `AGENTS.md` gets `omelet-rules` before any code is written in it.
+A project with no `AGENTS.md` gets `eggie-rules` before any code is written in it.
 
-## 2. `omelet-brainstorm`
+## 2. `eggie-brainstorm`
 
 Purpose: turn an idea into a written brief (project) or spec (feature) using questions a
-non-technical owner can answer. The questions are exactly the inputs `omelet-stack` needs plus
+non-technical owner can answer. The questions are exactly the inputs `eggie-stack` needs plus
 delivery scope; that coupling is the reason the two are separate skills and not one.
 
 **Interview rules**
@@ -120,7 +120,7 @@ affects · What it needs from outside · Not in this change · How we will know 
 the owner could do in the browser). Read `docs/brief.md` first so questions build on it; update
 the brief if the feature changes a section of it.
 
-## 3. `omelet-stack`
+## 3. `eggie-stack`
 
 Purpose: choose the stack from the brief, or detect it in an existing project, and record it.
 
@@ -142,9 +142,9 @@ for commodity parts (auth, admin, CMS, payments, email are products or libraries
 5. SQLite until several people write at once or a chosen component needs Postgres or MySQL; then
    one database service with a named volume.
 6. Reversible where cheap (ORM in front of the database), recorded where not (why this framework).
-7. Fits Omelet: everything in compose, a dev server that reloads on a mounted source, listens on
+7. Fits Eggie: everything in compose, a dev server that reloads on a mounted source, listens on
    `0.0.0.0`, no published host ports, starts in seconds, web services declared in
-   `.omelet/project.yml`.
+   `.eggie/project.yml`.
 
 ### The ladder: adopt → assemble → build
 
@@ -215,15 +215,15 @@ volume). For an existing project the first line says "detected, not chosen".
 
 ### References (progressive disclosure)
 
-`engine/skills/omelet-stack/references/<recipe>.md`, one per likely default, read only when that
-recipe is chosen: services, a compose skeleton that follows the Omelet contract, the dev command
-with its reload flags, `.omelet/project.yml`, first-run steps (migrations, admin user), gotchas.
+`engine/skills/eggie-stack/references/<recipe>.md`, one per likely default, read only when that
+recipe is chosen: services, a compose skeleton that follows the Eggie contract, the dev command
+with its reload flags, `.eggie/project.yml`, first-run steps (migrations, admin user), gotchas.
 Planned recipes: `astro.md`, `nextjs.md`, `wordpress.md`, `woocommerce.md`, `laravel.md`,
 `django.md`, `fastapi-nextjs.md`, `streamlit.md`, `payload.md`, `medusa.md`, `magento.md`. For any
 other product the skill says: use the product's official compose and adapt it to the contract.
 Every recipe also carries the "existing project" variant where it differs (mount, install step).
 
-## 4. `omelet-rules`
+## 4. `eggie-rules`
 
 Purpose: write the rules of the house into the project so every session — Claude Code or Codex —
 works the same way. `AGENTS.md` is the source; `CLAUDE.md` contains only `@AGENTS.md`.
@@ -235,15 +235,15 @@ New project: fill the template from `docs/brief.md` and `docs/stack.md`, `git in
 Existing project: explore first — manifests, entrypoints, how it is run and tested, folder layout,
 existing conventions, existing `AGENTS.md`/`CLAUDE.md`/`CONTRIBUTING.md`. Reconstruct
 `docs/brief.md` from what the code does and confirm the summary with the owner in plain words.
-Write `docs/stack.md` as detected unless `omelet-stack` already did. Then `AGENTS.md`: if one exists, keep it and append a marked
-`<!-- omelet:begin -->` … `<!-- omelet:end -->` section (the same markers `install-agents.sh`
-uses) holding only the Omelet-specific parts; if none exists, write the full template.
+Write `docs/stack.md` as detected unless `eggie-stack` already did. Then `AGENTS.md`: if one exists, keep it and append a marked
+`<!-- eggie:begin -->` … `<!-- eggie:end -->` section (the same markers `install-agents.sh`
+uses) holding only the Eggie-specific parts; if none exists, write the full template.
 
 **Template sections (`assets/AGENTS.md`)**, each with one line of guidance on what to put there;
 sections that do not apply are removed, not left empty:
 
 - What this project is — two sentences, pointing at `docs/brief.md` and `docs/stack.md`.
-- Running it — `omelet up`, `omelet logs`, `omelet status`; language tools only through
+- Running it — `eggie up`, `eggie logs`, `eggie status`; language tools only through
   `docker compose run --rm <service> …`; never `docker compose up` directly; never install
   toolchains on the VM.
 - Layout — where things live, five lines at most.
@@ -260,7 +260,7 @@ sections that do not apply are removed, not left empty:
 - Keeping this file current — add a non-obvious learning here when found; a subfolder with its
   own rules gets its own `AGENTS.md`; a changed stack decision updates `docs/stack.md`.
 
-## 5. `omelet-plan`
+## 5. `eggie-plan`
 
 Purpose: plan before building anything non-trivial, and execute the plan one verifiable step at
 a time so a new session can resume.
@@ -270,7 +270,7 @@ a time so a new session can resume.
 **Output: `docs/plans/<date>-<slug>.md`**, a numbered list of steps. Each step is small enough
 to finish and check in one go, and holds: files it touches · the change · how to check it (a
 curl against the project URL, a page to open, a command through compose, a test to run) · a
-checkbox. The first step of a new project is always "scaffold + compose + project.yml, `omelet
+checkbox. The first step of a new project is always "scaffold + compose + project.yml, `eggie
 up`, URL answers". Steps that add a screen end with the owner being able to open it.
 
 **Executing:** take the first unticked step; do it; run its check; tick it in the file; commit.
@@ -279,7 +279,7 @@ file rather than pushing on. When all steps are ticked, report to the owner in p
 the URL and what they can try. A new session with an unticked plan continues from the first
 unticked step.
 
-## 6. Sizing (in `omelet-setup` and `AGENTS.md`)
+## 6. Sizing (in `eggie-setup` and `AGENTS.md`)
 
 | Size | Test (observable) | What happens |
 |---|---|---|
@@ -289,17 +289,17 @@ unticked step.
 
 When in doubt, one size up. A task that grows mid-way is re-sized up, never finished small.
 
-## 7. `omelet-setup` (rewritten)
+## 7. `eggie-setup` (rewritten)
 
 Keeps: the "get it into `~/projects`" table, the rename/compose-file-name handling, the clone
-failure wording, the Omelet compose contract (`0.0.0.0`, no host ports, `.omelet/project.yml`
+failure wording, the Eggie compose contract (`0.0.0.0`, no host ports, `.eggie/project.yml`
 `web:` key, mounted source with reload, data in a volume), and "prove the URL answers with curl".
 Adds: the three flows of §1 as the body, the sizing table of §6, and hand-offs by skill name.
 Drops: "pick the simplest mainstream stack" and the inline compose-writing advice that recipes
 now carry.
 
-`engine/instructions/omelet.md` gains one line: an idea for an app or a change to a project
-starts with `omelet-brainstorm`; anything to set up or run starts with `omelet-setup`.
+`engine/instructions/eggie.md` gains one line: an idea for an app or a change to a project
+starts with `eggie-brainstorm`; anything to set up or run starts with `eggie-setup`.
 
 ## 8. Skill format
 
@@ -308,7 +308,7 @@ starts with `omelet-brainstorm`; anything to set up or run starts with `omelet-s
   body), under 500 characters, and "pushy" enough that a plain-words request triggers it.
 - Body under 500 lines; imperative; explains why. Heavy reference goes to `references/`,
   templates to `assets/`.
-- Cross-references by skill name in bold: **Use `omelet-stack`** — never by path, never with `@`.
+- Cross-references by skill name in bold: **Use `eggie-stack`** — never by path, never with `@`.
 
 ## 9. Testing
 
@@ -317,7 +317,7 @@ starts with `omelet-brainstorm`; anything to set up or run starts with `omelet-s
 - Every `engine/skills/*/SKILL.md` has frontmatter with `name` equal to its folder and a
   non-empty `description` — `npx skills add` registers by name, and a mismatch installs a skill
   nobody can call.
-- Every `omelet-<x>` name mentioned in any SKILL.md or in `engine/instructions/omelet.md` is an
+- Every `eggie-<x>` name mentioned in any SKILL.md or in `engine/instructions/eggie.md` is an
   existing folder — a rename silently breaks a hand-off.
 - Every relative file referenced from a SKILL.md (`references/…`, `assets/…`) exists.
 - The tree is resolved from `__file__` and the test asserts it scanned at least five skills, per
@@ -332,7 +332,7 @@ before finalizing**, baseline without the skill and then with it:
    a web front; the decision record says why not Node.
 3. "A page with my opening hours and phone number" → no interview marathon: one confirmation, a
    static site.
-4. An existing Django repository → `omelet-rules` writes an `AGENTS.md` with the real run and
+4. An existing Django repository → `eggie-rules` writes an `AGENTS.md` with the real run and
    migration commands, and does not overwrite an existing `CONTRIBUTING.md`-derived section.
 5. "Add customer accounts to my shop" on a project with a brief → sized as a feature: a spec and a
    plan appear before code.

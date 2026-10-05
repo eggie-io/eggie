@@ -2,7 +2,7 @@ import type { Api } from "../api/client";
 
 type Store = Pick<Storage, "getItem" | "setItem">;
 
-const KEY = "omelet.desktopHome";
+const KEY = "eggie.desktopHome";
 
 // The desktop app serves its own screens from a random loopback port and
 // passes that address in the handoff link. Anything else is refused: the

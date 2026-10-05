@@ -4,7 +4,7 @@
   "configurations": [
     {
       // Start here. The suite runs every module against fakes -- no VM, no
-      // containers -- so a breakpoint in omelet_api/core or host/ is reached
+      // containers -- so a breakpoint in eggie_api/core or host/ is reached
       // in about a second.
       "name": "Tests: whole suite",
       "type": "debugpy",
@@ -38,29 +38,29 @@
     {
       // The API as an ordinary local process: no image, no VM, native
       // stepping. It will drive whatever Docker this shell can reach, which
-      // on this machine is Docker Desktop's engine, NOT omelet-vm's --
+      // on this machine is Docker Desktop's engine, NOT eggie-vm's --
       // /usr/bin/docker here is a symlink into /mnt/wsl/docker-desktop.
       // Fine for stepping through routing, parsing and overlay generation.
       // Create the token first:  mkdir -p .debug && echo dev > .debug/api.token
       "name": "API: run locally (no container)",
       "type": "debugpy",
       "request": "launch",
-      "module": "omelet_api.routes",
+      "module": "eggie_api.routes",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
         "PYTHONPATH": "${workspaceFolder}/runtime",
-        "OMELET_PROJECTS_ROOT": "${workspaceFolder}/.debug/projects",
-        "OMELET_STATE_DB": "${workspaceFolder}/.debug/state.db",
-        "OMELET_API_TOKEN": "${workspaceFolder}/.debug/api.token",
-        "OMELET_TRAEFIK_HOST": "127.0.0.1",
-        "OMELET_API_PORT": "39099"
+        "EGGIE_PROJECTS_ROOT": "${workspaceFolder}/.debug/projects",
+        "EGGIE_STATE_DB": "${workspaceFolder}/.debug/state.db",
+        "EGGIE_API_TOKEN": "${workspaceFolder}/.debug/api.token",
+        "EGGIE_TRAEFIK_HOST": "127.0.0.1",
+        "EGGIE_API_PORT": "39099"
       }
     },
     {
       // The real API, in its container, in the VM. Requires the debug image
-      // (runtime/omelet_api/Dockerfile.debug) and the compose override
+      // (runtime/eggie_api/Dockerfile.debug) and the compose override
       // (runtime/stack.debug.yml -- its own header comment has the
       // `docker compose -f stack.yml -f stack.debug.yml up -d` command).
       // Breakpoints only bind if pathMappings is right; a hollow breakpoint
@@ -72,8 +72,8 @@
       "justMyCode": false,
       "pathMappings": [
         {
-          "localRoot": "${workspaceFolder}/runtime/omelet_api",
-          "remoteRoot": "/usr/local/lib/python3.12/site-packages/omelet_api"
+          "localRoot": "${workspaceFolder}/runtime/eggie_api",
+          "remoteRoot": "/usr/local/lib/python3.12/site-packages/eggie_api"
         }
       ]
     },
@@ -81,7 +81,7 @@
       // WINDOWS ONLY. host/providers/__init__.py raises
       // "unsupported host platform: linux" from a WSL shell, so this one has
       // to run from a VS Code window opened on the Windows checkout.
-      "name": "Host CLI: omelet up ./demo  (Windows only)",
+      "name": "Host CLI: eggie up ./demo  (Windows only)",
       "type": "debugpy",
       "request": "launch",
       "module": "host.cli",
@@ -91,7 +91,7 @@
       "justMyCode": true
     },
     {
-      "name": "Host CLI: omelet status  (Windows only)",
+      "name": "Host CLI: eggie status  (Windows only)",
       "type": "debugpy",
       "request": "launch",
       "module": "host.cli",

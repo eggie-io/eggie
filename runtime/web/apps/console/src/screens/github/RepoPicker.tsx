@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import { invalidateGitHub, useCloneRepo, useRepos } from "../../github/github";
 import { relativeTime } from "../../projects/format";
 import { useJob } from "../../projects/queries";

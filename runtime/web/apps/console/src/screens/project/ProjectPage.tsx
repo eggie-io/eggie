@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button, Egg, Notice, PromptCard, StateBadge } from "@omelet/ui";
+import { Button, Egg, Notice, PromptCard, StateBadge } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
@@ -160,7 +160,7 @@ export function ProjectPage() {
         <>
           {head()}
           <h2 className={s.big}>The folder for {project.id} has gone missing</h2>
-          <p className={s.lead}>Omelet still remembers it, but ~/projects/{project.id} isn't there any more.</p>
+          <p className={s.lead}>Eggie still remembers it, but ~/projects/{project.id} isn't there any more.</p>
           <div className={s.actions}>
             <Button
               variant="danger"

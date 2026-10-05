@@ -31,11 +31,11 @@ class MainAppLoginItem:
         service = self._service()
         ok, error = service.registerAndReturnError_(None)
         if not ok:
-            raise RuntimeError(f"macOS refused to add Omelet to Login Items: {error}")
+            raise RuntimeError(f"macOS refused to add Eggie to Login Items: {error}")
         # Registration succeeds but stays off until the user allows it.
         if service.status() == SMAppServiceStatusRequiresApproval:
-            raise RuntimeError("macOS needs your permission to open Omelet when you sign in. "
-                               "Allow Omelet in System Settings → General → Login Items.")
+            raise RuntimeError("macOS needs your permission to open Eggie when you sign in. "
+                               "Allow Eggie in System Settings → General → Login Items.")
 
     def unregister(self) -> None:
         from ServiceManagement import SMAppServiceStatusNotRegistered
@@ -44,7 +44,7 @@ class MainAppLoginItem:
             return
         ok, error = service.unregisterAndReturnError_(None)
         if not ok:
-            raise RuntimeError(f"macOS refused to remove Omelet from Login Items: {error}")
+            raise RuntimeError(f"macOS refused to remove Eggie from Login Items: {error}")
 
 
 _open_handler = None
@@ -57,7 +57,7 @@ def _make_open_handler(on_login: Callable[[], None]):
         import objc
         from Foundation import NSObject
 
-        class OmeletOpenHandler(NSObject):
+        class EggieOpenHandler(NSObject):
             @objc.signature(b"v@:@@")
             def handleOpen_withReply_(self, event, reply):
                 descriptor = event.paramDescriptorForKeyword_(_PROP_DATA)
@@ -73,7 +73,7 @@ def _make_open_handler(on_login: Callable[[], None]):
                 except Exception as e:
                     print(f"login-launch handler failed: {e!r}", file=sys.stderr)
 
-        _open_handler = OmeletOpenHandler.alloc().init()
+        _open_handler = EggieOpenHandler.alloc().init()
     _open_handler.on_login = on_login
     return _open_handler
 

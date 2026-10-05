@@ -1,5 +1,5 @@
-import "@omelet/ui/fonts";
-import "@omelet/ui/tokens.css";
+import "@eggie/ui/fonts";
+import "@eggie/ui/tokens.css";
 import "./app.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

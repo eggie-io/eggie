@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from omelet_api.routes.app import create_app
-from omelet_api.core.config import ApiConfig
+from eggie_api.routes.app import create_app
+from eggie_api.core.config import ApiConfig
 from tests.runtime.api.conftest import FakeProbe, FakeRunner
 from tests.runtime.cli.loader import load
 from tests.host.test_client_seam import TOKEN, AppOpener

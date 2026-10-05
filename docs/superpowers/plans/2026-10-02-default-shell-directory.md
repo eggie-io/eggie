@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A user opening a shell in the VM (`wsl -d omelet-vm`, `ssh`, `limactl shell`) lands in `~/projects` (→ `/opt/omelet/projects`) without picking a directory (omelet-app/omelet-resources#43).
+**Goal:** A user opening a shell in the VM (`wsl -d eggie-vm`, `ssh`, `limactl shell`) lands in `~/projects` (→ `/opt/eggie/projects`) without picking a directory (eggie-io/eggie-resources#43).
 
-**Architecture:** The runtime installs a POSIX `sh` snippet to `/etc/profile.d/omelet-cwd.sh`; every login shell sources it, and it `cd`s to `~/projects` only when the shell is interactive and started in `$HOME`. WSL starts in the Windows caller's folder (`/mnt/c/...`), not `$HOME`, so the host's WSL access command adds `--cd ~`. The host never names the guest path — the seam rule in `CLAUDE.md`.
+**Architecture:** The runtime installs a POSIX `sh` snippet to `/etc/profile.d/eggie-cwd.sh`; every login shell sources it, and it `cd`s to `~/projects` only when the shell is interactive and started in `$HOME`. WSL starts in the Windows caller's folder (`/mnt/c/...`), not `$HOME`, so the host's WSL access command adds `--cd ~`. The host never names the guest path — the seam rule in `CLAUDE.md`.
 
 **Tech Stack:** bash/POSIX sh, Python 3.12, pytest.
 
@@ -15,7 +15,7 @@
 - `profile.d` scripts are sourced by `/etc/profile` under dash as well as bash: POSIX `sh` only — no `[[ ]]`, no bash-isms.
 - Never `cd` in a non-interactive shell: coding agents, `scp`, VS Code Remote-SSH's server and `ssh host cmd` must keep their cwd.
 - No `RemoteCommand` in any ssh config — VS Code Remote-SSH refuses hosts that set it.
-- Host must not reference `/opt/omelet/projects` in the WSL command (host/runtime seam; `--cd` to a missing dir also makes `wsl.exe` fail before the runtime is installed).
+- Host must not reference `/opt/eggie/projects` in the WSL command (host/runtime seam; `--cd` to a missing dir also makes `wsl.exe` fail before the runtime is installed).
 - Tests reach repo files via `__file__`, never cwd-relative paths.
 - Run tests with `TMPDIR=<writable dir> python3 -m pytest -q` (python3 is 3.12 here).
 
@@ -32,14 +32,14 @@
 ### Task 1: Runtime profile snippet, installed by install.sh
 
 **Files:**
-- Create: `runtime/install/profile/omelet-cwd.sh`
+- Create: `runtime/install/profile/eggie-cwd.sh`
 - Modify: `runtime/install/install.sh` (step 9, after the `/etc/claude-code/CLAUDE.md` line)
-- Modify: `runtime/install/CLAUDE.md` (step list: mention `/etc/profile.d/omelet-cwd.sh` after `/etc/claude-code/CLAUDE.md`)
+- Modify: `runtime/install/CLAUDE.md` (step list: mention `/etc/profile.d/eggie-cwd.sh` after `/etc/claude-code/CLAUDE.md`)
 - Create: `tests/runtime/test_profile_cwd.py`
 - Modify: `tests/runtime/test_install_shell.py` (append one test)
 
 **Interfaces:**
-- Produces: guest file `/etc/profile.d/omelet-cwd.sh`; relies on the existing `~/projects` link from `lib/install-agents.sh`.
+- Produces: guest file `/etc/profile.d/eggie-cwd.sh`; relies on the existing `~/projects` link from `lib/install-agents.sh`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -53,7 +53,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "runtime" / "install" / "profile" / "omelet-cwd.sh"
+SCRIPT = ROOT / "runtime" / "install" / "profile" / "eggie-cwd.sh"
 
 # /etc/profile sources profile.d under dash too, when an account's shell is sh.
 SHELLS = ["sh", "bash"]
@@ -109,20 +109,20 @@ Append to `tests/runtime/test_install_shell.py`:
 ```python
 def test_install_ships_the_shell_start_directory_snippet():
     # A wrong source path here installs nothing, and shells quietly open in $HOME.
-    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/profile\.d/omelet-cwd\.sh',
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/profile\.d/eggie-cwd\.sh',
                       INSTALL.read_text())
-    assert match, "install.sh does not install /etc/profile.d/omelet-cwd.sh"
+    assert match, "install.sh does not install /etc/profile.d/eggie-cwd.sh"
     assert (INSTALL.parent / match.group(1)).is_file()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `TMPDIR=$SCRATCH python3 -m pytest -q tests/runtime/test_profile_cwd.py tests/runtime/test_install_shell.py`
-Expected: profile tests FAIL (`. ".../omelet-cwd.sh"`: file not found → non-zero exit); install test FAILs on the missing `install` line.
+Expected: profile tests FAIL (`. ".../eggie-cwd.sh"`: file not found → non-zero exit); install test FAILs on the missing `install` line.
 
 - [ ] **Step 3: Implement**
 
-`runtime/install/profile/omelet-cwd.sh`:
+`runtime/install/profile/eggie-cwd.sh`:
 
 ```sh
 # Sourced by /etc/profile, under dash as well as bash: POSIX sh only.
@@ -137,18 +137,18 @@ case $- in
 esac
 ```
 
-`runtime/install/install.sh`, step 9 — after `install -m 644 "$RUNTIME_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md`, add:
+`runtime/install/install.sh`, step 9 — after `install -m 644 "$RUNTIME_DIR/instructions/eggie.md" /etc/claude-code/CLAUDE.md`, add:
 
 ```bash
 # A login shell opens in ~/projects instead of an empty home.
-install -m 644 "$INSTALL_DIR/profile/omelet-cwd.sh" /etc/profile.d/omelet-cwd.sh
+install -m 644 "$INSTALL_DIR/profile/eggie-cwd.sh" /etc/profile.d/eggie-cwd.sh
 ```
 
-And rename the step heading to `# 9. the in-VM omelet command, the instructions every session loads, and the shell's start directory.`
+And rename the step heading to `# 9. the in-VM eggie command, the instructions every session loads, and the shell's start directory.`
 
 `runtime/install/CLAUDE.md`: in the `install.sh` step list, change
-`` `/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → `` to
-`` `/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → ``.
+`` `/usr/local/bin/eggie` → `/etc/claude-code/CLAUDE.md` → `` to
+`` `/usr/local/bin/eggie` → `/etc/claude-code/CLAUDE.md` → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → ``.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -158,7 +158,7 @@ Expected: all PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add runtime/install/profile/omelet-cwd.sh runtime/install/install.sh runtime/install/CLAUDE.md \
+git add runtime/install/profile/eggie-cwd.sh runtime/install/install.sh runtime/install/CLAUDE.md \
   tests/runtime/test_profile_cwd.py tests/runtime/test_install_shell.py
 git commit -m "feat(runtime): open interactive VM shells in ~/projects"
 ```
@@ -175,18 +175,18 @@ git commit -m "feat(runtime): open interactive VM shells in ~/projects"
 
 - [ ] **Step 1: Update the test**
 
-In `tests/host/test_access.py`, replace `assert access.command == "wsl -d omelet-vm"` with:
+In `tests/host/test_access.py`, replace `assert access.command == "wsl -d eggie-vm"` with:
 
 ```python
     # --cd ~: wsl.exe otherwise opens in the caller's Windows folder, which the
     # guest's profile snippet leaves alone; from $HOME it moves to ~/projects.
-    assert access.command == "wsl -d omelet-vm --cd ~"
+    assert access.command == "wsl -d eggie-vm --cd ~"
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `TMPDIR=$SCRATCH python3 -m pytest -q tests/host/test_access.py`
-Expected: FAIL, `'wsl -d omelet-vm' == 'wsl -d omelet-vm --cd ~'`.
+Expected: FAIL, `'wsl -d eggie-vm' == 'wsl -d eggie-vm --cd ~'`.
 
 - [ ] **Step 3: Implement**
 
@@ -196,10 +196,10 @@ In `host/providers/wsl2.py` `access()`:
             command=f"wsl -d {self.distro} --cd ~",
 ```
 
-In `docs/vm.md`, after the "On Windows, always pass `-d omelet-vm`..." paragraph, add:
+In `docs/vm.md`, after the "On Windows, always pass `-d eggie-vm`..." paragraph, add:
 
 ```markdown
-An interactive login shell that starts in `$HOME` moves to `~/projects` (`/etc/profile.d/omelet-cwd.sh`,
+An interactive login shell that starts in `$HOME` moves to `~/projects` (`/etc/profile.d/eggie-cwd.sh`,
 installed by the runtime). On Windows add `--cd ~` — without it `wsl` opens in the current Windows folder
 and stays there.
 ```

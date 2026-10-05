@@ -14,7 +14,7 @@
 
 - All paths below are relative to `web/` unless they start with `docs/` or `tests/`. Run npm commands from `web/`.
 - No agent (`agent/`) changes.
-- Kit is `@omelet/ui` (`Button`, `Modal`, `Notice`, `ProgressBar`, `PromptCard`, `RowCard`, `TextField`, `Collapsible`, `cx`). Do not import from `host/desktop/ui`.
+- Kit is `@eggie/ui` (`Button`, `Modal`, `Notice`, `ProgressBar`, `PromptCard`, `RowCard`, `TextField`, `Collapsible`, `cx`). Do not import from `host/desktop/ui`.
 - Vitest runs in `environment: "node"`; test files match `apps/*/src/**/*.test.ts` (`.ts`, not `.tsx`). No component or snapshot tests.
 - Tests follow the user's testing rules: each test names the bug it catches; no tests of the framework, the mock, or trivial glue.
 - Comments only for edge cases/workarounds, no ticket or doc references.
@@ -201,7 +201,7 @@ export function createApi(fetchImpl: typeof fetch, { timeoutMs = 10_000 }: { tim
     } catch {
       // The caller's own abort (a paused upload) is not a dropped connection.
       if (payload.signal?.aborted) throw new ApiError("aborted", "the request was cancelled", 0);
-      throw new ApiError("unreachable", "Omelet's service isn't answering", 0);
+      throw new ApiError("unreachable", "Eggie's service isn't answering", 0);
     }
     if (!ok) {
       const parsed = parse(text);
@@ -1462,7 +1462,7 @@ and in `handlersFor`:
       const dir = joinPath(new URL(request.url).searchParams.get("dir") ?? "");
       await delay(250);
       if (scenario === "locked" && dir === "data") {
-        return refuse("permission_denied", "Omelet can't look inside that folder; a program in the project owns it.", 409);
+        return refuse("permission_denied", "Eggie can't look inside that folder; a program in the project owns it.", 409);
       }
       const t = tree(id);
       if (dir !== "" && t.get(dir)?.kind !== "folder") return refuse("folder_not_found", `no folder '${dir}' in project '${id}'`, 404);
@@ -1506,7 +1506,7 @@ and in `handlersFor`:
       if (existing?.kind === "folder") return refuse("path_is_folder", `'${body.path}' is a folder in the project`, 409);
       if (existing && !body.replace) return refuse("file_exists", `'${body.path}' is already in the project`, 409);
       if (body.size + GB > disk.free) {
-        return HttpResponse.json({ error: { code: "not_enough_space", message: "this file is bigger than the room Omelet has left", free_bytes: disk.free } }, { status: 507 });
+        return HttpResponse.json({ error: { code: "not_enough_space", message: "this file is bigger than the room Eggie has left", free_bytes: disk.free } }, { status: 507 });
       }
       if (body.size === 0) {
         put(id, joinPath(body.path), { kind: "file", size: 0, modified: nowSec() });
@@ -1538,7 +1538,7 @@ and in `handlersFor`:
         disk.free = 0;
         // One-shot: the next /disk read reports room again, as if the user freed some.
         window.setTimeout(() => { disk.free = 40 * GB; }, 0);
-        return HttpResponse.json({ error: { code: "disk_full", message: "Omelet ran out of room", offset: up.offset } }, { status: 507 });
+        return HttpResponse.json({ error: { code: "disk_full", message: "Eggie ran out of room", offset: up.offset } }, { status: 507 });
       }
       up.offset += length;
       up.updated_at = nowSec();
@@ -1704,7 +1704,7 @@ Verify in the browser that `/p/recipe-box/files` (no trailing segment) matches t
 
 ```tsx
 import { Link } from "react-router";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { filesRoute } from "../../uploads/paths";
 import { FOLDER, GLOBE, MAGNIFIER, TRASH } from "../icons";
 import s from "./ProjectPage.module.css";
@@ -1768,7 +1768,7 @@ export function Listing({ projectId, dir, entries, now }: { projectId: string; d
 ```tsx
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Notice } from "@omelet/ui";
+import { Notice } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { useNow } from "../../projects/useNow";
 import { filesRoute, joinPath } from "../../uploads/paths";
@@ -1825,7 +1825,7 @@ export function FilesPage() {
         </div>
       </header>
       {code === "permission_denied" ? (
-        <Notice>Omelet can't look inside this folder — a program in the project owns it.</Notice>
+        <Notice>Eggie can't look inside this folder — a program in the project owns it.</Notice>
       ) : listing.isError ? (
         <Notice>{listing.error.message}</Notice>
       ) : listing.data === undefined ? (
@@ -1902,7 +1902,7 @@ git commit -m "Add the Files screen: browse a project's folders and download fil
 
 ```tsx
 import { useEffect, useState } from "react";
-import { Button, Modal, Notice, TextField } from "@omelet/ui";
+import { Button, Modal, Notice, TextField } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { folderNameError, joinPath } from "../../uploads/paths";
 import { useDisk, useListing } from "../../uploads/queries";
@@ -1959,7 +1959,7 @@ export function DestinationModal({
       {tooBig.length > 0 && free !== undefined && (
         <Notice>
           {tooBig.length === 1 && files.length === 1 ? "This one won't fit — the" : `${tooBig.map((f) => f.name).join(", ")} won't fit — the`}{" "}
-          {tooBig.length === 1 ? `file is ${size(tooBig[0].size)}` : `files need ${size(tooBig.reduce((n, f) => n + f.size, 0))}`} and Omelet has{" "}
+          {tooBig.length === 1 ? `file is ${size(tooBig[0].size)}` : `files need ${size(tooBig.reduce((n, f) => n + f.size, 0))}`} and Eggie has{" "}
           {size(free)} of room left. Make some space in the desktop app, then come back and send it up — we'll still be here.
         </Notice>
       )}
@@ -2012,7 +2012,7 @@ export function DestinationModal({
 // new imports
 import { useRef, useState, type DragEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import { api } from "../../api/client";
 import { fits } from "../../uploads/queue";
 import type { Disk } from "../../uploads/uploadApi";
@@ -2100,7 +2100,7 @@ Wrap the listing/foot area in a drop zone:
       />
 ```
 
-(Import `cx` from `@omelet/ui`.)
+(Import `cx` from `@eggie/ui`.)
 
 - [ ] **Step 3: Styles** — append to `FilesPage.module.css`:
 
@@ -2177,13 +2177,13 @@ export function failure(item: UploadItem): string {
     case "file_exists":
       return `${item.name} is already in ${item.dir === "" ? "the top of the project" : `${item.dir}/`}. Replace it?`;
     case "permission_denied":
-      return "Omelet can't write into that folder — pick another.";
+      return "Eggie can't write into that folder — pick another.";
     case "project_not_found":
       return "The project is gone.";
     case "path_is_folder":
       return "There's a folder with that name already.";
     case "upload_not_found":
-      return "Omelet lost this upload — send it again.";
+      return "Eggie lost this upload — send it again.";
     default:
       return item.message ?? "Something went wrong.";
   }
@@ -2195,7 +2195,7 @@ export function failure(item: UploadItem): string {
 ```tsx
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { Button, Collapsible, Notice, ProgressBar, RowCard } from "@omelet/ui";
+import { Button, Collapsible, Notice, ProgressBar, RowCard } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { failure, into, summary } from "../../uploads/copy";
 import { secondsLeft, timeLeftWords } from "../../uploads/eta";
@@ -2220,7 +2220,7 @@ export function UploadPanel({ items, queue }: { items: readonly UploadItem[]; qu
     <>
       {full && (
         <RowCard accent="trouble" className={s.banner}>
-          <h2 className={s.bannerTitle}>Omelet ran out of room partway through</h2>
+          <h2 className={s.bannerTitle}>Eggie ran out of room partway through</h2>
           <p className={s.bannerText}>
             {full.name} got {percent(full)}% of the way in. What made it is safe, and it can carry on from there — but you'll need to
             free up space in the desktop app first.
@@ -2332,7 +2332,7 @@ function UploadRow({ item, queue, onCarryOn }: { item: UploadItem; queue: Upload
 - [ ] **Step 3: `screens/files/DoneCard.tsx`**
 
 ```tsx
-import { Button, PromptCard } from "@omelet/ui";
+import { Button, PromptCard } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { kindOf, promptFor } from "../../uploads/kinds";
 import { joinPath } from "../../uploads/paths";

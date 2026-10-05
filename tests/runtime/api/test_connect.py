@@ -1,6 +1,6 @@
 import json
 
-from omelet_api.core import connect
+from eggie_api.core import connect
 
 
 def _write(tmp_path, value):

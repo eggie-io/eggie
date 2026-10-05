@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "runtime" / "install" / "profile" / "omelet-cwd.sh"
+SCRIPT = ROOT / "runtime" / "install" / "profile" / "eggie-cwd.sh"
 
 # /etc/profile sources profile.d under dash too, when an account's shell is sh.
 SHELLS = ["sh", "bash"]

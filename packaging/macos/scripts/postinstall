@@ -1,20 +1,20 @@
 #!/bin/bash
 # Runs as root, once the app is in /Applications.
 #
-# It puts `omelet` on PATH and stops there. It must not run setup: setup builds
+# It puts `eggie` on PATH and stops there. It must not run setup: setup builds
 # a Lima VM, and Lima keeps VMs per user under ~/.lima — one created by root
 # would be invisible to the person who installed it, and would leave a VM this
 # app can never find or delete.
 set -euo pipefail
 
-app="/Applications/Omelet.app/Contents/MacOS/omelet"
+app="/Applications/Eggie.app/Contents/MacOS/eggie"
 bindir="/usr/local/bin"
 
-[ -x "$app" ] || { echo "Omelet.app is missing its command-line tool" >&2; exit 1; }
+[ -x "$app" ] || { echo "Eggie.app is missing its command-line tool" >&2; exit 1; }
 
 # /usr/local/bin is not present on a clean Apple Silicon machine, and it is on
 # the default PATH whether or not it exists.
 mkdir -p "$bindir"
-ln -sfn "$app" "$bindir/omelet"
+ln -sfn "$app" "$bindir/eggie"
 
 exit 0

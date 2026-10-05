@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { Button, Collapsible, Notice, RowCard, cx } from "@omelet/ui";
+import { Button, Collapsible, Notice, RowCard, cx } from "@eggie/ui";
 import { folderHeading, relativeTime } from "../../projects/format";
 import { useAdopt } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
@@ -34,10 +34,10 @@ function Folder({ folder, now, adopting, onAdopt }: { folder: Discovered; now: n
         ) : (
           <>
             <span className={s.quiet}>
-              Omelet can't take this one in yet — the folder doesn't say how to run itself. Ask your coding agent to add
+              Eggie can't take this one in yet — the folder doesn't say how to run itself. Ask your coding agent to add
               the start-up recipe and it'll show up here, ready to adopt.
             </span>
-            <Collapsible summary="What Omelet looks for">
+            <Collapsible summary="What Eggie looks for">
               <pre className={s.recipe}>{`~/projects/${folder.name}\n  docker-compose.yml  — missing`}</pre>
             </Collapsible>
           </>
@@ -58,7 +58,7 @@ export function DiscoveredBand({ folders }: { folders: Discovered[] }) {
         {FOLDER}
         <div>
           <h2 className={s.bandTitle}>{folderHeading(folders.length)}</h2>
-          <p className={s.bandSub}>Your coding agent made these. Omelet hasn't met them yet.</p>
+          <p className={s.bandSub}>Your coding agent made these. Eggie hasn't met them yet.</p>
         </div>
       </header>
       <ul className={s.folders}>

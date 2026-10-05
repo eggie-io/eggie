@@ -43,7 +43,7 @@ def test_an_existing_project_is_reported_as_a_conflict(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("failure", [
-    RuntimeError("could not reach the Omelet API"),
+    RuntimeError("could not reach the Eggie API"),
     OSError("connection refused"),
     ValueError("nonsense"),
 ])

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 
 export function CopyButton({ text, className }: { text: string; className?: string }) {
   const [state, setState] = useState<"idle" | "copied" | "refused">("idle");

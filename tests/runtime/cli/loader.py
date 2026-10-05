@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 GUEST_CLI = (Path(__file__).resolve().parents[3]
-             / "runtime" / "cli" / "omelet.py")
-_NAME = "omelet_guest_cli"
+             / "runtime" / "cli" / "eggie.py")
+_NAME = "eggie_guest_cli"
 
 
 def load():

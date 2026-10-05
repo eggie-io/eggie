@@ -1,8 +1,0 @@
-[Unit]
-Description=Apply Omelet's GitHub connection when it changes
-
-[Path]
-PathChanged=/opt/omelet/github/desired.json
-
-[Install]
-WantedBy=multi-user.target

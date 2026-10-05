@@ -1,6 +1,6 @@
 # The Phase 5 payoff: this file is identical locally and in the cloud, and
 # differs only by the environment injected around it. Nothing here may
-# hardcode a value that has to change between the two -- see the OMELET_*
+# hardcode a value that has to change between the two -- see the EGGIE_*
 # variables below, each with the current local default.
 #
 # Traefik's static config lives entirely on `command:` rather than in a
@@ -13,7 +13,7 @@
 #
 # The edge network name is the literal `edge`, not a variable: it is
 # `constants.EDGE_NETWORK`, an authoritative constant the global rulings
-# forbid giving a second name. `omelet_api/core/overlay.py` hardcodes the same
+# forbid giving a second name. `eggie_api/core/overlay.py` hardcodes the same
 # constant when it labels project containers, so parameterising only the
 # Traefik side here would let the two drift -- Traefik watching a network
 # nothing is attached to, every route answering 404 with no error anywhere.
@@ -25,12 +25,12 @@ services:
     # answering 404.
     restart: always
     command:
-      - "--entryPoints.web.address=:${OMELET_EDGE_PORT:-39080}"
+      - "--entryPoints.web.address=:${EGGIE_EDGE_PORT:-39080}"
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"
     ports:
-      - "${OMELET_EDGE_PORT:-39080}:${OMELET_EDGE_PORT:-39080}"
+      - "${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -38,7 +38,7 @@ services:
       - tunnel
 
   api:
-    image: ${OMELET_API_IMAGE:-ghcr.io/omelet-app/omelet-api:${OMELET_VERSION}}
+    image: ${EGGIE_API_IMAGE:-ghcr.io/eggie-io/eggie-api:${EGGIE_VERSION}}
     restart: always
     # No `hostname:` here -- the api service looks itself up with
     # `docker inspect $HOSTNAME` to remove root-owned project files, and
@@ -53,23 +53,23 @@ services:
     # host dials 127.0.0.1:<same port> through the VM's forward, and a mapping
     # the api service does not bind forwards to nothing.
     ports:
-      - "${OMELET_API_PORT:-39099}:${OMELET_API_PORT:-39099}"
+      - "${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
     environment:
-      - OMELET_API_PORT=${OMELET_API_PORT:-39099}
-      - OMELET_DOMAIN=${OMELET_DOMAIN:-127-0-0-1.sslip.io}
-      - OMELET_EDGE_PORT=${OMELET_EDGE_PORT:-39080}
-      - OMELET_GITHUB_CLIENT_ID=${OMELET_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
+      - EGGIE_API_PORT=${EGGIE_API_PORT:-39099}
+      - EGGIE_DOMAIN=${EGGIE_DOMAIN:-127-0-0-1.sslip.io}
+      - EGGIE_EDGE_PORT=${EGGIE_EDGE_PORT:-39080}
+      - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same path on both sides, not negotiable: the api service parses
       # compose files, but the bind-mount paths inside them are resolved by
       # dockerd on the VM, not inside this container. A different path here
       # mounts every user project's relative volume onto an empty directory.
-      - /opt/omelet:/opt/omelet
+      - /opt/eggie:/opt/eggie
     # Fixable without a rebuild when a VM's docker group GID doesn't match
     # the image's build-time default.
     group_add:
-      - "${OMELET_DOCKER_GID:-999}"
+      - "${EGGIE_DOCKER_GID:-999}"
     networks:
       - edge
     # The browser UI's API. Same origin as the page (the web service below),
@@ -77,25 +77,25 @@ services:
     # page's catch-all route; project hosts never match these two names.
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.omelet-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
-      - "traefik.http.routers.omelet-api.entrypoints=web"
-      - "traefik.http.routers.omelet-api.priority=1000"
-      - "traefik.http.services.omelet-api.loadbalancer.server.port=${OMELET_API_PORT:-39099}"
+      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.eggie-api.entrypoints=web"
+      - "traefik.http.routers.eggie-api.priority=1000"
+      - "traefik.http.services.eggie-api.loadbalancer.server.port=${EGGIE_API_PORT:-39099}"
 
   # The browser UI: static files only, no secrets, no logic. Released under
   # the api service's version -- the two install as a pair. Its router is the
-  # catch-all for the UI hosts, so it sits below omelet-api's priority.
+  # catch-all for the UI hosts, so it sits below eggie-api's priority.
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:${OMELET_VERSION}}
+    image: ${EGGIE_WEB_IMAGE:-ghcr.io/eggie-io/eggie-web:${EGGIE_VERSION}}
     restart: always
     networks:
       - edge
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.omelet-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
-      - "traefik.http.routers.omelet-web.entrypoints=web"
-      - "traefik.http.routers.omelet-web.priority=10"
-      - "traefik.http.services.omelet-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.eggie-web.entrypoints=web"
+      - "traefik.http.routers.eggie-web.priority=10"
+      - "traefik.http.services.eggie-web.loadbalancer.server.port=8080"
 
   # Started and stopped by the api service while a public URL is on; the
   # installer's profile-less `up -d` never starts it. Its network is shared
@@ -106,12 +106,12 @@ services:
     image: cloudflare/cloudflared:2026.9.3
     profiles: [tunnel]
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token-file /run/omelet/token
+    command: tunnel --no-autoupdate run --token-file /run/eggie/token
     volumes:
-      - /opt/omelet/tunnel:/run/omelet:ro
+      - /opt/eggie/tunnel:/run/eggie:ro
     # cloudflared runs as a non-root user; the token is 0640 root:docker.
     group_add:
-      - "${OMELET_DOCKER_GID:-999}"
+      - "${EGGIE_DOCKER_GID:-999}"
     networks:
       - tunnel
 

@@ -2,10 +2,10 @@
 
 ## 1. Goal
 
-A non-technical user connects their GitHub account from the Omelet console with one
+A non-technical user connects their GitHub account from the Eggie console with one
 button and never opens a terminal. Afterwards every VM login account where coding agents
 run is authenticated as that user for `gh` and for `git` over https. The user can pick one
-of their repositories, most recently updated first, and have it cloned as an Omelet
+of their repositories, most recently updated first, and have it cloned as an Eggie
 project. The coding agent never runs a GitHub login itself.
 
 Done when, on a fresh VM:
@@ -23,14 +23,14 @@ additive on the shared router, so `API_VERSION` does not change. **No host relea
 
 | Piece | Location | Why there |
 |---|---|---|
-| GitHub HTTP, identity, clone argv | `runtime/omelet_api/core/github.py` | Stdlib client shaped like `core/cloud.py` |
-| Device flow, token/desired/applied files, setup state | `runtime/omelet_api/core/github_link.py` | Platform-free logic next to its twin `core/account.py` |
-| Routes `/github*` | `runtime/omelet_api/routes/app.py` | One router, mounted at `/` (bearer) and `/api` (cookie) |
+| GitHub HTTP, identity, clone argv | `runtime/eggie_api/core/github.py` | Stdlib client shaped like `core/cloud.py` |
+| Device flow, token/desired/applied files, setup state | `runtime/eggie_api/core/github_link.py` | Platform-free logic next to its twin `core/account.py` |
+| Routes `/github*` | `runtime/eggie_api/routes/app.py` | One router, mounted at `/` (bearer) and `/api` (cookie) |
 | Per-account `gh`/git setup | `runtime/install/lib/github-apply.sh`, run as root by systemd | The API is uid 1000 in a container and cannot write to user homes |
-| systemd units | `runtime/install/systemd/omelet-github.{path,service}`, installed by `install.sh` | Same release path as the rest of the guest setup |
-| `git` in the API image | `runtime/omelet_api/Dockerfile` | The clone runs in the API's job registry |
+| systemd units | `runtime/install/systemd/eggie-github.{path,service}`, installed by `install.sh` | Same release path as the rest of the guest setup |
+| `git` in the API image | `runtime/eggie_api/Dockerfile` | The clone runs in the API's job registry |
 | Console screens | `runtime/web/apps/console/src/github/`, `screens/github/` | Mirrors `account/` and `screens/account/` |
-| Agent rule | `runtime/instructions/omelet.md` | Read by Claude Code (`/etc/claude-code/CLAUDE.md`) and Codex |
+| Agent rule | `runtime/instructions/eggie.md` | Read by Claude Code (`/etc/claude-code/CLAUDE.md`) and Codex |
 
 ### Why a systemd path unit (approach A)
 
@@ -39,14 +39,14 @@ from its container. The alternatives were entering the VM's namespaces from a pr
 container (`nsenter -t 1`) or a system-wide `GH_TOKEN`. The first gives the API a standing
 way into the host. The second puts the token in every process's environment. A path unit
 keeps the root work in one short shell script. It is tested the same way as
-`install-agents.sh`, and the only input it trusts is a file inside `/opt/omelet`.
+`install-agents.sh`, and the only input it trusts is a file inside `/opt/eggie`.
 
 ### systemd is PID 1 on both platforms
 
 - WSL2: `Wsl2Provider.create()` writes `[boot] systemd=true` to `/etc/wsl.conf` and
   restarts the distro. `install.sh` already needs this for `systemctl enable --now docker`.
 - Lima: the Ubuntu 24.04 cloud image boots systemd as PID 1. This is the default and
-  `omelet.yaml` does not change it.
+  `eggie.yaml` does not change it.
 - If systemd is not running, `install.sh` already fails at step 2, so no VM reaches this
   feature without it. If the units are missing (a VM on an older runtime), the timeout in
   §5.4 reports it. The live acceptance run checks `ps -p 1 -o comm=` = `systemd` on both
@@ -59,17 +59,17 @@ keeps the root work in one short shell script. It is tested the same way as
 - **`user.email`:** the profile's public `email` from `GET /user`, or
   `<id>+<login>@users.noreply.github.com` when there is no public email. GitHub links
   both addresses to the profile, and the noreply address never trips GH007 on push.
-- Both come from the GitHub account alone. The Omelet login plays no part in the git
+- Both come from the GitHub account alone. The Eggie login plays no part in the git
   identity. They are read at connect time and on every re-apply (§5.5).
 
 ## 4. Configuration
 
-- `OMELET_GITHUB_CLIENT_ID` env var, defaulting to Omelet's OAuth App `client_id`, `Ov23lie5k9VqSCKI52Ci`. The
+- `EGGIE_GITHUB_CLIENT_ID` env var, defaulting to Eggie's OAuth App `client_id`, `Ov23lie5k9VqSCKI52Ci`. The
   default is a constant in `core/constants.py`. It is set through
-  `ApiConfig.github_client_id` like every other `OMELET_*` value, and `stack.yml` passes
+  `ApiConfig.github_client_id` like every other `EGGIE_*` value, and `stack.yml` passes
   it through with the same default. No client secret exists anywhere. The Device Flow
   needs only the `client_id`, and the App must have "Enable Device Flow" ticked.
-- `OMELET_GITHUB_URL` / `OMELET_GITHUB_API_URL` (defaults `https://github.com`,
+- `EGGIE_GITHUB_URL` / `EGGIE_GITHUB_API_URL` (defaults `https://github.com`,
   `https://api.github.com`) exist only so tests and forks point elsewhere.
 
 ## 5. Runtime API
@@ -105,14 +105,14 @@ keeps the root work in one short shell script. It is tested the same way as
 | What | Where | Mode |
 |---|---|---|
 | Pending device code, user code, expiry | memory only | — |
-| Token | `/opt/omelet/github/token` | `0600`, uid 1000 (API) |
+| Token | `/opt/eggie/github/token` | `0600`, uid 1000 (API) |
 | Identity + bookkeeping (`login`, `gh_id`, `name`, `email`, `generation`, `desired_at`, `needs_reconnect`, `last_error`, `checked_at`) | new `github` row in `state.db` (added in `migrate.py`) | as `state.db` |
-| Desired state for the root script | `/opt/omelet/github/desired.json` | `0640`, uid 1000, group docker |
-| Result from the root script | `/opt/omelet/github/applied.json` | `0644`, root |
+| Desired state for the root script | `/opt/eggie/github/desired.json` | `0640`, uid 1000, group docker |
+| Result from the root script | `/opt/eggie/github/applied.json` | `0644`, root |
 
 - The device code is kept in memory only. Together with the public `client_id` it is
   enough to get the token. If the API restarts mid-flow, the user just clicks Connect again.
-- `install.sh` creates `/opt/omelet/github` as `root:docker`, mode `2770`.
+- `install.sh` creates `/opt/eggie/github` as `root:docker`, mode `2770`.
 - The token and `desired.json` are written to a temp file in the same directory, then
   `os.replace`d into place, with the mode set at creation (`os.open(..., 0o600)`).
 - Docker-group members are root-equivalent in this VM anyway. `0600` keeps the token away
@@ -161,7 +161,7 @@ runtime can apply.
 - **equal and not `ok`** → `failed`, `setup_error` = the script's `error` (no token)
 - **behind, and `now - desired_at < SETUP_TIMEOUT` (30 s)** → `applying`
 - **behind after the timeout, `applied.json` missing** → `runtime_outdated`. The UI says
-  "This machine's Omelet runtime needs an update before GitHub can be set up", and the
+  "This machine's Eggie runtime needs an update before GitHub can be set up", and the
   host app's Repair re-runs `get.sh`.
 - **behind after the timeout, `applied.json` present** → `failed`, `setup_error:
   "setup_timeout"`, message "GitHub setup inside the machine did not finish".
@@ -206,10 +206,10 @@ the staging folder is removed and an error is returned; nothing is left behind.
 ```
 sh -c 'umask 002 && exec "$@"' sh \
   git -c credential.helper= \
-      -c 'credential.helper=!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$OMELET_GH_TOKEN"; }; f' \
+      -c 'credential.helper=!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$EGGIE_GH_TOKEN"; }; f' \
       -c core.sharedRepository=group \
-      clone -- https://github.com/<owner>/<name>.git /opt/omelet/projects/<id>
-env: OMELET_GH_TOKEN=<token>, GIT_TERMINAL_PROMPT=0
+      clone -- https://github.com/<owner>/<name>.git /opt/eggie/projects/<id>
+env: EGGIE_GH_TOKEN=<token>, GIT_TERMINAL_PROMPT=0
 ```
 
 - **The token never lands on disk in the repo.** It is only in the child's environment,
@@ -219,13 +219,13 @@ env: OMELET_GH_TOKEN=<token>, GIT_TERMINAL_PROMPT=0
 - **Why `umask 002` and `core.sharedRepository=group`.** The login accounts are not uid
   1000. On WSL2 there is no login user, so agents run as **root**. On Lima the account
   carries the **macOS uid (usually 501)**. What they share with the API is the docker
-  group, which `/opt/omelet/projects` already hands down through setgid. Without these two
+  group, which `/opt/eggie/projects` already hands down through setgid. Without these two
   settings the API's default umask 022 produces files the Lima account cannot write, and
   `core.sharedRepository=group` keeps `.git` group-writable whoever writes to it later.
 - **Output.** Job stdout/stderr pass through `redact(text, token)` before they are
   stored. git does not print the token, and redacting costs nothing.
 - **Success.** Add the project row (the same path as `POST /projects` + `sync.wake()`). If
-  a compose file exists, the same job runs `up`, as `omelet clone` does. Otherwise the
+  a compose file exists, the same job runs `up`, as `eggie clone` does. Otherwise the
   project is left stopped.
 - **Failure.** Remove the partial folder. On `Authentication failed` / 401 / 403, set
   `needs_reconnect`. `LocalRunner.exec` gains an optional `env` keyword to make this
@@ -240,11 +240,11 @@ in this VM. This also fixes a hidden bug that exists today: an uploaded folder c
 
 ## 6. Root side: `github-apply.sh`
 
-`omelet-github.path` has `PathChanged=/opt/omelet/github/desired.json`. systemd watches
+`eggie-github.path` has `PathChanged=/opt/eggie/github/desired.json`. systemd watches
 the parent directory for `IN_MOVED_TO`, so the API's `os.replace` triggers it. It
-activates `omelet-github.service`, a root `Type=oneshot` that runs
-`/opt/omelet/runtime/install/lib/github-apply.sh`. `install.sh` installs both units,
-`systemctl enable --now omelet-github.path`, and runs the script once at the end, so a
+activates `eggie-github.service`, a root `Type=oneshot` that runs
+`/opt/eggie/runtime/install/lib/github-apply.sh`. `install.sh` installs both units,
+`systemctl enable --now eggie-github.path`, and runs the script once at the end, so a
 repair or a newly added account picks up the current state.
 
 The script is idempotent. It reads `desired.json`, applies it in full, and writes
@@ -278,7 +278,7 @@ loop while generation moves (up to 5 passes):
   `PATH` keeps `gh`/`git` pointed at the right account.
 - **Reading the token.** Root's shell opens the token for the `< token` redirect before
   `runuser` drops privileges. The account never needs read access to
-  `/opt/omelet/github/token`.
+  `/opt/eggie/github/token`.
 - **`--insecure-storage`.** It makes the storage deterministic. There is no keyring in a
   headless VM, and gh would fall back to the same file anyway.
 - **Logout with `--user`.** Since gh 2.40 one host can hold several accounts (a hand
@@ -307,7 +307,7 @@ loop while generation moves (up to 5 passes):
   - `expired_token` → "That code ran out" + Get a new code
   - `github_error` → "GitHub said something unexpected" + Try again
   - `pending` → the code
-  - `applying` → "Setting up GitHub inside Omelet…"
+  - `applying` → "Setting up GitHub inside Eggie…"
   - `ready` → Connected as @login
   - `failed` → the setup error + Try again (`reapply`)
   - `runtime_outdated` → the update message
@@ -339,15 +339,15 @@ loop while generation moves (up to 5 passes):
   only duck-typed to it for `lifecycle.py`, which does not pass `env`.
 - **Dockerfile** — `apt-get install -y --no-install-recommends git ca-certificates`.
 - **`install.sh`:**
-  - create `/opt/omelet/github` (`root:docker 2770`)
+  - create `/opt/eggie/github` (`root:docker 2770`)
   - install and enable the two units
   - `git config --system safe.directory '*'` if it is not there already
   - run `github-apply.sh` after the per-account loop, before the marker
-- **`runtime/instructions/omelet.md`** — the GitHub bullet becomes:
+- **`runtime/instructions/eggie.md`** — the GitHub bullet becomes:
   > GitHub — repositories, pull requests, issues: use `gh` and plain `git` over https.
   > If `gh auth status` fails or a GitHub operation says unauthorized, do **not** run
   > `gh auth login` and do not ask for a token. Tell the user to click **Connect GitHub**
-  > in Omelet, then try again.
+  > in Eggie, then try again.
 - **Version** — additive runtime change, `API_VERSION` stays. No bump while 0.2.0 is
   untagged (the highest tag is `runtime-v0.0.5`). Bump `__version__`, `SERVICE_VERSION`
   and both `stack.yml` tags together, then release a `runtime-v*` tag, only if the 0.2.0
@@ -394,11 +394,11 @@ live acceptance run) and the modal components (no logic past `view.ts`).
 
 ## 10. Live acceptance (manual, WSL2 and Lima)
 
-1. `ps -p 1 -o comm=` → `systemd`, and `systemctl is-enabled omelet-github.path` →
+1. `ps -p 1 -o comm=` → `systemd`, and `systemctl is-enabled eggie-github.path` →
    `enabled`.
 2. Connect → approve → UI reaches "Connected as @login" with no reload. Deny → "You said
    no". Wait out a code → "That code ran out". Each recovers with its button.
-3. Pick a private repo → the project appears. `grep -r <token> /opt/omelet/projects/<id>/.git`
+3. Pick a private repo → the project appears. `grep -r <token> /opt/eggie/projects/<id>/.git`
    finds nothing, and `git remote -v` is plain https.
 4. As the agent's account (root on WSL2, the Lima user on macOS): `gh auth status` is OK;
    `touch`, commit and `git push` succeed with no prompt; `git log -1 --format='%an <%ae>'`
@@ -412,7 +412,7 @@ live acceptance run) and the modal components (no logic past `view.ts`).
 
 - GitHub Enterprise hosts, several GitHub accounts, org SSO authorization prompts beyond
   what `read:org` gives.
-- Signing out of Omelet does not disconnect GitHub. They are independent connections.
+- Signing out of Eggie does not disconnect GitHub. They are independent connections.
 - Search in the repo picker (paging only).
 - SSH remotes.
-- The Omelet service gaining a user name.
+- The Eggie service gaining a user name.

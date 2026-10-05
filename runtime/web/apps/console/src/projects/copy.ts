@@ -29,7 +29,7 @@ export const CAUSE_COPY: Record<Cause, { heading: (id: string) => string; short:
     heading: (id) => `${id} started, but nothing answers at its address`,
     short: "Started, but nothing answers at its address",
     body:
-      "Its little machines are up, but nothing replies where Omelet sends visitors. It may be listening on a " +
+      "Its little machines are up, but nothing replies where Eggie sends visitors. It may be listening on a " +
       "different port, or it fell over after starting.",
   },
   crash_looping: {
@@ -43,9 +43,9 @@ export const CAUSE_COPY: Record<Cause, { heading: (id: string) => string; short:
     body: "Docker refused to start it. The raw details below say what it tripped on.",
   },
   unreadable: {
-    heading: (id) => `Omelet can't read ${id}'s start-up recipe`,
-    short: "Omelet can't read its start-up recipe",
-    body: "The docker-compose.yml is there, but Omelet can't make sense of it.",
+    heading: (id) => `Eggie can't read ${id}'s start-up recipe`,
+    short: "Eggie can't read its start-up recipe",
+    body: "The docker-compose.yml is there, but Eggie can't make sense of it.",
   },
 };
 

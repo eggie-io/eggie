@@ -19,7 +19,7 @@ export function fixPrompt(cause: Cause, id: string, detail: string | null): stri
     case "failed_to_start":
       return `${where} won't start: Docker refuses to bring it up. Find out why from docker-compose.yml and the error Docker gives, and fix it. ${CLOSE}`;
     case "unreadable":
-      return `${where} has a docker-compose.yml that Omelet can't read${detail ? ` (it says: ${detail})` : ""}. Make it a valid compose file that starts the project, with the web service listening on 0.0.0.0. ${CLOSE}`;
+      return `${where} has a docker-compose.yml that Eggie can't read${detail ? ` (it says: ${detail})` : ""}. Make it a valid compose file that starts the project, with the web service listening on 0.0.0.0. ${CLOSE}`;
   }
 }
 

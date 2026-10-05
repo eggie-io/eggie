@@ -10,9 +10,9 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 | Field | Meaning |
 |---|---|
 | `home` | Directory under each account's home, e.g. `.codex`, or a list of them (Cursor: `.cursor` and its remote server's `.cursor-server`). Detection reads every one; `detect.ignore` applies to each. |
-| `instructions` | Files that get `instructions/omelet.md`: `/abs/path` written whole once, `~/path` as the `<!-- omelet:begin/end -->` block per account. |
+| `instructions` | Files that get `instructions/eggie.md`: `/abs/path` written whole once, `~/path` as the `<!-- eggie:begin/end -->` block per account. |
 | `skills` | The `npx skills add -a` agent name. |
-| `detect.ignore` | Top-level names under `home` that Omelet's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |
+| `detect.ignore` | Top-level names under `home` that Eggie's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |
 | `setup.run` | Shell command run once per account when the user opens the agent's guide. |
 
 ## Things that will bite you
@@ -22,4 +22,4 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 - `detect.ignore` must list everything the install and `setup.run` put under `home`, or the agent reads as
   connected right after install. Check on a fresh VM with `ls -A ~/<home>`.
 - This folder is copied into the web image (`--build-context agents=…`) and read from
-  `/opt/omelet/runtime/agents` on the VM by both the runner and the API.
+  `/opt/eggie/runtime/agents` on the VM by both the runner and the API.

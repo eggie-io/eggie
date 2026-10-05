@@ -4,36 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A PoC (`omelet`) that creates a managed Linux VM (Ubuntu 24.04), installs Docker inside it, runs
+A PoC (`eggie`) that creates a managed Linux VM (Ubuntu 24.04), installs Docker inside it, runs
 any `docker-compose` project in the guest, and hands back a working URL on the host. Windows/WSL2
 is the primary platform. macOS/Lima is **confirmed once, still mostly unverified** (a VM booted and
 finished the runtime install on Apple Silicon; nobody has recorded a full `create_vm` → `verify`
 run) — see `docs/macos-status.md`.
 
 Each layer has its own CLAUDE.md with the detail; read the one for the tree you are touching:
-`host/`, `host/desktop/`, `runtime/`, `runtime/install/`, `runtime/omelet_api/`, `runtime/web/`.
+`host/`, `host/desktop/`, `runtime/`, `runtime/install/`, `runtime/eggie_api/`, `runtime/web/`.
 
 ## Architecture shape: the host is a VM shell, the runtime is everything inside
 
 Two halves, shipped and versioned independently:
 
 - **Host** (`host/`, a PyInstaller-frozen desktop binary) — creates and runs the VM, runs one
-  bootstrap command in it (fetch `OMELET_RUNTIME_URL` → `bash`), reads the token, forwards ports,
+  bootstrap command in it (fetch `EGGIE_RUNTIME_URL` → `bash`), reads the token, forwards ports,
   and talks to the API over HTTP. It holds no guest files and no knowledge of what the runtime
   installs.
 - **Runtime** (`runtime/`) — everything inside the VM: Docker, the Traefik + API stack, the browser
-  console, the in-VM `omelet` CLI, coding-agent instructions and skills. Released as `runtime-v*`
+  console, the in-VM `eggie` CLI, coding-agent instructions and skills. Released as `runtime-v*`
   tags. The same `get.sh` provisions a cloud VM.
 
 ```
 host CLI / desktop  →  ApiClient (urllib)  →  127.0.0.1:39099 → API (FastAPI in the VM)
                     →  VmProvider.exec()   →  guest: runtime bootstrap, token read
 host localhost:39080 ──────────────────────→  Traefik :39080 → projects, console (/), API (/api)
-public URL (optional) → Omelet service's Cloudflare tunnel → `tunnel` container → Traefik
+public URL (optional) → Eggie service's Cloudflare tunnel → `tunnel` container → Traefik
 ```
 
-**The seam is a fixed contract and nothing else:** token path `/opt/omelet/api.token`, API port +
-`/health`'s `api` number, edge port, `/opt/omelet/runtime.version`, `/opt/omelet/host.json` (host →
+**The seam is a fixed contract and nothing else:** token path `/opt/eggie/api.token`, API port +
+`/health`'s `api` number, edge port, `/opt/eggie/runtime.version`, `/opt/eggie/host.json` (host →
 VM, the API numbers it accepts), `runtime/release.json`'s `api`. A change inside the VM must
 never need a host release; if it does, the logic is on the wrong side. Before adding a host CLI
 command or a host-side guest asset, check the phased plan: Phase 1 (MVP) is moving toward no host
@@ -41,11 +41,11 @@ CLI and SSH-only access, not away from it.
 
 ## Cross-cutting invariants (enforced by tests)
 
-- **`host/` never imports `omelet_api`, and vice versa.** They ship as separate artifacts (frozen
+- **`host/` never imports `eggie_api`, and vice versa.** They ship as separate artifacts (frozen
   binary vs. Docker image). `tests/host/test_no_api_import.py`,
   `tests/runtime/api/test_no_host_import.py`.
 - **No platform branching outside `host/providers/`.** `tests/test_no_platform_leak.py` fails on
-  `sys.platform` / `platform.system()` / `os.name` anywhere else in `host/` or `runtime/omelet_api/`.
+  `sys.platform` / `platform.system()` / `os.name` anywhere else in `host/` or `runtime/eggie_api/`.
   Push the difference into a provider method.
 - **Shared constants are declared on each side and held equal** by `tests/test_constants_agree.py`
   (ports, `SUPPORTED_API` vs `API_VERSION`, SSH port). The runtime release number is not one of
@@ -68,7 +68,7 @@ python3 -m pytest tests/runtime/api/test_project.py -q # one file
 python3 -m pytest -k classify -q                       # by name
 ```
 
-`pyproject.toml` puts `runtime/` on `pythonpath`, so tests import `omelet_api` directly. All Python
+`pyproject.toml` puts `runtime/` on `pythonpath`, so tests import `eggie_api` directly. All Python
 tests live under the top-level `tests/` (mirroring `host/` and `runtime/`); the web UI has its own
 Vitest suite — see `runtime/web/CLAUDE.md`. There is no linter or formatter configured.
 

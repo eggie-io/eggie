@@ -8,4 +8,4 @@ runner = CliRunner()
 def test_version_command_runs():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert f"omelet {constants.APP_VERSION}" in result.stdout
+    assert f"eggie {constants.APP_VERSION}" in result.stdout

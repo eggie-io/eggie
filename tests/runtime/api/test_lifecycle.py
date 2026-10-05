@@ -1,8 +1,8 @@
-from omelet_api.core import lifecycle
-from omelet_api.core.lifecycle import compose_up, _compose_argv
-from omelet_api.core.project import Project, STARTED_OK
-from omelet_api.core.detect import WebSpec
-from omelet_api.core.exec import Completed
+from eggie_api.core import lifecycle
+from eggie_api.core.lifecycle import compose_up, _compose_argv
+from eggie_api.core.project import Project, STARTED_OK
+from eggie_api.core.detect import WebSpec
+from eggie_api.core.exec import Completed
 
 DIR = "/srv/projects/myproj"
 
@@ -28,7 +28,7 @@ def test_compose_argv_uses_both_files_in_order():
     assert argv[:2] == ["/usr/bin/docker", "compose"]
     assert argv.count("-f") == 2
     assert f"{d}/docker-compose.yml" in argv
-    assert f"{d}/.omelet/overlay.yml" in argv
+    assert f"{d}/.eggie/overlay.yml" in argv
     assert argv[-2:] == ["up", "-d"]
 
 
@@ -52,8 +52,8 @@ def test_compose_up_runs_against_the_directory_it_is_given(tmp_path):
 def test_compose_up_carries_the_guest_error_when_the_stack_fails():
     # A bare status like "failed_to_start" is unactionable: the reason lives in
     # compose's own stderr, which used to be discarded.
-    from omelet_api.core.exec import Completed
-    from omelet_api.core.project import FAILED_TO_START
+    from eggie_api.core.exec import Completed
+    from eggie_api.core.project import FAILED_TO_START
 
     class FailingProvider(FakeProvider):
         def exec(self, argv, *, root=False):
@@ -72,14 +72,14 @@ def test_compose_up_reports_a_failed_overlay_write_instead_of_starting_the_stack
     # exec() never raises, so an unchecked overlay write turns into a project
     # that comes up with no Traefik labels: no route, and nothing anywhere
     # saying why. The write has to be the thing that fails, loudly.
-    from omelet_api.core.exec import Completed
-    from omelet_api.core.project import FAILED_TO_START
+    from eggie_api.core.exec import Completed
+    from eggie_api.core.project import FAILED_TO_START
 
     class OverlayFails(FakeProvider):
         def exec(self, argv, *, root=False):
             self.execs.append(argv)
             if "overlay.yml" in " ".join(argv):
-                return Completed(1, "", "bash: /opt/omelet/projects/myproj: Permission denied")
+                return Completed(1, "", "bash: /opt/eggie/projects/myproj: Permission denied")
             return Completed(0, "[]", "")
 
     p = OverlayFails()
@@ -101,7 +101,7 @@ def test_resolve_compose_name_prefers_what_the_containers_carry():
                 return Completed(0, "fancy\n", "")
             return Completed(0, "", "")
 
-    name = lifecycle.resolve_compose_name(Runner(), "/opt/omelet/projects/blog", "blog")
+    name = lifecycle.resolve_compose_name(Runner(), "/opt/eggie/projects/blog", "blog")
     assert name == "fancy"
 
 
@@ -110,7 +110,7 @@ def test_resolve_compose_name_falls_back_when_no_container_carries_the_label():
         def exec(self, argv, *, root=False):
             return Completed(0, "", "")
 
-    name = lifecycle.resolve_compose_name(Runner(), "/opt/omelet/projects/blog", "stored")
+    name = lifecycle.resolve_compose_name(Runner(), "/opt/eggie/projects/blog", "stored")
     assert name == "stored"
 
 
@@ -119,7 +119,7 @@ def test_resolve_compose_name_falls_back_when_the_lookup_command_fails():
         def exec(self, argv, *, root=False):
             return Completed(1, "", "daemon not running")
 
-    name = lifecycle.resolve_compose_name(Runner(), "/opt/omelet/projects/blog", "stored")
+    name = lifecycle.resolve_compose_name(Runner(), "/opt/eggie/projects/blog", "stored")
     assert name == "stored"
 
 

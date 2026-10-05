@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Selects the real login accounts install.sh should provision Omelet's agent
+# Selects the real login accounts install.sh should provision Eggie's agent
 # files into. Reads `getent passwd` lines on stdin and prints one
 # `name:uid:gid:home` line per account that looks like a person, not a system
 # service -- Lima's guest user carries the macOS host uid (often 501, always

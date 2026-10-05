@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The desktop window shows the in-VM projects console itself instead of sending the user to a browser, with host-only controls behind a native "Omelet" menu.
+**Goal:** The desktop window shows the in-VM projects console itself instead of sending the user to a browser, with host-only controls behind a native "Eggie" menu.
 
 **Architecture:** One pywebview window. It loads the local desktop UI first and navigates to `http://localhost:39080/#handoff=<code>` with `window.load_url` when the machine is running. A new `host/desktop/shell.py` owns the window: it remembers which URL is the local UI, and every bridge call and pushed event is refused unless that page is showing. JS gets a guarded facade over `DesktopApi`, never `DesktopApi` itself.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Host-only change: nothing under `runtime/` changes; no runtime release.
-- `host/` never imports `omelet_api`; no `sys.platform`/`platform.system()`/`os.name` outside `host/providers/`.
+- `host/` never imports `eggie_api`; no `sys.platform`/`platform.system()`/`os.name` outside `host/providers/`.
 - No new host dependency (`tests/host/test_host_dependencies.py`). `webview` is imported lazily inside functions only; the dev environment does not have it installed, so no test may import it.
 - The console URL is `http://localhost:{constants.EDGE_PORT}` — the edge port, never the API port.
 - The console is never loaded inside the app without a handoff code.
@@ -68,7 +68,7 @@ from host.core.install import InstallState
 from host.desktop.api import DesktopApi
 from host.desktop.shell import NotLocalPage, Shell, guarded, public_methods
 
-LOCAL = "file:///opt/omelet/host/desktop/ui/index.html"
+LOCAL = "file:///opt/eggie/host/desktop/ui/index.html"
 CONSOLE = "http://localhost:39080/#handoff=abc"
 
 
@@ -132,11 +132,11 @@ def test_events_reach_the_local_page_as_one_json_argument():
     window = FakeWindow(LOCAL)
     Shell(window).push({"kind": "vm", "message": 'a "quote"'})
     assert window.evaluated == [
-        f"window.omelet.on({json.dumps({'kind': 'vm', 'message': 'a \"quote\"'})})"]
+        f"window.eggie.on({json.dumps({'kind': 'vm', 'message': 'a \"quote\"'})})"]
 
 
 def test_events_never_reach_the_console():
-    # A console page can define its own window.omelet.on and read job events.
+    # A console page can define its own window.eggie.on and read job events.
     window = FakeWindow(LOCAL)
     shell = Shell(window)
     shell.load(CONSOLE)
@@ -230,7 +230,7 @@ class Shell:
         # json.dumps, never a format string: a message carrying a quote would
         # otherwise close the call and inject whatever followed.
         if self.window is not None and self.is_local():
-            self.window.evaluate_js(f"window.omelet.on({json.dumps(event)})")
+            self.window.evaluate_js(f"window.eggie.on({json.dumps(event)})")
 
 
 def public_methods(cls: type) -> list[str]:
@@ -249,7 +249,7 @@ def _guard(method, shell: Shell):
     @functools.wraps(method)
     def call(*args, **kwargs):
         if not shell.is_local():
-            raise NotLocalPage(f"{method.__name__} is only available to Omelet's own screens")
+            raise NotLocalPage(f"{method.__name__} is only available to Eggie's own screens")
         return method(*args, **kwargs)
     return call
 ```
@@ -431,7 +431,7 @@ Constructor — add the `navigate` keyword and two attributes:
         }
 ```
 
-New method, directly after `open_omelet`:
+New method, directly after `open_eggie`:
 
 ```python
     def enter_console(self) -> dict:
@@ -462,7 +462,7 @@ git commit -m "Desktop: enter the projects console in the window"
 
 ---
 
-### Task 3: Wire the shell, the guarded bridge and the Omelet menu into `run()`
+### Task 3: Wire the shell, the guarded bridge and the Eggie menu into `run()`
 
 **Files:**
 - Modify: `host/desktop/__main__.py` (`run()`, new `menu_items()`, new `_default_menu()`)
@@ -575,7 +575,7 @@ def menu_items(api, shell) -> list:
     return [
         ("Projects", api.enter_console),
         ("Machine", shell.load_local),
-        ("Open in browser", api.open_omelet),
+        ("Open in browser", api.open_eggie),
     ]
 
 
@@ -589,7 +589,7 @@ def _default_menu(items):
         # through the provider, which would freeze the window meanwhile.
         return lambda: threading.Thread(target=fn, daemon=True).start()
 
-    return [Menu("Omelet", [MenuAction(title, detached(fn)) for title, fn in items])]
+    return [Menu("Eggie", [MenuAction(title, detached(fn)) for title, fn in items])]
 ```
 
 Replace `run()`'s body from `from .api import DesktopApi` to the end with:
@@ -638,7 +638,7 @@ Expected: all PASS.
 
 ```bash
 git add host/desktop/__main__.py tests/host/desktop/test_entry.py
-git commit -m "Desktop: guarded bridge and the Omelet menu in the window"
+git commit -m "Desktop: guarded bridge and the Eggie menu in the window"
 ```
 
 ---
@@ -646,7 +646,7 @@ git commit -m "Desktop: guarded bridge and the Omelet menu in the window"
 ### Task 4: The UI enters the console
 
 **Files:**
-- Modify: `host/desktop/ui/app.js` (`refresh()`, the `open-omelet` action)
+- Modify: `host/desktop/ui/app.js` (`refresh()`, the `open-eggie` action)
 - Modify: `host/desktop/ui/index.html` (`home:running`'s primary button action name)
 - Test: `tests/host/desktop/test_ui_assets.py`
 
@@ -678,10 +678,10 @@ Expected: FAIL on `assert "enter_console" in called`.
 In `index.html`, `home:running`'s primary button:
 
 ```html
-      <button class="btn-primary" data-action="enter-console">Open Omelet</button>
+      <button class="btn-primary" data-action="enter-console">Open Eggie</button>
 ```
 
-In `app.js`, replace the `'open-omelet'` entry in `ACTIONS` with:
+In `app.js`, replace the `'open-eggie'` entry in `ACTIONS` with:
 
 ```js
   // Success navigates the window away; there is nothing to render after it.
@@ -728,7 +728,7 @@ In the `host/desktop/` layer bullet, replace the sentence starting "`api.py` is 
 `api.py` is the only object JavaScript can reach — through `shell.py`'s `guarded()`
 facade, which refuses every call unless the local UI is the page showing. When the
 machine is running the same window shows the projects console (`localhost:<edge>`,
-entered with a handoff code); a native "Omelet" menu switches between it and the
+entered with a handoff code); a native "Eggie" menu switches between it and the
 local screens and offers "Open in browser". It stays a thin, fixed list of methods
 taking scalars, with every real decision pushed into `view.py`.
 ```
@@ -758,9 +758,9 @@ git commit -m "Docs: the console inside the desktop window"
 - [ ] **Step 4: Manual acceptance (for the PR description, run by a human on Windows and macOS)**
 
 - Launch with the machine running → the window lands on the projects list.
-- *Omelet → Machine* → Home "The kitchen is open"; stays there (no bounce).
-- *Omelet → Projects* → back in the console.
-- *Omelet → Open in browser* → system browser signed in.
+- *Eggie → Machine* → Home "The kitchen is open"; stays there (no bounce).
+- *Eggie → Projects* → back in the console.
+- *Eggie → Open in browser* → system browser signed in.
 - A project's address link and its "Open" button (`window.open`) open in the system browser, not the window.
 - Stop the machine from *Machine*, choose *Projects* → notice explaining the handoff failed; window stays on Home.
 - Debug build: from the console's devtools, `await window.pywebview.api.doctor()` rejects.

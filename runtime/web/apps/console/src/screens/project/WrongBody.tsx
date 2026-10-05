@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Collapsible, Egg, Modal, Notice, PromptCard, StateBadge } from "@omelet/ui";
+import { Button, Collapsible, Egg, Modal, Notice, PromptCard, StateBadge } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";

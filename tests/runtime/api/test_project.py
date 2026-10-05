@@ -1,4 +1,4 @@
-from omelet_api.core.project import (
+from eggie_api.core.project import (
     load_project, classify, overlay_yaml,
     STARTED_OK, FAILED_TO_START, CRASH_LOOPING,
 )

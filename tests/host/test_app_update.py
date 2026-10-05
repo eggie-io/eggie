@@ -16,7 +16,7 @@ def _release(tag, *names, draft=False, prerelease=False):
 
 
 def _exe(version):
-    return f"OmeletSetup-{version}.exe"
+    return f"EggieSetup-{version}.exe"
 
 
 def test_the_highest_app_release_above_this_one_wins_by_number_not_text():
@@ -24,7 +24,7 @@ def test_the_highest_app_release_above_this_one_wins_by_number_not_text():
                 _release("app-v0.10.0", _exe("0.10.0"), "SHA256SUMS")]
     version, installer, _ = pick_release(releases, current="0.1.0", asset_name=_exe)
     assert version == "0.10.0"
-    assert installer["name"] == "OmeletSetup-0.10.0.exe"
+    assert installer["name"] == "EggieSetup-0.10.0.exe"
 
 
 def test_runtime_tags_drafts_and_pre_releases_are_ignored():
@@ -41,7 +41,7 @@ def test_this_version_or_older_is_no_update():
 
 
 def test_a_release_without_this_machines_installer_or_checksums_is_skipped():
-    releases = [_release("app-v0.3.0", "OmeletSetup-0.3.0-arm64.pkg", "SHA256SUMS"),
+    releases = [_release("app-v0.3.0", "EggieSetup-0.3.0-arm64.pkg", "SHA256SUMS"),
                 _release("app-v0.2.0", _exe("0.2.0")),
                 _release("app-v0.1.5", _exe("0.1.5"), "SHA256SUMS")]
     version, _, _ = pick_release(releases, current="0.1.0", asset_name=_exe)
@@ -51,10 +51,10 @@ def test_a_release_without_this_machines_installer_or_checksums_is_skipped():
 def test_check_returns_the_installer_and_its_published_digest():
     digest = hashlib.sha256(b"x").hexdigest()
     listing = json.dumps([_release("app-v0.2.0", _exe("0.2.0"), "SHA256SUMS")]).encode()
-    sums = f"{'0' * 64}  OmeletSetup-0.2.0-arm64.pkg\n{digest}  OmeletSetup-0.2.0.exe\n".encode()
+    sums = f"{'0' * 64}  EggieSetup-0.2.0-arm64.pkg\n{digest}  EggieSetup-0.2.0.exe\n".encode()
     pages = {app_update.RELEASES_URL: listing, "https://dl.invalid/SHA256SUMS": sums}
     assert check(current="0.1.0", asset_name=_exe, fetch=pages.__getitem__) == \
-        AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe", digest)
+        AppRelease("0.2.0", "https://dl.invalid/EggieSetup-0.2.0.exe", digest)
 
 
 def test_a_checksum_file_not_naming_the_installer_is_no_update():

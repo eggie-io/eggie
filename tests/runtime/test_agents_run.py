@@ -21,6 +21,7 @@ SETUP = '[[ ! -e "$HOME/setup-fails" ]] && touch "$HOME/installed"'
 MANIFESTS = {
     "codex": {"home": ".codex", "detect": {"ignore": ["AGENTS.md"]}, "setup": {"run": SETUP}},
     "claude-code": {"home": ".claude", "detect": {"ignore": ["skills"]}},
+    "cursor": {"home": [".cursor", ".cursor-server"], "detect": {"ignore": ["AGENTS.md"]}},
 }
 
 
@@ -77,6 +78,15 @@ def test_anything_else_in_any_accounts_dir_means_connected(tmp_path):
     agents = run(t)
     assert agents["claude-code"]["connected"] is True
     assert agents["codex"]["connected"] is False
+
+
+def test_an_agent_with_several_dirs_is_connected_by_any_of_them(tmp_path):
+    t = make(tmp_path)
+    (t.root / ".cursor").mkdir()
+    (t.root / ".cursor" / "AGENTS.md").write_text("ours")
+    assert run(t)["cursor"]["connected"] is False
+    (t.ada / ".cursor-server" / "bin").mkdir(parents=True)
+    assert run(t)["cursor"]["connected"] is True
 
 
 def test_a_requested_setup_runs_once_for_every_account(tmp_path):

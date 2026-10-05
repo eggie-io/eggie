@@ -54,6 +54,8 @@ def test_system_wide_and_per_account_instruction_files_are_kept_apart(tmp_path):
     {"home": "..\n"},
     {"home": ".x", "instructions": ["~/..\n"]},
     {"home": ".x", "skills": "x\n"},
+    {"home": []},
+    {"home": [".x", "../etc"]},
 ])
 def test_a_manifest_that_could_escape_or_is_incomplete_is_skipped_by_name(tmp_path, bad):
     root = write_agents(tmp_path, {"good": {"home": ".g", "skills": "good"},

@@ -19,7 +19,7 @@ export function useAgents() {
   return { platform, agents, connect: connect.data, error: catalog.error };
 }
 
-const POLL_MS = 3000;
+export const POLL_MS = 3000;
 
 // Polls while the screen is mounted; with `watch` it stops once that agent is
 // connected. Errors don't stop it, so a briefly unreachable API recovers.

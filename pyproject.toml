@@ -1,6 +1,6 @@
 [project]
 name = "omelet"
-version = "0.1.5"
+version = "0.1.6"
 requires-python = ">=3.12"
 # The host parses no YAML: compose files are read by the API, and
 # host/providers/omelet.yaml is handed to limactl as a path.

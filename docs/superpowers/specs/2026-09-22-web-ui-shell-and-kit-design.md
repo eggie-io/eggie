@@ -1,15 +1,15 @@
-# Omelet web UI — part B: shell, kit, image and sign-in
+# Eggie web UI — part B: shell, kit, image and sign-in
 
 Part B of four (spec 2026-09-21-web-ui-agent-prerequisites-design.md §1). The
 decisions in that spec's §1 bind this one; its §8 "B" list is the input. Design
-board: `docs/design/omelet-web-ui.dc.html` — frame 15, frame 16's layout, frame
+board: `docs/design/eggie-web-ui.dc.html` — frame 15, frame 16's layout, frame
 01's top bar, and the component strip.
 
 ## 1. Outcome
 
 When B is done, the VM serves a page at `localhost:39080` that:
 
-- signs in through the desktop's "Open Omelet" handoff, or shows screen 15
+- signs in through the desktop's "Open Eggie" handoff, or shows screen 15
   ("We've lost track of you") when it cannot;
 - shows "needs an update" when the agent speaks another `api` number, and
   "isn't answering" when the agent does not answer;
@@ -88,7 +88,7 @@ frame 01's (52 px top bar, 22 px side padding); from 1040 px, frame 16's (54 px,
 32 px). No max content width — the board draws 1200 as "the same page with
 elbow room".
 
-**The shell** is the top bar (Egg, "Omelet") over a scrolling content area,
+**The shell** is the top bar (Egg, "Eggie") over a scrolling content area,
 with routes `/` (Projects placeholder) and `/kit`; any other path renders the
 placeholder too, until C adds its routes.
 
@@ -135,18 +135,18 @@ the screen that made the request.
 
 **Screens.**
 
-- **SignedOut (frame 15)**, with the `omelet://` scope cut applied: the board's
-  "Open the Omelet app" button becomes text — "Open the Omelet app on your
-  desktop and press *Open Omelet*." — and "Try again" becomes the primary button,
+- **SignedOut (frame 15)**, with the `eggie://` scope cut applied: the board's
+  "Open the Eggie app" button becomes text — "Open the Eggie app on your
+  desktop and press *Open Eggie*." — and "Try again" becomes the primary button,
   re-running the session check. The page also re-checks on its own whenever the
   tab becomes visible again (`visibilitychange`): the desktop opens a new tab,
   and the old one recovers by itself. For `handoff_spent` the lead line says
   the link was already used or ran out. The footer line stays: "Your projects
   carried on the whole time. Nothing stopped, nothing was lost."
 - **NeedsUpdate.** Frame 15's layout with the yolk Egg: the agent and this page
-  are from different releases; update Omelet from the desktop app. Shows both
+  are from different releases; update Eggie from the desktop app. Shows both
   `api` numbers in small mono text for support.
-- **NotAnswering.** Same layout, cold Egg: Omelet's service inside the VM isn't
+- **NotAnswering.** Same layout, cold Egg: Eggie's service inside the VM isn't
   answering. Retries on its own every 5 s and offers "Try again"; recovers
   into a full boot.
 - **Projects placeholder.** "Your projects", one `RowCard` per project `id`
@@ -207,20 +207,20 @@ architecture only.
 
 ```yaml
   web:
-    image: ${OMELET_WEB_IMAGE:-ghcr.io/omelet-app/omelet-web:0.2.0}
+    image: ${EGGIE_WEB_IMAGE:-ghcr.io/eggie-io/eggie-web:0.2.0}
     restart: always
     networks:
       - edge
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.omelet-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
-      - "traefik.http.routers.omelet-web.entrypoints=web"
-      - "traefik.http.routers.omelet-web.priority=10"
-      - "traefik.http.services.omelet-web.loadbalancer.server.port=8080"
+      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.eggie-web.entrypoints=web"
+      - "traefik.http.routers.eggie-web.priority=10"
+      - "traefik.http.services.eggie-web.loadbalancer.server.port=8080"
 ```
 
 No published ports. `install.sh` needs no change: it pulls and starts every
-service in the file, and its pull-failure messages already say "the Omelet
+service in the file, and its pull-failure messages already say "the Eggie
 images".
 
 **Release.** The web image carries the agent's version; A and B ship together
@@ -228,7 +228,7 @@ as 0.2.0 (no engine tag exists past 0.1.0). `CLAUDE.md`'s release steps gain:
 
 ```
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/omelet-app/omelet-web:X.Y.Z --push web/
+  -t ghcr.io/eggie-io/eggie-web:X.Y.Z --push web/
 ```
 
 and the web tag joins the list of values bumped together. `CLAUDE.md` also
@@ -254,7 +254,7 @@ Python side:
 - `tests/test_constants_agree.py`: the stack's web image tag equals the agent's
   `__version__`; `SUPPORTED_API` contains `API_VERSION`.
 - `tests/engine/test_stack_yml.py`: the `web` service exists, joins `edge`,
-  publishes no ports, and its router's priority is below `omelet-api`'s.
+  publishes no ports, and its router's priority is below `eggie-api`'s.
 
 Not tested, noted in the PR: component rendering (no snapshots of the kit),
 the layout breakpoint, PromptCard's timer, MSW handlers. These are glue or

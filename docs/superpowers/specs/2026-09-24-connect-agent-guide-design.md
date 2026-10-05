@@ -1,6 +1,6 @@
 # Connect a coding agent — console guide
 
-Issue #21. Implements section 4 ("Help, from Home, for any agent") of the Omelet Desktop design in
+Issue #21. Implements section 4 ("Help, from Home, for any agent") of the Eggie Desktop design in
 the runtime console. Runtime only: no host change, no `API_VERSION` bump.
 
 ## What the user gets
@@ -26,7 +26,7 @@ before this change, a cloud VM) the console falls back to the browser: a `Mac` i
 
 ## Content: JSON files, no per-agent code
 
-Static files in the `omelet-web` image, `runtime/web/apps/console/agent-guides/`, served at
+Static files in the `eggie-web` image, `runtime/web/apps/console/agent-guides/`, served at
 `/agent-guides/` (never under a console route: nginx serves that path with no SPA fallback) and
 fetched at page load. Adding an agent is a data change plus a runtime release.
 
@@ -71,7 +71,7 @@ agent-guides/<id>/<platform>/<n>.png     screenshots, optional
 
 ## Runtime: `GET /connect`
 
-`install.sh` writes `/opt/omelet/connect.json` (bind-mounted into the API container):
+`install.sh` writes `/opt/eggie/connect.json` (bind-mounted into the API container):
 
 ```json
 {"vm": "lima", "user": "ihor"}
@@ -89,7 +89,7 @@ agent-guides/<id>/<platform>/<n>.png     screenshots, optional
 
 `ssh` is `null` unless `vm` is `lima` and `user` is non-empty. A missing or unreadable file answers
 `{"vm": "other", "ssh": null}`. The port and key file are constants in the API, mirroring the host's
-`omelet.yaml` `ssh.localPort` and Lima's default key path.
+`eggie.yaml` `ssh.localPort` and Lima's default key path.
 
 ## First content
 

@@ -40,14 +40,14 @@ class FakeElevator:
 
 
 def wsl(elevator=None, runner=None):
-    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe",
+    return Wsl2Provider(distro="eggie-vm", wsl="wsl.exe",
                         runner=runner or FakeRunner(),
                         elevator=elevator or FakeElevator(),
                         facts=dict, arch="amd64")
 
 
 def lima(runner=None):
-    return LimaProvider(name="omelet-vm", config=Path("/tmp/omelet.yaml"),
+    return LimaProvider(name="eggie-vm", config=Path("/tmp/eggie.yaml"),
                         lima_home=Path("/home/u/.lima"),
                         limactl="limactl", runner=runner or FakeRunner())
 
@@ -64,7 +64,7 @@ def test_wsl2_equal_ports_stay_a_no_op():
 
 
 def test_lima_equal_ports_stay_a_no_op():
-    # Declared in omelet.yaml's portForwards; Lima sets it up at VM start.
+    # Declared in eggie.yaml's portForwards; Lima sets it up at VM start.
     r = FakeRunner()
     lima(runner=r).forward(39080, 39080)
     assert r.calls == []
@@ -140,10 +140,10 @@ def test_lima_distinct_ports_use_the_control_socket_lima_already_maintains():
     r = FakeRunner()
     lima(runner=r).forward(5432, 5433)
     assert r.calls == [
-        ["ssh", "-F", "/home/u/.lima/omelet-vm/ssh.config",
-         "-O", "cancel", "-L", "5433:127.0.0.1:5432", "lima-omelet-vm"],
-        ["ssh", "-F", "/home/u/.lima/omelet-vm/ssh.config",
-         "-O", "forward", "-L", "5433:127.0.0.1:5432", "lima-omelet-vm"],
+        ["ssh", "-F", "/home/u/.lima/eggie-vm/ssh.config",
+         "-O", "cancel", "-L", "5433:127.0.0.1:5432", "lima-eggie-vm"],
+        ["ssh", "-F", "/home/u/.lima/eggie-vm/ssh.config",
+         "-O", "forward", "-L", "5433:127.0.0.1:5432", "lima-eggie-vm"],
     ]
 
 
@@ -159,8 +159,8 @@ def test_lima_removing_a_forward_that_is_not_there_is_not_an_error():
     r = FakeRunner(returncode=255)
     lima(runner=r).unforward(5432, 5433)
     assert r.calls == [
-        ["ssh", "-F", "/home/u/.lima/omelet-vm/ssh.config",
-         "-O", "cancel", "-L", "5433:127.0.0.1:5432", "lima-omelet-vm"]]
+        ["ssh", "-F", "/home/u/.lima/eggie-vm/ssh.config",
+         "-O", "cancel", "-L", "5433:127.0.0.1:5432", "lima-eggie-vm"]]
 
 
 def test_lima_a_forward_that_could_not_be_added_is_loud():

@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from omelet_api.routes.jobs import JobFailed, JobRegistry
+from eggie_api.routes.jobs import JobFailed, JobRegistry
 
 
 def test_job_moves_from_running_to_done_and_keeps_its_result():

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from omelet_api.core.github import (GitHub, GitHubError, GitHubUnavailable,
+from eggie_api.core.github import (GitHub, GitHubError, GitHubUnavailable,
                                     auth_failed, clone_argv, identity_from,
                                     redact, valid_repo)
 
@@ -99,11 +99,11 @@ def test_repo_names_that_are_not_owner_slash_name_are_refused(name):
 
 
 def test_clone_argv_keeps_the_token_out_of_argv_and_the_url():
-    argv = clone_argv("octo/app", Path("/opt/omelet/projects/app"))
+    argv = clone_argv("octo/app", Path("/opt/eggie/projects/app"))
     assert "https://github.com/octo/app.git" in argv
     assert not any("@github.com" in word for word in argv)
-    assert "$OMELET_GH_TOKEN" in " ".join(argv)
-    assert argv[-1] == "/opt/omelet/projects/app"
+    assert "$EGGIE_GH_TOKEN" in " ".join(argv)
+    assert argv[-1] == "/opt/eggie/projects/app"
 
 
 def test_redact_and_auth_failed():

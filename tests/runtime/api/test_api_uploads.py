@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from omelet_api.core.uploads import RESERVE
+from eggie_api.core.uploads import RESERVE
 from tests.runtime.api.conftest import _create
 
 
@@ -83,7 +83,7 @@ def test_one_folder_level_is_listed_with_counts(blog):
     root = blog.config.projects_root / "blog"
     (root / "data").mkdir(parents=True)
     (root / "data" / "x.csv").write_bytes(b"12345")
-    (root / ".omelet").mkdir()
+    (root / ".eggie").mkdir()
     (root / "README.md").write_text("hi")
     entries = blog.client.get("/projects/blog/files", params={"dir": ""}).json()["entries"]
     assert [(e["name"], e["kind"], e["items"], e["size"]) for e in entries] == [

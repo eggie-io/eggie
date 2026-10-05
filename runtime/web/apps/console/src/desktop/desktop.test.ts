@@ -47,7 +47,7 @@ describe("takeDesktopHome", () => {
   });
 
   it("refuses a bad address even when one was stored earlier", () => {
-    expect(desktopHome(store({ "omelet.desktopHome": "http://evil.example:53817/" }))).toBeNull();
+    expect(desktopHome(store({ "eggie.desktopHome": "http://evil.example:53817/" }))).toBeNull();
   });
 
   it("still works when storage is unavailable", () => {

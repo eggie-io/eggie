@@ -45,7 +45,7 @@ def test_a_provider_that_names_its_own_step_wins():
 
 
 def test_a_step_without_a_label_uses_the_table():
-    assert step_label(_step("bootstrap")) == "Installing Omelet"
+    assert step_label(_step("bootstrap")) == "Installing Eggie"
 
 
 def test_an_unknown_step_falls_back_to_its_name():

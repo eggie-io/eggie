@@ -2,17 +2,17 @@ import threading
 
 from fastapi import FastAPI
 
-from omelet_api.core.exec import Completed
-from omelet_api.core.state import State
+from eggie_api.core.exec import Completed
+from eggie_api.core.state import State
 from tests.runtime.api.conftest import (COMPOSE_AMBIGUOUS, COMPOSE_MALFORMED,
                                   PS_RESTARTING, _create, _run_to_completion,
                                   _write_compose)
 
 
 def test_importing_the_app_module_builds_nothing(env):
-    # A module-level app would open sqlite under /opt/omelet at import time and
+    # A module-level app would open sqlite under /opt/eggie at import time and
     # drag the whole suite onto the real filesystem.
-    import omelet_api.routes.app as module
+    import eggie_api.routes.app as module
     assert not [name for name, value in vars(module).items()
                 if isinstance(value, (FastAPI, State))]
 
@@ -162,7 +162,7 @@ def test_compose_runs_against_the_configured_projects_root(env):
     assert paths, "no compose file reached the runner at all"
     for word in paths:
         assert str(env.config.projects_root) in word, word
-        assert "/opt/omelet/projects" not in word, word
+        assert "/opt/eggie/projects" not in word, word
 
 
 def test_up_without_a_compose_file_is_compose_missing(env):
@@ -360,7 +360,7 @@ def test_a_stored_problem_survives_a_re_read_that_still_fails(env):
 
 
 def test_a_healthy_listing_probes_nothing(env):
-    # One round trip per project would make `omelet status` slow in proportion
+    # One round trip per project would make `eggie status` slow in proportion
     # to how much the tool is used. A project with no stored problem has
     # nothing to re-check, so it costs nothing.
     _create(env)
@@ -374,7 +374,7 @@ def test_a_healthy_listing_probes_nothing(env):
 
 
 def test_a_stale_problem_clears_in_the_listing_too(env):
-    # `omelet status` calls the listing, never GET /projects/{id}: re-probing
+    # `eggie status` calls the listing, never GET /projects/{id}: re-probing
     # only there left the one surface users read stale forever.
     _create(env)
     _write_compose(env, "blog")

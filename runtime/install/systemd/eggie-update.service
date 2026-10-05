@@ -1,0 +1,15 @@
+[Unit]
+Description=Update the Eggie runtime to the newest release this machine's host accepts
+# No Wants=network-online.target: it pulls in systemd-networkd-wait-online,
+# which can stall under WSL. boot-update.sh retries its fetch instead.
+After=network-online.target docker.service
+Wants=docker.service
+
+[Service]
+# exec, not oneshot: multi-user.target, and with it limactl start or the WSL
+# boot, must not wait for image pulls.
+Type=exec
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/boot-update.sh
+
+[Install]
+WantedBy=multi-user.target

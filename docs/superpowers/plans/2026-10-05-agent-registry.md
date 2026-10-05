@@ -4,7 +4,7 @@
 
 **Goal:** Every coding agent is one manifest folder under `runtime/agents/`; the VM writes each agent's instructions and skills from it, a root-side runner detects whether the agent has connected and runs its setup when the user picks it, and the console shows the result.
 
-**Architecture:** `runtime/install/lib/agents.py` (stdlib Python, runs on the VM) is the only reader of the manifests' install-side fields; `install.sh`, `install-agents.sh` and the runner call it. The API never touches a user home: it bumps counter files in `/opt/omelet/agent-status/` and reads the runner's `status.json` (GitHub's desired/applied shape). The console reads the same manifests from nginx for the guides and polls the API for status.
+**Architecture:** `runtime/install/lib/agents.py` (stdlib Python, runs on the VM) is the only reader of the manifests' install-side fields; `install.sh`, `install-agents.sh` and the runner call it. The API never touches a user home: it bumps counter files in `/opt/eggie/agent-status/` and reads the runner's `status.json` (GitHub's desired/applied shape). The console reads the same manifests from nginx for the guides and polls the API for status.
 
 **Tech Stack:** bash, Python 3.12 stdlib, systemd path units, FastAPI, React + TanStack Query + Vitest, nginx.
 
@@ -16,9 +16,9 @@
 - Python tests: `.venv/bin/python -m pytest` (3.12+). In the WSL sandbox prefix `TMPDIR=<writable dir>` if `tmp_path` fails.
 - Web: run from `runtime/web`: `npm test`, `npm run typecheck`.
 - Tests reach repo files via `__file__`, never cwd-relative paths; scans assert they found something.
-- `host/` is untouched. No `sys.platform`/`platform.system()`/`os.name` in `runtime/omelet_api/`.
+- `host/` is untouched. No `sys.platform`/`platform.system()`/`os.name` in `runtime/eggie_api/`.
 - The API never reads a user home. Status files carry only booleans/states, never file names or file contents.
-- Status dir is `/opt/omelet/agent-status/` — never `/opt/omelet/agents` (install.sh deletes that as a leftover).
+- Status dir is `/opt/eggie/agent-status/` — never `/opt/eggie/agents` (install.sh deletes that as a leftover).
 - New API routes are additive; `API_VERSION` stays 1.
 - Every non-2xx API body is `{"error": {"code", "message"}}` via `ApiError`.
 - Comments only for non-obvious edge cases; no ticket/doc references in comments.
@@ -43,11 +43,11 @@
 | `runtime/agents/CLAUDE.md` | Manifest fields, trust, how to add an agent |
 | `runtime/install/lib/agents.py` | Load/validate manifests; `skills`, `instructions`, `run` subcommands |
 | `runtime/install/lib/agents-run.sh` | Root wrapper: accounts → `agents.py run` |
-| `runtime/install/systemd/omelet-agents.{path,service}` | Trigger on `check` change |
+| `runtime/install/systemd/eggie-agents.{path,service}` | Trigger on `check` change |
 | `runtime/install/lib/install-agents.sh` | Per-account instruction blocks from `agents.py` |
 | `runtime/install/install.sh` | System instructions, skills `-a` list, runner install |
-| `runtime/omelet_api/core/agents.py` | `AgentStatus`: bump counters, read status |
-| `runtime/omelet_api/routes/app.py` | `GET /agents/status`, `POST /agents/{id}/setup` |
+| `runtime/eggie_api/core/agents.py` | `AgentStatus`: bump counters, read status |
+| `runtime/eggie_api/routes/app.py` | `GET /agents/status`, `POST /agents/{id}/setup` |
 | `runtime/web/apps/console/src/agents/status.ts` | Pure status → line mapping |
 | `runtime/web/apps/console/src/screens/agents/AgentStatusLine.tsx` | Guide status line + Retry |
 
@@ -108,7 +108,7 @@ COPY --from=build /runtime/agents /usr/share/nginx/html/agent-guides
 In `packaging/images/build.sh` line 68:
 
 ```bash
-[[ "$only" == api ]] || build omelet-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures" --build-context "agents=$repo/runtime/agents"
+[[ "$only" == api ]] || build eggie-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures" --build-context "agents=$repo/runtime/agents"
 ```
 
 `runtime/agents/CLAUDE.md` is served too, as `/agent-guides/CLAUDE.md`. That's harmless (the repo is public), so leave it.
@@ -187,9 +187,9 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 | Field | Meaning |
 |---|---|
 | `home` | Directory under each account's home, e.g. `.codex`. Detection reads it. |
-| `instructions` | Files that get `instructions/omelet.md`: `/abs/path` written whole once, `~/path` as the `<!-- omelet:begin/end -->` block per account. |
+| `instructions` | Files that get `instructions/eggie.md`: `/abs/path` written whole once, `~/path` as the `<!-- eggie:begin/end -->` block per account. |
 | `skills` | The `npx skills add -a` agent name. |
-| `detect.ignore` | Top-level names under `home` that Omelet's own install creates (instructions, skills). Anything else there means the agent connected. |
+| `detect.ignore` | Top-level names under `home` that Eggie's own install creates (instructions, skills). Anything else there means the agent connected. |
 | `setup.run` | Shell command run once per account when the user opens the agent's guide. |
 
 ## Things that will bite you
@@ -199,7 +199,7 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 - `detect.ignore` must list everything the install puts under `home`, or the agent reads as
   connected right after install. Check on a fresh VM with `ls -A ~/<home>`.
 - This folder is copied into the web image (`--build-context agents=…`) and read from
-  `/opt/omelet/runtime/agents` on the VM by both the runner and the API.
+  `/opt/eggie/runtime/agents` on the VM by both the runner and the API.
 ```
 
 In `runtime/CLAUDE.md` "What lives here", add a bullet after `instructions/`:
@@ -517,7 +517,7 @@ In `tests/runtime/test_install_agents.py`, replace `test_the_codex_block_is_repl
 def _source(tmp_path, manifests):
     source = tmp_path / "src"
     (source / "instructions").mkdir(parents=True)
-    shutil.copy(SOURCE / "instructions" / "omelet.md", source / "instructions" / "omelet.md")
+    shutil.copy(SOURCE / "instructions" / "eggie.md", source / "instructions" / "eggie.md")
     agents = source / "agents"
     agents.mkdir()
     (agents / "index.json").write_text(json.dumps({"agents": list(manifests)}))
@@ -535,14 +535,14 @@ def test_the_block_is_replaced_and_the_users_own_text_kept(tmp_path):
     source = _source(tmp_path, {"codex": {"home": ".codex", "instructions": ["~/.codex/AGENTS.md"]}})
 
     _install(home, source)
-    (source / "instructions" / "omelet.md").write_text("new instructions\n")
+    (source / "instructions" / "eggie.md").write_text("new instructions\n")
     _install(home, source)
 
     text = agents_md.read_text()
     assert text.startswith("# my notes\nkeep me\n")
-    assert text.count("<!-- omelet:begin -->") == 1
+    assert text.count("<!-- eggie:begin -->") == 1
     assert "new instructions" in text
-    assert "You are working inside an Omelet VM" not in text
+    assert "You are working inside an Eggie VM" not in text
 
 
 def test_every_per_account_target_gets_the_block_and_system_ones_are_left_to_install(tmp_path):
@@ -555,7 +555,7 @@ def test_every_per_account_target_gets_the_block_and_system_ones_are_left_to_ins
     })
     _install(home, source)
     for target in (home / ".codex" / "AGENTS.md", home / ".cursor" / "AGENTS.md"):
-        assert "<!-- omelet:begin -->" in target.read_text()
+        assert "<!-- eggie:begin -->" in target.read_text()
     assert not (home / ".claude").exists()
 ```
 
@@ -570,7 +570,7 @@ Expected: FAIL in `test_every_per_account_target…` (`~/.cursor/AGENTS.md` miss
 
 ```bash
 #!/usr/bin/env bash
-# Writes Omelet's instructions block into every per-account file the agent
+# Writes Eggie's instructions block into every per-account file the agent
 # manifests name, and the ~/projects link, into one home directory. Skills are
 # installed separately, with npx; system-wide instructions by install.sh.
 # Run by install.sh as root, once per home:
@@ -581,9 +581,9 @@ SRC=$1
 HOME_DIR=$2
 OWNER=$3
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BEGIN='<!-- omelet:begin -->'
-END='<!-- omelet:end -->'
-TARGET=/opt/omelet/projects
+BEGIN='<!-- eggie:begin -->'
+END='<!-- eggie:end -->'
+TARGET=/opt/eggie/projects
 
 # Captured first: a failure inside a process substitution would go unnoticed.
 targets="$(python3 "$LIB/agents.py" --agents-dir "$SRC/agents" instructions --home "$HOME_DIR")"
@@ -598,7 +598,7 @@ while IFS= read -r file; do
   if [[ -s "$file" && -n "$(tail -c1 "$file")" ]]; then
     echo >> "$file"
   fi
-  { echo "$BEGIN"; cat "$SRC/instructions/omelet.md"; echo "$END"; } >> "$file"
+  { echo "$BEGIN"; cat "$SRC/instructions/eggie.md"; echo "$END"; } >> "$file"
   chown "$OWNER" "$file" "$(dirname "$file")"
 done <<< "$targets"
 
@@ -607,7 +607,7 @@ if [[ ! -e "$HOME_DIR/projects" && ! -L "$HOME_DIR/projects" ]]; then
 elif [[ -L "$HOME_DIR/projects" && "$(readlink "$HOME_DIR/projects")" == "$TARGET" ]]; then
   :
 elif [[ -e "$HOME_DIR/projects" || -L "$HOME_DIR/projects" ]]; then
-  echo "left $HOME_DIR/projects alone: it already exists and is not Omelet's link"
+  echo "left $HOME_DIR/projects alone: it already exists and is not Eggie's link"
 fi
 
 if [[ -L "$HOME_DIR/projects" && "$(readlink "$HOME_DIR/projects")" == "$TARGET" ]]; then
@@ -626,7 +626,7 @@ Replace
 
 ```bash
 install -d /etc/claude-code
-install -m 644 "$RUNTIME_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
+install -m 644 "$RUNTIME_DIR/instructions/eggie.md" /etc/claude-code/CLAUDE.md
 ```
 
 with
@@ -637,7 +637,7 @@ if ! system_instructions="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$
   exit 1
 fi
 while IFS= read -r target; do
-  [[ -n "$target" ]] && install -D -m 644 "$RUNTIME_DIR/instructions/omelet.md" "$target"
+  [[ -n "$target" ]] && install -D -m 644 "$RUNTIME_DIR/instructions/eggie.md" "$target"
 done <<< "$system_instructions"
 ```
 
@@ -679,18 +679,18 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `runtime/install/lib/agents.py` (add `run`)
-- Create: `runtime/install/lib/agents-run.sh`, `runtime/install/systemd/omelet-agents.path`, `runtime/install/systemd/omelet-agents.service`
+- Create: `runtime/install/lib/agents-run.sh`, `runtime/install/systemd/eggie-agents.path`, `runtime/install/systemd/eggie-agents.service`
 - Modify: `runtime/install/install.sh` (new step 12c)
 - Test: `tests/runtime/test_agents_run.py`, one test in `tests/runtime/test_install_shell.py`
 - Docs: `runtime/install/CLAUDE.md`
 
 **Interfaces:**
 - Consumes: `load()`, `Agent` (Task 2).
-- Produces, in `STATUS_DIR` (`/opt/omelet/agent-status`):
+- Produces, in `STATUS_DIR` (`/opt/eggie/agent-status`):
   - reads `check` (int) and `setup/<id>` (int); missing/garbage = 0;
   - writes `status.json` (0644): `{"generation": int, "agents": {"<id>": {"connected": bool, "setup": null|"installing"|"ready"|"failed", "setup_generation": int}}}`;
   - writes `setup-<id>.log` (0600).
-- `agents-run.sh [status-dir]`; env overrides for tests: `OMELET_ROOT_HOME`, `OMELET_SHELLS_FILE`, `OMELET_APPLY_PATH`, `OMELET_AGENTS_DIR`.
+- `agents-run.sh [status-dir]`; env overrides for tests: `EGGIE_ROOT_HOME`, `EGGIE_SHELLS_FILE`, `EGGIE_APPLY_PATH`, `EGGIE_AGENTS_DIR`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -738,9 +738,9 @@ def make(tmp_path):
     shells = tmp_path / "shells"
     shells.write_text("/bin/bash\n")
     path = f"{bin_dir}:/usr/bin:/bin"
-    env = {**os.environ, "PATH": path, "OMELET_APPLY_PATH": path, "LOG": str(log),
-           "OMELET_ROOT_HOME": str(root), "OMELET_SHELLS_FILE": str(shells),
-           "ADA_HOME": str(ada), "OMELET_AGENTS_DIR": str(agents)}
+    env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path, "LOG": str(log),
+           "EGGIE_ROOT_HOME": str(root), "EGGIE_SHELLS_FILE": str(shells),
+           "ADA_HOME": str(ada), "EGGIE_AGENTS_DIR": str(agents)}
     return SimpleNamespace(env=env, status=status, root=root, ada=ada, log=log)
 
 
@@ -760,7 +760,7 @@ def setups_run(t):
     return log.read_text().split() if log.exists() else []
 
 
-def test_a_dir_holding_only_omelets_own_files_is_not_connected(tmp_path):
+def test_a_dir_holding_only_eggies_own_files_is_not_connected(tmp_path):
     t = make(tmp_path)
     (t.root / ".codex").mkdir()
     (t.root / ".codex" / "AGENTS.md").write_text("ours")
@@ -969,16 +969,16 @@ In `main`, register the subcommand and dispatch:
 #!/usr/bin/env bash
 # Detects which coding agents have connected and runs the setups the console
 # asked for, over root and every login account. Run as root by
-# omelet-agents.service and once by install.sh.
+# eggie-agents.service and once by install.sh.
 #   agents-run.sh [status-dir]
 set -euo pipefail
 
-DIR="${1:-/opt/omelet/agent-status}"
+DIR="${1:-/opt/eggie/agent-status}"
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS="${OMELET_AGENTS_DIR:-$LIB/../../agents}"
-ROOT_HOME="${OMELET_ROOT_HOME:-/root}"
-SHELLS="${OMELET_SHELLS_FILE:-/etc/shells}"
-SAFE_PATH="${OMELET_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+AGENTS="${EGGIE_AGENTS_DIR:-$LIB/../../agents}"
+ROOT_HOME="${EGGIE_ROOT_HOME:-/root}"
+SHELLS="${EGGIE_SHELLS_FILE:-/etc/shells}"
+SAFE_PATH="${EGGIE_APPLY_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 accounts="root:0:0:$ROOT_HOME
 $(getent passwd | bash "$LIB/login-users.sh" "$SHELLS")"
@@ -994,20 +994,20 @@ Expected: PASS.
 
 - [ ] **Step 6: systemd units**
 
-`runtime/install/systemd/omelet-agents.path`:
+`runtime/install/systemd/eggie-agents.path`:
 
 ```ini
 [Unit]
-Description=Check Omelet's coding agents when the API asks
+Description=Check Eggie's coding agents when the API asks
 
 [Path]
-PathChanged=/opt/omelet/agent-status/check
+PathChanged=/opt/eggie/agent-status/check
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-`runtime/install/systemd/omelet-agents.service`:
+`runtime/install/systemd/eggie-agents.service`:
 
 ```ini
 [Unit]
@@ -1016,7 +1016,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /opt/omelet/runtime/install/lib/agents-run.sh
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/agents-run.sh
 ```
 
 - [ ] **Step 7: Install test, then the install step**
@@ -1026,9 +1026,9 @@ Add to `tests/runtime/test_install_shell.py`:
 ```python
 def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
     text = INSTALL.read_text()
-    assert "systemctl enable --now omelet-agents.path" in text
-    assert "install -d -m 2770 -o root -g docker /opt/omelet/agent-status" in text
-    assert text.index("systemctl start omelet-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
+    assert "systemctl enable --now eggie-agents.path" in text
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/agent-status" in text
+    assert text.index("systemctl start eggie-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
 ```
 
 Run it: FAIL. Then in `install.sh`, after step 12b, add:
@@ -1036,14 +1036,14 @@ Run it: FAIL. Then in `install.sh`, after step 12b, add:
 ```bash
 # 12c. coding agents: the root-side runner the API pokes to detect connected
 # agents and run their setup. The API writes counters here, never into a home.
-install -d -m 2770 -o root -g docker /opt/omelet/agent-status /opt/omelet/agent-status/setup
-chmod 2770 /opt/omelet/agent-status /opt/omelet/agent-status/setup
-install -m 644 "$INSTALL_DIR/systemd/omelet-agents.path" \
-  "$INSTALL_DIR/systemd/omelet-agents.service" /etc/systemd/system/
+install -d -m 2770 -o root -g docker /opt/eggie/agent-status /opt/eggie/agent-status/setup
+chmod 2770 /opt/eggie/agent-status /opt/eggie/agent-status/setup
+install -m 644 "$INSTALL_DIR/systemd/eggie-agents.path" \
+  "$INSTALL_DIR/systemd/eggie-agents.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now omelet-agents.path
+systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
-systemctl start omelet-agents.service || echo "could not check this machine's coding agents" >&2
+systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
 ```
 
 Run: `.venv/bin/python -m pytest tests/runtime -q` → PASS.
@@ -1053,8 +1053,8 @@ Run: `.venv/bin/python -m pytest tests/runtime -q` → PASS.
 Append to `runtime/install/CLAUDE.md` after the `github-apply.sh` paragraph:
 
 ```markdown
-`lib/agents-run.sh` runs as root from `systemd/omelet-agents.path` whenever the API writes
-`/opt/omelet/agent-status/check`: `lib/agents.py run` marks each agent in the manifests
+`lib/agents-run.sh` runs as root from `systemd/eggie-agents.path` whenever the API writes
+`/opt/eggie/agent-status/check`: `lib/agents.py run` marks each agent in the manifests
 (`runtime/agents/`) connected or not and runs `setup.run` for every `setup/<id>` request number
 above the one it last handled, into `status.json`. systemd drops triggers that arrive during a pass,
 so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
@@ -1077,10 +1077,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 5: API — `GET /agents/status`, `POST /agents/{id}/setup`
 
 **Files:**
-- Create: `runtime/omelet_api/core/agents.py`
-- Modify: `runtime/omelet_api/core/config.py`, `runtime/omelet_api/core/constants.py`, `runtime/omelet_api/routes/app.py`, `tests/runtime/api/conftest.py`
+- Create: `runtime/eggie_api/core/agents.py`
+- Modify: `runtime/eggie_api/core/config.py`, `runtime/eggie_api/core/constants.py`, `runtime/eggie_api/routes/app.py`, `tests/runtime/api/conftest.py`
 - Test: `tests/runtime/api/test_api_agents.py`
-- Docs: `runtime/omelet_api/CLAUDE.md`
+- Docs: `runtime/eggie_api/CLAUDE.md`
 
 **Interfaces:**
 - Consumes: the files Task 4 defines.
@@ -1107,8 +1107,8 @@ AGENTS_DIR = f"{GUEST_ROOT}/runtime/agents"
 and in `from_env`:
 
 ```python
-            agent_status_dir=Path(env.get("OMELET_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
-            agents_dir=Path(env.get("OMELET_AGENTS_DIR", constants.AGENTS_DIR)),
+            agent_status_dir=Path(env.get("EGGIE_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
+            agents_dir=Path(env.get("EGGIE_AGENTS_DIR", constants.AGENTS_DIR)),
 ```
 
 `tests/runtime/api/conftest.py` `env` fixture's `ApiConfig(...)`: add
@@ -1198,7 +1198,7 @@ import tempfile
 import threading
 from pathlib import Path
 
-log = logging.getLogger("omelet.api")
+log = logging.getLogger("eggie.api")
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _STATES = {"installing", "ready", "failed"}
@@ -1286,10 +1286,10 @@ In `routes/app.py`: import `from ..core.agents import AgentStatus, UnknownAgent`
         try:
             return agent_status.ensure_setup(agent_id)
         except UnknownAgent:
-            raise ApiError("agent_not_found", "Omelet has nothing to set up for that agent.", 404) from None
+            raise ApiError("agent_not_found", "Eggie has nothing to set up for that agent.", 404) from None
         except OSError:
             raise ApiError("agent_setup_unavailable", "This VM can't set up agents yet. "
-                           "Restart Omelet and try again.", 503) from None
+                           "Restart Eggie and try again.", 503) from None
 ```
 
 - [ ] **Step 6: Run the API tests**
@@ -1299,20 +1299,20 @@ Expected: PASS, including the auth sweeps in `test_api_auth.py` / `test_api_brow
 
 - [ ] **Step 7: Docs**
 
-Add to `runtime/omelet_api/CLAUDE.md` "Feature areas":
+Add to `runtime/eggie_api/CLAUDE.md` "Feature areas":
 
 ```markdown
 - **Agents** (`core/agents.py`) — `GET /agents/status` and `POST /agents/{id}/setup`. The API never
-  reads a home: it bumps counters in `/opt/omelet/agent-status/` (`check`, `setup/<id>`) and returns
+  reads a home: it bumps counters in `/opt/eggie/agent-status/` (`check`, `setup/<id>`) and returns
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
-  `failed` is the same call. Manifests are read from `/opt/omelet/runtime/agents`.
+  `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
 ```
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add runtime/omelet_api tests/runtime/api
+git add runtime/eggie_api tests/runtime/api
 git commit -m "feat: API reports coding-agent status and requests their setup
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -1431,7 +1431,7 @@ export function useEnsureSetup() {
 
 ```tsx
 import { useEffect } from "react";
-import { Button, cx } from "@omelet/ui";
+import { Button, cx } from "@eggie/ui";
 import type { Agent } from "../../agents/catalog";
 import { useAgentStatus, useEnsureSetup } from "../../agents/queries";
 import { statusLine, type LineKind } from "../../agents/status";
@@ -1542,6 +1542,6 @@ The PR body must carry this live-VM checklist (not automatable here):
 - fresh install: `ls -A ~/.claude ~/.codex ~/.cursor` shows only ignored entries; console says "Waiting…" for all three;
 - Cursor CLI reads `~/.cursor/AGENTS.md`; `skills add -a cursor` succeeds and writes only what `detect.ignore` lists;
 - connect Claude Code from the desktop app → "✓ Claude Code is connected" within a few seconds;
-- open the Codex guide → "Getting Codex ready…" → `codex --version` works in the VM; `/opt/omelet/agent-status/setup-codex.log` is `0600`.
+- open the Codex guide → "Getting Codex ready…" → `codex --version` works in the VM; `/opt/eggie/agent-status/setup-codex.log` is `0600`.
 
 - [ ] **Step 4: Code review by a separate agent** (user's rule), then address findings.

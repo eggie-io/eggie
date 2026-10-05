@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run at boot by omelet-update.service: moves this VM to the newest runtime
+# Run at boot by eggie-update.service: moves this VM to the newest runtime
 # release its host accepts. Any failure leaves the installed runtime running.
 set -euo pipefail
 
@@ -7,11 +7,11 @@ set -euo pipefail
 # release's own -- a VM with no host never changes api.
 accepted_api() {
   local api=""
-  if [[ -s /opt/omelet/host.json ]]; then
-    api="$(tr -d ' \n' < /opt/omelet/host.json | sed -n 's/.*"supported_api":\[\([0-9,]*\)\].*/\1/p')"
+  if [[ -s /opt/eggie/host.json ]]; then
+    api="$(tr -d ' \n' < /opt/eggie/host.json | sed -n 's/.*"supported_api":\[\([0-9,]*\)\].*/\1/p')"
   fi
-  if [[ ! "$api" =~ ^[0-9]+(,[0-9]+)*$ && -s /opt/omelet/runtime/release.json ]]; then
-    api="$(tr -d ' \n' < /opt/omelet/runtime/release.json | sed -n 's/.*"api":\([0-9][0-9]*\).*/\1/p')"
+  if [[ ! "$api" =~ ^[0-9]+(,[0-9]+)*$ && -s /opt/eggie/runtime/release.json ]]; then
+    api="$(tr -d ' \n' < /opt/eggie/runtime/release.json | sed -n 's/.*"api":\([0-9][0-9]*\).*/\1/p')"
   fi
   [[ "$api" =~ ^[0-9]+(,[0-9]+)*$ ]] || return 1
   echo "$api"
@@ -19,9 +19,9 @@ accepted_api() {
 
 main() {
   local installed api script attempt
-  installed="$(cat /opt/omelet/runtime.version 2>/dev/null || true)"
+  installed="$(cat /opt/eggie/runtime.version 2>/dev/null || true)"
   # No marker after an interrupted update: get.sh restores this release first.
-  [[ -n "$installed" ]] || installed="$(cat /opt/omelet/runtime.prev.version 2>/dev/null || true)"
+  [[ -n "$installed" ]] || installed="$(cat /opt/eggie/runtime.prev.version 2>/dev/null || true)"
   # A branch was pinned by hand; moving it to a tag would undo that.
   if [[ ! "$installed" =~ ^runtime-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "installed runtime '$installed' is not a release; not updating"
@@ -32,21 +32,21 @@ main() {
     return 1
   fi
   # shellcheck disable=SC1091
-  source /opt/omelet/runtime.env
+  source /opt/eggie/runtime.env
   # The network may come up after this unit starts.
   for attempt in 1 2 3 4 5 6; do
-    script="$(curl -fsSL "$OMELET_RUNTIME_URL")" && break
+    script="$(curl -fsSL "$EGGIE_RUNTIME_URL")" && break
     script=""
     sleep 10
   done
   if [[ -z "$script" ]]; then
-    echo "could not download the Omelet updater from $OMELET_RUNTIME_URL" >&2
+    echo "could not download the Eggie updater from $EGGIE_RUNTIME_URL" >&2
     return 1
   fi
-  env -u OMELET_RUNTIME_REF -u OMELET_RUNTIME_REPAIR \
-    OMELET_RUNTIME_UPDATE=1 OMELET_RUNTIME_API="$api" \
-    OMELET_RUNTIME_URL="$OMELET_RUNTIME_URL" OMELET_RUNTIME_REPO="$OMELET_RUNTIME_REPO" \
+  env -u EGGIE_RUNTIME_REF -u EGGIE_RUNTIME_REPAIR \
+    EGGIE_RUNTIME_UPDATE=1 EGGIE_RUNTIME_API="$api" \
+    EGGIE_RUNTIME_URL="$EGGIE_RUNTIME_URL" EGGIE_RUNTIME_REPO="$EGGIE_RUNTIME_REPO" \
     bash -c "$script"
 }
 
-[[ -n "${OMELET_BOOT_UPDATE_SOURCED:-}" ]] || main "$@"
+[[ -n "${EGGIE_BOOT_UPDATE_SOURCED:-}" ]] || main "$@"

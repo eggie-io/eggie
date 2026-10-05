@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Notice } from "@omelet/ui";
+import { Button, Notice } from "@eggie/ui";
 import { subtitle } from "../../projects/format";
 import { ONE, useProjects } from "../../projects/queries";
 import type { DeleteResult } from "../../projects/types";
@@ -20,7 +20,7 @@ function DeletedNotice({ result }: { result: DeleteResult }) {
     <Notice>Threw out {result.id}.</Notice>
   ) : (
     <Notice>
-      {result.id} is deleted. Some of its little machines may still be running — restarting Omelet from the desktop
+      {result.id} is deleted. Some of its little machines may still be running — restarting Eggie from the desktop
       app clears them.
     </Notice>
   );

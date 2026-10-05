@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes Omelet's instructions block into every per-account file the agent
+# Writes Eggie's instructions block into every per-account file the agent
 # manifests name, and the ~/projects link, into one home directory. Skills are
 # installed separately, with npx; system-wide instructions by install.sh.
 # Run by install.sh as root, once per home:
@@ -10,9 +10,9 @@ SRC=$1
 HOME_DIR=$2
 OWNER=$3
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BEGIN='<!-- omelet:begin -->'
-END='<!-- omelet:end -->'
-TARGET=/opt/omelet/projects
+BEGIN='<!-- eggie:begin -->'
+END='<!-- eggie:end -->'
+TARGET=/opt/eggie/projects
 
 # Captured first: a failure inside a process substitution would go unnoticed.
 targets="$(python3 "$LIB/agents.py" --agents-dir "$SRC/agents" instructions --home "$HOME_DIR")"
@@ -36,7 +36,7 @@ while IFS= read -r file; do
   if [[ -s "$file" && -n "$(tail -c1 "$file")" ]]; then
     echo >> "$file"
   fi
-  { echo "$BEGIN"; cat "$SRC/instructions/omelet.md"; echo "$END"; } >> "$file"
+  { echo "$BEGIN"; cat "$SRC/instructions/eggie.md"; echo "$END"; } >> "$file"
   chown "$OWNER" "$file"
 done <<< "$targets"
 
@@ -45,7 +45,7 @@ if [[ ! -e "$HOME_DIR/projects" && ! -L "$HOME_DIR/projects" ]]; then
 elif [[ -L "$HOME_DIR/projects" && "$(readlink "$HOME_DIR/projects")" == "$TARGET" ]]; then
   :
 elif [[ -e "$HOME_DIR/projects" || -L "$HOME_DIR/projects" ]]; then
-  echo "left $HOME_DIR/projects alone: it already exists and is not Omelet's link"
+  echo "left $HOME_DIR/projects alone: it already exists and is not Eggie's link"
 fi
 
 if [[ -L "$HOME_DIR/projects" && "$(readlink "$HOME_DIR/projects")" == "$TARGET" ]]; then

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal } from "@omelet/ui";
+import { Button, Modal } from "@eggie/ui";
 import { openExternal } from "../../desktop/desktop";
 import { DEVICE_URL, useConnectGitHub, useGitHub, useReapplyGitHub } from "../../github/github";
 import { githubView } from "../../github/view";
@@ -38,7 +38,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
         body = <Code code={view.code} expiresAt={view.expiresAt} />;
         break;
       case "applying":
-        body = <p>Connected as @{view.login}. Setting up GitHub inside Omelet…</p>;
+        body = <p>Connected as @{view.login}. Setting up GitHub inside Eggie…</p>;
         break;
       case "ready":
         body = <RepoPicker login={view.login} onDone={onClose} />;
@@ -56,7 +56,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
       case "reconnect":
         body = (
           <>
-            <p>GitHub stopped accepting Omelet's access for @{view.login}.</p>
+            <p>GitHub stopped accepting Eggie's access for @{view.login}.</p>
             <Button variant="primary" onClick={start} disabled={connect.isPending}>Reconnect GitHub</Button>
           </>
         );

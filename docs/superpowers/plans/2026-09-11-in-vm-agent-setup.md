@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A coding agent running inside the Omelet VM can turn a repo URL, an archive, a folder, or a plain-words app idea into a routed project with a working sslip URL, without asking the user a technical question.
+**Goal:** A coding agent running inside the Eggie VM can turn a repo URL, an archive, a folder, or a plain-words app idea into a routed project with a working sslip URL, without asking the user a technical question.
 
-**Architecture:** A stdlib-only `omelet` command inside the guest talks to the existing agent API (`127.0.0.1:39099`, bearer token) exactly the way the host client does. Two agent-neutral Markdown files (always-loaded instructions + an `omelet-setup` skill) are pushed with it, and provisioning copies them into each coding agent's discovery locations. Nothing is written into user repositories.
+**Architecture:** A stdlib-only `eggie` command inside the guest talks to the existing agent API (`127.0.0.1:39099`, bearer token) exactly the way the host client does. Two agent-neutral Markdown files (always-loaded instructions + an `eggie-setup` skill) are pushed with it, and provisioning copies them into each coding agent's discovery locations. Nothing is written into user repositories.
 
 **Tech Stack:** Python 3.12 stdlib (guest CLI), bash (provisioning), pytest + FastAPI `TestClient` (seam tests against the real agent app).
 
@@ -12,10 +12,10 @@
 
 ## Global Constraints
 
-- The guest CLI is **one file**, `host/provision/guest/omelet.py`, importing **only the standard library** — never `host`, never `agent`.
+- The guest CLI is **one file**, `host/provision/guest/eggie.py`, importing **only the standard library** — never `host`, never `agent`.
 - Every failure the guest CLI reports is **one plain sentence on stderr, exit code 1**. Agent error bodies are printed **verbatim**; no status code ever reaches the user.
-- **Nothing under the user's project is modified** except `.omelet/` (permissions only, §5.3 of the spec).
-- Shared values, declared again in the guest CLI: `AGENT_PORT = 39099`, `GUEST_ROOT = "/opt/omelet"`, `GUEST_PROJECTS = "/opt/omelet/projects"`, `GUEST_TOKEN = "/opt/omelet/agent.token"`, `COMPOSE_FILE = "docker-compose.yml"`; slug rule `re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")`.
+- **Nothing under the user's project is modified** except `.eggie/` (permissions only, §5.3 of the spec).
+- Shared values, declared again in the guest CLI: `AGENT_PORT = 39099`, `GUEST_ROOT = "/opt/eggie"`, `GUEST_PROJECTS = "/opt/eggie/projects"`, `GUEST_TOKEN = "/opt/eggie/agent.token"`, `COMPOSE_FILE = "docker-compose.yml"`; slug rule `re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")`.
 - **No `sys.platform` / `platform.system()` / `os.name`** anywhere outside `host/providers/` (enforced by `tests/test_no_platform_leak.py`, which also scans the guest CLI).
 - **Bump `BOOTSTRAP_VERSION`** (5 → 6) because `bootstrap.sh` changes.
 - Each pushed asset must fit one `wsl.exe` command line (Windows caps it at 32,767 characters, base64 included).
@@ -32,14 +32,14 @@
 
 | Path | Responsibility |
 |---|---|
-| `host/provision/guest/omelet.py` (create) | The in-VM `omelet` command: path rules, `.omelet/` permissions, agent API client, commands, `main`. |
-| `host/provision/agents/omelet.md` (create) | Always-loaded instructions for every coding agent. |
-| `host/provision/agents/skills/omelet-setup/SKILL.md` (create) | The setup procedure, loaded on use. |
+| `host/provision/guest/eggie.py` (create) | The in-VM `eggie` command: path rules, `.eggie/` permissions, agent API client, commands, `main`. |
+| `host/provision/agents/eggie.md` (create) | Always-loaded instructions for every coding agent. |
+| `host/provision/agents/skills/eggie-setup/SKILL.md` (create) | The setup procedure, loaded on use. |
 | `host/provision/install-agents.sh` (create) | Copies the skill and the Codex block into one home directory. |
 | `host/provision/bootstrap.sh` (modify) | New step 8: git, the CLI, system-wide agent files, per-user installer loop. |
 | `host/core/bootstrap.py` (modify) | `guest_assets()` gains the four new files. |
 | `host/core/constants.py` (modify) | `BOOTSTRAP_VERSION = 6`. |
-| `packaging/windows/omelet.spec` (modify) | Bundles the four new files. |
+| `packaging/windows/eggie.spec` (modify) | Bundles the four new files. |
 | `tests/guest/__init__.py`, `tests/guest/loader.py` (create) | Load the guest CLI by path, the way the VM runs it. |
 | `tests/guest/conftest.py` (create) | `guest` fixture: guest CLI wired to the real agent app in-process. |
 | `tests/guest/test_paths.py`, `test_boundaries.py`, `test_transport.py`, `test_seam.py`, `test_new_and_clone.py` (create) | Guest CLI tests. |
@@ -49,15 +49,15 @@
 
 ---
 
-### Task 1: Guest CLI foundation — path rules, `.omelet/` permissions, boundaries
+### Task 1: Guest CLI foundation — path rules, `.eggie/` permissions, boundaries
 
 **Files:**
-- Create: `host/provision/guest/omelet.py`
+- Create: `host/provision/guest/eggie.py`
 - Create: `tests/guest/__init__.py`, `tests/guest/loader.py`, `tests/guest/test_paths.py`, `tests/guest/test_boundaries.py`
 - Modify: `tests/test_constants_agree.py`, `tests/host/test_no_dead_modules.py`
 
 **Interfaces:**
-- Produces (in `omelet.py`): constants `AGENT_PORT`, `GUEST_ROOT`, `GUEST_PROJECTS`, `GUEST_TOKEN`, `COMPOSE_FILE`, `DOCKER_GROUP`; `class OmeletError(Exception)`; `project_id_for(name: str) -> str`; `project_of(directory: Path, root: Path) -> Path | None`; `require_id(folder: Path) -> str`; `prepare_overlay_dir(project: Path, gid: int) -> None`; `docker_gid() -> int`.
+- Produces (in `eggie.py`): constants `AGENT_PORT`, `GUEST_ROOT`, `GUEST_PROJECTS`, `GUEST_TOKEN`, `COMPOSE_FILE`, `DOCKER_GROUP`; `class EggieError(Exception)`; `project_id_for(name: str) -> str`; `project_of(directory: Path, root: Path) -> Path | None`; `require_id(folder: Path) -> str`; `prepare_overlay_dir(project: Path, gid: int) -> None`; `docker_gid() -> int`.
 - Produces (tests): `tests.guest.loader.load()` returning the loaded module, `tests.guest.loader.GUEST_CLI` (its `Path`).
 
 - [ ] **Step 1: Create the test loader**
@@ -74,8 +74,8 @@ import sys
 from pathlib import Path
 
 GUEST_CLI = (Path(__file__).resolve().parents[2]
-             / "host" / "provision" / "guest" / "omelet.py")
-_NAME = "omelet_guest_cli"
+             / "host" / "provision" / "guest" / "eggie.py")
+_NAME = "eggie_guest_cli"
 
 
 def load():
@@ -135,23 +135,23 @@ def test_the_projects_root_itself_and_folders_outside_it_are_no_project(root, tm
 def test_a_folder_whose_name_is_not_an_id_must_be_renamed_first(root):
     folder = root / "My Blog"
     folder.mkdir()
-    with pytest.raises(cli.OmeletError, match="'my-blog'"):
+    with pytest.raises(cli.EggieError, match="'my-blog'"):
         cli.require_id(folder)
 
 
 def test_a_folder_name_with_nothing_usable_is_refused(root):
     folder = root / "???"
     folder.mkdir()
-    with pytest.raises(cli.OmeletError, match="cannot be a project name"):
+    with pytest.raises(cli.EggieError, match="cannot be a project name"):
         cli.require_id(folder)
 
 
 def test_the_agent_can_write_its_overlay_after_a_root_session_made_the_files(root):
     project = root / "blog"
-    omelet_dir = project / ".omelet"
-    omelet_dir.mkdir(parents=True)
-    omelet_dir.chmod(0o755)
-    overlay = omelet_dir / "overlay.yml"
+    eggie_dir = project / ".eggie"
+    eggie_dir.mkdir(parents=True)
+    eggie_dir.chmod(0o755)
+    overlay = eggie_dir / "overlay.yml"
     overlay.write_text("old")
     overlay.chmod(0o644)
     source = project / "app.py"
@@ -160,16 +160,16 @@ def test_the_agent_can_write_its_overlay_after_a_root_session_made_the_files(roo
 
     cli.prepare_overlay_dir(project, os.getgid())
 
-    assert stat.S_IMODE(omelet_dir.stat().st_mode) == 0o2775
+    assert stat.S_IMODE(eggie_dir.stat().st_mode) == 0o2775
     assert stat.S_IMODE(overlay.stat().st_mode) == 0o664
     assert stat.S_IMODE(source.stat().st_mode) == 0o644
 
 
-def test_a_missing_omelet_folder_is_created_writable(root):
+def test_a_missing_eggie_folder_is_created_writable(root):
     project = root / "blog"
     project.mkdir()
     cli.prepare_overlay_dir(project, os.getgid())
-    assert stat.S_IMODE((project / ".omelet").stat().st_mode) == 0o2775
+    assert stat.S_IMODE((project / ".eggie").stat().st_mode) == 0o2775
 ```
 
 - [ ] **Step 3: Write the failing boundary tests**
@@ -227,17 +227,17 @@ def test_the_guest_cli_holds_the_same_values_as_the_host_and_the_agent():
 - [ ] **Step 4: Run the new tests to verify they fail**
 
 Run: `python3 -m pytest tests/guest tests/test_constants_agree.py -q`
-Expected: FAIL — `FileNotFoundError` / `ModuleNotFoundError` loading `host/provision/guest/omelet.py`.
+Expected: FAIL — `FileNotFoundError` / `ModuleNotFoundError` loading `host/provision/guest/eggie.py`.
 
 - [ ] **Step 5: Create the guest CLI foundation**
 
-`host/provision/guest/omelet.py`:
+`host/provision/guest/eggie.py`:
 
 ```python
 #!/usr/bin/env python3
-"""`omelet` inside the VM: turns a folder in ~/projects into a routed project.
+"""`eggie` inside the VM: turns a folder in ~/projects into a routed project.
 
-Pushed into the guest by the host and installed as /usr/local/bin/omelet, then
+Pushed into the guest by the host and installed as /usr/local/bin/eggie, then
 run by whichever coding agent the user works in. Stdlib only: it can import
 neither host/ nor agent/, so the names it shares with them are declared again
 here and held equal by tests/test_constants_agree.py.
@@ -260,7 +260,7 @@ from pathlib import Path
 from typing import Callable, TextIO
 
 AGENT_PORT = 39099
-GUEST_ROOT = "/opt/omelet"
+GUEST_ROOT = "/opt/eggie"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 GUEST_TOKEN = f"{GUEST_ROOT}/agent.token"
 COMPOSE_FILE = "docker-compose.yml"
@@ -268,7 +268,7 @@ COMPOSE_FILE = "docker-compose.yml"
 DOCKER_GROUP = "docker"
 
 
-class OmeletError(Exception):
+class EggieError(Exception):
     """One plain sentence for the user; `main` prints it and exits 1."""
 
 
@@ -279,8 +279,8 @@ def project_id_for(name: str) -> str:
 def project_of(directory: Path, root: Path) -> Path | None:
     """The project folder holding `directory`, or None outside `root`.
 
-    Resolved first, so ~/projects/x (a symlink) and /opt/omelet/projects/x are
-    one folder; a subfolder counts, so `omelet up` from src/ runs the project.
+    Resolved first, so ~/projects/x (a symlink) and /opt/eggie/projects/x are
+    one folder; a subfolder counts, so `eggie up` from src/ runs the project.
     """
     root = root.resolve()
     path = directory.resolve()
@@ -293,13 +293,13 @@ def project_of(directory: Path, root: Path) -> Path | None:
 def require_id(folder: Path) -> str:
     project_id = project_id_for(folder.name)
     if not project_id:
-        raise OmeletError(
+        raise EggieError(
             f"The folder name '{folder.name}' cannot be a project name. "
             "Rename it using letters, digits and dashes.")
     if project_id != folder.name:
         # The agent derives the folder from the slugged id, so any other name
         # would register a different, empty folder.
-        raise OmeletError(
+        raise EggieError(
             f"Rename the folder '{folder.name}' to '{project_id}' first, "
             "then run the command again.")
     return project_id
@@ -309,29 +309,29 @@ def docker_gid() -> int:
     try:
         return grp.getgrnam(DOCKER_GROUP).gr_gid
     except KeyError:
-        raise OmeletError(
-            "This VM has no docker group, so Omelet is not set up here. "
-            "Run `omelet setup` on your computer.") from None
+        raise EggieError(
+            "This VM has no docker group, so Eggie is not set up here. "
+            "Run `eggie setup` on your computer.") from None
 
 
 def prepare_overlay_dir(project: Path, gid: int) -> None:
-    """Let the agent write .omelet/overlay.yml, the one file it writes here.
+    """Let the agent write .eggie/overlay.yml, the one file it writes here.
 
     It runs as a non-root member of the docker group, while a coding agent
     working as root leaves directories 755 and files 644.
     """
-    omelet_dir = project / ".omelet"
-    overlay = omelet_dir / "overlay.yml"
+    eggie_dir = project / ".eggie"
+    overlay = eggie_dir / "overlay.yml"
     try:
-        omelet_dir.mkdir(exist_ok=True)
-        os.chown(omelet_dir, -1, gid)
-        os.chmod(omelet_dir, 0o2775)
+        eggie_dir.mkdir(exist_ok=True)
+        os.chown(eggie_dir, -1, gid)
+        os.chmod(eggie_dir, 0o2775)
         if overlay.exists():
             os.chown(overlay, -1, gid)
             os.chmod(overlay, 0o664)
     except PermissionError as e:
-        raise OmeletError(
-            f"Omelet could not make {omelet_dir} writable for itself "
+        raise EggieError(
+            f"Eggie could not make {eggie_dir} writable for itself "
             f"({e.strerror}). Run the command as the folder's owner.") from None
 ```
 
@@ -366,8 +366,8 @@ Expected: all PASS.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add host/provision/guest/omelet.py tests/guest tests/test_constants_agree.py tests/host/test_no_dead_modules.py
-git commit -m "feat: guest omelet CLI path rules and overlay permissions
+git add host/provision/guest/eggie.py tests/guest tests/test_constants_agree.py tests/host/test_no_dead_modules.py
+git commit -m "feat: guest eggie CLI path rules and overlay permissions
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -378,13 +378,13 @@ Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
 ### Task 2: Guest CLI talks to the agent — `up`, `status`, `logs`, `down`
 
 **Files:**
-- Modify: `host/provision/guest/omelet.py` (append)
+- Modify: `host/provision/guest/eggie.py` (append)
 - Create: `tests/guest/conftest.py`, `tests/guest/test_transport.py`, `tests/guest/test_seam.py`
 
 **Interfaces:**
 - Consumes: everything Task 1 produced.
 - Consumes (tests): `tests.host.test_client_seam.AppOpener`, `TOKEN`; `tests.agent.test_api_routes.COMPOSE_ONE_WEB`, `COMPOSE_MALFORMED`, `FakeRunner`, `FakeProbe`; `agent.api.app.create_app`; `agent.core.config.AgentConfig`; `agent.core.exec.Completed`.
-- Produces (in `omelet.py`): `START_STACK: str`; `class AgentError(OmeletError)` with `.code`; `class JobFailed(OmeletError)` with `.result: dict`; `read_token(path: Path) -> str`; `class Agent(token, *, base_url=..., opener=None, sleep=time.sleep, monotonic=time.monotonic)` with `ensure_project(id) -> None`, `project(id) -> dict`, `projects() -> list[dict]`, `up(id) -> dict`, `down(id) -> dict`, `logs(id, service=None) -> str`; `@dataclass class Env(root, cwd, agent, gid, git, out, err)` where `git: Callable[[list[str], dict], subprocess.CompletedProcess]`; `_start(env, folder: Path, project_id: str) -> None`; `main(argv: list[str] | None = None, env: Env | None = None) -> int`.
+- Produces (in `eggie.py`): `START_STACK: str`; `class AgentError(EggieError)` with `.code`; `class JobFailed(EggieError)` with `.result: dict`; `read_token(path: Path) -> str`; `class Agent(token, *, base_url=..., opener=None, sleep=time.sleep, monotonic=time.monotonic)` with `ensure_project(id) -> None`, `project(id) -> dict`, `projects() -> list[dict]`, `up(id) -> dict`, `down(id) -> dict`, `logs(id, service=None) -> str`; `@dataclass class Env(root, cwd, agent, gid, git, out, err)` where `git: Callable[[list[str], dict], subprocess.CompletedProcess]`; `_start(env, folder: Path, project_id: str) -> None`; `main(argv: list[str] | None = None, env: Env | None = None) -> int`.
 - Produces (tests): fixture `guest` yielding a `Guest` with `.root: Path`, `.runner: FakeRunner`, `.git_calls: list`, `.git_result: tuple[int, str]`, `.clone_files: dict[str, str]`, and `.run(*argv, cwd: Path) -> tuple[int, str, str]` (exit code, stdout, stderr).
 
 - [ ] **Step 1: Write the `guest` fixture**
@@ -494,7 +494,7 @@ def test_up_turns_a_folder_in_the_projects_root_into_a_routed_project(guest):
     assert (code, err) == (0, "")
     assert "http://blog.test.local:41080" in out
     # Started with the generated overlay: without it there is no Traefik route.
-    assert guest.runner.argv_containing(f"{folder}/.omelet/overlay.yml")
+    assert guest.runner.argv_containing(f"{folder}/.eggie/overlay.yml")
 
 
 def test_up_from_a_subfolder_starts_the_enclosing_project(guest):
@@ -526,7 +526,7 @@ def test_a_start_that_fails_reports_the_guest_output_and_points_at_logs(guest):
     code, _out, err = guest.run("up", cwd=folder)
     assert code == 1
     assert "port is already allocated" in err
-    assert "omelet logs" in err
+    assert "eggie logs" in err
 
 
 def test_a_busy_project_is_waited_for_rather_than_reported(guest):
@@ -552,7 +552,7 @@ def test_status_names_folders_that_are_not_set_up_yet(guest):
     code, out, _err = guest.run("status", cwd=guest.root)
     assert code == 0
     assert out.splitlines()[0].startswith("blog")
-    assert "Not set up yet (run `omelet up` in each): shop" in out
+    assert "Not set up yet (run `eggie up` in each): shop" in out
 
 
 def test_status_inside_an_unregistered_folder_says_how_to_set_it_up(guest):
@@ -602,8 +602,8 @@ def test_a_stopped_service_is_named_with_the_command_that_starts_it(tmp_path):
     assert cli.START_STACK in err.getvalue()
 
 
-def test_a_vm_without_a_token_says_omelet_is_not_set_up(tmp_path):
-    with pytest.raises(cli.OmeletError, match="not set up"):
+def test_a_vm_without_a_token_says_eggie_is_not_set_up(tmp_path):
+    with pytest.raises(cli.EggieError, match="not set up"):
         cli.read_token(tmp_path / "agent.token")
 
 
@@ -612,18 +612,18 @@ def test_an_unreadable_token_points_at_the_docker_group(tmp_path):
     token = tmp_path / "agent.token"
     token.write_text("secret")
     token.chmod(0)
-    with pytest.raises(cli.OmeletError, match="docker group"):
+    with pytest.raises(cli.EggieError, match="docker group"):
         cli.read_token(token)
 ```
 
 - [ ] **Step 4: Run the tests to verify they fail**
 
 Run: `python3 -m pytest tests/guest/test_seam.py tests/guest/test_transport.py -q`
-Expected: FAIL — `AttributeError: module 'omelet_guest_cli' has no attribute 'Agent'` (or `Env`).
+Expected: FAIL — `AttributeError: module 'eggie_guest_cli' has no attribute 'Agent'` (or `Env`).
 
 - [ ] **Step 5: Implement the agent client, the commands and `main`**
 
-Append to `host/provision/guest/omelet.py`:
+Append to `host/provision/guest/eggie.py`:
 
 ```python
 REQUEST_TIMEOUT = 30.0
@@ -634,22 +634,22 @@ JOB_POLL_INTERVAL = 1.0
 BUSY_RETRY_TIMEOUT = 60.0
 BUSY_RETRY_INTERVAL = 1.0
 
-START_STACK = "sudo /usr/bin/docker compose -f /opt/omelet/stack.yml up -d"
+START_STACK = "sudo /usr/bin/docker compose -f /opt/eggie/stack.yml up -d"
 # The agent reads its token once, at startup, so only a recreate picks up a new one.
 RESTART_AGENT = f"{START_STACK} --force-recreate agent"
 _GUIDANCE = {
-    "unauthorized": f"The Omelet service needs a restart. Run: {RESTART_AGENT}",
-    "agent_unconfigured": f"The Omelet service needs a restart. Run: {RESTART_AGENT}",
+    "unauthorized": f"The Eggie service needs a restart. Run: {RESTART_AGENT}",
+    "agent_unconfigured": f"The Eggie service needs a restart. Run: {RESTART_AGENT}",
 }
 
 
-class AgentError(OmeletError):
+class AgentError(EggieError):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
 
 
-class JobFailed(OmeletError):
+class JobFailed(EggieError):
     def __init__(self, message: str, result: dict | None):
         super().__init__(message)
         self.result = result or {}
@@ -659,14 +659,14 @@ def read_token(path: Path) -> str:
     try:
         token = path.read_text().strip()
     except PermissionError:
-        raise OmeletError(
-            "This user can't reach Omelet: it must be in the docker group. "
+        raise EggieError(
+            "This user can't reach Eggie: it must be in the docker group. "
             "Run `sudo usermod -aG docker $USER` and start a new session.") from None
     except OSError:
         token = ""
     if not token:
-        raise OmeletError("Omelet is not set up in this VM yet. "
-                          "Run `omelet setup` on your computer.")
+        raise EggieError("Eggie is not set up in this VM yet. "
+                          "Run `eggie setup` on your computer.")
     return token
 
 
@@ -677,7 +677,7 @@ def _agent_error(exc: urllib.error.HTTPError) -> AgentError:
         error = json.loads(exc.read().decode("utf-8", "replace"))["error"]
         code, message = str(error["code"]), str(error["message"])
     except (OSError, ValueError, KeyError, TypeError):
-        return AgentError("http_error", f"The Omelet service answered HTTP "
+        return AgentError("http_error", f"The Eggie service answered HTTP "
                                         f"{exc.code} ({exc.reason}).")
     guidance = _GUIDANCE.get(code)
     return AgentError(code, f"{guidance} (the service said: {message})"
@@ -708,7 +708,7 @@ class Agent:
         except urllib.error.HTTPError as e:
             raise _agent_error(e) from None
         except (urllib.error.URLError, OSError):
-            raise OmeletError("The Omelet service in this VM is not answering. "
+            raise EggieError("The Eggie service in this VM is not answering. "
                               f"Start it with: {START_STACK}") from None
 
     def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
@@ -737,9 +737,9 @@ class Agent:
                 raise JobFailed(job.get("detail") or "the operation failed inside the VM",
                                 job.get("result"))
             if self._monotonic() >= deadline:
-                raise OmeletError(f"Omelet was still working after "
+                raise EggieError(f"Eggie was still working after "
                                   f"{JOB_TIMEOUT / 60:.0f} minutes. Run "
-                                  "`omelet status` to see where it got to.")
+                                  "`eggie status` to see where it got to.")
             self._sleep(JOB_POLL_INTERVAL)
 
     def ensure_project(self, project_id: str) -> None:
@@ -801,13 +801,13 @@ def _project_here(env: Env, directory: str | None) -> tuple[Path, str] | None:
 def _require_project(env: Env) -> str:
     found = _project_here(env, None)
     if found is None:
-        raise OmeletError("Run this inside a project folder in ~/projects.")
+        raise EggieError("Run this inside a project folder in ~/projects.")
     return found[1]
 
 
 def _start(env: Env, folder: Path, project_id: str) -> None:
     if not (folder / COMPOSE_FILE).is_file():
-        raise OmeletError(f"There is no {COMPOSE_FILE} in {folder}.")
+        raise EggieError(f"There is no {COMPOSE_FILE} in {folder}.")
     prepare_overlay_dir(folder, env.gid())
     agent = env.agent()
     agent.ensure_project(project_id)
@@ -816,8 +816,8 @@ def _start(env: Env, folder: Path, project_id: str) -> None:
         job = agent.up(project_id)
     except JobFailed as e:
         status = e.result.get("status", "failed")
-        raise OmeletError(f"{project_id} did not start (status: {status}).\n{e}\n"
-                          "To see what it printed, run: omelet logs") from None
+        raise EggieError(f"{project_id} did not start (status: {status}).\n{e}\n"
+                          "To see what it printed, run: eggie logs") from None
     result = job.get("result") or {}
     urls = result.get("urls") or []
     for url in urls:
@@ -844,8 +844,8 @@ def _print_project(env: Env, project: dict) -> None:
 def cmd_up(env: Env, directory: str | None) -> None:
     found = _project_here(env, directory)
     if found is None:
-        raise OmeletError("Projects live in ~/projects. Move this folder there, "
-                          "or start a new one with `omelet new <name>`.")
+        raise EggieError("Projects live in ~/projects. Move this folder there, "
+                          "or start a new one with `eggie new <name>`.")
     _start(env, *found)
 
 
@@ -859,7 +859,7 @@ def cmd_status(env: Env, directory: str | None) -> None:
         except AgentError as e:
             if e.code != "project_not_found":
                 raise
-            print(f"{project_id} is not set up yet. Run `omelet up` in it.",
+            print(f"{project_id} is not set up yet. Run `eggie up` in it.",
                   file=env.out)
         return
     projects = agent.projects()
@@ -870,7 +870,7 @@ def cmd_status(env: Env, directory: str | None) -> None:
                      if d.is_dir() and not d.name.startswith(".")
                      and d.name not in known) if env.root.is_dir() else []
     if waiting:
-        print("Not set up yet (run `omelet up` in each): " + ", ".join(waiting),
+        print("Not set up yet (run `eggie up` in each): " + ", ".join(waiting),
               file=env.out)
     elif not projects:
         print("No projects yet.", file=env.out)
@@ -888,10 +888,10 @@ def cmd_down(env: Env) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="omelet",
-        description="Run projects in this VM behind Omelet's router. Projects "
+        prog="eggie",
+        description="Run projects in this VM behind Eggie's router. Projects "
                     "live in ~/projects, one folder each. Start them only with "
-                    "`omelet up`, never `docker compose up`.")
+                    "`eggie up`, never `docker compose up`.")
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
     up = sub.add_parser("up", help="start or restart the project in this folder "
                                    "and print its URL")
@@ -915,7 +915,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
     }
     try:
         commands[args.command]()
-    except OmeletError as e:
+    except EggieError as e:
         print(str(e), file=env.err)
         return 1
     return 0
@@ -932,14 +932,14 @@ Expected: all PASS.
 
 - [ ] **Step 7: Smoke-test the script as the VM runs it**
 
-Run: `python3 host/provision/guest/omelet.py --help`
+Run: `python3 host/provision/guest/eggie.py --help`
 Expected: usage listing `up`, `status`, `logs`, `down`, exit 0.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add host/provision/guest/omelet.py tests/guest
-git commit -m "feat: guest omelet up, status, logs and down over the agent API
+git add host/provision/guest/eggie.py tests/guest
+git commit -m "feat: guest eggie up, status, logs and down over the agent API
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -950,11 +950,11 @@ Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
 ### Task 3: Guest CLI `new` and `clone`
 
 **Files:**
-- Modify: `host/provision/guest/omelet.py`
+- Modify: `host/provision/guest/eggie.py`
 - Create: `tests/guest/test_new_and_clone.py`
 
 **Interfaces:**
-- Consumes: `Env`, `_start`, `project_id_for`, `OmeletError`, `COMPOSE_FILE`, `main`, `_parser` from Task 2; the `guest` fixture.
+- Consumes: `Env`, `_start`, `project_id_for`, `EggieError`, `COMPOSE_FILE`, `main`, `_parser` from Task 2; the `guest` fixture.
 - Produces: `repo_name(url: str) -> str`; `cmd_new(env, name) -> None`; `cmd_clone(env, url, name) -> None`; subcommands `new <name>` and `clone <url> [name]`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1027,7 +1027,7 @@ Expected: FAIL — argparse exits with `invalid choice: 'new'` / `'clone'`.
 
 - [ ] **Step 3: Implement `new` and `clone`**
 
-In `host/provision/guest/omelet.py`, add after `cmd_down`:
+In `host/provision/guest/eggie.py`, add after `cmd_down`:
 
 ```python
 def repo_name(url: str) -> str:
@@ -1038,12 +1038,12 @@ def repo_name(url: str) -> str:
 def _new_folder(env: Env, name: str) -> Path:
     project_id = project_id_for(name)
     if not project_id:
-        raise OmeletError(f"'{name}' cannot be a project name. "
+        raise EggieError(f"'{name}' cannot be a project name. "
                           "Use letters, digits and dashes.")
     folder = env.root / project_id
     if folder.exists():
-        raise OmeletError(f"{folder} already exists. Pick another name, "
-                          "or run `omelet up` in it.")
+        raise EggieError(f"{folder} already exists. Pick another name, "
+                          "or run `eggie up` in it.")
     return folder
 
 
@@ -1051,7 +1051,7 @@ def cmd_new(env: Env, name: str) -> None:
     folder = _new_folder(env, name)
     folder.mkdir()
     print(f"Created {folder}. Put the project's files there, "
-          "then run `omelet up` in it.", file=env.out)
+          "then run `eggie up` in it.", file=env.out)
 
 
 def cmd_clone(env: Env, url: str, name: str | None) -> None:
@@ -1061,12 +1061,12 @@ def cmd_clone(env: Env, url: str, name: str | None) -> None:
     result = env.git(["git", "clone", "--", url, str(folder)],
                      {**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if result.returncode != 0:
-        raise OmeletError(f"Could not download {url}:\n{(result.stderr or '').strip()}")
+        raise EggieError(f"Could not download {url}:\n{(result.stderr or '').strip()}")
     if (folder / COMPOSE_FILE).is_file():
         _start(env, folder, folder.name)
     else:
         print(f"Downloaded to {folder}. It has no {COMPOSE_FILE} yet; one must "
-              "be written before `omelet up`.", file=env.out)
+              "be written before `eggie up`.", file=env.out)
 ```
 
 In `_parser()`, add before `return parser`:
@@ -1095,8 +1095,8 @@ Expected: all PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add host/provision/guest/omelet.py tests/guest/test_new_and_clone.py
-git commit -m "feat: guest omelet new and clone
+git add host/provision/guest/eggie.py tests/guest/test_new_and_clone.py
+git commit -m "feat: guest eggie new and clone
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -1104,49 +1104,49 @@ Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
 
 ---
 
-### Task 4: What coding agents read — `omelet.md` and the `omelet-setup` skill
+### Task 4: What coding agents read — `eggie.md` and the `eggie-setup` skill
 
 **Files:**
-- Create: `host/provision/agents/omelet.md`
-- Create: `host/provision/agents/skills/omelet-setup/SKILL.md`
+- Create: `host/provision/agents/eggie.md`
+- Create: `host/provision/agents/skills/eggie-setup/SKILL.md`
 
 **Interfaces:**
 - Consumes: the guest CLI's commands (`up`, `status`, `logs`, `down`, `new`, `clone`) from Tasks 2–3.
-- Produces: the two files Tasks 5–6 install. The skill directory name `omelet-setup` equals its frontmatter `name`.
+- Produces: the two files Tasks 5–6 install. The skill directory name `eggie-setup` equals its frontmatter `name`.
 
 No automated test: these files hold no logic. Task 7's acceptance run is their test.
 
-- [ ] **Step 1: Write `host/provision/agents/omelet.md`**
+- [ ] **Step 1: Write `host/provision/agents/eggie.md`**
 
 ```markdown
-# You are working inside an Omelet VM
+# You are working inside an Eggie VM
 This is an isolated Linux VM. Projects live in ~/projects, one folder each,
-and run in Docker behind Omelet's router.
+and run in Docker behind Eggie's router.
 
 The user is not technical. Never ask them technical questions (stack, ports,
 databases, frameworks) — decide yourself. Report results in plain words and
 always give them the project's URL.
 
-- Start with `omelet status` to see what exists and what is running.
-- Run projects only with `omelet up` — never `docker compose up` directly,
+- Start with `eggie status` to see what exists and what is running.
+- Run projects only with `eggie up` — never `docker compose up` directly,
   or the project gets no URL.
-- Never edit `.omelet/overlay.yml`; it is generated.
-- Something broken? `omelet logs`.
-- New project, repo URL, or an archive to set up: use the `omelet-setup` skill
-  (no skills? run `omelet --help`).
+- Never edit `.eggie/overlay.yml`; it is generated.
+- Something broken? `eggie logs`.
+- New project, repo URL, or an archive to set up: use the `eggie-setup` skill
+  (no skills? run `eggie --help`).
 ```
 
-- [ ] **Step 2: Write `host/provision/agents/skills/omelet-setup/SKILL.md`**
+- [ ] **Step 2: Write `host/provision/agents/skills/eggie-setup/SKILL.md`**
 
 ````markdown
 ---
-name: omelet-setup
-description: Set up, create, import, clone or run a project in this Omelet VM — a repository URL, an archive, a folder, or a new app described in plain words. Use whenever the user wants something running with a link to open.
+name: eggie-setup
+description: Set up, create, import, clone or run a project in this Eggie VM — a repository URL, an archive, a folder, or a new app described in plain words. Use whenever the user wants something running with a link to open.
 ---
 
-# Setting up a project with Omelet
+# Setting up a project with Eggie
 
-Projects live in `~/projects/<name>/`, one folder each. Omelet runs them in
+Projects live in `~/projects/<name>/`, one folder each. Eggie runs them in
 Docker and gives each one a URL. The user is not technical: choose everything
 yourself and never ask them about technology.
 
@@ -1154,16 +1154,16 @@ yourself and never ask them about technology.
 
 | The user gives you | Do |
 |---|---|
-| A repository URL | `omelet clone <url>` — it also starts the project if it can |
+| A repository URL | `eggie clone <url>` — it also starts the project if it can |
 | An archive (zip, tar) | unpack it so its `docker-compose.yml` sits directly in `~/projects/<name>/` |
 | A folder already in `~/projects` | nothing — go to step 3 |
 | A folder elsewhere in the VM | move it into `~/projects/` |
-| A description of an app | `omelet new <name>`, then build it there following step 2 |
+| A description of an app | `eggie new <name>`, then build it there following step 2 |
 
-If `omelet up` asks you to rename the folder, rename it to the name it gives
-and run `omelet up` again.
+If `eggie up` asks you to rename the folder, rename it to the name it gives
+and run `eggie up` again.
 
-If `omelet clone` says it could not download the repository, it is private.
+If `eggie clone` says it could not download the repository, it is private.
 Tell the user in plain words that the repository needs access; do not ask for
 tokens or keys unprompted.
 
@@ -1173,8 +1173,8 @@ tokens or keys unprompted.
 - Everything runs in `docker-compose.yml`. Run language tools inside containers
   (`docker compose run --rm <service> <command>`); never install them on the VM.
 - The app must listen on `0.0.0.0`, not `127.0.0.1`, or its URL never answers.
-- Publish no host ports. Tell Omelet which service serves the web page in
-  `.omelet/project.yml`, with only a `web:` key:
+- Publish no host ports. Tell Eggie which service serves the web page in
+  `.eggie/project.yml`, with only a `web:` key:
 
   ```yaml
   web:
@@ -1187,11 +1187,11 @@ tokens or keys unprompted.
 
 ## 3. Start it and prove it works
 
-1. Run `omelet up` inside the project folder. It prints the URL.
+1. Run `eggie up` inside the project folder. It prints the URL.
 2. Check the URL answers before telling the user it works:
    `curl -s -o /dev/null -w '%{http_code}\n' <url>`.
-3. On a failure or no answer: read `omelet logs`, fix the cause, run
-   `omelet up` again.
+3. On a failure or no answer: read `eggie logs`, fix the cause, run
+   `eggie up` again.
 4. Give the user the URL in one plain sentence.
 ````
 
@@ -1199,7 +1199,7 @@ tokens or keys unprompted.
 
 ```bash
 git add host/provision/agents
-git commit -m "feat: agent-neutral Omelet instructions and setup skill
+git commit -m "feat: agent-neutral Eggie instructions and setup skill
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -1215,7 +1215,7 @@ Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
 
 **Interfaces:**
 - Consumes: `host/provision/agents/` from Task 4.
-- Produces: `install-agents.sh <agents-source-dir> <home> <owner uid:gid>` — copies the skill to `<home>/.claude/skills/omelet-setup/` and `<home>/.agents/skills/omelet-setup/`, replaces the `<!-- omelet:begin -->`…`<!-- omelet:end -->` block in `<home>/.codex/AGENTS.md`, links `<home>/projects` → `/opt/omelet/projects` unless something else is there.
+- Produces: `install-agents.sh <agents-source-dir> <home> <owner uid:gid>` — copies the skill to `<home>/.claude/skills/eggie-setup/` and `<home>/.agents/skills/eggie-setup/`, replaces the `<!-- eggie:begin -->`…`<!-- eggie:end -->` block in `<home>/.codex/AGENTS.md`, links `<home>/projects` → `/opt/eggie/projects` unless something else is there.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1242,9 +1242,9 @@ def _install(home: Path, source: Path = SOURCE) -> subprocess.CompletedProcess:
 
 def test_every_agent_finds_the_skill_in_its_own_home_location(tmp_path):
     _install(tmp_path)
-    expected = (SOURCE / "skills" / "omelet-setup" / "SKILL.md").read_text()
+    expected = (SOURCE / "skills" / "eggie-setup" / "SKILL.md").read_text()
     for where in (".claude/skills", ".agents/skills"):
-        assert (tmp_path / where / "omelet-setup" / "SKILL.md").read_text() == expected
+        assert (tmp_path / where / "eggie-setup" / "SKILL.md").read_text() == expected
 
 
 def test_the_codex_block_is_replaced_and_the_users_own_text_kept(tmp_path):
@@ -1256,14 +1256,14 @@ def test_the_codex_block_is_replaced_and_the_users_own_text_kept(tmp_path):
     shutil.copytree(SOURCE, source)
 
     _install(home, source)
-    (source / "omelet.md").write_text("new instructions\n")
+    (source / "eggie.md").write_text("new instructions\n")
     _install(home, source)
 
     text = agents_md.read_text()
     assert text.startswith("# my notes\nkeep me\n")
-    assert text.count("<!-- omelet:begin -->") == 1
+    assert text.count("<!-- eggie:begin -->") == 1
     assert "new instructions" in text
-    assert "You are working inside an Omelet VM" not in text
+    assert "You are working inside an Eggie VM" not in text
 
 
 def test_the_projects_link_is_made_once_and_a_real_folder_is_left_alone(tmp_path):
@@ -1271,7 +1271,7 @@ def test_the_projects_link_is_made_once_and_a_real_folder_is_left_alone(tmp_path
     fresh.mkdir()
     _install(fresh)
     _install(fresh)
-    assert os.readlink(fresh / "projects") == "/opt/omelet/projects"
+    assert os.readlink(fresh / "projects") == "/opt/eggie/projects"
 
     taken = tmp_path / "taken"
     (taken / "projects").mkdir(parents=True)
@@ -1289,7 +1289,7 @@ Expected: FAIL — bash cannot open `install-agents.sh`.
 
 ```bash
 #!/usr/bin/env bash
-# Copies Omelet's skill and Codex instructions into one home directory.
+# Copies Eggie's skill and Codex instructions into one home directory.
 # Run by bootstrap.sh as root, once per home:
 #   install-agents.sh <agents-source-dir> <home> <owner uid:gid>
 set -euo pipefail
@@ -1297,9 +1297,9 @@ set -euo pipefail
 SRC=$1
 HOME_DIR=$2
 OWNER=$3
-SKILL=omelet-setup
-BEGIN='<!-- omelet:begin -->'
-END='<!-- omelet:end -->'
+SKILL=eggie-setup
+BEGIN='<!-- eggie:begin -->'
+END='<!-- eggie:end -->'
 
 # Claude Code reads ~/.claude/skills; Codex, Gemini CLI, Cursor and Copilot
 # read ~/.agents/skills. Copies, so a moved source never leaves a dead link.
@@ -1318,12 +1318,12 @@ sed -i "\|^$BEGIN\$|,\|^$END\$|d" "$AGENTS_MD"
 if [[ -s "$AGENTS_MD" && -n "$(tail -c1 "$AGENTS_MD")" ]]; then
   echo >> "$AGENTS_MD"
 fi
-{ echo "$BEGIN"; cat "$SRC/omelet.md"; echo "$END"; } >> "$AGENTS_MD"
+{ echo "$BEGIN"; cat "$SRC/eggie.md"; echo "$END"; } >> "$AGENTS_MD"
 
 if [[ ! -e "$HOME_DIR/projects" && ! -L "$HOME_DIR/projects" ]]; then
-  ln -s /opt/omelet/projects "$HOME_DIR/projects"
+  ln -s /opt/eggie/projects "$HOME_DIR/projects"
 elif [[ ! -L "$HOME_DIR/projects" ]]; then
-  echo "left $HOME_DIR/projects alone: it already exists and is not Omelet's link"
+  echo "left $HOME_DIR/projects alone: it already exists and is not Eggie's link"
 fi
 
 chown -R "$OWNER" "$HOME_DIR/.claude/skills/$SKILL" "$HOME_DIR/.agents/skills/$SKILL" "$AGENTS_MD"
@@ -1343,7 +1343,7 @@ Expected: all PASS.
 
 ```bash
 git add host/provision/install-agents.sh tests/host/test_install_agents.py
-git commit -m "feat: install Omelet's skill and Codex block into a home directory
+git commit -m "feat: install Eggie's skill and Codex block into a home directory
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -1357,13 +1357,13 @@ Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
 - Modify: `host/core/bootstrap.py` (`guest_assets`)
 - Modify: `host/core/constants.py` (`BOOTSTRAP_VERSION`)
 - Modify: `host/provision/bootstrap.sh` (new step 8, marker becomes step 9)
-- Modify: `packaging/windows/omelet.spec` (`datas`)
+- Modify: `packaging/windows/eggie.spec` (`datas`)
 - Modify: `tests/host/test_bootstrap.py`, `tests/host/test_bootstrap_shell.py`
 - Modify: `CLAUDE.md`
 
 **Interfaces:**
-- Consumes: `host/provision/guest/omelet.py`, `host/provision/install-agents.sh`, `host/provision/agents/omelet.md`, `host/provision/agents/skills/omelet-setup/SKILL.md`.
-- Produces: guest paths `/opt/omelet/bin/omelet`, `/opt/omelet/bin/install-agents.sh`, `/opt/omelet/agents/omelet.md`, `/opt/omelet/agents/skills/omelet-setup/SKILL.md`; installed `/usr/local/bin/omelet`, `/etc/claude-code/CLAUDE.md`, `/etc/codex/skills/omelet-setup/`.
+- Consumes: `host/provision/guest/eggie.py`, `host/provision/install-agents.sh`, `host/provision/agents/eggie.md`, `host/provision/agents/skills/eggie-setup/SKILL.md`.
+- Produces: guest paths `/opt/eggie/bin/eggie`, `/opt/eggie/bin/install-agents.sh`, `/opt/eggie/agents/eggie.md`, `/opt/eggie/agents/skills/eggie-setup/SKILL.md`; installed `/usr/local/bin/eggie`, `/etc/claude-code/CLAUDE.md`, `/etc/codex/skills/eggie-setup/`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1392,15 +1392,15 @@ def test_bootstrap_installs_the_agent_files_where_the_host_pushes_them():
 
     remotes = {local.name: remote for local, remote in guest_assets()}
     text = "\n".join(_commands())
-    assert remotes["omelet.py"] in text
+    assert remotes["eggie.py"] in text
     assert remotes["install-agents.sh"] in text
-    assert posixpath.dirname(remotes["omelet.md"]) in text
+    assert posixpath.dirname(remotes["eggie.md"]) in text
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `python3 -m pytest tests/host/test_bootstrap.py tests/host/test_bootstrap_shell.py tests/host/test_frozen_bundle.py -q`
-Expected: FAIL — `KeyError: 'omelet.py'` in the shell test.
+Expected: FAIL — `KeyError: 'eggie.py'` in the shell test.
 
 - [ ] **Step 3: Push the new assets**
 
@@ -1408,7 +1408,7 @@ In `host/core/bootstrap.py`, below `_GUEST_SCRIPT = f"{_GUEST_DIR}/bootstrap.sh"
 
 ```python
 _GUEST_AGENTS = f"{constants.GUEST_ROOT}/agents"
-_SKILL = "skills/omelet-setup/SKILL.md"
+_SKILL = "skills/eggie-setup/SKILL.md"
 ```
 
 and replace the `return` in `guest_assets()` with:
@@ -1417,23 +1417,23 @@ and replace the `return` in `guest_assets()` with:
     return (
         (_ASSETS / "bootstrap.sh", _GUEST_SCRIPT),
         (_ASSETS / "stack.yml", constants.GUEST_STACK),
-        (_ASSETS / "guest" / "omelet.py", f"{_GUEST_DIR}/omelet"),
+        (_ASSETS / "guest" / "eggie.py", f"{_GUEST_DIR}/eggie"),
         (_ASSETS / "install-agents.sh", f"{_GUEST_DIR}/install-agents.sh"),
-        (_ASSETS / "agents" / "omelet.md", f"{_GUEST_AGENTS}/omelet.md"),
+        (_ASSETS / "agents" / "eggie.md", f"{_GUEST_AGENTS}/eggie.md"),
         (_ASSETS / "agents" / _SKILL, f"{_GUEST_AGENTS}/{_SKILL}"),
     )
 ```
 
 - [ ] **Step 4: Bundle them into the frozen host**
 
-In `packaging/windows/omelet.spec`, add to the `datas=[` list, after the `stack.yml` entry:
+In `packaging/windows/eggie.spec`, add to the `datas=[` list, after the `stack.yml` entry:
 
 ```python
-        ("../../host/provision/guest/omelet.py", "host/provision/guest"),
+        ("../../host/provision/guest/eggie.py", "host/provision/guest"),
         ("../../host/provision/install-agents.sh", "host/provision"),
-        ("../../host/provision/agents/omelet.md", "host/provision/agents"),
-        ("../../host/provision/agents/skills/omelet-setup/SKILL.md",
-         "host/provision/agents/skills/omelet-setup"),
+        ("../../host/provision/agents/eggie.md", "host/provision/agents"),
+        ("../../host/provision/agents/skills/eggie-setup/SKILL.md",
+         "host/provision/agents/skills/eggie-setup"),
 ```
 
 - [ ] **Step 5: Install everything from `bootstrap.sh`**
@@ -1447,30 +1447,30 @@ In `host/provision/bootstrap.sh`, replace
 with
 
 ```bash
-# 8. coding agents: the in-VM `omelet` command, and what each agent reads.
+# 8. coding agents: the in-VM `eggie` command, and what each agent reads.
 if ! dpkg -s git >/dev/null 2>&1; then
   apt-get update
   apt-get install -y git
 fi
-command -v python3 >/dev/null || { echo 'python3 is missing; the omelet command needs it' >&2; exit 1; }
-install -m 755 /opt/omelet/bin/omelet /usr/local/bin/omelet
+command -v python3 >/dev/null || { echo 'python3 is missing; the eggie command needs it' >&2; exit 1; }
+install -m 755 /opt/eggie/bin/eggie /usr/local/bin/eggie
 
 # System-wide where the agent has such a place, so which user runs the
 # session does not matter.
 install -d /etc/claude-code /etc/codex/skills
-install -m 644 /opt/omelet/agents/omelet.md /etc/claude-code/CLAUDE.md
-rm -rf /etc/codex/skills/omelet-setup
-cp -r /opt/omelet/agents/skills/omelet-setup /etc/codex/skills/
+install -m 644 /opt/eggie/agents/eggie.md /etc/claude-code/CLAUDE.md
+rm -rf /etc/codex/skills/eggie-setup
+cp -r /opt/eggie/agents/skills/eggie-setup /etc/codex/skills/
 
 # Per home where it is not: root (WSL sessions), every login account (Lima's
 # user) and /etc/skel for accounts made later. The docker group is the only
 # way a non-root user can read the agent token.
-bash /opt/omelet/bin/install-agents.sh /opt/omelet/agents /root 0:0
-bash /opt/omelet/bin/install-agents.sh /opt/omelet/agents /etc/skel 0:0
+bash /opt/eggie/bin/install-agents.sh /opt/eggie/agents /root 0:0
+bash /opt/eggie/bin/install-agents.sh /opt/eggie/agents /etc/skel 0:0
 while IFS=: read -r name _ uid gid _ home _; do
   if (( uid >= 1000 && uid < 60000 )) && [[ -d "$home" ]]; then
     usermod -aG docker "$name"
-    bash /opt/omelet/bin/install-agents.sh /opt/omelet/agents "$home" "$uid:$gid"
+    bash /opt/eggie/bin/install-agents.sh /opt/eggie/agents "$home" "$uid:$gid"
   fi
 done < <(getent passwd)
 
@@ -1491,12 +1491,12 @@ Expected: all PASS, including `test_frozen_bundle.py` (it now requires the new `
 In `CLAUDE.md`, under `### Layers`, add after the `host/provision/` bullet:
 
 ```markdown
-- `host/provision/guest/omelet.py` — the `omelet` command **inside** the VM, used by coding
+- `host/provision/guest/eggie.py` — the `eggie` command **inside** the VM, used by coding
   agents (Claude Code, Codex, …) working there: `up`/`new`/`clone`/`status`/`logs`/`down`
   over the agent API with the guest token. One stdlib-only file, loaded by tests by path
   (`tests/guest/loader.py`); it shares constants with both sides, held equal by
   `tests/test_constants_agree.py`. `host/provision/agents/` holds what those agents read
-  (`omelet.md`, the `omelet-setup` skill); `bootstrap.sh` step 8 and `install-agents.sh`
+  (`eggie.md`, the `eggie-setup` skill); `bootstrap.sh` step 8 and `install-agents.sh`
   copy them into each agent's discovery paths (`/etc/claude-code/CLAUDE.md`,
   `/etc/codex/skills`, `~/.claude/skills`, `~/.agents/skills`, a marked block in
   `~/.codex/AGENTS.md`). Nothing is written into user repositories.
@@ -1516,8 +1516,8 @@ Also update the test count in the `## Commands` block from `365 tests` to the ne
 - [ ] **Step 9: Commit**
 
 ```bash
-git add host/core/bootstrap.py host/core/constants.py host/provision/bootstrap.sh packaging/windows/omelet.spec tests/host/test_bootstrap.py tests/host/test_bootstrap_shell.py CLAUDE.md
-git commit -m "feat: provision the guest omelet command and agent instructions
+git add host/core/bootstrap.py host/core/constants.py host/provision/bootstrap.sh packaging/windows/eggie.spec tests/host/test_bootstrap.py tests/host/test_bootstrap_shell.py CLAUDE.md
+git commit -m "feat: provision the guest eggie command and agent instructions
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01DBSpFPWc1TRWYn4pnjP8px"
@@ -1542,8 +1542,8 @@ gh pr create --base main --title "Coding agents set up projects inside the VM" -
 Closes #2.
 
 ## What
-- `omelet` inside the VM (`up`, `new`, `clone`, `status`, `logs`, `down`) — stdlib-only, talks to the agent API with the guest token, so every project it starts gets the overlay and a Traefik URL.
-- Agent-neutral `omelet.md` + `omelet-setup` skill, copied by provisioning into Claude Code (`/etc/claude-code/CLAUDE.md`, `~/.claude/skills`), Codex (`/etc/codex/skills`, marked block in `~/.codex/AGENTS.md`) and `~/.agents/skills` for Gemini CLI / Cursor / Copilot.
+- `eggie` inside the VM (`up`, `new`, `clone`, `status`, `logs`, `down`) — stdlib-only, talks to the agent API with the guest token, so every project it starts gets the overlay and a Traefik URL.
+- Agent-neutral `eggie.md` + `eggie-setup` skill, copied by provisioning into Claude Code (`/etc/claude-code/CLAUDE.md`, `~/.claude/skills`), Codex (`/etc/codex/skills`, marked block in `~/.codex/AGENTS.md`) and `~/.agents/skills` for Gemini CLI / Cursor / Copilot.
 - `BOOTSTRAP_VERSION` 5 → 6 so existing VMs pick it up.
 
 ## Tested
@@ -1572,18 +1572,18 @@ Dispatch a fresh reviewer agent on the PR diff (`git diff main...HEAD`), with th
 
 Never boot or exec into the VM from the development WSL shell; give the user these commands instead.
 
-1. Re-provision the existing VM from this branch: run `omelet setup` the way the host CLI is normally run on their machine (the version bump makes bootstrap re-run).
+1. Re-provision the existing VM from this branch: run `eggie setup` the way the host CLI is normally run on their machine (the version bump makes bootstrap re-run).
 2. Check what landed:
    ```powershell
-   wsl -d omelet-vm -u root -- omelet --help
-   wsl -d omelet-vm -u root -- cat /etc/claude-code/CLAUDE.md
-   wsl -d omelet-vm -u root -- ls /root/.claude/skills /root/.agents/skills /etc/codex/skills
-   wsl -d omelet-vm -u root -- omelet status
+   wsl -d eggie-vm -u root -- eggie --help
+   wsl -d eggie-vm -u root -- cat /etc/claude-code/CLAUDE.md
+   wsl -d eggie-vm -u root -- ls /root/.claude/skills /root/.agents/skills /etc/codex/skills
+   wsl -d eggie-vm -u root -- eggie status
    ```
-3. In Claude Code Desktop → environment `omelet-vm` → folder `/root/projects`:
+3. In Claude Code Desktop → environment `eggie-vm` → folder `/root/projects`:
    1. paste a public repo URL that has a `docker-compose.yml` and say "set up the project";
    2. say "I want a web app for tracking routines";
-   3. copy a folder in through `\\wsl.localhost\omelet-vm\opt\omelet\projects` and say "set this up".
+   3. copy a folder in through `\\wsl.localhost\eggie-vm\opt\eggie\projects` and say "set this up".
 4. In Codex (WSL mode), repeat 3.1 or 3.2.
 
 Each passes when the agent asks no technical question, replies with a `…127-0-0-1.sslip.io:39080` URL, the URL opens in a Windows browser, and a page edit shows after a reload.

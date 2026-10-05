@@ -40,9 +40,9 @@ def make(tmp_path):
     shells = tmp_path / "shells"
     shells.write_text("/bin/bash\n")
     path = f"{bin_dir}:/usr/bin:/bin"
-    env = {**os.environ, "PATH": path, "OMELET_APPLY_PATH": path, "LOG": str(log),
-           "OMELET_ROOT_HOME": str(root), "OMELET_SHELLS_FILE": str(shells),
-           "ADA_HOME": str(ada), "OMELET_AGENTS_DIR": str(agents)}
+    env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path, "LOG": str(log),
+           "EGGIE_ROOT_HOME": str(root), "EGGIE_SHELLS_FILE": str(shells),
+           "ADA_HOME": str(ada), "EGGIE_AGENTS_DIR": str(agents)}
     return SimpleNamespace(env=env, status=status, root=root, ada=ada, log=log)
 
 
@@ -62,7 +62,7 @@ def setups_run(t):
     return log.read_text().split() if log.exists() else []
 
 
-def test_a_dir_holding_only_omelets_own_files_is_not_connected(tmp_path):
+def test_a_dir_holding_only_eggies_own_files_is_not_connected(tmp_path):
     t = make(tmp_path)
     (t.root / ".codex").mkdir()
     (t.root / ".codex" / "AGENTS.md").write_text("ours")

@@ -1,6 +1,6 @@
 # runtime/web/ — the browser console
 
-React + Vite + TypeScript npm workspace, shipped as the `omelet-web` nginx image. Traefik routes
+React + Vite + TypeScript npm workspace, shipped as the `eggie-web` nginx image. Traefik routes
 `localhost:<edge>/` here and `/api` to the API. A sibling of the API inside `runtime/` — never nest
 it in the Python package. Not to be confused with `host/desktop/ui/` (the native window's local
 screens); don't share code or assets with it.

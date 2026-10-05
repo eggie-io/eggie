@@ -8,7 +8,7 @@ BOOT = ROOT / "runtime" / "install" / "lib" / "boot-update.sh"
 
 
 def _root(tmp_path, *, host_json=None, release='{"api": 1}', installed="runtime-v0.1.0"):
-    root = tmp_path / "opt-omelet"
+    root = tmp_path / "opt-eggie"
     (root / "runtime").mkdir(parents=True)
     if host_json is not None:
         (root / "host.json").write_text(host_json)
@@ -17,16 +17,16 @@ def _root(tmp_path, *, host_json=None, release='{"api": 1}', installed="runtime-
     if installed:
         (root / "runtime.version").write_text(installed + "\n")
     (root / "runtime.env").write_text(
-        "OMELET_RUNTIME_URL=https://example.invalid/get.sh\n"
-        "OMELET_RUNTIME_REPO=https://example.invalid/repo\n")
+        "EGGIE_RUNTIME_URL=https://example.invalid/get.sh\n"
+        "EGGIE_RUNTIME_REPO=https://example.invalid/repo\n")
     return root
 
 
 def _accepted(tmp_path, **kw):
     root = _root(tmp_path, **kw)
-    script = BOOT.read_text().replace("/opt/omelet", str(root))
+    script = BOOT.read_text().replace("/opt/eggie", str(root))
     return subprocess.run(["bash", "-c", script + "\naccepted_api"],
-                          env={**os.environ, "OMELET_BOOT_UPDATE_SOURCED": "1"},
+                          env={**os.environ, "EGGIE_BOOT_UPDATE_SOURCED": "1"},
                           capture_output=True, text=True)
 
 
@@ -63,12 +63,12 @@ def _run(tmp_path, *, installed="runtime-v0.1.0", prev_version=None):
     bin_dir.mkdir()
     curl = bin_dir / "curl"
     # The fetched "get.sh" reports what it was handed.
-    curl.write_text("#!/bin/sh\necho 'echo \"url=$OMELET_RUNTIME_URL api=$OMELET_RUNTIME_API "
-                    "update=$OMELET_RUNTIME_UPDATE repo=$OMELET_RUNTIME_REPO ref=$OMELET_RUNTIME_REF\"'\n")
+    curl.write_text("#!/bin/sh\necho 'echo \"url=$EGGIE_RUNTIME_URL api=$EGGIE_RUNTIME_API "
+                    "update=$EGGIE_RUNTIME_UPDATE repo=$EGGIE_RUNTIME_REPO ref=$EGGIE_RUNTIME_REF\"'\n")
     curl.chmod(0o755)
-    script = BOOT.read_text().replace("/opt/omelet", str(root))
+    script = BOOT.read_text().replace("/opt/eggie", str(root))
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
-           "OMELET_RUNTIME_REF": "leaked"}
+           "EGGIE_RUNTIME_REF": "leaked"}
     return subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
 
 

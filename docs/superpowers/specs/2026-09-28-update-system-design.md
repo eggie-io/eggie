@@ -6,10 +6,10 @@ Issue: #25
 
 ## 1. Problem
 
-Nothing updates today. Once `/opt/omelet/runtime.version` exists the host never runs the
+Nothing updates today. Once `/opt/eggie/runtime.version` exists the host never runs the
 installer again, Repair reinstalls the ref already installed, and a new `runtime-v*` tag reaches
 only fresh VMs. The host has no way to learn about or install a newer desktop app. The console's
-"Omelet needs an update" screen points at a desktop action that does not exist.
+"Eggie needs an update" screen points at a desktop action that does not exist.
 
 Goal:
 
@@ -25,9 +25,9 @@ Goal:
 | 2 | The VM decides and applies the update, not the host. | The VM often runs without the desktop app open, and a cloud VM has no host at all. |
 | 3 | Compatibility is the existing API number. Each runtime release declares it in `runtime/release.json`. | A tag is immutable, so the declaration cannot drift. A separate manifest on `main` can be forgotten; encoding it in the tag name collapses the release number into the API number. |
 | 4 | Tags without `release.json` are skipped. | `runtime-v0.0.5`–`0.0.7` are pre-releases no shipped host installed; no compat for unreleased state. |
-| 5 | The host tells the VM what it supports through `/opt/omelet/host.json`. | The boot updater must know the host's range while the host is not running. |
+| 5 | The host tells the VM what it supports through `/opt/eggie/host.json`. | The boot updater must know the host's range while the host is not running. |
 | 6 | No overlap rule. When a host finds an incompatible runtime, it updates it immediately. | Simpler to state; a newer host never waits on a reboot. |
-| 7 | Every update, whoever starts it, runs `get.sh` from `main`. There is no `omelet self-update` CLI command. | One updater code path, and it works when the installed runtime is too old to hold any updater. |
+| 7 | Every update, whoever starts it, runs `get.sh` from `main`. There is no `eggie self-update` CLI command. | One updater code path, and it works when the installed runtime is too old to hold any updater. |
 | 8 | An update stages everything before touching the installed runtime, and rolls back if `install.sh` fails. | A boot with no network, or a bad release, must leave a working VM working. |
 | 9 | The desktop app updates manually, on one click: download, verify, run the installer, quit. | The users are non-technical; a release page and a download folder lose them. |
 | 10 | Host builds are GitHub releases tagged `host-vX.Y.Z` with a `SHA256SUMS` asset. | The repo already hosts the runtime; no new infrastructure. |
@@ -37,32 +37,32 @@ Goal:
 Added to the seam. Everything already in it is unchanged.
 
 1. **`runtime/release.json`** in every runtime tag: `{"api": N}`. `tests/test_constants_agree.py`
-   holds `N` equal to `runtime/omelet_api/core/constants.API_VERSION`.
-2. **`/opt/omelet/host.json`**: `{"supported_api": [1]}`, written by the host (root) every time it
+   holds `N` equal to `runtime/eggie_api/core/constants.API_VERSION`.
+2. **`/opt/eggie/host.json`**: `{"supported_api": [1]}`, written by the host (root) every time it
    reaches the VM. Only the host writes it; the runtime only reads it.
-3. **`/opt/omelet/runtime.env`**: `OMELET_RUNTIME_URL=…` and `OMELET_RUNTIME_REPO=…`, written by
+3. **`/opt/eggie/runtime.env`**: `EGGIE_RUNTIME_URL=…` and `EGGIE_RUNTIME_REPO=…`, written by
    `get.sh` on every install, so an update started inside the VM uses the source the VM was
    installed from (a fork during development) rather than a hard-coded default. The host's stub
-   exports `OMELET_RUNTIME_URL` to `get.sh`; without it (`curl | bash` on a cloud VM) `get.sh`
+   exports `EGGIE_RUNTIME_URL` to `get.sh`; without it (`curl | bash` on a cloud VM) `get.sh`
    records `$REPO/raw/main/runtime/install/get.sh`.
 4. **`get.sh` inputs**, both optional, so every existing caller behaves as before:
-   - `OMELET_RUNTIME_API=1,2` — accepted API numbers. When set, `resolve_ref` takes the newest
+   - `EGGIE_RUNTIME_API=1,2` — accepted API numbers. When set, `resolve_ref` takes the newest
      `runtime-vN.N.N` tag whose `release.json` has an accepted `api`.
-   - `OMELET_RUNTIME_UPDATE=1` — update mode (section 4).
+   - `EGGIE_RUNTIME_UPDATE=1` — update mode (section 4).
 
-`resolve_ref` precedence becomes: explicit `OMELET_RUNTIME_REF` → installed ref on repair →
-newest tag matching `OMELET_RUNTIME_API` (or newest tag when unset). An explicit ref is installed
+`resolve_ref` precedence becomes: explicit `EGGIE_RUNTIME_REF` → installed ref on repair →
+newest tag matching `EGGIE_RUNTIME_API` (or newest tag when unset). An explicit ref is installed
 as asked, without an API check: pinning is a deliberate override.
 
-The host's `bootstrap()` always passes `OMELET_RUNTIME_API` from `SUPPORTED_API`, so a fresh
+The host's `bootstrap()` always passes `EGGIE_RUNTIME_API` from `SUPPORTED_API`, so a fresh
 install also gets a compatible runtime.
 
 ## 4. The runtime updater (inside the VM)
 
 ### Trigger
 
-`runtime/install/systemd/omelet-update.service`, installed and enabled by `install.sh` next to
-`omelet-github.*`. `Type=exec`, so boot (and `limactl start` or the WSL launch) never waits for
+`runtime/install/systemd/eggie-update.service`, installed and enabled by `install.sh` next to
+`eggie-github.*`. `Type=exec`, so boot (and `limactl start` or the WSL launch) never waits for
 image pulls; `After=network-online.target docker.service`, `Wants=docker.service` only —
 `Wants=network-online.target` would pull in `systemd-networkd-wait-online`, which stalls under WSL,
 so `boot-update.sh` retries its fetch instead; `WantedBy=multi-user.target`. The stack's containers
@@ -72,10 +72,10 @@ The unit runs a small script, `runtime/install/lib/boot-update.sh`:
 
 1. Read `runtime.env` for the URL.
 2. Accepted APIs: `host.json`'s `supported_api`; when that file is missing (a cloud VM, or a host
-   that never connected), the `api` of the installed `/opt/omelet/runtime/release.json`. A VM with
+   that never connected), the `api` of the installed `/opt/eggie/runtime/release.json`. A VM with
    no host therefore gets fixes but never changes API.
 3. Fetch `get.sh` from the URL (downloaded in full before it runs, as the host's stub does) and run
-   it with `OMELET_RUNTIME_UPDATE=1 OMELET_RUNTIME_API=<accepted>`.
+   it with `EGGIE_RUNTIME_UPDATE=1 EGGIE_RUNTIME_API=<accepted>`.
 
 An installed ref that is not a `runtime-vN.N.N` tag (a pinned branch) is left alone.
 
@@ -87,14 +87,14 @@ An installed ref that is not a `runtime-vN.N.N` tag (a pinned branch) is left al
    `docker compose -f <new stack.yml> --profile tunnel pull`. Any failure (no network, GitHub or
    ghcr unreachable, a missing image) exits non-zero; the installed runtime and running stack are
    untouched.
-3. **Swap:** move `/opt/omelet/runtime` to `/opt/omelet/runtime.prev`, move the new tree in, run
+3. **Swap:** move `/opt/eggie/runtime` to `/opt/eggie/runtime.prev`, move the new tree in, run
    `install.sh <new ref>`. On success delete `runtime.prev`.
 4. **Roll back** when `install.sh` fails: restore `runtime.prev` and run its
    `install.sh <old ref>` (its images are still local), then exit non-zero.
 
 ### Locking
 
-All of `get.sh` — install, repair and update — runs under `flock /opt/omelet/update.lock`, so a
+All of `get.sh` — install, repair and update — runs under `flock /opt/eggie/update.lock`, so a
 host-started update and the boot unit cannot interleave.
 
 ### What an update never touches
@@ -104,7 +104,7 @@ Project containers and folders, `state.db`, `api.token`, `github/`, `tunnel/`, `
 
 ### Failures
 
-Logged to the journal (`journalctl -u omelet-update`). The VM stays on its current version and
+Logged to the journal (`journalctl -u eggie-update`). The VM stays on its current version and
 tries again next boot. Nothing is surfaced to the user: the one case the user must see — an
 incompatible runtime — the host handles (section 5).
 
@@ -122,8 +122,8 @@ incompatible runtime — the host handles (section 5).
 
 ### Immediate update on an incompatible runtime
 
-`bootstrap(provider, update=True)` reuses the existing stub and adds `OMELET_RUNTIME_UPDATE=1`
-next to the always-present `OMELET_RUNTIME_API`.
+`bootstrap(provider, update=True)` reuses the existing stub and adds `EGGIE_RUNTIME_UPDATE=1`
+next to the always-present `EGGIE_RUNTIME_API`.
 
 `connect_step`, instead of raising `ApiIncompatible` straight away:
 
@@ -137,13 +137,13 @@ next to the always-present `OMELET_RUNTIME_API`.
 `route_for` gains `("update_runtime", "")` for "runtime installed, `api` not in `SUPPORTED_API`".
 `("home", "wrong")` keeps a missing marker and unknown failures. On `update_runtime` the UI starts
 the update job itself, no click, through `jobs.py` (so it cannot overlap a repair or a restart),
-and shows "Updating Omelet inside the virtual machine" with the stage events the repair job
+and shows "Updating Eggie inside the virtual machine" with the stage events the repair job
 already emits. Success goes back to Home and into the console; failure shows the guest's stderr,
 **Try again** and the existing Diagnose link.
 
 ### Console
 
-`NeedsUpdate.tsx`'s copy becomes "Open the Omelet desktop app — it finishes the update."
+`NeedsUpdate.tsx`'s copy becomes "Open the Eggie desktop app — it finishes the update."
 
 ## 6. Updating the desktop app
 
@@ -151,8 +151,8 @@ already emits. Success goes back to Home and into the console; failure shows the
 
 GitHub releases on the repo, tag `host-vX.Y.Z`, not marked pre-release. Assets:
 
-- `OmeletSetup-X.Y.Z.exe`
-- `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg` (native-arch builds)
+- `EggieSetup-X.Y.Z.exe`
+- `EggieSetup-X.Y.Z-arm64.pkg`, `EggieSetup-X.Y.Z-x86_64.pkg` (native-arch builds)
 - `SHA256SUMS`
 
 `packaging/macos/build.sh` puts the arch into the `.pkg` name.
@@ -160,14 +160,14 @@ GitHub releases on the repo, tag `host-vX.Y.Z`, not marked pre-release. Assets:
 ### Checking
 
 `host/core/app_update.py`, stdlib `urllib` only. Once per app launch on a background thread:
-`GET https://api.github.com/repos/omelet-app/omelet/releases`, keep non-draft,
+`GET https://api.github.com/repos/eggie-io/eggie/releases`, keep non-draft,
 non-pre-release `host-vN.N.N` tags, compare as version tuples, take the highest above
 `APP_VERSION` that has this machine's asset and `SHA256SUMS`. Any failure means "no update" and
 shows nothing. Unauthenticated GitHub allows 60 requests an hour — one per launch is well inside.
 
 ### The button
 
-Home shows "Omelet X.Y.Z is available" with **Update**, disabled while any job runs. Clicking it:
+Home shows "Eggie X.Y.Z is available" with **Update**, disabled while any job runs. Clicking it:
 
 1. downloads the installer into the app's cache with `host/core/download.py` (resumable, SHA-256
    checked against `SHA256SUMS`), showing progress;
@@ -182,12 +182,12 @@ coming back Home from the console.
 
 - `installer_asset(version) -> str` — the asset name for this machine.
 - `launch_installer(path) -> None`:
-  - Windows: `OmeletSetup.exe /SILENT /SUPPRESSMSGBOXES`. Per-user install, so no UAC.
+  - Windows: `EggieSetup.exe /SILENT /SUPPRESSMSGBOXES`. Per-user install, so no UAC.
     `installer.iss` gains: waiting for the running app to exit before copying files, and a `[Run]`
-    entry that relaunches the app after a silent install (the existing "Set up Omelet now" entry is
+    entry that relaunches the app after a silent install (the existing "Set up Eggie now" entry is
     `skipifsilent`).
   - macOS: `open <pkg>`. Installer.app asks for the admin password as a first install does; the
-    user reopens Omelet.
+    user reopens Eggie.
 
 ### After the update
 
@@ -201,7 +201,7 @@ immediate update runs.
 - Automatic host updates, "skip this version", release notes in the app.
 - A periodic in-VM check or a "restart to update" action.
 - Surfacing failed boot updates in the console.
-- An `omelet self-update` CLI command.
+- An `eggie self-update` CLI command.
 - While a boot update recreates the stack, an open desktop app can briefly show the unreachable
   screen; its Restart button would interrupt the update (the next boot redoes it).
 
@@ -211,9 +211,9 @@ Automated, where a wrong result is plausible:
 
 - `resolve_ref` (sourced from `get.sh`, fake `git` and `curl` on `PATH`): newest compatible tag
   wins over a newer incompatible one; tags without `release.json` are skipped; nothing compatible
-  is a clear error; explicit ref and repair still win; unset `OMELET_RUNTIME_API` behaves as today.
+  is a clear error; explicit ref and repair still win; unset `EGGIE_RUNTIME_API` behaves as today.
 - `get.sh` update mode against fakes: same ref exits 0 and changes nothing; a failed pull leaves
-  `/opt/omelet/runtime` untouched; a failed `install.sh` restores `runtime.prev` and re-runs the
+  `/opt/eggie/runtime` untouched; a failed `install.sh` restores `runtime.prev` and re-runs the
   old ref.
 - `boot-update.sh`: accepted APIs come from `host.json`, else from the installed `release.json`.
 - `connect_step`: incompatible → exactly one `bootstrap(update=True)`; still incompatible →
@@ -222,7 +222,7 @@ Automated, where a wrong result is plausible:
 - `app_update` against a realistic GitHub response: ignores `runtime-v*`, drafts, pre-releases
   and older versions; `0.10.0 > 0.9.0`; no asset for this platform → no update; failed or empty
   response → no update.
-- `bootstrap` argv: `OMELET_RUNTIME_API` always; `update=True` adds `OMELET_RUNTIME_UPDATE=1`.
+- `bootstrap` argv: `EGGIE_RUNTIME_API` always; `update=True` adds `EGGIE_RUNTIME_UPDATE=1`.
 - `test_constants_agree.py`: `release.json`'s `api` equals `API_VERSION`.
 
 Left to manual cases in `docs/release-testing.md` (thin OS wrappers): the systemd unit,

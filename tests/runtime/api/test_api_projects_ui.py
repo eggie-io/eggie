@@ -1,7 +1,7 @@
 import threading
 import time
 
-from omelet_api.core.exec import Completed
+from eggie_api.core.exec import Completed
 from tests.runtime.api.conftest import (COMPOSE_MALFORMED, _create,
                                   _run_to_completion, _write_compose)
 

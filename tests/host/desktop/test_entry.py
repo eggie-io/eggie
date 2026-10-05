@@ -107,7 +107,7 @@ def test_a_missing_webview_runtime_is_a_sentence_not_a_traceback(tmp_path, capsy
 
 def test_the_fallback_names_the_headless_command():
     # Without this the user is told the app is broken and nothing else.
-    assert "omelet setup --headless" in WEBVIEW_MISSING
+    assert "eggie setup --headless" in WEBVIEW_MISSING
 
 
 def test_a_working_window_starts_the_loop_and_returns_zero(tmp_path):
@@ -230,9 +230,9 @@ def test_the_tray_menu_carries_open_settings_and_quit(tmp_path):
     assert set(kwargs) == {"icon", "on_open", "on_settings", "on_quit"}
     assert kwargs["icon"].is_file()
     kwargs["on_settings"]()
-    assert window.evaluated[-1] == 'window.omelet.route("settings")'
+    assert window.evaluated[-1] == 'window.eggie.route("settings")'
     kwargs["on_quit"]()
-    assert window.evaluated[-1] == 'window.omelet.route("quit")'
+    assert window.evaluated[-1] == 'window.eggie.route("quit")'
 
 
 def test_the_tray_stops_when_the_loop_ends(tmp_path):

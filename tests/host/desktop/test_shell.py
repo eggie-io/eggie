@@ -77,11 +77,11 @@ def test_events_reach_the_local_page_as_one_json_argument():
     window = FakeWindow(LOCAL)
     Shell(window).push({"kind": "vm", "message": 'a "quote"'})
     assert window.evaluated == [
-        f"window.omelet.on({json.dumps({'kind': 'vm', 'message': 'a \"quote\"'})})"]
+        f"window.eggie.on({json.dumps({'kind': 'vm', 'message': 'a \"quote\"'})})"]
 
 
 def test_events_never_reach_the_console(tmp_path):
-    # A console page can define its own window.omelet.on and read job events.
+    # A console page can define its own window.eggie.on and read job events.
     window = FakeWindow(LOCAL)
     shell = Shell(window)
     _enter_console(tmp_path, window, shell)

@@ -1,7 +1,7 @@
-# Omelet web UI — decisions, and part A: agent prerequisites
+# Eggie web UI — decisions, and part A: agent prerequisites
 
 Date: 2026-09-21
-Design board: `Omelet Web UI.dc.html` (claude.ai/design project `5a77e605`);
+Design board: `Eggie Web UI.dc.html` (claude.ai/design project `5a77e605`);
 snapshot and frame-to-part map in `docs/design/`
 
 The web UI is the page at `http://localhost:39080` a non-technical user manages
@@ -15,8 +15,8 @@ Service Layer is out of scope; so is creating a project from GitHub.
 
 | Part | Items | Contents |
 |---|---|---|
-| A | 18–22 | Agent routes the UI cannot work without; host "Open Omelet" handoff. This document. |
-| B | 1–3 | `web/` workspace, UI kit from scratch, the `omelet-web` image, app shell at 880 and 1200 px, sign-in handoff and the "lost track of you" screen. |
+| A | 18–22 | Agent routes the UI cannot work without; host "Open Eggie" handoff. This document. |
+| B | 1–3 | `web/` workspace, UI kit from scratch, the `eggie-web` image, app shell at 880 and 1200 px, sign-in handoff and the "lost track of you" screen. |
 | C | 4–9, 13–17 | Projects list, discovered band, create, detail, starting, something's wrong, Analyze, public address, delete, sync marker. |
 | D | 10–12 | Files, upload destination, resumable queue, out-of-space states. |
 
@@ -27,7 +27,7 @@ Service Layer is out of scope; so is creating a project from GitHub.
 to its own repository, so the kit is shared later from there, not across this
 repo's host/guest line.
 
-**Serving.** A separate `omelet-web` image (nginx, static build only, no secrets,
+**Serving.** A separate `eggie-web` image (nginx, static build only, no secrets,
 no logic). It is released under the same `engine-vX.Y.Z` tag as the agent and
 pinned next to it in `engine/stack.yml`, so the two always install as a pair;
 `tests/test_constants_agree.py` gains the web tag. On load the app checks
@@ -38,7 +38,7 @@ mismatch.
 
 - Uploads stop when the page closes. Copy that says "uploads carry on if you
   close this page" is rewritten to "pick up where it stopped when you're back".
-- No `omelet://` URL scheme. "Open the Omelet app" becomes an instruction to
+- No `eggie://` URL scheme. "Open the Eggie app" becomes an instruction to
   switch to the desktop app, not a link.
 - The sync marker is built with both variants but hidden until sync exists.
 - The delete confirmation lists real container and volume names, not
@@ -66,12 +66,12 @@ different auth dependency. No handler is duplicated.
 
 **Handoff.**
 
-1. The desktop's "Open Omelet" calls `POST /sessions/handoff` (bearer) and gets
+1. The desktop's "Open Eggie" calls `POST /sessions/handoff` (bearer) and gets
    a one-time code: 32 random bytes, 60-second lifetime, held in memory only.
 2. The host opens `http://localhost:39080/#handoff=<code>`. The fragment never
    reaches a server log or a `Referer`.
 3. The page posts it to `POST /api/session`. The agent consumes the code and
-   sets `omelet_session` — `HttpOnly`, `SameSite=Strict`, `Path=/api`, no
+   sets `eggie_session` — `HttpOnly`, `SameSite=Strict`, `Path=/api`, no
    `Secure` (plain http on loopback).
 4. Sessions live in sqlite as a SHA-256 of the id, so they survive an agent
    restart. Seven days, sliding on use: once less than `SESSION_TTL - 1h`
@@ -97,7 +97,7 @@ accept a bearer token.
 **Errors the UI renders.** 401 `not_signed_in` and `session_expired` → the
 "lost track of you" screen. Code consumed or expired → 401 `handoff_invalid`.
 
-**Host.** `host/desktop/api.py`'s "Open Omelet" asks `AgentClient` for a handoff
+**Host.** `host/desktop/api.py`'s "Open Eggie" asks `AgentClient` for a handoff
 code, then opens the URL. If the agent predates the route (404), it opens
 `http://localhost:39080` bare, as today. The route is additive: `API_VERSION`
 stays 1, `SUPPORTED_API` is unchanged.
@@ -184,7 +184,7 @@ A cut-down tus: the server's only state per upload is how many bytes it holds.
   507 `disk_full` with that offset. The same PATCH works once there is room.
 - Completion (offset reaches size): `os.replace` into the project, under the
   project lock for that step only — never for the transfer.
-- Staging lives at `/opt/omelet/uploads/<upload_id>/` (`data` + `meta.json`),
+- Staging lives at `/opt/eggie/uploads/<upload_id>/` (`data` + `meta.json`),
   outside `projects_root`: a partial file never appears in a listing, in the
   reconcile scan, or to the coding agent. Uploads untouched for seven days are
   swept at agent start and on each list.
@@ -246,7 +246,7 @@ its own spec; this is the input, not the design.
   fonts bundled locally since the page must work offline, buttons, state badge,
   sync marker, prompt card, modal, row card, progress bar, collapsible) and
   `apps/console`.
-- `omelet-web` nginx image with an `index.html` fallback; `web` service in
+- `eggie-web` nginx image with an `index.html` fallback; `web` service in
   `engine/stack.yml` with a Traefik catch-all for `Host(localhost) ||
   Host(127.0.0.1)` below the agent's `/api` router (priority 1000); the web tag
   joins `tests/test_constants_agree.py` and the release steps in `CLAUDE.md`.

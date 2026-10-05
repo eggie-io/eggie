@@ -3,7 +3,7 @@
 // The one global Python reaches, and the one place a pushed event lands.
 // Handlers register by event kind; an unknown kind is ignored rather than
 // thrown, so an older UI paired with a newer bridge degrades quietly.
-window.omelet = {
+window.eggie = {
   handlers: {},
   on(event) {
     const handler = this.handlers[event.kind];
@@ -137,7 +137,7 @@ ACTIONS['app-update'] = async () => {
   show('app-update:running', { available: started.version });
 };
 
-window.omelet.handlers.app_update = (event) => {
+window.eggie.handlers.app_update = (event) => {
   // The launch-time check usually lands after Home has drawn. Only Home is
   // redrawn: refreshing elsewhere would throw the user off their screen.
   if (event.type === 'available') {
@@ -177,8 +177,8 @@ ACTIONS['start-install'] = async (node, data) => {
   });
   // "Step N of M" comes from the list the factory returned, never a literal:
   // seven on Lima, nine on WSL2.
-  window.omelet.total = started.rows.length;
-  window.omelet.done = 0;
+  window.eggie.total = started.rows.length;
+  window.eggie.done = 0;
 };
 
 ACTIONS['reboot-now'] = () => api().reboot_now();
@@ -188,7 +188,7 @@ const STATE_WORDS = {
   failed: "Didn't work", reboot: 'Needs restart',
 };
 
-window.omelet.handlers.install = (event) => {
+window.eggie.handlers.install = (event) => {
   if (event.type === 'step') {
     const li = rowsByName[event.step];
     if (li) {
@@ -200,15 +200,15 @@ window.omelet.handlers.install = (event) => {
     // 'done' can never read "Step 8 of 7" before the terminal 'done' event
     // (which follows immediately) swaps the screen away.
     if (event.status === 'done' || event.status === 'skipped') {
-      window.omelet.done += 1;
+      window.eggie.done += 1;
       const counter = document.querySelector('[data-field="counter"]');
       if (counter) {
-        const step = Math.min(window.omelet.done + 1, window.omelet.total);
-        counter.textContent = `Step ${step} of ${window.omelet.total}`;
+        const step = Math.min(window.eggie.done + 1, window.eggie.total);
+        counter.textContent = `Step ${step} of ${window.eggie.total}`;
       }
       const bar = document.querySelector('[data-field="progress"]');
       if (bar) {
-        bar.style.width = `${Math.round((window.omelet.done / window.omelet.total) * 100)}%`;
+        bar.style.width = `${Math.round((window.eggie.done / window.eggie.total) * 100)}%`;
       }
     }
     // fraction is non-null only on the download step: a separate footer line
@@ -343,7 +343,7 @@ const ROUTES = {
   'quit': () => fromTray(() => startQuit(false)),
 };
 
-window.omelet.route = (name) => {
+window.eggie.route = (name) => {
   const go = ROUTES[name];
   if (go) go();
 };
@@ -384,7 +384,7 @@ ACTIONS['do-import'] = async () => {
   show('import:progress', { name: started.name, counter: '' });
 };
 
-window.omelet.handlers.import = (event) => {
+window.eggie.handlers.import = (event) => {
   if (event.type === 'progress') {
     const percent = event.total ? Math.round((event.done / event.total) * 100) : 0;
     const bar = document.querySelector('[data-field="fraction"]');
@@ -417,23 +417,23 @@ ACTIONS['do-uninstall'] = async () => {
   await api().start_uninstall(purge);
 };
 
-window.omelet.handlers.vm = (event) => {
+window.eggie.handlers.vm = (event) => {
   if (event.type === 'progress') return;
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
-window.omelet.handlers.background_start = () => {
+window.eggie.handlers.background_start = () => {
   const screen = document.getElementById('screen').dataset.screen || '';
   if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
 };
 // Opening from the tray: a page drawn while hidden may be stale. Screens
 // holding user input or a job are left alone.
-window.omelet.handlers.window = (event) => {
+window.eggie.handlers.window = (event) => {
   if (event.type !== 'shown') return;
   const screen = document.getElementById('screen').dataset.screen || '';
   if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
 };
-window.omelet.handlers.repair = (event) => {
+window.eggie.handlers.repair = (event) => {
   if (event.type === 'progress') return;
   // 'stage' events (bootstrap, connect) mark progress mid-repair, not the
   // end of the job -- refreshing on one re-renders the screen as though
@@ -458,7 +458,7 @@ async function startRuntimeUpdate() {
 ACTIONS['retry-runtime-update'] = () => startRuntimeUpdate();
 JOB_ACTIONS.add('retry-runtime-update');
 
-window.omelet.handlers.runtime_update = (event) => {
+window.eggie.handlers.runtime_update = (event) => {
   if (event.type === 'progress' || event.type === 'stage') return;
   if (event.type === 'crashed') {
     runtimeUpdateError = event.message;
@@ -467,14 +467,14 @@ window.omelet.handlers.runtime_update = (event) => {
   refresh();
 };
 
-window.omelet.handlers.recover = (event) => {
+window.eggie.handlers.recover = (event) => {
   // The wider restart stops more than this machine, so it is offered, never
   // taken; if even that fails, the probe lands back on the unresponsive screen.
   if (event.type === 'unresponsive' && !event.everything) return show('recover-confirm', event);
   if (event.type === 'unresponsive' || event.type === 'crashed') showNotice(event.message);
   refresh();
 };
-window.omelet.handlers.uninstall = (event) => {
+window.eggie.handlers.uninstall = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
@@ -491,7 +491,7 @@ async function refresh() {
     throw error;
   }
   if (generation !== screenGeneration) return;
-  document.title = 'Omelet';
+  document.title = 'Eggie';
   // A window RunOnce reopened by itself must continue setup, not show Home.
   if (home.resumed) return ACTIONS['start-install'](null, home);
   if (home.first_run) return show('first-run', home);

@@ -43,7 +43,7 @@ export function AgentPicker({ base }: { base: AgentBase }) {
         <h1 className={s.title}>{welcome ? "Which coding agent do you use?" : "Which agent do you use?"}</h1>
         <p className={s.sub}>
           {welcome
-            ? "Omelet works with the agent you already have. Pick it and we'll connect it to your kitchen. It takes about two minutes."
+            ? "Eggie works with the agent you already have. Pick it and we'll connect it to your kitchen. It takes about two minutes."
             : "Pick one and we'll walk you through it. Takes about two minutes."}
         </p>
       </div>

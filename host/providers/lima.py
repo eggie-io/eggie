@@ -2,14 +2,14 @@ from __future__ import annotations
 
 # CONFIRMED ONCE, then still mostly UNVERIFIED. On 2026-09-15, on macOS
 # 26.6.2 (build 25G83) arm64 with Lima 2.2.0, a VM created from this
-# provider's `create()` against the pre-33571da revision of omelet.yaml
+# provider's `create()` against the pre-33571da revision of eggie.yaml
 # booted under `vz`, ran the full engine bootstrap, and answered both
 # declared portForwards (39080, 39099) -- confirmed after the fact, not by a
 # controlled session anyone recorded as it happened. See
 # docs/macos-status.md (it points at the full command trail in git history).
 # Still unrun anywhere: `forward()`/`forwards()` and the ssh control master
 # they assume, `stop()`/`destroy()`, the uninstall path, whether
-# omelet.yaml's `ssh.localPort` is honoured by Lima at all (the one VM
+# eggie.yaml's `ssh.localPort` is honoured by Lima at all (the one VM
 # inspected predates that field), the x86_64 image, and whether Rosetta is
 # functional inside the guest -- `rosetta.enabled: true` only proved not to
 # block boot.
@@ -25,7 +25,7 @@ from ..core.provider import Access, AccessField, Completed, Diagnosis, CheckResu
 
 LOOPBACK = "127.0.0.1"
 
-# The value omelet.yaml's `ssh.localPort` requests -- not confirmed as what
+# The value eggie.yaml's `ssh.localPort` requests -- not confirmed as what
 # Lima actually binds. Not shown to the user for that reason (see
 # _PORT_UNCONFIRMED below): the one VM this project has inspected predates
 # the field, so whether Lima honours it is still an open question in
@@ -63,7 +63,7 @@ def parse_ssh_config(text: str) -> dict[str, str]:
 
 # Host is a fact this project's own code guarantees, by construction --
 # portForwards always binds it to LOOPBACK, and that much needs no VM to
-# check. Port is different: Omelet requests it via omelet.yaml's
+# check. Port is different: Eggie requests it via eggie.yaml's
 # `ssh.localPort`, but no run of this project has ever confirmed Lima honours
 # that field rather than picking its own free port -- the one VM inspected so
 # far predates the field entirely (see docs/macos-status.md).
@@ -72,7 +72,7 @@ def parse_ssh_config(text: str) -> dict[str, str]:
 # `_config/user`), and a host username Lima sanitizes when provisioning the
 # guest (spaces, uppercase, unicode) makes the guess wrong. The fallback note
 # below must say which kind of default each missing field is, not lump them
-# together as "the values Omelet asks Lima for".
+# together as "the values Eggie asks Lima for".
 _CONFIGURED_LABELS = ("Host",)
 _REQUESTED_LABELS = ("Port",)
 _GUESSED_LABELS = ("User", "Identity file")
@@ -103,10 +103,10 @@ def _fallback_note(missing: list[str], *, config_exists: bool) -> str:
     clauses = []
     if configured:
         verb = "is" if len(configured) == 1 else "are"
-        clauses.append(f"{_join_and(configured)} {verb} what Omelet asks Lima for")
+        clauses.append(f"{_join_and(configured)} {verb} what Eggie asks Lima for")
     if requested:
         verb = "is" if len(requested) == 1 else "are"
-        clauses.append(f"{_join_and(requested)} {verb} requested in omelet.yaml "
+        clauses.append(f"{_join_and(requested)} {verb} requested in eggie.yaml "
                        "but not confirmed until Lima writes its own ssh.config")
     if guessed:
         verb = "is" if len(guessed) == 1 else "are"
@@ -131,7 +131,7 @@ def default_data_root() -> Path:
     the download cache and the managed Lima. The single literal -- the provider
     factory's default_install_dir() is derived from it, so the two cannot
     disagree about where setup put limactl."""
-    return Path.home() / ".local" / "share" / "omelet"
+    return Path.home() / ".local" / "share" / "eggie"
 
 
 def find_limactl(name: str = "limactl", *, which=shutil.which,
@@ -163,7 +163,7 @@ def _default_runner(argv):
 
 
 class LimaProvider:
-    def __init__(self, name="omelet-vm", config: Path | None = None,
+    def __init__(self, name="eggie-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
                  mac_ver=None, machine=None, login_items=None,
@@ -174,7 +174,7 @@ class LimaProvider:
         self._run = runner
         self.lima_home = Path(lima_home) if lima_home else Path.home() / ".lima"
         self.data_root = Path(data_root) if data_root else default_data_root()
-        # The user's own ~/.ssh, where setup adds the `omelet` host. Injectable
+        # The user's own ~/.ssh, where setup adds the `eggie` host. Injectable
         # so no test can edit the real one.
         self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
         # Injectable for the same reason Wsl2Provider's `facts` is: platform.mac_ver()
@@ -210,7 +210,7 @@ class LimaProvider:
                            + (f": {detail}" if detail else "."))
 
     def is_supported(self) -> Diagnosis:
-        """What `omelet doctor` prints: the whole truth about this machine.
+        """What `eggie doctor` prints: the whole truth about this machine.
 
         Wider than preflight() on purpose, and the reverse of the WSL2
         provider, where preflight is the richer of the two. Setup installs Lima
@@ -237,14 +237,14 @@ class LimaProvider:
         present = os.access(self.limactl, os.X_OK) or which(self.limactl) is not None
         if not present:
             return CheckResult(label, False,
-                               "run Omelet setup, which installs Lima for you")
+                               "run Eggie setup, which installs Lima for you")
         result = self._spawn([self.limactl, "--version"])
         output = f"{result.stdout} {result.stderr}"
         matches = result.ok and lima_install.LIMA_VERSION in output
         return CheckResult(
             label, matches,
             None if matches else
-            "a different Lima is on this Mac; run Omelet setup, which "
+            "a different Lima is on this Mac; run Eggie setup, which "
             "installs the version this app was built for")
 
     def _os_checks(self):
@@ -261,12 +261,12 @@ class LimaProvider:
         # that parses AND reads below 13 is a dead end.
         parsed = int(head) if head.isdigit() and release != "10.16" else None
         ok = parsed is None or parsed >= 13
-        # vz, which omelet.yaml asks for, is macOS 13+. The .pkg refuses to
+        # vz, which eggie.yaml asks for, is macOS 13+. The .pkg refuses to
         # install below that; a source checkout has nothing stopping it.
         yield CheckResult(
             f"macOS 13 or newer (found {release or 'unknown'})", ok,
             None if ok else
-            "Omelet needs macOS 13 or newer; this Mac cannot run it")
+            "Eggie needs macOS 13 or newer; this Mac cannot run it")
 
     def exists(self) -> bool:
         out = self._cmd(["list", "--quiet"]).stdout
@@ -310,7 +310,7 @@ class LimaProvider:
             if address:
                 ssh_alias.forget(self.ssh_dir / "known_hosts", address, self._spawn)
         except (OSError, ValueError):
-            pass    # a stale `omelet` host is harmless; the VM is what mattered
+            pass    # a stale `eggie` host is harmless; the VM is what mattered
 
     def recover(self, *, everything: bool = False) -> None:
         # Nothing outside this instance to restart, so `everything` is the same
@@ -357,7 +357,7 @@ class LimaProvider:
         ssh_alias.trust(self.ssh_dir / "known_hosts", name, keys.stdout, self._spawn)
 
     def ssh_shortcut(self):
-        """The setup step that adds `Host omelet` to ~/.ssh/config and the
+        """The setup step that adds `Host eggie` to ~/.ssh/config and the
         VM's host keys to known_hosts -- see ssh_alias.py. Rewritten on every
         run: the values come from the ssh.config Lima writes on each start."""
         def write() -> str:
@@ -380,7 +380,7 @@ class LimaProvider:
 
     def forward(self, guest_port: int, host_port: int) -> None:
         if guest_port == host_port:
-            # Declared in omelet.yaml's portForwards and set up when the VM
+            # Declared in eggie.yaml's portForwards and set up when the VM
             # starts; asking for it again would only fail as a duplicate.
             return
         # `-O forward` fails on a tunnel that already exists, and says so only
@@ -443,7 +443,7 @@ class LimaProvider:
         return Access(
             headline="Connect a coding agent",
             summary=("Your coding agent runs inside the virtual machine, where "
-                     "Docker and the omelet command already are. Open a shell "
+                     "Docker and the eggie command already are. Open a shell "
                      f"there with the command below, or {remote}."),
             command=command,
             fields=fields,
@@ -483,7 +483,7 @@ class LimaProvider:
 
     def single_instance(self, on_show, *, announce: bool) -> bool:
         """LaunchServices keeps one instance of a .app; a second open arrives
-        as the reopen event, which the tray turns into Open Omelet."""
+        as the reopen event, which the tray turns into Open Eggie."""
         return True
 
     def runtime(self) -> Runtime | None:
@@ -522,7 +522,7 @@ class LimaProvider:
 
     def installer_asset(self, version: str) -> str:
         # The .pkg is built native-arch: an arm64 package refuses an Intel Mac.
-        return f"OmeletSetup-{version}-{self._machine()}.pkg"
+        return f"EggieSetup-{version}-{self._machine()}.pkg"
 
     def launch_installer(self, path: Path) -> None:
         self._run(["open", str(path)])
@@ -534,7 +534,7 @@ class LimaProvider:
     def image(self):
         """No rootfs for the host to fetch.
 
-        `images:` in omelet.yaml names the guest image and `limactl start`
+        `images:` in eggie.yaml names the guest image and `limactl start`
         downloads and caches it, so the host has nothing to download and the
         install list drops its download step. None is the answer, not a URL
         nobody reads -- see `default_steps`.

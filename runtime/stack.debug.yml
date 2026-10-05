@@ -2,13 +2,13 @@
 # publishes the debugger port. The base stack.yml is unchanged -- that file
 # has to stay identical to what runs in production.
 #
-#   docker compose -f /opt/omelet/stack.yml -f /opt/omelet/stack.debug.yml up -d
+#   docker compose -f /opt/eggie/stack.yml -f /opt/eggie/stack.debug.yml up -d
 #
 # `ports` is appended to the base list, so 39099 stays published alongside.
 # WSL2's localhostForwarding surfaces 5678 on the Windows host at
 # 127.0.0.1:5678, which is what launch.json's attach config connects to.
 services:
   api:
-    image: omelet-api:debug
+    image: eggie-api:debug
     ports:
       - "5678:5678"

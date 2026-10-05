@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>Omelet @VERSION@</title>
-    <organization>dev.omelet</organization>
+    <title>Eggie @VERSION@</title>
+    <organization>dev.eggie</organization>
     <welcome file="welcome.html" mime-type="text/html"/>
     <conclusion file="conclusion.html" mime-type="text/html"/>
 
@@ -9,7 +9,7 @@
          must refuse an Intel Mac rather than install binaries it cannot run. -->
     <options customize="never" require-scripts="true" hostArchitectures="@ARCH@"/>
 
-    <!-- Lima is asked for vmType: vz in host/providers/omelet.yaml, which is
+    <!-- Lima is asked for vmType: vz in host/providers/eggie.yaml, which is
          Apple's own virtualization framework and needs macOS 13. -->
     <volume-check>
         <allowed-os-versions>
@@ -19,12 +19,12 @@
 
     <choices-outline>
         <line choice="default">
-            <line choice="dev.omelet.app"/>
+            <line choice="io.eggie.app"/>
         </line>
     </choices-outline>
     <choice id="default"/>
-    <choice id="dev.omelet.app" visible="false">
-        <pkg-ref id="dev.omelet.app"/>
+    <choice id="io.eggie.app" visible="false">
+        <pkg-ref id="io.eggie.app"/>
     </choice>
-    <pkg-ref id="dev.omelet.app" version="@VERSION@">Omelet-component.pkg</pkg-ref>
+    <pkg-ref id="io.eggie.app" version="@VERSION@">Eggie-component.pkg</pkg-ref>
 </installer-gui-script>

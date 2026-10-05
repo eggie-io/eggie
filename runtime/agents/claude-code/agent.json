@@ -22,7 +22,7 @@
       "steps": [
         {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen"},
         {"title": "Switch to WSL", "body": "Open the environment menu next to the prompt box and pick WSL.", "alt": "Screenshot · environment menu with WSL"},
-        {"title": "Pick omelet-vm", "body": "Choose the omelet-vm machine from the list.", "alt": "Screenshot · WSL machine list with omelet-vm"},
+        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine from the list.", "alt": "Screenshot · WSL machine list with eggie-vm"},
         {"title": "Start prompting", "body": "Pick the projects folder and tell it what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen"}
       ]
     }

@@ -1,0 +1,8 @@
+[Unit]
+Description=Apply Eggie's GitHub connection when it changes
+
+[Path]
+PathChanged=/opt/eggie/github/desired.json
+
+[Install]
+WantedBy=multi-user.target

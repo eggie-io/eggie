@@ -13,7 +13,7 @@
      the only origin a script may come from. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self';">
-<title>Omelet</title>
+<title>Eggie</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -36,9 +36,9 @@
   <section class="pad centered">
     <div class="title-row">
       <span class="egg" aria-hidden="true"></span>
-      <h1 class="display">Welcome to Omelet</h1>
+      <h1 class="display">Welcome to Eggie</h1>
     </div>
-    <p class="lede">Omelet sets up a tiny private computer inside your computer,
+    <p class="lede">Eggie sets up a tiny private computer inside your computer,
       so you can build real, working apps just by chatting with it.</p>
     <ol class="steps">
       <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
@@ -66,12 +66,12 @@
       </div>
     </div>
     <div class="update-note" data-when="app_update">
-      <p><b>Omelet <span data-field="app_update"></span> is ready</b>
+      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
         <span>A fresh version of the app is waiting.</span></p>
       <button class="btn-update" data-action="app-update">Update now</button>
     </div>
     <div class="row">
-      <button class="btn-primary" data-action="enter-console">Open Omelet</button>
+      <button class="btn-primary" data-action="enter-console">Open Eggie</button>
       <button class="btn-secondary" data-action="stop-vm">Stop the kitchen</button>
     </div>
     <footer class="odds">
@@ -99,13 +99,13 @@
       </div>
     </div>
     <div class="update-note" data-when="app_update">
-      <p><b>Omelet <span data-field="app_update"></span> is ready</b>
+      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
         <span>A fresh version of the app is waiting.</span></p>
       <button class="btn-update" data-action="app-update">Update now</button>
     </div>
     <div class="row">
       <button class="btn-primary" data-action="start-vm">Start the kitchen</button>
-      <button class="btn-secondary" disabled>Open Omelet</button>
+      <button class="btn-secondary" disabled>Open Eggie</button>
       <span class="hint">Opens by itself once the pan is hot.</span>
     </div>
     <footer class="odds">
@@ -134,7 +134,7 @@
       </div>
     </div>
     <div class="update-note" data-when="app_update">
-      <p><b>Omelet <span data-field="app_update"></span> is ready</b>
+      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
         <span>A fresh version of the app is waiting.</span></p>
       <button class="btn-update" data-action="app-update">Update now</button>
     </div>
@@ -166,7 +166,7 @@
       </div>
     </div>
     <div class="update-note" data-when="app_update">
-      <p><b>Omelet <span data-field="app_update"></span> is ready</b>
+      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
         <span>A fresh version of the app is waiting.</span></p>
       <button class="btn-update" data-action="app-update">Update now</button>
     </div>
@@ -194,7 +194,7 @@
   <section class="pad">
     <span class="badge badge-warm">Running, but quiet</span>
     <h1 class="display">Nobody's answering the door</h1>
-    <p class="lede">Your machine is on — we can see it humming — but Omelet can't
+    <p class="lede">Your machine is on — we can see it humming — but Eggie can't
       get a word in. Nine times out of ten a retry sorts it out. Nothing is lost
       either way.</p>
     <div class="row">
@@ -226,7 +226,7 @@
 <template data-screen="runtime-update:running">
   <section class="pad centered">
     <span class="badge badge-warm">Updating</span>
-    <h1 class="display">Updating Omelet inside the kitchen</h1>
+    <h1 class="display">Updating Eggie inside the kitchen</h1>
     <p class="lede">This app is newer than what runs inside your machine, so that part
       is catching up. It takes a minute or two. Your projects stay put.</p>
   </section>
@@ -236,7 +236,7 @@
   <section class="pad">
     <span class="badge badge-bad">Update didn't finish</span>
     <h1 class="display">The kitchen couldn't catch up</h1>
-    <p class="lede">Omelet couldn't update what runs inside your machine, so this app
+    <p class="lede">Eggie couldn't update what runs inside your machine, so this app
       can't talk to it yet. Your projects are safe. Check your internet connection and try again.</p>
     <div class="row">
       <button class="btn-primary" data-action="retry-runtime-update">Try again</button>
@@ -264,7 +264,7 @@
 <template data-screen="updates">
   <section class="pad centered">
     <div data-when="available">
-      <h2 class="title">Omelet <span data-field="available"></span> is ready</h2>
+      <h2 class="title">Eggie <span data-field="available"></span> is ready</h2>
       <p class="lede">Updating closes this window, installs the new version and opens it again.</p>
       <div class="row"><button class="btn-primary" data-action="app-update">Update</button>
         <button class="btn-secondary" data-action="go-home">Not now</button></div>
@@ -280,7 +280,7 @@
 
 <template data-screen="app-update:running">
   <section class="pad centered">
-    <h2 class="title">Downloading Omelet <span data-field="available"></span></h2>
+    <h2 class="title">Downloading Eggie <span data-field="available"></span></h2>
     <div class="bar"><span data-field="fraction"></span></div>
     <p class="hint">The window closes when the installer starts.</p>
   </section>
@@ -291,9 +291,9 @@
     <h2 class="title">Settings</h2>
     <label class="setting">
       <input type="checkbox" data-setting="autostart" data-action="toggle-autostart">
-      <span>Open Omelet when I sign in</span>
+      <span>Open Eggie when I sign in</span>
     </label>
-    <p class="hint" data-when="unavailable">Only an installed Omelet can open when you sign in.</p>
+    <p class="hint" data-when="unavailable">Only an installed Eggie can open when you sign in.</p>
     <p class="hint" data-field="error"></p>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
   </section>
@@ -301,7 +301,7 @@
 
 <template data-screen="quit-confirm">
   <section class="pad centered">
-    <h2 class="title">Omelet is still working</h2>
+    <h2 class="title">Eggie is still working</h2>
     <p class="lede">Quitting now stops what it is doing and turns the kitchen off.</p>
     <div class="row">
       <button class="btn-primary" data-action="quit-anyway">Quit anyway</button>
@@ -312,7 +312,7 @@
 
 <template data-screen="quitting">
   <section class="pad centered">
-    <h2 class="title">Stopping Omelet…</h2>
+    <h2 class="title">Stopping Eggie…</h2>
     <p class="lede">Turning the kitchen off. The window closes by itself.</p>
   </section>
 </template>
@@ -429,11 +429,11 @@
       Your own files, outside the kitchen, are untouched.</p>
     <label class="choice"><input type="checkbox" name="purge">
       <b>Also delete downloads and settings</b>
-      <span>Frees the disk space Omelet used. You'd start from scratch next time.</span></label>
+      <span>Frees the disk space Eggie used. You'd start from scratch next time.</span></label>
     <p class="warn"><b>There's no undo.</b> Any project the cook made in there
       goes with it.</p>
     <div class="row">
-      <button class="btn-danger" data-action="do-uninstall">Remove Omelet</button>
+      <button class="btn-danger" data-action="do-uninstall">Remove Eggie</button>
       <button class="btn-secondary" data-action="go-home">Keep it</button>
     </div>
   </section>

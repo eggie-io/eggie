@@ -1,4 +1,4 @@
-import { Button, Modal, PromptCard } from "@omelet/ui";
+import { Button, Modal, PromptCard } from "@eggie/ui";
 import { ANALYZE_PROMPT } from "../../projects/prompts";
 import s from "./ProjectPage.module.css";
 
@@ -6,7 +6,7 @@ export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal open={open} onClose={onClose} title="Ask for a once-over">
       <p className={s.modalSub}>
-        Omelet doesn't read your code — your coding agent does. Here's the ask, written so you get a plain-language
+        Eggie doesn't read your code — your coding agent does. Here's the ask, written so you get a plain-language
         answer back.
       </p>
       <PromptCard

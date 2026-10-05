@@ -1,4 +1,4 @@
-"""One running Omelet per user.
+"""One running Eggie per user.
 
 A second launch (Start menu, the login entry, the post-update relaunch) hands
 the first one a "show" and exits instead of opening a second tray icon.
@@ -68,5 +68,5 @@ def _listen(address, family, on_show) -> bool:
                 # instead of spinning a core.
                 time.sleep(0.5)
 
-    threading.Thread(target=serve, daemon=True, name="omelet-instance").start()
+    threading.Thread(target=serve, daemon=True, name="eggie-instance").start()
     return True

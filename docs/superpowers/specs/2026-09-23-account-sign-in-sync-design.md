@@ -5,8 +5,8 @@ Status: proposed
 
 ## 1. Problem
 
-Omelet has no notion of a user. Before someone works with the projects console
-they must be signed in to the Omelet service (`https://omelet.bridgie.chat/api`,
+Eggie has no notion of a user. Before someone works with the projects console
+they must be signed in to the Eggie service (`https://app.eggie.io/api`,
 OpenAPI at `/api/openapi.json`), and every project on a device must exist as a
 record on that service so the web app can list it.
 
@@ -22,9 +22,9 @@ Two things are asked for:
 | # | Decision | Why |
 |---|----------|-----|
 | 1 | Sync scope is the **registry only**: identity and existence. No status, no URLs, no files. | Smallest thing the web app can build on. |
-| 2 | **Only the UIs are locked** — the web console and the desktop window's view of it. The in-VM `omelet` CLI and coding agents work without an account. | An agent must never stall on a sign-in nobody is watching. |
+| 2 | **Only the UIs are locked** — the web console and the desktop window's view of it. The in-VM `eggie` CLI and coding agents work without an account. | An agent must never stall on a sign-in nobody is watching. |
 | 3 | Projects made before sign-in are pushed on the first pass after sign-in. | Follows from 2. |
-| 4 | Sign-in and sync live **in the runtime** (`runtime/omelet_api`). The token is stored in the VM. The host is not touched. | Host/runtime split: a change inside the VM must never need a host release. The same `get.sh` provisions a cloud VM, which gets sign-in for free. |
+| 4 | Sign-in and sync live **in the runtime** (`runtime/eggie_api`). The token is stored in the VM. The host is not touched. | Host/runtime split: a change inside the VM must never need a host release. The same `get.sh` provisions a cloud VM, which gets sign-in for free. |
 | 5 | Sync is a **reconcile loop**, not an outbox or inline route calls. | One mechanism covers offline, not-yet-signed-in, crashes and pre-sign-in projects. |
 | 6 | **Projects are per device.** Two devices never share a record, even with equal names. Moving a project to another device goes through GitHub and a fresh setup. | Product decision. |
 | 7 | Local projects cannot be renamed (the id is the slug), so sync sends **create and delete only**. | Nothing to rename. |
@@ -52,18 +52,18 @@ The required service changes are listed in section 7.
 
 ### Components
 
-- `runtime/omelet_api/core/cloud.py` — the service client. Stdlib `urllib` only,
+- `runtime/eggie_api/core/cloud.py` — the service client. Stdlib `urllib` only,
   the one place that knows `/v1/...` paths. Turns every non-2xx
   `{"error":{code,message}}` into `CloudError(code, message, status)` and a
   refused or timed-out connection into `CloudUnavailable`.
-- `runtime/omelet_api/core/account.py` — platform-free account logic: the
+- `runtime/eggie_api/core/account.py` — platform-free account logic: the
   device-code state machine, token storage, refresh.
-- `ApiConfig.cloud_url` — from `OMELET_CLOUD_URL`, default
-  `https://omelet.bridgie.chat/api`. The only place the service address comes from.
+- `ApiConfig.cloud_url` — from `EGGIE_CLOUD_URL`, default
+  `https://app.eggie.io/api`. The only place the service address comes from.
 
 ### Storage
 
-Migration `_v4_account` adds to `state.db` (already under `/opt/omelet`, readable by the
+Migration `_v4_account` adds to `state.db` (already under `/opt/eggie`, readable by the
 docker group — root-equivalent already):
 
 ```
@@ -131,17 +131,17 @@ local screens (install, VM status) are never locked.
 
 ### `screens/account/SignIn.tsx`
 
-- **Signed out** — "Sign in to Omelet" → `POST /api/account/sign-in`. If
+- **Signed out** — "Sign in to Eggie" → `POST /api/account/sign-in`. If
   `error` is set, a one-line reason above the button (denied, expired, revoked).
 - **Pending** — the `user_code` large, a QR code of `url`, an "Open sign-in page"
   link, a countdown to `expires_at`. Polls `GET /api/account` every 3 s; on
   `signed_in` it goes to the project list without a reload.
-- **Service unreachable** (503 `cloud_unavailable`) — says the Omelet service
+- **Service unreachable** (503 `cloud_unavailable`) — says the Eggie service
   can't be reached, with Retry. The existing `notAnswering` screen stays reserved
   for the local API.
 
 `url` is shown only when its scheme is `https:`; anything else renders "The sign-in
-link from the Omelet service is not valid" and no QR code. This is input
+link from the Eggie service is not valid" and no QR code. This is input
 validation on an address from outside, not a rewrite: the page never substitutes
 another address.
 
@@ -172,7 +172,7 @@ Mock sign-in URLs are `https:`.
 ### Where it runs
 
 - `core/sync.py` — `plan(local_ids, mapping, org_id) -> list[Action]`, pure,
-  plus `apply(actions, cloud, state)`. `omelet-selftest` (the install smoke
+  plus `apply(actions, cloud, state)`. `eggie-selftest` (the install smoke
   test) is never sent.
 - A daemon thread started by `routes/__main__.py`, not by `create_app()`, so
   importing the app or building it in a test starts no thread. It runs one pass
@@ -199,7 +199,7 @@ A failure is per project: it is recorded in `sync.last_error` and never stops th
 rest of the pass. A pass that finishes without failures sets `sync.last_ok_at`.
 There is no special case for any status code beyond 204/404 on delete.
 
-"Local projects" are the rows in `projects`. Coding agents' `omelet up/new/clone`
+"Local projects" are the rows in `projects`. Coding agents' `eggie up/new/clone`
 go through the API and create rows; a folder that was never adopted is not a
 project yet.
 

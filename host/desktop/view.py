@@ -62,9 +62,9 @@ STEP_LABELS = {
     "reboot_gate": "Restart needed",
     "fetch_image": "Downloading Linux image",
     "create_vm": "Preparing the virtual machine",
-    "ssh_alias": "Adding the omelet SSH host",
-    "bootstrap": "Installing Omelet",
-    "connect": "Connecting to the Omelet service",
+    "ssh_alias": "Adding the eggie SSH host",
+    "bootstrap": "Installing Eggie",
+    "connect": "Connecting to the Eggie service",
     "verify": "Testing the setup",
     "finish": "Finishing up",
 }
@@ -143,7 +143,7 @@ def inspect_folder(path) -> dict:
                     stack.append(entry)
                 continue
             # EXCLUDED_FILES holds paths relative to the project root
-            # (".omelet/overlay.yml"), so compare the same way the tar filter
+            # (".eggie/overlay.yml"), so compare the same way the tar filter
             # sees them -- posix separators, relative to root.
             if entry.relative_to(root).as_posix() in EXCLUDED_FILES:
                 continue

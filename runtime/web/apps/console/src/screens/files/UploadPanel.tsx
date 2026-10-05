@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Button, Collapsible, Notice, ProgressBar, RowCard } from "@omelet/ui";
+import { Button, Collapsible, Notice, ProgressBar, RowCard } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { failure, into, summary } from "../../uploads/copy";
 import { secondsLeft, timeLeftWords } from "../../uploads/eta";
@@ -27,7 +27,7 @@ export function UploadPanel({ items, queue }: { items: readonly UploadItem[]; qu
     <>
       {full && (
         <RowCard accent="trouble" className={s.banner}>
-          <h2 className={s.bannerTitle}>Omelet ran out of room partway through</h2>
+          <h2 className={s.bannerTitle}>Eggie ran out of room partway through</h2>
           <p className={s.bannerText}>
             {full.name} got {percent(full)}% of the way in. What made it is safe, and it can carry on from there — but you'll need to
             free up space in the desktop app first.

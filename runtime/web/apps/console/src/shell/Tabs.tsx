@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { PLUG, PROJECTS } from "../screens/icons";
 import s from "./Shell.module.css";
 

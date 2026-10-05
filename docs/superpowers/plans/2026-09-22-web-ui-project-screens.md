@@ -155,7 +155,7 @@ function project(over: Partial<Project> = {}): Project {
     id: "recipe-box",
     status: "stopped",
     domain: "127-0-0-1.sslip.io",
-    path: "/opt/omelet/projects/recipe-box",
+    path: "/opt/eggie/projects/recipe-box",
     urls: [],
     problem: null,
     empty: false,
@@ -203,7 +203,7 @@ describe("projectView", () => {
     }
   });
 
-  it("groups files Omelet can't read under 'unreadable' and keeps the agent's message", () => {
+  it("groups files Eggie can't read under 'unreadable' and keeps the agent's message", () => {
     for (const code of ["invalid_compose", "invalid_project", "compose_missing"]) {
       expect(projectView(project({ problem: problem(code) }))).toEqual({
         kind: "wrong",
@@ -245,7 +245,7 @@ Expected: FAIL — cannot find module `./view`.
 `web/apps/console/src/projects/view.ts`:
 
 ```ts
-import type { ProjectState } from "@omelet/ui";
+import type { ProjectState } from "@eggie/ui";
 import type { ActiveJob, Project } from "./types";
 
 export type Cause = "bound_to_loopback" | "service_unreachable" | "crash_looping" | "failed_to_start" | "unreadable";
@@ -665,7 +665,7 @@ Change the three catch blocks:
 `web/apps/console/src/screens/WrongHost.tsx`:
 
 ```tsx
-import { Button, Egg } from "@omelet/ui";
+import { Button, Egg } from "@eggie/ui";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
 
@@ -673,11 +673,11 @@ export function WrongHost({ onRetry }: { onRetry: () => void }) {
   return (
     <StatusScreen
       art={<Egg tone="cold" size={96} />}
-      title="This page was opened from an address Omelet doesn't recognise"
+      title="This page was opened from an address Eggie doesn't recognise"
       actions={<Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>}
     >
       <p className={s.lead}>
-        Open it as <strong>http://localhost:39080</strong> — the desktop app's <strong>Open Omelet</strong> button
+        Open it as <strong>http://localhost:39080</strong> — the desktop app's <strong>Open Eggie</strong> button
         does that for you.
       </p>
     </StatusScreen>
@@ -903,7 +903,7 @@ export function createApi(fetchImpl: typeof fetch, { timeoutMs = 10_000 }: { tim
           : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
       });
     } catch {
-      throw new ApiError("unreachable", "Omelet's service isn't answering", 0);
+      throw new ApiError("unreachable", "Eggie's service isn't answering", 0);
     }
     const text = await response.text();
     if (!response.ok) {
@@ -1102,7 +1102,7 @@ export const CAUSE_COPY: Record<Cause, { heading: (id: string) => string; short:
     heading: (id) => `${id} started, but nothing answers at its address`,
     short: "Started, but nothing answers at its address",
     body:
-      "Its little machines are up, but nothing replies where Omelet sends visitors. It may be listening on a " +
+      "Its little machines are up, but nothing replies where Eggie sends visitors. It may be listening on a " +
       "different port, or it fell over after starting.",
   },
   crash_looping: {
@@ -1116,9 +1116,9 @@ export const CAUSE_COPY: Record<Cause, { heading: (id: string) => string; short:
     body: "Docker refused to start it. The raw details below say what it tripped on.",
   },
   unreadable: {
-    heading: (id) => `Omelet can't read ${id}'s start-up recipe`,
-    short: "Omelet can't read its start-up recipe",
-    body: "The docker-compose.yml is there, but Omelet can't make sense of it.",
+    heading: (id) => `Eggie can't read ${id}'s start-up recipe`,
+    short: "Eggie can't read its start-up recipe",
+    body: "The docker-compose.yml is there, but Eggie can't make sense of it.",
   },
 };
 
@@ -1156,7 +1156,7 @@ export function fixPrompt(cause: Cause, id: string, detail: string | null): stri
     case "failed_to_start":
       return `${where} won't start: Docker refuses to bring it up. Find out why from docker-compose.yml and the error Docker gives, and fix it. ${CLOSE}`;
     case "unreadable":
-      return `${where} has a docker-compose.yml that Omelet can't read${detail ? ` (it says: ${detail})` : ""}. Make it a valid compose file that starts the project, with the web service listening on 0.0.0.0. ${CLOSE}`;
+      return `${where} has a docker-compose.yml that Eggie can't read${detail ? ` (it says: ${detail})` : ""}. Make it a valid compose file that starts the project, with the web service listening on 0.0.0.0. ${CLOSE}`;
   }
 }
 
@@ -1226,7 +1226,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
     id,
     status: "stopped",
     domain: DOMAIN,
-    path: `/opt/omelet/projects/${id}`,
+    path: `/opt/eggie/projects/${id}`,
     urls: [address(id)],
     problem: null,
     empty: false,
@@ -1249,8 +1249,8 @@ const LOGS = `11:04:19 photo-sorter_web  listening on 127.0.0.1:8000
 // Same codes and wording as the agent's own refusals.
 const refuse = (code: string, message: string, status: number) =>
   HttpResponse.json({ error: { code, message } }, { status });
-const notSignedIn = () => refuse("not_signed_in", "open Omelet from the desktop app to sign in", 401);
-const expired = () => refuse("session_expired", "your sign-in ran out; open Omelet from the desktop app again", 401);
+const notSignedIn = () => refuse("not_signed_in", "open Eggie from the desktop app to sign in", 401);
+const expired = () => refuse("session_expired", "your sign-in ran out; open Eggie from the desktop app again", 401);
 const notFound = (id: string) => refuse("project_not_found", `no project called ${id}`, 404);
 const busy = () => refuse("project_busy", "this project is busy with another job", 409);
 
@@ -1360,7 +1360,7 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.post("/api/session", () => {
       if (scenario === "handoff-spent") {
-        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Omelet from the desktop app again", 401);
+        return refuse("handoff_invalid", "that sign-in link has already been used or has run out; open Eggie from the desktop app again", 401);
       }
       signedIn = true;
       return HttpResponse.json({ signed_in: true });
@@ -1567,7 +1567,7 @@ export const TRASH = <svg {...svg}><path d="M3.5 5h11M7.2 5V3.5h3.6V5M5 5l.7 9.5
 ```tsx
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Button, Notice, RowCard, StateBadge } from "@omelet/ui";
+import { Button, Notice, RowCard, StateBadge } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
@@ -1644,7 +1644,7 @@ export function ProjectRow({ project }: { project: Project }) {
 
 ```tsx
 import { useNavigate } from "react-router";
-import { Button, Collapsible, Notice, RowCard, cx } from "@omelet/ui";
+import { Button, Collapsible, Notice, RowCard, cx } from "@eggie/ui";
 import { folderHeading, relativeTime } from "../../projects/format";
 import { useAdopt } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
@@ -1679,10 +1679,10 @@ function Folder({ folder, now, adopting, onAdopt }: { folder: Discovered; now: n
         ) : (
           <>
             <span className={s.quiet}>
-              Omelet can't take this one in yet — the folder doesn't say how to run itself. Ask your coding agent to add
+              Eggie can't take this one in yet — the folder doesn't say how to run itself. Ask your coding agent to add
               the start-up recipe and it'll show up here, ready to adopt.
             </span>
-            <Collapsible summary="What Omelet looks for">
+            <Collapsible summary="What Eggie looks for">
               <pre className={s.recipe}>{`~/projects/${folder.name}\n  docker-compose.yml  — missing`}</pre>
             </Collapsible>
           </>
@@ -1703,7 +1703,7 @@ export function DiscoveredBand({ folders }: { folders: Discovered[] }) {
         {FOLDER}
         <div>
           <h2 className={s.bandTitle}>{folderHeading(folders.length)}</h2>
-          <p className={s.bandSub}>Your coding agent made these. Omelet hasn't met them yet.</p>
+          <p className={s.bandSub}>Your coding agent made these. Eggie hasn't met them yet.</p>
         </div>
       </header>
       <ul className={s.folders}>
@@ -1733,7 +1733,7 @@ export function DiscoveredBand({ folders }: { folders: Discovered[] }) {
 ```tsx
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { Button, Modal, TextField } from "@omelet/ui";
+import { Button, Modal, TextField } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { useCreateProject } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
@@ -1797,7 +1797,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
 `web/apps/console/src/screens/list/EmptyCounter.tsx`:
 
 ```tsx
-import { Button, Egg, Notice, RowCard } from "@omelet/ui";
+import { Button, Egg, Notice, RowCard } from "@eggie/ui";
 import { PLUS } from "../icons";
 import s from "./ProjectList.module.css";
 
@@ -1832,7 +1832,7 @@ export function EmptyCounter({ onNew }: { onNew: () => void }) {
 ```tsx
 import { useState } from "react";
 import { useLocation } from "react-router";
-import { Button, Notice } from "@omelet/ui";
+import { Button, Notice } from "@eggie/ui";
 import { subtitle } from "../../projects/format";
 import { useProjects } from "../../projects/queries";
 import type { DeleteResult } from "../../projects/types";
@@ -1849,7 +1849,7 @@ function DeletedNotice({ result }: { result: DeleteResult }) {
     <Notice>Threw out {result.id}.</Notice>
   ) : (
     <Notice>
-      {result.id} is deleted. Some of its little machines may still be running — restarting Omelet from the desktop
+      {result.id} is deleted. Some of its little machines may still be running — restarting Eggie from the desktop
       app clears them.
     </Notice>
   );
@@ -2012,7 +2012,7 @@ No tests: screens are glue over tested modules.
 `web/apps/console/src/screens/project/Tiles.tsx`:
 
 ```tsx
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { FOLDER, GLOBE, MAGNIFIER, TRASH } from "../icons";
 import s from "./ProjectPage.module.css";
 
@@ -2032,7 +2032,7 @@ export function Tiles({ onAnalyze, onDelete }: { onAnalyze: () => void; onDelete
 
 ```tsx
 import { useEffect, useState } from "react";
-import { Button, cx } from "@omelet/ui";
+import { Button, cx } from "@eggie/ui";
 import { hostOf } from "../../projects/format";
 import type { WebEntry } from "../../projects/types";
 import s from "./ProjectPage.module.css";
@@ -2076,7 +2076,7 @@ export function AddressRows({ web, live }: { web: WebEntry[]; live: boolean }) {
 `web/apps/console/src/screens/project/StartingBody.tsx`:
 
 ```tsx
-import { Egg, ProgressBar, StateBadge } from "@omelet/ui";
+import { Egg, ProgressBar, StateBadge } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { phaseCaption } from "../../projects/copy";
 import { useJob } from "../../projects/queries";
@@ -2117,7 +2117,7 @@ export function StartingBody({ project, job }: { project: Project; job: ActiveJo
 
 ```tsx
 import { useState } from "react";
-import { Button, Collapsible, Egg, Modal, Notice, PromptCard, StateBadge } from "@omelet/ui";
+import { Button, Collapsible, Egg, Modal, Notice, PromptCard, StateBadge } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
@@ -2196,7 +2196,7 @@ export function WrongBody({ project, cause, detail }: { project: Project; cause:
 `web/apps/console/src/screens/project/AnalyzeModal.tsx`:
 
 ```tsx
-import { Button, Modal, PromptCard } from "@omelet/ui";
+import { Button, Modal, PromptCard } from "@eggie/ui";
 import { ANALYZE_PROMPT } from "../../projects/prompts";
 import s from "./ProjectPage.module.css";
 
@@ -2204,7 +2204,7 @@ export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal open={open} onClose={onClose} title="Ask for a once-over">
       <p className={s.modalSub}>
-        Omelet doesn't read your code — your coding agent does. Here's the ask, written so you get a plain-language
+        Eggie doesn't read your code — your coding agent does. Here's the ask, written so you get a plain-language
         answer back.
       </p>
       <PromptCard
@@ -2228,7 +2228,7 @@ export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => 
 ```tsx
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button, Egg, Notice, PromptCard, StateBadge } from "@omelet/ui";
+import { Button, Egg, Notice, PromptCard, StateBadge } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
@@ -2359,7 +2359,7 @@ export function ProjectPage() {
         <>
           {head()}
           <h2 className={s.big}>The folder for {project.id} has gone missing</h2>
-          <p className={s.lead}>Omelet still remembers it, but ~/projects/{project.id} isn't there any more.</p>
+          <p className={s.lead}>Eggie still remembers it, but ~/projects/{project.id} isn't there any more.</p>
           <div className={s.actions}>
             <Button
               variant="danger"
@@ -2427,7 +2427,7 @@ No tests: `deleteRows` (Task 2) holds the logic.
 ```tsx
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Button, Modal, Notice } from "@omelet/ui";
+import { Button, Modal, Notice } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { deleteRows } from "../../projects/format";
 import { useDeletePreview, useDeleteProject } from "../../projects/queries";

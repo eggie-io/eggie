@@ -1,7 +1,0 @@
-[Unit]
-Description=Apply Omelet's GitHub connection to this machine's accounts
-StartLimitIntervalSec=0
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /opt/omelet/runtime/install/lib/github-apply.sh

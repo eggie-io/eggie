@@ -191,7 +191,7 @@ def test_install_reports_download_progress(tmp_path):
 def test_extraction_refuses_an_absolute_member(tmp_path):
     # tarfile's data filter normalizes an absolute name instead of refusing it,
     # which is why this check is explicit -- the same finding as
-    # omelet_api/core/files.extract_archive.
+    # eggie_api/core/files.extract_archive.
     fetch = _fetcher(lambda dest: _tarball(dest, {"/etc/passwd": b"pwned",
                                                   "bin/limactl": b"#!/bin/sh\n"}))
     with pytest.raises(lima_install.LimaInstallError):

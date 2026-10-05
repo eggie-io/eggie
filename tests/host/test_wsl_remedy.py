@@ -60,9 +60,9 @@ def test_register_resume_writes_a_self_deleting_runonce_value():
     written = []
     provider = make(registry_writer=lambda key, name, value:
                     written.append((key, name, value)))
-    provider.register_resume(r"C:\Apps\Omelet\omelet.exe")
-    assert written == [(RUNONCE_KEY, "OmeletSetup",
-                        r'"C:\Apps\Omelet\omelet.exe" setup --resume')]
+    provider.register_resume(r"C:\Apps\Eggie\eggie.exe")
+    assert written == [(RUNONCE_KEY, "EggieSetup",
+                        r'"C:\Apps\Eggie\eggie.exe" setup --resume')]
 
 
 def test_image_selection_follows_architecture():

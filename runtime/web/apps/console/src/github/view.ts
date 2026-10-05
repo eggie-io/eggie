@@ -29,15 +29,15 @@ export function githubView(status: GitHubStatus): GitHubView {
       if (status.setup === "runtime_outdated") {
         return {
           kind: "setupFailed", login: status.login, canRetry: false,
-          message: "This machine's Omelet runtime needs an update before GitHub can be set up. " +
+          message: "This machine's Eggie runtime needs an update before GitHub can be set up. " +
             "Open the desktop app and choose Repair.",
         };
       }
       return {
         kind: "setupFailed", login: status.login, canRetry: true,
         message: status.setup_error === "setup_timeout"
-          ? "GitHub setup inside Omelet didn't finish."
-          : `GitHub setup inside Omelet failed: ${status.setup_error ?? "no reason given"}`,
+          ? "GitHub setup inside Eggie didn't finish."
+          : `GitHub setup inside Eggie failed: ${status.setup_error ?? "no reason given"}`,
       };
   }
 }

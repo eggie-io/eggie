@@ -4,7 +4,7 @@
 
 **Goal:** The runtime updates itself at VM boot to the newest release the host supports, a host that finds an incompatible runtime updates it at once, and the desktop app updates on one click.
 
-**Architecture:** Each runtime tag declares its API number in `runtime/release.json`. `get.sh` (the one updater, always fetched from `main`) learns to pick the newest tag speaking an accepted API and gains a staged, rolled-back update mode. A boot-time systemd unit runs it with the API list the host last wrote to `/opt/omelet/host.json`. The host writes that file, triggers the same update when `/health` answers an unsupported API, and separately checks `host-v*` GitHub releases to download, verify and launch a newer installer.
+**Architecture:** Each runtime tag declares its API number in `runtime/release.json`. `get.sh` (the one updater, always fetched from `main`) learns to pick the newest tag speaking an accepted API and gains a staged, rolled-back update mode. A boot-time systemd unit runs it with the API list the host last wrote to `/opt/eggie/host.json`. The host writes that file, triggers the same update when `/health` answers an unsupported API, and separately checks `host-v*` GitHub releases to download, verify and launch a newer installer.
 
 **Tech Stack:** bash (get.sh, install.sh, systemd), Python 3.12 stdlib (host), pywebview UI (plain JS/HTML), React console copy, pytest.
 
@@ -12,22 +12,22 @@
 
 ## Global Constraints
 
-- `get.sh` on `main` stays backward compatible: `OMELET_RUNTIME_REPO`, `OMELET_RUNTIME_REF`, `OMELET_RUNTIME_REPAIR`, the marker `/opt/omelet/runtime.version` and exit semantics keep their meaning. New inputs (`OMELET_RUNTIME_API`, `OMELET_RUNTIME_UPDATE`) are optional; unset means today's behaviour.
-- `resolve_ref` precedence: explicit `OMELET_RUNTIME_REF` → installed ref on repair → newest `runtime-vN.N.N` tag whose `release.json` `api` is accepted (newest tag when `OMELET_RUNTIME_API` unset). Tags without `release.json` are skipped when filtering.
+- `get.sh` on `main` stays backward compatible: `EGGIE_RUNTIME_REPO`, `EGGIE_RUNTIME_REF`, `EGGIE_RUNTIME_REPAIR`, the marker `/opt/eggie/runtime.version` and exit semantics keep their meaning. New inputs (`EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`) are optional; unset means today's behaviour.
+- `resolve_ref` precedence: explicit `EGGIE_RUNTIME_REF` → installed ref on repair → newest `runtime-vN.N.N` tag whose `release.json` `api` is accepted (newest tag when `EGGIE_RUNTIME_API` unset). Tags without `release.json` are skipped when filtering.
 - Update mode never leaves a working VM worse: same ref → exit 0, no change; staging failure → installed runtime untouched; `install.sh` failure → previous runtime restored and reinstalled.
-- `host/` never imports `omelet_api`; no `sys.platform` / `platform.system()` / `os.name` outside `host/providers/`.
+- `host/` never imports `eggie_api`; no `sys.platform` / `platform.system()` / `os.name` outside `host/providers/`.
 - The host gains no dependency: HTTP through stdlib `urllib` only.
-- Host releases: tag `host-vX.Y.Z`, not pre-release; assets `OmeletSetup-X.Y.Z.exe`, `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg`, `SHA256SUMS`.
-- Releases API: `https://api.github.com/repos/omelet-app/omelet/releases`.
-- Guest paths: `/opt/omelet/host.json` (`{"supported_api": [1]}`), `/opt/omelet/runtime.env`, `/opt/omelet/update.lock`, `/opt/omelet/runtime.prev`, `/opt/omelet/stack.next.yml`.
+- Host releases: tag `host-vX.Y.Z`, not pre-release; assets `EggieSetup-X.Y.Z.exe`, `EggieSetup-X.Y.Z-arm64.pkg`, `EggieSetup-X.Y.Z-x86_64.pkg`, `SHA256SUMS`.
+- Releases API: `https://api.github.com/repos/eggie-io/eggie/releases`.
+- Guest paths: `/opt/eggie/host.json` (`{"supported_api": [1]}`), `/opt/eggie/runtime.env`, `/opt/eggie/update.lock`, `/opt/eggie/runtime.prev`, `/opt/eggie/stack.next.yml`.
 - Tests: no network, no real VM; shell scripts run against fakes on `PATH`; repo files reached via `Path(__file__).resolve()`. `TMPDIR=<writable dir>` prefix in this sandbox.
 - Comments: only for non-obvious edge cases; no ticket or doc references.
 
 ## Review Focus
 
 1. **Boot update enabled with `--now`** — `install.sh` must `enable` the unit but never start it, or every install recursively runs an update. Pinned in Task 4.
-2. **A developer's VM on a branch ref** — a VM installed from `OMELET_RUNTIME_REF=feature/x` must not be silently moved to a tag at boot. Pinned in Task 4 (`boot-update.sh` skips non-tag installed refs).
-3. **`host.json` with junk or a missing file** — a malformed file must not produce an `OMELET_RUNTIME_API` that matches nothing or everything; it falls back to the installed release's API. Pinned in Task 4.
+2. **A developer's VM on a branch ref** — a VM installed from `EGGIE_RUNTIME_REF=feature/x` must not be silently moved to a tag at boot. Pinned in Task 4 (`boot-update.sh` skips non-tag installed refs).
+3. **`host.json` with junk or a missing file** — a malformed file must not produce an `EGGIE_RUNTIME_API` that matches nothing or everything; it falls back to the installed release's API. Pinned in Task 4.
 4. **Endless auto-update loop in the desktop** — if an update "succeeds" but the probe still reports an unsupported API, the UI must not restart the job forever. Pinned in Task 7 (auto-start once per session; `connect_step` re-checks and raises).
 5. **Semver compared as text** — `0.10.0` must beat `0.9.0` for both runtime tags (`sort -V`) and host releases. Pinned in Task 9.
 
@@ -89,7 +89,7 @@ git commit -m "Declare the runtime's API number in release.json"
 
 **Interfaces:**
 - Consumes: `runtime/release.json` shape from Task 1, fetched as `$repo/raw/<tag>/runtime/release.json`.
-- Produces: `resolve_ref <repo> <marker>` honours `OMELET_RUNTIME_API` (comma list of integers, e.g. `1,2`).
+- Produces: `resolve_ref <repo> <marker>` honours `EGGIE_RUNTIME_API` (comma list of integers, e.g. `1,2`).
 
 - [ ] **Step 1: Write the failing tests** — in `tests/runtime/test_get_sh.py`, extend `_resolve` to accept a fake curl and clear the new variables, then add tests:
 
@@ -113,8 +113,8 @@ def _resolve(tmp_path, *, tags=(), git_code=0, installed="", releases=None, **en
     if releases is not None:
         fakes["curl"] = _curl_serving(tmp_path, releases)
     environ = _bin(tmp_path, **fakes)
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
-                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE"):
+    for name in ("EGGIE_RUNTIME_REF", "EGGIE_RUNTIME_REPAIR",
+                 "EGGIE_RUNTIME_API", "EGGIE_RUNTIME_UPDATE"):
         environ.pop(name, None)
     environ.update(env)
     return subprocess.run(
@@ -128,7 +128,7 @@ def test_the_newest_release_speaking_an_accepted_api_wins_over_a_newer_one_that_
                       releases={"runtime-v1.0.0": '{"api": 2}',
                                 "runtime-v0.10.0": '{"api": 1}',
                                 "runtime-v0.9.0": '{"api": 1}'},
-                      OMELET_RUNTIME_API="1")
+                      EGGIE_RUNTIME_API="1")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "runtime-v0.10.0"
 
@@ -136,47 +136,47 @@ def test_the_newest_release_speaking_an_accepted_api_wins_over_a_newer_one_that_
 def test_any_listed_api_is_accepted(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.1.0", "runtime-v0.2.0"],
                       releases={"runtime-v0.2.0": '{"api": 2}', "runtime-v0.1.0": '{"api": 1}'},
-                      OMELET_RUNTIME_API="1,2")
+                      EGGIE_RUNTIME_API="1,2")
     assert result.stdout.strip() == "runtime-v0.2.0"
 
 
 def test_a_release_without_release_json_is_skipped(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.0.7", "runtime-v0.1.0"],
                       releases={"runtime-v0.1.0": None, "runtime-v0.0.7": '{"api": 1}'},
-                      OMELET_RUNTIME_API="1")
+                      EGGIE_RUNTIME_API="1")
     assert result.stdout.strip() == "runtime-v0.0.7"
 
 
 def test_no_release_speaking_an_accepted_api_is_a_plain_failure(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
                       releases={"runtime-v0.1.0": '{"api": 1}'},
-                      OMELET_RUNTIME_API="2")
+                      EGGIE_RUNTIME_API="2")
     assert result.returncode != 0
     assert "speaks api 2" in result.stderr
 
 
 def test_an_explicit_ref_is_installed_without_an_api_check(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.1.0"], releases={},
-                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REF="feature/x")
+                      EGGIE_RUNTIME_API="1", EGGIE_RUNTIME_REF="feature/x")
     assert result.stdout.strip() == "feature/x"
 
 
 def test_a_repair_keeps_the_installed_ref_even_with_an_api_list(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.3.0"], installed="runtime-v0.2.0",
                       releases={"runtime-v0.3.0": '{"api": 1}'},
-                      OMELET_RUNTIME_API="1", OMELET_RUNTIME_REPAIR="1")
+                      EGGIE_RUNTIME_API="1", EGGIE_RUNTIME_REPAIR="1")
     assert result.stdout.strip() == "runtime-v0.2.0"
 
 
 def test_an_api_list_that_is_not_numbers_is_refused(tmp_path):
     result = _resolve(tmp_path, tags=["runtime-v0.1.0"],
                       releases={"runtime-v0.1.0": '{"api": 1}'},
-                      OMELET_RUNTIME_API="1;rm")
+                      EGGIE_RUNTIME_API="1;rm")
     assert result.returncode != 0
-    assert "OMELET_RUNTIME_API" in result.stderr
+    assert "EGGIE_RUNTIME_API" in result.stderr
 ```
 
-Also update the two other places in this file that pop env names (`test_fetching_the_script_runs_the_install_not_just_its_functions`, `test_a_successful_install_exits_zero_and_hands_install_sh_the_ref`, `test_an_archive_without_the_runtime_is_a_plain_failure`) to pop `OMELET_RUNTIME_API` and `OMELET_RUNTIME_UPDATE` as well.
+Also update the two other places in this file that pop env names (`test_fetching_the_script_runs_the_install_not_just_its_functions`, `test_a_successful_install_exits_zero_and_hands_install_sh_the_ref`, `test_an_archive_without_the_runtime_is_a_plain_failure`) to pop `EGGIE_RUNTIME_API` and `EGGIE_RUNTIME_UPDATE` as well.
 
 - [ ] **Step 2: Run them to see them fail**
 
@@ -195,23 +195,23 @@ release_api() {
 
 # resolve_ref <repo> <marker>: an explicit ref wins, a repair keeps what is
 # installed, anything else takes the highest runtime-v* tag -- the highest one
-# speaking an api in OMELET_RUNTIME_API when that is set.
+# speaking an api in EGGIE_RUNTIME_API when that is set.
 resolve_ref() {
   local repo=$1 marker=$2 tags candidates tag api
-  if [[ -n "${OMELET_RUNTIME_REF:-}" ]]; then
-    echo "$OMELET_RUNTIME_REF"
+  if [[ -n "${EGGIE_RUNTIME_REF:-}" ]]; then
+    echo "$EGGIE_RUNTIME_REF"
     return
   fi
-  if [[ "${OMELET_RUNTIME_REPAIR:-}" == 1 && -s "$marker" ]]; then
+  if [[ "${EGGIE_RUNTIME_REPAIR:-}" == 1 && -s "$marker" ]]; then
     cat "$marker"
     return
   fi
-  if [[ -n "${OMELET_RUNTIME_API:-}" && ! "$OMELET_RUNTIME_API" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
-    echo "OMELET_RUNTIME_API must be a comma-separated list of numbers, not '$OMELET_RUNTIME_API'" >&2
+  if [[ -n "${EGGIE_RUNTIME_API:-}" && ! "$EGGIE_RUNTIME_API" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+    echo "EGGIE_RUNTIME_API must be a comma-separated list of numbers, not '$EGGIE_RUNTIME_API'" >&2
     return 1
   fi
   if ! tags="$(git ls-remote --tags --refs "$repo" 'runtime-v*')"; then
-    echo "could not reach $repo to find the latest Omelet runtime" >&2
+    echo "could not reach $repo to find the latest Eggie runtime" >&2
     return 1
   fi
   # grep exits 1 when no tag matches; the empty result is handled below.
@@ -220,18 +220,18 @@ resolve_ref() {
     echo "$repo has no runtime-v* release to install" >&2
     return 1
   fi
-  if [[ -z "${OMELET_RUNTIME_API:-}" ]]; then
+  if [[ -z "${EGGIE_RUNTIME_API:-}" ]]; then
     head -n 1 <<<"$candidates"
     return
   fi
   while read -r tag; do
     api="$(release_api "$repo" "$tag")" || true
-    if [[ -n "$api" && ",$OMELET_RUNTIME_API," == *",$api,"* ]]; then
+    if [[ -n "$api" && ",$EGGIE_RUNTIME_API," == *",$api,"* ]]; then
       echo "$tag"
       return
     fi
   done <<<"$candidates"
-  echo "no runtime-v* release in $repo speaks api $OMELET_RUNTIME_API" >&2
+  echo "no runtime-v* release in $repo speaks api $EGGIE_RUNTIME_API" >&2
   return 1
 }
 ```
@@ -260,7 +260,7 @@ git commit -m "get.sh picks the newest release speaking an accepted API"
 
 **Interfaces:**
 - Consumes: `resolve_ref` from Task 2.
-- Produces: `OMELET_RUNTIME_UPDATE=1` mode; `/opt/omelet/runtime.env` written on every successful download (`OMELET_RUNTIME_URL=…`, `OMELET_RUNTIME_REPO=…`); every run holds `flock /opt/omelet/update.lock`. `OMELET_RUNTIME_URL` in the environment is recorded as given; otherwise `$REPO/raw/main/runtime/install/get.sh`.
+- Produces: `EGGIE_RUNTIME_UPDATE=1` mode; `/opt/eggie/runtime.env` written on every successful download (`EGGIE_RUNTIME_URL=…`, `EGGIE_RUNTIME_REPO=…`); every run holds `flock /opt/eggie/update.lock`. `EGGIE_RUNTIME_URL` in the environment is recorded as given; otherwise `$REPO/raw/main/runtime/install/get.sh`.
 
 - [ ] **Step 1: Write the failing tests** — add a harness and tests to `tests/runtime/test_get_sh.py`:
 
@@ -272,7 +272,7 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
         for name, body in {"runtime/install/install.sh": install_body,
                            "runtime/stack.yml": stack}.items():
             data = body.encode()
-            info = tarfile.TarInfo(name=f"omelet-{ref}/{name}")
+            info = tarfile.TarInfo(name=f"eggie-{ref}/{name}")
             info.size = len(data)
             tar.addfile(tarinfo=info, fileobj=io.BytesIO(data))
     return tar_path
@@ -280,8 +280,8 @@ def _archive(tmp_path: Path, ref: str, install_body: str, *, stack="services: {}
 
 def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0",
                 pull_code=0, install_code=0, update=True):
-    """Runs get.sh against a fake /opt/omelet with runtime-v0.1.0 installed."""
-    root = tmp_path / "opt-omelet"
+    """Runs get.sh against a fake /opt/eggie with runtime-v0.1.0 installed."""
+    root = tmp_path / "opt-eggie"
     (root / "runtime" / "install").mkdir(parents=True)
     (root / "runtime" / "install" / "install.sh").write_text(
         f'#!/usr/bin/env bash\necho "old install.sh $*"\necho "$1" > "{root}/runtime.version"\n')
@@ -300,7 +300,7 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
     fake_docker = tmp_path / "docker"
     fake_docker.write_text(f'#!/bin/sh\necho "$*" >> "{docker_log}"\nexit {pull_code}\n')
     fake_docker.chmod(0o755)
-    script = (GET.read_text().replace("/opt/omelet", str(root))
+    script = (GET.read_text().replace("/opt/eggie", str(root))
               .replace("/usr/bin/docker", str(fake_docker)))
     curl = ('for last; do :; done\n'
             'case "$last" in\n'
@@ -308,12 +308,12 @@ def _update_run(tmp_path, *, installed="runtime-v0.1.0", latest="runtime-v0.2.0"
             f'*) cp "{tar_path}" "$4" ;;\n'
             'esac\n')
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=curl, git=_git_listing(tmp_path, [latest]))
-    for name in ("OMELET_RUNTIME_REF", "OMELET_RUNTIME_REPAIR",
-                 "OMELET_RUNTIME_API", "OMELET_RUNTIME_UPDATE", "OMELET_RUNTIME_URL"):
+    for name in ("EGGIE_RUNTIME_REF", "EGGIE_RUNTIME_REPAIR",
+                 "EGGIE_RUNTIME_API", "EGGIE_RUNTIME_UPDATE", "EGGIE_RUNTIME_URL"):
         environ.pop(name, None)
-    environ["OMELET_RUNTIME_API"] = "1"
+    environ["EGGIE_RUNTIME_API"] = "1"
     if update:
-        environ["OMELET_RUNTIME_UPDATE"] = "1"
+        environ["EGGIE_RUNTIME_UPDATE"] = "1"
     result = subprocess.run(["bash", "-c", script], env=environ,
                             capture_output=True, text=True)
     docker = docker_log.read_text() if docker_log.exists() else ""
@@ -362,13 +362,13 @@ def test_every_install_records_where_the_runtime_came_from(tmp_path):
     result, root, _ = _update_run(tmp_path, update=False)
     assert result.returncode == 0, result.stderr
     env = (root / "runtime.env").read_text()
-    assert "OMELET_RUNTIME_REPO=https://github.com/omelet-app/omelet\n" in env
-    assert ("OMELET_RUNTIME_URL=https://github.com/omelet-app/omelet"
+    assert "EGGIE_RUNTIME_REPO=https://github.com/eggie-io/eggie\n" in env
+    assert ("EGGIE_RUNTIME_URL=https://github.com/eggie-io/eggie"
             "/raw/main/runtime/install/get.sh\n") in env
 
 
 def test_get_sh_holds_the_update_lock():
-    assert "flock" in GET.read_text() and "/opt/omelet/update.lock" in GET.read_text()
+    assert "flock" in GET.read_text() and "/opt/eggie/update.lock" in GET.read_text()
 ```
 
 - [ ] **Step 2: Run them to see them fail**
@@ -392,25 +392,25 @@ main() {
     fi
   fi
 
-  mkdir -p /opt/omelet
+  mkdir -p /opt/eggie
   # The boot unit and a host-started update may run at the same moment.
-  exec 9>/opt/omelet/update.lock
+  exec 9>/opt/eggie/update.lock
   flock 9
 
   local ref installed="" update=0
-  [[ "${OMELET_RUNTIME_UPDATE:-}" == 1 ]] && update=1
+  [[ "${EGGIE_RUNTIME_UPDATE:-}" == 1 ]] && update=1
   [[ -s "$MARKER" ]] && installed="$(cat "$MARKER")"
   ref="$(resolve_ref "$REPO" "$MARKER")"
   if (( update )) && [[ "$ref" == "$installed" ]]; then
-    echo "Omelet runtime $ref is already installed"
+    echo "Eggie runtime $ref is already installed"
     return 0
   fi
-  echo "installing Omelet runtime $ref"
+  echo "installing Eggie runtime $ref"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "${tmp:-}"; rm -f /opt/omelet/stack.next.yml' EXIT
+  trap 'rm -rf "${tmp:-}"; rm -f /opt/eggie/stack.next.yml' EXIT
   if ! curl -fsSL "$REPO/archive/$ref.tar.gz" -o "$tmp/runtime.tar.gz"; then
-    echo "could not download Omelet runtime $ref from $REPO" >&2
+    echo "could not download Eggie runtime $ref from $REPO" >&2
     exit 1
   fi
   if ! tar -xzf "$tmp/runtime.tar.gz" -C "$tmp" --strip-components=1 --wildcards '*/runtime/' 2>/dev/null; then
@@ -421,14 +421,14 @@ main() {
     echo "$ref of $REPO has no runtime/install/install.sh" >&2
     exit 1
   fi
-  printf 'OMELET_RUNTIME_URL=%s\nOMELET_RUNTIME_REPO=%s\n' \
-    "${OMELET_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/omelet/runtime.env
+  printf 'EGGIE_RUNTIME_URL=%s\nEGGIE_RUNTIME_REPO=%s\n' \
+    "${EGGIE_RUNTIME_URL:-$REPO/raw/main/runtime/install/get.sh}" "$REPO" > /opt/eggie/runtime.env
 
-  # Next to /opt/omelet/.env so compose reads the docker GID the stack needs.
+  # Next to /opt/eggie/.env so compose reads the docker GID the stack needs.
   if (( update )) && [[ -n "$installed" ]]; then
-    install -m 644 "$tmp/runtime/stack.yml" /opt/omelet/stack.next.yml
-    if ! /usr/bin/docker compose -f /opt/omelet/stack.next.yml --profile tunnel pull; then
-      echo "could not download the images for Omelet runtime $ref; staying on $installed" >&2
+    install -m 644 "$tmp/runtime/stack.yml" /opt/eggie/stack.next.yml
+    if ! /usr/bin/docker compose -f /opt/eggie/stack.next.yml --profile tunnel pull; then
+      echo "could not download the images for Eggie runtime $ref; staying on $installed" >&2
       exit 1
     fi
   fi
@@ -444,12 +444,12 @@ main() {
   chmod 755 "$RUNTIME_DIR"
 
   local args=("$ref")
-  if [[ "${OMELET_RUNTIME_REPAIR:-}" == 1 ]]; then
+  if [[ "${EGGIE_RUNTIME_REPAIR:-}" == 1 ]]; then
     args+=(--repair)
   fi
   if ! bash "$RUNTIME_DIR/install/install.sh" "${args[@]}"; then
     if [[ -d "$RUNTIME_DIR.prev" ]]; then
-      echo "Omelet runtime $ref did not install; going back to $installed" >&2
+      echo "Eggie runtime $ref did not install; going back to $installed" >&2
       rm -rf "$RUNTIME_DIR"
       mv "$RUNTIME_DIR.prev" "$RUNTIME_DIR"
       bash "$RUNTIME_DIR/install/install.sh" "$installed" || true
@@ -460,7 +460,7 @@ main() {
 }
 ```
 
-Note: `RUNTIME_DIR.prev` expands to `/opt/omelet/runtime.prev`. The existing `test_a_successful_install_exits_zero_and_hands_install_sh_the_ref` must still pass (no update mode, no docker call).
+Note: `RUNTIME_DIR.prev` expands to `/opt/eggie/runtime.prev`. The existing `test_a_successful_install_exits_zero_and_hands_install_sh_the_ref` must still pass (no update mode, no docker call).
 
 - [ ] **Step 4: Run the file**
 
@@ -480,14 +480,14 @@ git commit -m "get.sh update mode stages, swaps and rolls back"
 
 **Files:**
 - Create: `runtime/install/lib/boot-update.sh`
-- Create: `runtime/install/systemd/omelet-update.service`
+- Create: `runtime/install/systemd/eggie-update.service`
 - Modify: `runtime/install/install.sh` (step 12 area)
 - Create: `tests/runtime/test_boot_update.py`
 - Modify: `tests/runtime/test_install_shell.py` (append)
 
 **Interfaces:**
-- Consumes: `/opt/omelet/host.json` (`{"supported_api": [1, 2]}`, written by Task 5), `/opt/omelet/runtime/release.json` (Task 1), `/opt/omelet/runtime.env` (Task 3), `get.sh` update mode (Task 3).
-- Produces: `accepted_api` (bash function, prints `1,2` or fails), the enabled `omelet-update.service`.
+- Consumes: `/opt/eggie/host.json` (`{"supported_api": [1, 2]}`, written by Task 5), `/opt/eggie/runtime/release.json` (Task 1), `/opt/eggie/runtime.env` (Task 3), `get.sh` update mode (Task 3).
+- Produces: `accepted_api` (bash function, prints `1,2` or fails), the enabled `eggie-update.service`.
 
 - [ ] **Step 1: Write the failing tests** — `tests/runtime/test_boot_update.py`:
 
@@ -502,7 +502,7 @@ BOOT = ROOT / "runtime" / "install" / "lib" / "boot-update.sh"
 
 
 def _root(tmp_path, *, host_json=None, release='{"api": 1}', installed="runtime-v0.1.0"):
-    root = tmp_path / "opt-omelet"
+    root = tmp_path / "opt-eggie"
     (root / "runtime").mkdir(parents=True)
     if host_json is not None:
         (root / "host.json").write_text(host_json)
@@ -511,16 +511,16 @@ def _root(tmp_path, *, host_json=None, release='{"api": 1}', installed="runtime-
     if installed:
         (root / "runtime.version").write_text(installed + "\n")
     (root / "runtime.env").write_text(
-        "OMELET_RUNTIME_URL=https://example.invalid/get.sh\n"
-        "OMELET_RUNTIME_REPO=https://example.invalid/repo\n")
+        "EGGIE_RUNTIME_URL=https://example.invalid/get.sh\n"
+        "EGGIE_RUNTIME_REPO=https://example.invalid/repo\n")
     return root
 
 
 def _accepted(tmp_path, **kw):
     root = _root(tmp_path, **kw)
-    script = BOOT.read_text().replace("/opt/omelet", str(root))
+    script = BOOT.read_text().replace("/opt/eggie", str(root))
     return subprocess.run(["bash", "-c", script + "\naccepted_api"],
-                          env={**os.environ, "OMELET_BOOT_UPDATE_SOURCED": "1"},
+                          env={**os.environ, "EGGIE_BOOT_UPDATE_SOURCED": "1"},
                           capture_output=True, text=True)
 
 
@@ -555,12 +555,12 @@ def _run(tmp_path, *, installed="runtime-v0.1.0"):
     bin_dir.mkdir()
     curl = bin_dir / "curl"
     # The fetched "get.sh" reports what it was handed.
-    curl.write_text("#!/bin/sh\necho 'echo \"url=$OMELET_RUNTIME_URL api=$OMELET_RUNTIME_API "
-                    "update=$OMELET_RUNTIME_UPDATE repo=$OMELET_RUNTIME_REPO ref=$OMELET_RUNTIME_REF\"'\n")
+    curl.write_text("#!/bin/sh\necho 'echo \"url=$EGGIE_RUNTIME_URL api=$EGGIE_RUNTIME_API "
+                    "update=$EGGIE_RUNTIME_UPDATE repo=$EGGIE_RUNTIME_REPO ref=$EGGIE_RUNTIME_REF\"'\n")
     curl.chmod(0o755)
-    script = BOOT.read_text().replace("/opt/omelet", str(root))
+    script = BOOT.read_text().replace("/opt/eggie", str(root))
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
-           "OMELET_RUNTIME_REF": "leaked"}
+           "EGGIE_RUNTIME_REF": "leaked"}
     return subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
 
 
@@ -583,9 +583,9 @@ Append to `tests/runtime/test_install_shell.py`:
 def test_install_enables_the_boot_update_without_running_it_now():
     # Starting it here would run an update inside every install.
     text = INSTALL.read_text()
-    assert "systemctl enable omelet-update.service" in text
-    assert "enable --now omelet-update" not in text
-    assert "start omelet-update" not in text
+    assert "systemctl enable eggie-update.service" in text
+    assert "enable --now eggie-update" not in text
+    assert "start eggie-update" not in text
 ```
 
 - [ ] **Step 2: Run to see them fail**
@@ -597,7 +597,7 @@ Expected: FAIL (file missing, install.sh lacks the unit).
 
 ```bash
 #!/usr/bin/env bash
-# Run at boot by omelet-update.service: moves this VM to the newest runtime
+# Run at boot by eggie-update.service: moves this VM to the newest runtime
 # release its host accepts. Any failure leaves the installed runtime running.
 set -euo pipefail
 
@@ -605,11 +605,11 @@ set -euo pipefail
 # release's own -- a VM with no host never changes api.
 accepted_api() {
   local api=""
-  if [[ -s /opt/omelet/host.json ]]; then
-    api="$(tr -d ' \n' < /opt/omelet/host.json | sed -n 's/.*"supported_api":\[\([0-9,]*\)\].*/\1/p')"
+  if [[ -s /opt/eggie/host.json ]]; then
+    api="$(tr -d ' \n' < /opt/eggie/host.json | sed -n 's/.*"supported_api":\[\([0-9,]*\)\].*/\1/p')"
   fi
-  if [[ ! "$api" =~ ^[0-9]+(,[0-9]+)*$ && -s /opt/omelet/runtime/release.json ]]; then
-    api="$(tr -d ' \n' < /opt/omelet/runtime/release.json | sed -n 's/.*"api":\([0-9][0-9]*\).*/\1/p')"
+  if [[ ! "$api" =~ ^[0-9]+(,[0-9]+)*$ && -s /opt/eggie/runtime/release.json ]]; then
+    api="$(tr -d ' \n' < /opt/eggie/runtime/release.json | sed -n 's/.*"api":\([0-9][0-9]*\).*/\1/p')"
   fi
   [[ "$api" =~ ^[0-9]+(,[0-9]+)*$ ]] || return 1
   echo "$api"
@@ -617,7 +617,7 @@ accepted_api() {
 
 main() {
   local installed api script attempt
-  installed="$(cat /opt/omelet/runtime.version 2>/dev/null || true)"
+  installed="$(cat /opt/eggie/runtime.version 2>/dev/null || true)"
   # A branch was pinned by hand; moving it to a tag would undo that.
   if [[ ! "$installed" =~ ^runtime-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "installed runtime '$installed' is not a release; not updating"
@@ -628,37 +628,37 @@ main() {
     return 1
   fi
   # shellcheck disable=SC1091
-  source /opt/omelet/runtime.env
+  source /opt/eggie/runtime.env
   # The network may come up after this unit starts.
   for attempt in 1 2 3 4 5 6; do
-    script="$(curl -fsSL "$OMELET_RUNTIME_URL")" && break
+    script="$(curl -fsSL "$EGGIE_RUNTIME_URL")" && break
     script=""
     sleep 10
   done
   if [[ -z "$script" ]]; then
-    echo "could not download the Omelet updater from $OMELET_RUNTIME_URL" >&2
+    echo "could not download the Eggie updater from $EGGIE_RUNTIME_URL" >&2
     return 1
   fi
-  env -u OMELET_RUNTIME_REF -u OMELET_RUNTIME_REPAIR \
-    OMELET_RUNTIME_UPDATE=1 OMELET_RUNTIME_API="$api" \
-    OMELET_RUNTIME_URL="$OMELET_RUNTIME_URL" OMELET_RUNTIME_REPO="$OMELET_RUNTIME_REPO" \
+  env -u EGGIE_RUNTIME_REF -u EGGIE_RUNTIME_REPAIR \
+    EGGIE_RUNTIME_UPDATE=1 EGGIE_RUNTIME_API="$api" \
+    EGGIE_RUNTIME_URL="$EGGIE_RUNTIME_URL" EGGIE_RUNTIME_REPO="$EGGIE_RUNTIME_REPO" \
     bash -c "$script"
 }
 
-[[ -n "${OMELET_BOOT_UPDATE_SOURCED:-}" ]] || main "$@"
+[[ -n "${EGGIE_BOOT_UPDATE_SOURCED:-}" ]] || main "$@"
 ```
 
-- [ ] **Step 4: Create `runtime/install/systemd/omelet-update.service`**
+- [ ] **Step 4: Create `runtime/install/systemd/eggie-update.service`**
 
 ```ini
 [Unit]
-Description=Update the Omelet runtime to the newest release this machine's host accepts
+Description=Update the Eggie runtime to the newest release this machine's host accepts
 After=network-online.target docker.service
 Wants=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /opt/omelet/runtime/install/lib/boot-update.sh
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/boot-update.sh
 TimeoutStartSec=30min
 
 [Install]
@@ -670,9 +670,9 @@ WantedBy=multi-user.target
 ```bash
 # 12b. the boot-time updater. Enabled only: starting it here would run an
 # update inside this install.
-install -m 644 "$INSTALL_DIR/systemd/omelet-update.service" /etc/systemd/system/
+install -m 644 "$INSTALL_DIR/systemd/eggie-update.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable omelet-update.service
+systemctl enable eggie-update.service
 ```
 
 - [ ] **Step 6: Run the tests**
@@ -683,7 +683,7 @@ Expected: all PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add runtime/install/lib/boot-update.sh runtime/install/systemd/omelet-update.service \
+git add runtime/install/lib/boot-update.sh runtime/install/systemd/eggie-update.service \
   runtime/install/install.sh tests/runtime/test_boot_update.py tests/runtime/test_install_shell.py
 git commit -m "Update the runtime at boot to the newest release the host accepts"
 ```
@@ -699,7 +699,7 @@ git commit -m "Update the runtime at boot to the newest release the host accepts
 - Test: `tests/host/test_bootstrap.py`, create `tests/host/test_runtime_update.py`, append to `tests/runtime/test_boot_update.py`
 
 **Interfaces:**
-- Produces: `constants.HOST_JSON = f"{GUEST_ROOT}/host.json"`; `runtime_update.declare_supported(provider) -> bool` (never raises on a failed exec; returns `Completed.ok`); `bootstrap(provider, *, source=None, repair=False, update=False)` — `update=True` runs the installer even when installed and adds `OMELET_RUNTIME_UPDATE=1`; every run carries `OMELET_RUNTIME_API=<sorted SUPPORTED_API joined by ",">`; the stub exports `OMELET_RUNTIME_URL` to `get.sh`.
+- Produces: `constants.HOST_JSON = f"{GUEST_ROOT}/host.json"`; `runtime_update.declare_supported(provider) -> bool` (never raises on a failed exec; returns `Completed.ok`); `bootstrap(provider, *, source=None, repair=False, update=False)` — `update=True` runs the installer even when installed and adds `EGGIE_RUNTIME_UPDATE=1`; every run carries `EGGIE_RUNTIME_API=<sorted SUPPORTED_API joined by ",">`; the stub exports `EGGIE_RUNTIME_URL` to `get.sh`.
 
 - [ ] **Step 1: Write the failing tests** — append to `tests/host/test_bootstrap.py`:
 
@@ -708,18 +708,18 @@ def test_every_run_tells_the_installer_which_apis_this_host_speaks():
     p = FakeProvider()
     bootstrap(p)
     expected = ",".join(str(n) for n in sorted(constants.SUPPORTED_API))
-    assert f"OMELET_RUNTIME_API={expected}" in _command(p)
-    assert "OMELET_RUNTIME_UPDATE" not in _command(p)
+    assert f"EGGIE_RUNTIME_API={expected}" in _command(p)
+    assert "EGGIE_RUNTIME_UPDATE" not in _command(p)
 
 
 def test_an_update_runs_on_an_installed_runtime_in_update_mode():
     p = FakeProvider(installed=True)
     bootstrap(p, update=True)
-    assert "OMELET_RUNTIME_UPDATE=1" in _command(p)
+    assert "EGGIE_RUNTIME_UPDATE=1" in _command(p)
 
 
 def test_the_stub_hands_get_sh_the_url_it_came_from(tmp_path):
-    env = _fake_curl(tmp_path, "echo 'echo \"from=$OMELET_RUNTIME_URL\"'\n")
+    env = _fake_curl(tmp_path, "echo 'echo \"from=$EGGIE_RUNTIME_URL\"'\n")
     result = _run_stub(tmp_path, env)
     assert result.stdout.strip() == "from=https://example.invalid/get.sh"
 ```
@@ -813,7 +813,7 @@ The test extracts the tail after `mv … `; `command.rstrip().endswith(constants
 
 ```python
 # (in _STUB, replace the final `bash -c "$script"` line with)
-OMELET_RUNTIME_URL="$1" bash -c "$script"
+EGGIE_RUNTIME_URL="$1" bash -c "$script"
 ```
 
 ```python
@@ -828,17 +828,17 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False,
     if not repair and not update and _installed(provider):
         return
     url = _shell_safe(
-        source or os.environ.get("OMELET_RUNTIME_URL") or constants.RUNTIME_URL,
-        "OMELET_RUNTIME_URL")
+        source or os.environ.get("EGGIE_RUNTIME_URL") or constants.RUNTIME_URL,
+        "EGGIE_RUNTIME_URL")
     apis = ",".join(str(n) for n in sorted(constants.SUPPORTED_API))
-    assignments = [f"OMELET_RUNTIME_API={apis}"]
-    ref = os.environ.get("OMELET_RUNTIME_REF")
+    assignments = [f"EGGIE_RUNTIME_API={apis}"]
+    ref = os.environ.get("EGGIE_RUNTIME_REF")
     if ref:
-        assignments.append(f"OMELET_RUNTIME_REF={_shell_safe(ref, 'OMELET_RUNTIME_REF')}")
+        assignments.append(f"EGGIE_RUNTIME_REF={_shell_safe(ref, 'EGGIE_RUNTIME_REF')}")
     if repair:
-        assignments.append("OMELET_RUNTIME_REPAIR=1")
+        assignments.append("EGGIE_RUNTIME_REPAIR=1")
     if update:
-        assignments.append("OMELET_RUNTIME_UPDATE=1")
+        assignments.append("EGGIE_RUNTIME_UPDATE=1")
     # ... rest unchanged
 ```
 
@@ -931,7 +931,7 @@ Expected: FAIL (`update` unexpected kwarg).
 def _incompatible(api) -> str:
     from host.core import constants
     supported = ", ".join(str(n) for n in sorted(constants.SUPPORTED_API))
-    return ("This app and the Omelet service inside the virtual machine are "
+    return ("This app and the Eggie service inside the virtual machine are "
             "versions that cannot work together.\n"
             f"service API {api}, app supports {supported}")
 
@@ -971,10 +971,10 @@ def connect_step(provider, *, client=None, reconnect=None, update=None,
         client.version()
     except ApiError as e:
         # ... existing reconnect block unchanged ...
-        return ("The Omelet service in the virtual machine was not accepting "
+        return ("The Eggie service in the virtual machine was not accepting "
                 "this computer, and has been reconnected.")
     if updated:
-        return "The Omelet service in the virtual machine was updated."
+        return "The Eggie service in the virtual machine was updated."
     return None
 ```
 
@@ -1163,7 +1163,7 @@ In `start_repair`, replace `connect_step(self._provider)` with `install.connect_
 <template data-screen="runtime-update:running">
   <section class="pad centered">
     <span class="badge badge-warm">Updating</span>
-    <h1 class="display">Updating Omelet inside the kitchen</h1>
+    <h1 class="display">Updating Eggie inside the kitchen</h1>
     <p class="lede">This app is newer than what runs inside your machine, so that part
       is catching up. It takes a minute or two. Your projects stay put.</p>
   </section>
@@ -1173,7 +1173,7 @@ In `start_repair`, replace `connect_step(self._provider)` with `install.connect_
   <section class="pad">
     <span class="badge badge-bad">Update didn't finish</span>
     <h1 class="display">The kitchen couldn't catch up</h1>
-    <p class="lede">Omelet couldn't update what runs inside your machine, so this app
+    <p class="lede">Eggie couldn't update what runs inside your machine, so this app
       can't talk to it yet. Your projects are safe. Check your internet connection and try again.</p>
     <div class="row">
       <button class="btn-primary" data-action="retry-runtime-update">Try again</button>
@@ -1201,7 +1201,7 @@ async function startRuntimeUpdate() {
 ACTIONS['retry-runtime-update'] = () => startRuntimeUpdate();
 JOB_ACTIONS.add('retry-runtime-update');
 
-window.omelet.handlers.runtime_update = (event) => {
+window.eggie.handlers.runtime_update = (event) => {
   if (event.type === 'progress' || event.type === 'stage') return;
   if (event.type === 'crashed') return show('runtime-update:failed', { message: event.message });
   refresh();
@@ -1220,8 +1220,8 @@ and in `refresh()`, before the final `show(...)`:
 `runtime/web/apps/console/src/screens/NeedsUpdate.tsx` — replace the lead paragraph text with:
 
 ```tsx
-        This page and the Omelet service on your computer come from different releases, so they can't safely
-        talk to each other. Open the Omelet desktop app — it finishes the update.
+        This page and the Eggie service on your computer come from different releases, so they can't safely
+        talk to each other. Open the Eggie desktop app — it finishes the update.
 ```
 
 - [ ] **Step 4: Run tests**
@@ -1261,10 +1261,10 @@ def test_the_windows_installer_updates_silently_and_closes_the_running_app(tmp_p
     from host.providers.wsl2 import Wsl2Provider
     spawned = []
     provider = Wsl2Provider(spawner=spawned.append, arch="amd64")
-    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0.exe"
-    provider.launch_installer(Path("C:/cache/OmeletSetup-0.2.0.exe"))
+    assert provider.installer_asset("0.2.0") == "EggieSetup-0.2.0.exe"
+    provider.launch_installer(Path("C:/cache/EggieSetup-0.2.0.exe"))
     (argv,) = spawned
-    assert argv[0].endswith("OmeletSetup-0.2.0.exe")
+    assert argv[0].endswith("EggieSetup-0.2.0.exe")
     assert {"/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/NORESTART"} <= set(argv[1:])
 ```
 
@@ -1281,9 +1281,9 @@ def test_the_mac_installer_is_the_package_for_this_architecture():
 
     provider = LimaProvider(runner=lambda argv: ran.append(argv) or Result(),
                             machine=lambda: "arm64")
-    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0-arm64.pkg"
-    provider.launch_installer(Path("/cache/OmeletSetup-0.2.0-arm64.pkg"))
-    assert ran == [["open", "/cache/OmeletSetup-0.2.0-arm64.pkg"]]
+    assert provider.installer_asset("0.2.0") == "EggieSetup-0.2.0-arm64.pkg"
+    provider.launch_installer(Path("/cache/EggieSetup-0.2.0-arm64.pkg"))
+    assert ran == [["open", "/cache/EggieSetup-0.2.0-arm64.pkg"]]
 ```
 
 - [ ] **Step 2: Run to see them fail**
@@ -1297,7 +1297,7 @@ Expected: FAIL.
 
 ```python
     def installer_asset(self, version: str) -> str:
-        return f"OmeletSetup-{version}.exe"
+        return f"EggieSetup-{version}.exe"
 
     def launch_installer(self, path: Path) -> None:
         # The installer closes this app itself and relaunches it when done
@@ -1311,16 +1311,16 @@ Expected: FAIL.
 ```python
     def installer_asset(self, version: str) -> str:
         # The .pkg is built native-arch: an arm64 package refuses an Intel Mac.
-        return f"OmeletSetup-{version}-{self._machine()}.pkg"
+        return f"EggieSetup-{version}-{self._machine()}.pkg"
 
     def launch_installer(self, path: Path) -> None:
         self._run(["open", str(path)])
 ```
 
-`packaging/macos/build.sh`: change `pkg="$repo/dist/OmeletSetup-$version.pkg"` to
+`packaging/macos/build.sh`: change `pkg="$repo/dist/EggieSetup-$version.pkg"` to
 
 ```bash
-pkg="$repo/dist/OmeletSetup-$version-$(uname -m).pkg"
+pkg="$repo/dist/EggieSetup-$version-$(uname -m).pkg"
 ```
 
 `packaging/windows/installer.iss`: in `[Setup]` add `CloseApplications=force`; in `[Run]` add:
@@ -1331,7 +1331,7 @@ pkg="$repo/dist/OmeletSetup-$version-$(uname -m).pkg"
 Filename: "{app}\setup.exe"; Parameters: "setup"; Flags: nowait runasoriginaluser; Check: WizardSilent
 ```
 
-Grep docs for `OmeletSetup-<version>.pkg` (`docs/building.md`, `docs/release-testing.md`, `host/CLAUDE.md`) and change to `OmeletSetup-<version>-<arch>.pkg`.
+Grep docs for `EggieSetup-<version>.pkg` (`docs/building.md`, `docs/release-testing.md`, `host/CLAUDE.md`) and change to `EggieSetup-<version>-<arch>.pkg`.
 
 - [ ] **Step 4: Run tests**
 
@@ -1383,7 +1383,7 @@ def _release(tag, *names, draft=False, prerelease=False):
 
 
 def _exe(version):
-    return f"OmeletSetup-{version}.exe"
+    return f"EggieSetup-{version}.exe"
 
 
 def test_the_highest_host_release_above_this_one_wins_by_number_not_text():
@@ -1391,7 +1391,7 @@ def test_the_highest_host_release_above_this_one_wins_by_number_not_text():
                 _release("host-v0.10.0", _exe("0.10.0"), "SHA256SUMS")]
     version, installer, _ = pick_release(releases, current="0.1.0", asset_name=_exe)
     assert version == "0.10.0"
-    assert installer["name"] == "OmeletSetup-0.10.0.exe"
+    assert installer["name"] == "EggieSetup-0.10.0.exe"
 
 
 def test_runtime_tags_drafts_and_pre_releases_are_ignored():
@@ -1408,7 +1408,7 @@ def test_this_version_or_older_is_no_update():
 
 
 def test_a_release_without_this_machines_installer_or_checksums_is_skipped():
-    releases = [_release("host-v0.3.0", "OmeletSetup-0.3.0-arm64.pkg", "SHA256SUMS"),
+    releases = [_release("host-v0.3.0", "EggieSetup-0.3.0-arm64.pkg", "SHA256SUMS"),
                 _release("host-v0.2.0", _exe("0.2.0")),
                 _release("host-v0.1.5", _exe("0.1.5"), "SHA256SUMS")]
     version, _, _ = pick_release(releases, current="0.1.0", asset_name=_exe)
@@ -1418,10 +1418,10 @@ def test_a_release_without_this_machines_installer_or_checksums_is_skipped():
 def test_check_returns_the_installer_and_its_published_digest():
     digest = hashlib.sha256(b"x").hexdigest()
     listing = json.dumps([_release("host-v0.2.0", _exe("0.2.0"), "SHA256SUMS")]).encode()
-    sums = f"{'0' * 64}  OmeletSetup-0.2.0-arm64.pkg\n{digest}  OmeletSetup-0.2.0.exe\n".encode()
+    sums = f"{'0' * 64}  EggieSetup-0.2.0-arm64.pkg\n{digest}  EggieSetup-0.2.0.exe\n".encode()
     pages = {app_update.RELEASES_URL: listing, "https://dl.invalid/SHA256SUMS": sums}
     assert check(current="0.1.0", asset_name=_exe, fetch=pages.__getitem__) == \
-        AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe", digest)
+        AppRelease("0.2.0", "https://dl.invalid/EggieSetup-0.2.0.exe", digest)
 
 
 def test_a_checksum_file_not_naming_the_installer_is_no_update():
@@ -1452,7 +1452,7 @@ Expected: FAIL (no module).
 
 ```python
 # Desktop app releases are tagged host-vX.Y.Z on this repository.
-HOST_RELEASES_URL = "https://api.github.com/repos/omelet-app/omelet/releases"
+HOST_RELEASES_URL = "https://api.github.com/repos/eggie-io/eggie/releases"
 ```
 
 `host/core/app_update.py`:
@@ -1516,7 +1516,7 @@ def _digest_for(sums: str, name: str) -> str | None:
 def _fetch(url: str) -> bytes:
     from urllib.request import Request, urlopen
     # GitHub's API refuses requests without a User-Agent.
-    request = Request(url, headers={"User-Agent": f"omelet/{constants.APP_VERSION}",
+    request = Request(url, headers={"User-Agent": f"eggie/{constants.APP_VERSION}",
                                     "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=10) as response:
         return response.read()
@@ -1588,7 +1588,7 @@ class FakeProvider:
         self.launched = []
 
     def installer_asset(self, version):
-        return f"OmeletSetup-{version}.exe"
+        return f"EggieSetup-{version}.exe"
 
     def launch_installer(self, path):
         self.launched.append(path)
@@ -1598,7 +1598,7 @@ def _api(tmp_path, release, *, pushed=None, quits=None, provider=None):
     return DesktopApi(provider or FakeProvider(), InstallState(tmp_path / "s.json"),
                       push=(pushed.append if pushed is not None else lambda e: None),
                       probe_fn=lambda p: Readiness(),
-                      install_dir_factory=lambda: tmp_path / "omelet" / "vm",
+                      install_dir_factory=lambda: tmp_path / "eggie" / "vm",
                       app_update_fn=lambda: release,
                       quit_app=(lambda: quits.append(True)) if quits is not None else lambda: None)
 
@@ -1618,7 +1618,7 @@ def test_no_release_means_nothing_to_offer(tmp_path):
 
 def test_the_installer_is_verified_launched_and_the_app_closes(tmp_path, monkeypatch):
     body = b"installer"
-    release = AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe",
+    release = AppRelease("0.2.0", "https://dl.invalid/EggieSetup-0.2.0.exe",
                          hashlib.sha256(body).hexdigest())
 
     import io
@@ -1632,7 +1632,7 @@ def test_the_installer_is_verified_launched_and_the_app_closes(tmp_path, monkeyp
     api.jobs.join(timeout=5)
     (path,) = provider.launched
     assert path.read_bytes() == body
-    assert path.name == "OmeletSetup-0.2.0.exe"
+    assert path.name == "EggieSetup-0.2.0.exe"
     assert quits == [True]
 
 
@@ -1642,7 +1642,7 @@ def test_a_download_that_does_not_match_its_digest_is_never_launched(tmp_path, m
     monkeypatch.setattr(download, "_default_opener",
                         lambda url, start: (io.BytesIO(b"tampered"), 8))
     provider, pushed, quits = FakeProvider(), [], []
-    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe", "0" * 64),
+    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/EggieSetup-0.2.0.exe", "0" * 64),
                pushed=pushed, quits=quits, provider=provider)
     api.check_app_update()
     api.start_app_update()
@@ -1745,7 +1745,7 @@ Bridge methods:
 - In each of `home:not_installed`, `home:stopped`, `home:running`, `home:wrong`, directly after the hero `</div>`, add:
 
 ```html
-    <p class="update-note" data-when="app_update">Omelet <span data-field="app_update"></span> is available.
+    <p class="update-note" data-when="app_update">Eggie <span data-field="app_update"></span> is available.
       <button class="btn-secondary" data-action="app-update">Update</button></p>
 ```
 
@@ -1755,7 +1755,7 @@ Bridge methods:
 <template data-screen="updates">
   <section class="pad centered">
     <div data-when="available">
-      <h2 class="title">Omelet <span data-field="available"></span> is ready</h2>
+      <h2 class="title">Eggie <span data-field="available"></span> is ready</h2>
       <p class="lede">Updating closes this window, installs the new version and opens it again.</p>
       <div class="row"><button class="btn-primary" data-action="app-update">Update</button>
         <button class="btn-secondary" data-action="go-home">Not now</button></div>
@@ -1771,7 +1771,7 @@ Bridge methods:
 
 <template data-screen="app-update:running">
   <section class="pad centered">
-    <h2 class="title">Downloading Omelet <span data-field="available"></span></h2>
+    <h2 class="title">Downloading Eggie <span data-field="available"></span></h2>
     <div class="bar"><div class="bar-fill" data-field="fraction" style="width:0%"></div></div>
     <p class="hint">The window closes when the installer starts.</p>
   </section>
@@ -1795,7 +1795,7 @@ ACTIONS['app-update'] = async () => {
   show('app-update:running', { available: home.app_update });
 };
 
-window.omelet.handlers.app_update = (event) => {
+window.eggie.handlers.app_update = (event) => {
   if (event.type === 'progress') {
     const bar = document.querySelector('[data-field="fraction"]');
     if (bar && event.total) bar.style.width = `${Math.round((event.done / event.total) * 100)}%`;
@@ -1836,20 +1836,20 @@ The host (desktop app) and the runtime (everything inside the VM) release separa
 
 ## How installed machines update
 
-- **Runtime:** every VM checks at boot (`omelet-update.service`) and moves to the newest
-  `runtime-vX.Y.Z` whose `runtime/release.json` `api` the host accepts (`/opt/omelet/host.json`).
+- **Runtime:** every VM checks at boot (`eggie-update.service`) and moves to the newest
+  `runtime-vX.Y.Z` whose `runtime/release.json` `api` the host accepts (`/opt/eggie/host.json`).
   A host that finds an older API updates the runtime at once. A failed update keeps the old one.
 - **Desktop app:** the app checks `host-v*` releases on launch and shows **Update**.
 
 `runtime/install/get.sh` on `main` is what every host and every VM runs. Keep its env vars
-(`OMELET_RUNTIME_REPO`, `_REF`, `_REPAIR`, `_API`, `_UPDATE`), the marker
-`/opt/omelet/runtime.version` and its exit codes backward compatible.
+(`EGGIE_RUNTIME_REPO`, `_REF`, `_REPAIR`, `_API`, `_UPDATE`), the marker
+`/opt/eggie/runtime.version` and its exit codes backward compatible.
 
 ## Cut a runtime release
 
 1. Bump the version in all five places (`tests/test_constants_agree.py` checks):
-   `runtime/omelet_api/__init__.py`, `runtime/omelet_api/pyproject.toml`,
-   `runtime/omelet_api/Dockerfile` (`SERVICE_VERSION`), `runtime/omelet_api/Dockerfile.debug`
+   `runtime/eggie_api/__init__.py`, `runtime/eggie_api/pyproject.toml`,
+   `runtime/eggie_api/Dockerfile` (`SERVICE_VERSION`), `runtime/eggie_api/Dockerfile.debug`
    (`SERVICE_IMAGE`), `runtime/stack.yml` (api and web tags).
 2. `packaging/images/build.sh --push` (amd64 + arm64; register qemu first).
 3. `git tag runtime-vX.Y.Z && git push origin runtime-vX.Y.Z`
@@ -1860,7 +1860,7 @@ VMs pick it up at their next boot.
 
 Only when a route the host calls changes incompatibly:
 
-1. Bump `API_VERSION` in `runtime/omelet_api/core/constants.py` and `runtime/release.json`.
+1. Bump `API_VERSION` in `runtime/eggie_api/core/constants.py` and `runtime/release.json`.
 2. Release a host whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
    or no VM will install it.
 
@@ -1870,42 +1870,42 @@ numbers. Never merge them.
 ## Cut a host release
 
 1. Bump `version` in `pyproject.toml` and `APP_VERSION` in `host/core/constants.py`.
-2. Build on each platform (`docs/building.md`): `OmeletSetup-X.Y.Z.exe`,
-   `OmeletSetup-X.Y.Z-arm64.pkg`, `OmeletSetup-X.Y.Z-x86_64.pkg`.
-3. Put all three in one folder and run `sha256sum OmeletSetup-* > SHA256SUMS`.
-4. `gh release create host-vX.Y.Z OmeletSetup-* SHA256SUMS --title "Omelet X.Y.Z"`
+2. Build on each platform (`docs/building.md`): `EggieSetup-X.Y.Z.exe`,
+   `EggieSetup-X.Y.Z-arm64.pkg`, `EggieSetup-X.Y.Z-x86_64.pkg`.
+3. Put all three in one folder and run `sha256sum EggieSetup-* > SHA256SUMS`.
+4. `gh release create host-vX.Y.Z EggieSetup-* SHA256SUMS --title "Eggie X.Y.Z"`
    (not `--prerelease`, or no app will offer it).
 
 ## First-release checklist
 
 - The repository is public, `runtime/install/get.sh` is on `main`.
 - A `runtime-v*` tag with `runtime/release.json` exists.
-- ghcr `omelet-api` and `omelet-web` are public and multi-arch.
-- `github.com/omelet-app/omelet-skills` is public.
+- ghcr `eggie-api` and `eggie-web` are public and multi-arch.
+- `github.com/eggie-io/eggie-skills` is public.
 
 ## Pin or repair a VM by hand
 
 ```powershell
-wsl -d omelet-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+wsl -d eggie-vm -u root -- bash -lc "curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | EGGIE_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
 ```bash
-limactl shell omelet-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/omelet-app/omelet/main/runtime/install/get.sh | OMELET_RUNTIME_REF=runtime-vX.Y.Z bash"
+limactl shell eggie-vm -- sudo bash -lc "curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | EGGIE_RUNTIME_REF=runtime-vX.Y.Z bash"
 ```
 
-Use `OMELET_RUNTIME_REPAIR=1` instead to reinstall the current release. A VM on a pinned branch
+Use `EGGIE_RUNTIME_REPAIR=1` instead to reinstall the current release. A VM on a pinned branch
 (not a `runtime-v*` tag) is never moved by the boot update.
 ````
 
 - [ ] **Step 2: Update the other docs**
 
-- `runtime/install/CLAUDE.md`: in the `get.sh` section list the new env vars, the `resolve_ref` API filter, update mode (no-op / stage / swap / roll back), `runtime.env`, `update.lock`; add `lib/boot-update.sh` + `systemd/omelet-update.service` (enabled, never started by `install.sh`); add `tests/runtime/test_boot_update.py` to the tests list.
-- Root `CLAUDE.md` seam sentence: add `/opt/omelet/host.json` (host → VM), `runtime/release.json`'s `api`.
+- `runtime/install/CLAUDE.md`: in the `get.sh` section list the new env vars, the `resolve_ref` API filter, update mode (no-op / stage / swap / roll back), `runtime.env`, `update.lock`; add `lib/boot-update.sh` + `systemd/eggie-update.service` (enabled, never started by `install.sh`); add `tests/runtime/test_boot_update.py` to the tests list.
+- Root `CLAUDE.md` seam sentence: add `/opt/eggie/host.json` (host → VM), `runtime/release.json`'s `api`.
 - `runtime/CLAUDE.md`: replace "Re-running setup does nothing … run `get.sh` in the VM without repair" with "The VM updates itself at boot; see `docs/releasing.md`."
-- `docs/release-testing.md`: add Windows and macOS rows — "Update from the previous host release via the Update button" (pass: installer runs, app reopens on Windows, new version in the footer); "Boot a VM with a newer compatible runtime tag published" (pass: `runtime.version` moves, projects still run); "Boot with the network off" (pass: VM starts on its old runtime, `journalctl -u omelet-update` explains).
+- `docs/release-testing.md`: add Windows and macOS rows — "Update from the previous host release via the Update button" (pass: installer runs, app reopens on Windows, new version in the footer); "Boot a VM with a newer compatible runtime tag published" (pass: `runtime.version` moves, projects still run); "Boot with the network off" (pass: VM starts on its old runtime, `journalctl -u eggie-update` explains).
 - `docs/README.md`: remove the `future/` row; change the `releasing.md` row to "Cutting runtime and host releases, and how installed machines update".
 - `git rm docs/future/engine-self-update.md`.
-- Spec: under section 4 "Trigger" add "An installed ref that is not a `runtime-vN.N.N` tag (a pinned branch) is left alone." Under section 3 item 3 add "The host's stub exports `OMELET_RUNTIME_URL` to `get.sh`; without it (`curl | bash` on a cloud VM) `get.sh` records `$REPO/raw/main/runtime/install/get.sh`." Set `Status: implemented`.
+- Spec: under section 4 "Trigger" add "An installed ref that is not a `runtime-vN.N.N` tag (a pinned branch) is left alone." Under section 3 item 3 add "The host's stub exports `EGGIE_RUNTIME_URL` to `get.sh`; without it (`curl | bash` on a cloud VM) `get.sh` records `$REPO/raw/main/runtime/install/get.sh`." Set `Status: implemented`.
 
 - [ ] **Step 3: Run the full suite**
 

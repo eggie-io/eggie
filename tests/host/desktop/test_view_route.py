@@ -41,7 +41,7 @@ def test_a_marker_read_that_threw_is_wrong_not_unreachable():
     # and it is what pins the `and readiness.runtime_version` half of the
     # unreachable guard.
     readiness = Readiness(vm_exists=True, vm_reachable=True,
-                          problem="cat: /opt/omelet/runtime.version: No such file")
+                          problem="cat: /opt/eggie/runtime.version: No such file")
     assert route_for(readiness) == ("home", "wrong")
 
 

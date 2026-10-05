@@ -63,7 +63,7 @@ def test_vm_start_reports_the_providers_own_failure_instead_of_saying_started(mo
     # dropping it printed "VM started." for a VM that does not exist.
     class BrokenProvider(FakeProvider):
         def start(self):
-            raise RuntimeError("the virtual machine 'omelet-vm' could not be "
+            raise RuntimeError("the virtual machine 'eggie-vm' could not be "
                                "started (exit 1): no such distribution")
 
     monkeypatch.setattr(cli, "_provider_factory", lambda: BrokenProvider())

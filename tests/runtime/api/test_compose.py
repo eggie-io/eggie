@@ -1,4 +1,4 @@
-from omelet_api.core.compose import container_port, exposed_ports
+from eggie_api.core.compose import container_port, exposed_ports
 
 
 def test_container_port_from_short_mapping():

@@ -1,4 +1,4 @@
-"""Entry point for the Omelet.app bundle.
+"""Entry point for the Eggie.app bundle.
 
 The CLI and the setup window are one program with two front doors, exactly as
 on Windows — where the installer's shortcut runs `setup.exe setup`, passing the

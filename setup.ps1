@@ -9,7 +9,7 @@
 param(
     # Use a rootfs already on disk instead of downloading one.
     [string]$Rootfs,
-    # Install only; skip `omelet vm create`.
+    # Install only; skip `eggie vm create`.
     [switch]$NoCreate
 )
 
@@ -43,7 +43,7 @@ if (-not (Test-Path $venvPython)) {
     if ($LASTEXITCODE -ne 0) { Fail "venv creation failed." }
 }
 
-Step "Installing the omelet package"
+Step "Installing the eggie package"
 # Called through the venv's python so no activation (and no execution policy) is needed.
 & $venvPython -m pip install --quiet --upgrade pip
 Push-Location $repo
@@ -52,21 +52,21 @@ try {
 } finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { Fail "pip install failed." }
 
-$omeletExe = Join-Path $repo '.venv\Scripts\omelet.exe'
-if (-not (Test-Path $omeletExe)) { Fail "Install finished but $omeletExe is missing." }
+$eggieExe = Join-Path $repo '.venv\Scripts\eggie.exe'
+if (-not (Test-Path $eggieExe)) { Fail "Install finished but $eggieExe is missing." }
 
-# Shim so `.\omelet <cmd>` works from this directory without activating the venv.
+# Shim so `.\eggie <cmd>` works from this directory without activating the venv.
 @"
 @echo off
-"%~dp0.venv\Scripts\omelet.exe" %*
-"@ | Set-Content -Path (Join-Path $repo 'omelet.cmd') -Encoding ASCII
+"%~dp0.venv\Scripts\eggie.exe" %*
+"@ | Set-Content -Path (Join-Path $repo 'eggie.cmd') -Encoding ASCII
 
 # --- 3. host check ------------------------------------------------------------
 Step "Checking this host"
-& $omeletExe doctor
+& $eggieExe doctor
 if ($LASTEXITCODE -ne 0) { Fail "Host check failed — fix the items above, then re-run." }
 
-if ($NoCreate) { Step "Done (skipped VM create). Run: .\omelet vm create"; exit 0 }
+if ($NoCreate) { Step "Done (skipped VM create). Run: .\eggie vm create"; exit 0 }
 
 # --- 4. rootfs ----------------------------------------------------------------
 # Canonical's official WSL images, the same ones Microsoft's WSL distro
@@ -88,7 +88,7 @@ if ($Rootfs) {
     $rootfsPath = (Resolve-Path $Rootfs).Path
 } else {
     $image = $images[$arch]
-    $cache = Join-Path $env:LOCALAPPDATA 'Omelet\cache'
+    $cache = Join-Path $env:LOCALAPPDATA 'Eggie\cache'
     New-Item -ItemType Directory -Force -Path $cache | Out-Null
     $rootfsPath = Join-Path $cache (Split-Path $image.Url -Leaf)
 
@@ -116,10 +116,10 @@ Write-Host "    rootfs: $rootfsPath"
 
 # --- 5. create + bootstrap the VM --------------------------------------------
 Step "Creating the VM and installing Docker + Traefik (several minutes)"
-$env:OMELET_ROOTFS = $rootfsPath
-& $omeletExe vm create
+$env:EGGIE_ROOTFS = $rootfsPath
+& $eggieExe vm create
 if ($LASTEXITCODE -ne 0) { Fail "VM setup failed — see the error above." }
 
 Write-Host ""
 Write-Host "Ready. Start a project with:" -ForegroundColor Green
-Write-Host "    .\omelet up <path-to-project>"
+Write-Host "    .\eggie up <path-to-project>"

@@ -10,7 +10,7 @@ runner = CliRunner()
 
 
 class StubProvider:
-    location = r"C:\Users\you\AppData\Local\Omelet\vm"
+    location = r"C:\Users\you\AppData\Local\Eggie\vm"
     terminal = "PowerShell"
     remediable = True
     autostart_off = False
@@ -80,7 +80,7 @@ def provisionable(monkeypatch):
 def test_headless_setup_ends_by_naming_the_next_command(provisionable):
     result = runner.invoke(cli.app, ["setup", "--headless"])
     assert result.exit_code == 0
-    assert "omelet up" in result.stdout, \
+    assert "eggie up" in result.stdout, \
         "a user who waited several minutes must be told what to type next"
 
 
@@ -171,7 +171,7 @@ def test_uninstall_cleans_up_local_state_even_when_destroy_fails(monkeypatch):
 def test_uninstall_purge_removes_the_vm_directory(monkeypatch):
     # The multi-gigabyte vhdx is what survives a failed destroy and fills the
     # disk. Project state is no longer host-side at all -- it lives inside the
-    # VM at /opt/omelet/state.db and goes with it.
+    # VM at /opt/eggie/state.db and goes with it.
     from host.providers import default_install_dir
 
     monkeypatch.setattr(cli, "_provider_factory", lambda: FailingDestroyProvider())
@@ -219,7 +219,7 @@ def test_uninstall_purge_succeeds_and_clears_state(monkeypatch):
 def test_selfcheck_reports_ok_for_every_bundled_asset():
     result = runner.invoke(cli.app, ["selfcheck"])
     assert result.exit_code == 0
-    for name in ("docker-compose.yml", "omelet.yaml"):
+    for name in ("docker-compose.yml", "eggie.yaml"):
         assert name in result.stdout
     assert "MISSING" not in result.stdout
 
@@ -228,7 +228,7 @@ def test_selfcheck_reports_missing_and_exits_nonzero_when_an_asset_cannot_resolv
         monkeypatch, tmp_path):
     import host.providers as providers
 
-    # Simulate a frozen build whose datas entry for omelet.yaml went missing:
+    # Simulate a frozen build whose datas entry for eggie.yaml went missing:
     # __file__ is what the real resolution (Path(__file__).parent) depends on.
     monkeypatch.setattr(providers, "__file__", str(tmp_path / "nonexistent" / "__init__.py"))
 
@@ -236,7 +236,7 @@ def test_selfcheck_reports_missing_and_exits_nonzero_when_an_asset_cannot_resolv
 
     assert result.exit_code == 1
     assert "MISSING" in result.stdout
-    assert "omelet.yaml" in result.stdout
+    assert "eggie.yaml" in result.stdout
 
 
 def test_verify_template_resolves_to_the_bundled_compose_file():
@@ -319,7 +319,7 @@ def test_packaging_spec_bundles_exactly_the_assets_selfcheck_verifies():
     import re
     from pathlib import Path
 
-    spec = Path("packaging/windows/omelet.spec").read_text()
+    spec = Path("packaging/windows/eggie.spec").read_text()
     datas = re.search(r"datas=\[(.*?)\n    \]", spec, re.DOTALL)
     assert datas, "could not find the datas block in the spec"
     bundled = set(re.findall(r'"\.\./\.\./([^"]+)"', datas[1]))

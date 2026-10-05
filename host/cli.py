@@ -5,7 +5,7 @@ import typer
 from host.core.diagnose import render_diagnosis
 from host.providers import get_provider
 
-app = typer.Typer(help="Omelet: VM + Docker + one exposed port.", no_args_is_help=True)
+app = typer.Typer(help="Eggie: VM + Docker + one exposed port.", no_args_is_help=True)
 
 _provider_factory = get_provider  # tests override this
 
@@ -55,15 +55,15 @@ def _vm_errors():
 
 @app.callback()
 def callback():
-    """Omelet CLI."""
+    """Eggie CLI."""
 
 
 @app.command()
 def version():
-    """Print the Omelet version."""
+    """Print the Eggie version."""
     from host.core import constants
 
-    typer.echo(f"omelet {constants.APP_VERSION}")
+    typer.echo(f"eggie {constants.APP_VERSION}")
 
 
 @app.command()
@@ -75,22 +75,22 @@ def doctor():
     raise typer.Exit(code=0 if diag.ok else 1)
 
 
-vm = typer.Typer(help="Manage the Omelet VM.", no_args_is_help=True)
+vm = typer.Typer(help="Manage the Eggie VM.", no_args_is_help=True)
 app.add_typer(vm, name="vm")
 
 
 @vm.command("create")
 def vm_create():
-    """Create the VM and install Omelet inside it."""
+    """Create the VM and install Eggie inside it."""
     from host.core.bootstrap import bootstrap, BootstrapError
     with _vm_errors():
         p = _provider()
         if p.exists():
-            typer.echo("VM already exists; checking the Omelet install.")
+            typer.echo("VM already exists; checking the Eggie install.")
         else:
             typer.echo("Creating VM…")
             p.create()
-        typer.echo("Installing Omelet in the VM (a few minutes)…")
+        typer.echo("Installing Eggie in the VM (a few minutes)…")
         try:
             bootstrap(p)
         except BootstrapError as e:
@@ -190,7 +190,7 @@ def up(directory: str = typer.Argument(".", help="Project directory with a docke
             # bare `crash_looping` is not a sentence anyone can act on.
             typer.echo(f"{project_id} started, but its containers did not stay "
                        f"running. To see what they printed, run: "
-                       f"omelet logs {project_id}", err=True)
+                       f"eggie logs {project_id}", err=True)
             typer.echo(f"(status: {status})", err=True)
             if str(e):
                 typer.echo(str(e), err=True)
@@ -372,7 +372,7 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     except OSError as e:
         typer.echo(f"Could not remove the desktop settings: {e}", err=True)
     # No host-side state.db to remove any more: project state lives in the VM
-    # at /opt/omelet/state.db and goes with the VM.
+    # at /opt/eggie/state.db and goes with the VM.
 
     if destroy_error is not None:
         typer.echo(f"The VM could not be removed ({destroy_error}). "
@@ -399,7 +399,7 @@ def selfcheck():
     checks = [
         ("host/provision/nginx-hello/docker-compose.yml",
          VERIFY_TEMPLATE / "docker-compose.yml"),
-        ("host/providers/omelet.yaml", Path(_providers.__file__).parent / "omelet.yaml"),
+        ("host/providers/eggie.yaml", Path(_providers.__file__).parent / "eggie.yaml"),
     ]
 
     try:

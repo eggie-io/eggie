@@ -1,12 +1,12 @@
 {
-  "name": "omelet-web",
+  "name": "eggie-web",
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
   "engines": { "node": ">=22.22" },
   "scripts": {
-    "dev": "npm run dev -w @omelet/console",
-    "build": "npm run build -w @omelet/console",
+    "dev": "npm run dev -w @eggie/console",
+    "build": "npm run build -w @eggie/console",
     "test": "vitest run",
     "typecheck": "tsc -p packages/ui && tsc -p apps/console",
     "check-offline": "node scripts/check-offline.mjs apps/console/dist"

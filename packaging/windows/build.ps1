@@ -8,9 +8,9 @@ $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
 # PowerShell's call operator rejects bare relative paths: `& .venv\...` is
 # parsed as a module name, not a program. Every invocation below is absolute.
 $venvPython = Join-Path $repo '.venv\Scripts\python.exe'
-$cliExe     = Join-Path $repo 'dist\Omelet\omelet.exe'
-$setupExe   = Join-Path $repo 'dist\Omelet\setup.exe'
-$specFile   = Join-Path $repo 'packaging\windows\omelet.spec'
+$cliExe     = Join-Path $repo 'dist\Eggie\eggie.exe'
+$setupExe   = Join-Path $repo 'dist\Eggie\setup.exe'
+$specFile   = Join-Path $repo 'packaging\windows\eggie.spec'
 $issFile    = Join-Path $repo 'packaging\windows\installer.iss'
 $webview2   = Join-Path $repo 'packaging\windows\MicrosoftEdgeWebView2Setup.exe'
 $webview2Url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
@@ -50,7 +50,7 @@ try {
         throw "PyInstaller missing. Run: .\.venv\Scripts\python.exe -m pip install -e `".[dev]`""
     }
 
-    # omelet.spec names this as a hidden import by string. If the name is
+    # eggie.spec names this as a hidden import by string. If the name is
     # wrong, PyInstaller silently omits it -- the build still succeeds, and
     # the only symptom is a user's double-click reporting "install the Edge
     # WebView2 runtime", which is the wrong diagnosis for a packaging bug.
@@ -58,29 +58,29 @@ try {
     # turns that into a build-time error instead.
     & $venvPython -c "import webview.platforms.edgechromium"
     if ($LASTEXITCODE -ne 0) {
-        throw "pywebview's EdgeChromium backend did not import; the hidden import in omelet.spec is wrong."
+        throw "pywebview's EdgeChromium backend did not import; the hidden import in eggie.spec is wrong."
     }
 
     $version = (Select-String -Path (Join-Path $repo 'pyproject.toml') `
         -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
-    Write-Host "==> Building Omelet $version"
+    Write-Host "==> Building Eggie $version"
 
     & $venvPython -m PyInstaller --noconfirm --clean $specFile
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
 
-    # Only omelet.exe is smoke-tested: setup.exe is the same code frozen for the
+    # Only eggie.exe is smoke-tested: setup.exe is the same code frozen for the
     # GUI subsystem, which PowerShell neither waits on nor reads output from.
     if (-not (Test-Path $setupExe)) { throw "setup.exe was not built." }
 
     & $cliExe version
-    if ($LASTEXITCODE -ne 0) { throw "Smoke test failed: omelet.exe version." }
+    if ($LASTEXITCODE -ne 0) { throw "Smoke test failed: eggie.exe version." }
     # version never touches disk, so it can pass on a bundle that's missing a
     # datas entry or a hiddenimport; selfcheck resolves each bundled asset the
     # way the real code does, and also imports the four desktop modules the
     # spec's hiddenimports name, and catches either class of failure before
     # it reaches a user.
     & $cliExe selfcheck
-    if ($LASTEXITCODE -ne 0) { throw "Smoke test failed: omelet.exe selfcheck reported a missing bundled asset or desktop-window module." }
+    if ($LASTEXITCODE -ne 0) { throw "Smoke test failed: eggie.exe selfcheck reported a missing bundled asset or desktop-window module." }
 
     # Evergreen bootstrapper (~1.5MB), not the runtime itself: it detects
     # what's already on the machine and fetches only what's missing when the
@@ -99,9 +99,9 @@ try {
                "%LOCALAPPDATA%\Programs, and PATH.")
     }
     Write-Host "==> ISCC: $InnoSetup"
-    $env:OMELET_VERSION = $version
+    $env:EGGIE_VERSION = $version
     & $InnoSetup $issFile
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 
-    Write-Host "==> dist\OmeletSetup-$version.exe" -ForegroundColor Green
+    Write-Host "==> dist\EggieSetup-$version.exe" -ForegroundColor Green
 } finally { Pop-Location }

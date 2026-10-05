@@ -1,6 +1,6 @@
 # Design boards
 
-`omelet-web-ui.dc.html` is a snapshot of `Omelet Web UI.dc.html` from the
+`eggie-web-ui.dc.html` is a snapshot of `Eggie Web UI.dc.html` from the
 claude.ai/design project `5a77e605-5a2a-4a68-a1e7-76c07c0d8aa2`, taken
 2026-09-22. The project stays the source of truth; refresh this copy when the
 board changes. It will not render on its own (it expects the design tool's

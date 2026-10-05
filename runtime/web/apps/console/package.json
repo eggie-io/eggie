@@ -1,5 +1,5 @@
 {
-  "name": "@omelet/console",
+  "name": "@eggie/console",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@omelet/ui": "*",
+    "@eggie/ui": "*",
     "@tanstack/react-query": "5.103.2",
     "qrcode-generator": "2.0.4",
     "react": "19.3.0",

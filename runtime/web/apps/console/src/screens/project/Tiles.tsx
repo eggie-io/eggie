@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import { filesRoute } from "../../uploads/paths";
 import { FOLDER, GLOBE, MAGNIFIER, TRASH } from "../icons";
 import s from "./ProjectPage.module.css";

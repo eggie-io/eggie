@@ -1,4 +1,4 @@
-import { Button, PromptCard } from "@omelet/ui";
+import { Button, PromptCard } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { kindOf, promptFor } from "../../uploads/kinds";
 import { joinPath } from "../../uploads/paths";

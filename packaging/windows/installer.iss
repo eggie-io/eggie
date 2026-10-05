@@ -1,13 +1,13 @@
-#define AppName "Omelet"
-#define AppVersion GetEnv("OMELET_VERSION")
+#define AppName "Eggie"
+#define AppVersion GetEnv("EGGIE_VERSION")
 
 [Setup]
 AppName={#AppName}
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\Omelet
+DefaultDirName={localappdata}\Programs\Eggie
 DefaultGroupName={#AppName}
 OutputDir=..\..\dist
-OutputBaseFilename=OmeletSetup-{#AppVersion}
+OutputBaseFilename=EggieSetup-{#AppVersion}
 SetupIconFile=..\..\host\desktop\resources\icon.ico
 UninstallDisplayIcon={app}\setup.exe
 ; Per-user install: no admin for the install itself. The only UAC prompt in
@@ -20,7 +20,7 @@ WizardStyle=modern
 CloseApplications=force
 
 [Files]
-Source: "..\..\dist\Omelet\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\..\dist\Eggie\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 ; Microsoft's evergreen bootstrapper, fetched by build.ps1. A no-op on
 ; Windows 11 and any updated Windows 10 -- it detects an existing runtime and
 ; exits without reinstalling -- so shipping and running it unconditionally is
@@ -28,13 +28,13 @@ Source: "..\..\dist\Omelet\*"; DestDir: "{app}"; Flags: recursesubdirs ignorever
 Source: "MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\Omelet Setup"; Filename: "{app}\setup.exe"; Parameters: "setup"
+Name: "{group}\Eggie Setup"; Filename: "{app}\setup.exe"; Parameters: "setup"
 
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; \
   StatusMsg: "Installing Microsoft Edge WebView2 runtime..."; Flags: waituntilterminated
 Filename: "{app}\setup.exe"; Parameters: "setup"; \
-  Description: "Set up Omelet now"; Flags: postinstall nowait skipifsilent
+  Description: "Set up Eggie now"; Flags: postinstall nowait skipifsilent
 ; A silent run is the app's own Update button: reopen it when done. The entry
 ; above is skipifsilent, so it never covers this.
 Filename: "{app}\setup.exe"; Parameters: "setup"; Flags: nowait runasoriginaluser; Check: WizardSilent
@@ -42,7 +42,7 @@ Filename: "{app}\setup.exe"; Parameters: "setup"; Flags: nowait runasoriginaluse
 [UninstallRun]
 ; Destroys the VM and every project inside it before files are removed.
 ; Console exe on purpose: the uninstaller must wait for it and read its exit code.
-Filename: "{app}\omelet.exe"; Parameters: "uninstall --purge"; \
+Filename: "{app}\eggie.exe"; Parameters: "uninstall --purge"; \
   Flags: runhidden; RunOnceId: "PurgeVm"
 
 [Registry]
@@ -64,7 +64,7 @@ function InitializeUninstall(): Boolean;
 var ResultCode: Integer;
 begin
   Result := MsgBox(
-    'Uninstalling Omelet permanently deletes the VM and every ' +
+    'Uninstalling Eggie permanently deletes the VM and every ' +
     'project inside it. Project files live inside the VM, not on this ' +
     'PC, so nothing is recoverable afterward.' + #13#10#13#10 +
     'Continue with uninstall?',

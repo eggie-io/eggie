@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import { type Account, type StartOutcome, signInError, signInLink, startError } from "../../account/account";
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
@@ -64,7 +64,7 @@ export function SignIn({
   return (
     <StatusScreen
       art={<SleepyEgg />}
-      title="Sign in to Omelet"
+      title="Sign in to Eggie"
       actions={
         <Button variant="primary" size="lg" onClick={start} disabled={view.starting}>
           {view.outcome?.kind === "unreachable" ? "Try again" : "Sign in"}
@@ -73,7 +73,7 @@ export function SignIn({
       footer="Your projects keep running while you sign in."
     >
       {reason && <p className={own.error}>{reason}</p>}
-      <p className={s.lead}>Your Omelet account keeps track of your projects. Sign in once on this computer.</p>
+      <p className={s.lead}>Your Eggie account keeps track of your projects. Sign in once on this computer.</p>
     </StatusScreen>
   );
 }
@@ -85,7 +85,7 @@ function Pending({ account }: { account: Extract<Account, { state: "pending" }> 
   if (link === null) {
     return (
       <StatusScreen art={<SleepyEgg />} title="Sign-in isn't available" actions={null}>
-        <p className={s.lead}>The link the Omelet service sent isn't valid. This page keeps waiting for a good one.</p>
+        <p className={s.lead}>The link the Eggie service sent isn't valid. This page keeps waiting for a good one.</p>
         <p className={s.detail}>{account.url}</p>
       </StatusScreen>
     );

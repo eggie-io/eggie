@@ -11,11 +11,11 @@ def _imported_modules(tree):
             yield node.lineno, node.module or ""
 
 
-API = Path(__file__).resolve().parents[3] / "runtime" / "omelet_api"
+API = Path(__file__).resolve().parents[3] / "runtime" / "eggie_api"
 
 
 def test_the_api_never_imports_from_the_host():
-    # The API ships as a Docker image built from runtime/omelet_api/ alone; an
+    # The API ships as a Docker image built from runtime/eggie_api/ alone; an
     # import of host code would only fail once the image runs.
     offenders = []
     scanned = sorted(API.rglob("*.py"))

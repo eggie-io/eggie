@@ -14,7 +14,7 @@ class FakeProvider:
         self.launched = []
 
     def installer_asset(self, version):
-        return f"OmeletSetup-{version}.exe"
+        return f"EggieSetup-{version}.exe"
 
     def launch_installer(self, path):
         self.launched.append(path)
@@ -24,7 +24,7 @@ def _api(tmp_path, release, *, pushed=None, quits=None, provider=None):
     return DesktopApi(provider or FakeProvider(), InstallState(tmp_path / "s.json"),
                       push=(pushed.append if pushed is not None else lambda e: None),
                       probe_fn=lambda p: Readiness(),
-                      install_dir_factory=lambda: tmp_path / "omelet" / "vm",
+                      install_dir_factory=lambda: tmp_path / "eggie" / "vm",
                       app_update_fn=lambda: release,
                       quit_app=(lambda: quits.append(True)) if quits is not None else lambda: None)
 
@@ -98,8 +98,8 @@ def test_the_installer_is_verified_launched_and_the_app_closes(tmp_path, monkeyp
     api.jobs.join(timeout=5)
     (path,) = provider.launched
     assert path.read_bytes() == body
-    assert path.name == "OmeletSetup-0.2.0.exe"
-    assert path.parent == tmp_path / "omelet" / "cache"
+    assert path.name == "EggieSetup-0.2.0.exe"
+    assert path.parent == tmp_path / "eggie" / "cache"
     assert quits == [True]
 
 
@@ -109,7 +109,7 @@ def test_a_download_that_does_not_match_its_digest_is_never_launched(tmp_path, m
     monkeypatch.setattr(download, "_default_opener",
                         lambda url, start: (io.BytesIO(b"tampered"), 8))
     provider, pushed, quits = FakeProvider(), [], []
-    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/OmeletSetup-0.2.0.exe", "0" * 64),
+    api = _api(tmp_path, AppRelease("0.2.0", "https://dl.invalid/EggieSetup-0.2.0.exe", "0" * 64),
                pushed=pushed, quits=quits, provider=provider)
     api.check_app_update()
     api.start_app_update()

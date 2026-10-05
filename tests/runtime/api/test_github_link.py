@@ -3,10 +3,10 @@ import stat
 
 import pytest
 
-from omelet_api.core.github import GitHubUnavailable
-from omelet_api.core.github_link import (SETUP_TIMEOUT, GitHubLink,
+from eggie_api.core.github import GitHubUnavailable
+from eggie_api.core.github_link import (SETUP_TIMEOUT, GitHubLink,
                                          NotConnected, setup_state)
-from omelet_api.core.state import State
+from eggie_api.core.state import State
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
 

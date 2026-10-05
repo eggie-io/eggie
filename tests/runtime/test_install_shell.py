@@ -119,10 +119,10 @@ def test_the_stack_comes_up_without_the_tunnel_profile():
     assert ups and not any("--profile" in l for l in ups)
 
 
-def test_install_makes_opt_omelet_writable_before_the_api_starts():
+def test_install_makes_opt_eggie_writable_before_the_api_starts():
     # The API runs as a non-root user whose only shared credential with the VM
     # is the docker group. Root-owned 0755 here means it cannot create
-    # /opt/omelet/state.db, and `restart: always` then loops it forever.
+    # /opt/eggie/state.db, and `restart: always` then loops it forever.
     up = _index_of(" up -d")
     assert _index_of("chgrp") < up
     assert any("docker" in l for l in _commands() if "chgrp" in l), \
@@ -168,7 +168,7 @@ def test_the_skills_install_from_their_own_repository():
     # runtime: `add` was doing the filing while the tarball did the
     # distributing. The argument must be a remote source, not a local path.
     script = (ROOT / "runtime" / "install" / "install.sh").read_text()
-    assert "omelet-app/omelet-skills" in script
+    assert "eggie-io/eggie-skills" in script
     assert "$RUNTIME_DIR/skills" not in script
     assert "$INSTALL_DIR/skills" not in script
 
@@ -176,7 +176,7 @@ def test_the_skills_install_from_their_own_repository():
 def test_the_skills_source_is_overridable():
     # Pinning a ref must be a value change, not a code change.
     script = (ROOT / "runtime" / "install" / "install.sh").read_text()
-    assert "${OMELET_SKILLS_SOURCE:-" in script
+    assert "${EGGIE_SKILLS_SOURCE:-" in script
 
 
 def test_npx_in_the_account_loop_cannot_swallow_the_account_list():
@@ -196,7 +196,7 @@ def test_a_repair_or_a_new_token_recreates_the_api():
     # no longer exists.
     services = yaml.safe_load(STACK_YML.read_text())["services"]
     (api_key,) = [name for name, svc in services.items()
-                  if "omelet-api" in svc.get("image", "")]
+                  if "eggie-api" in svc.get("image", "")]
     commands = _commands()
     recreate = _index_of(f"--force-recreate {api_key}")
     assert recreate > _index_of(" up -d")
@@ -229,7 +229,7 @@ def test_install_writes_the_token_before_the_stack_comes_up():
 
 
 def test_install_writes_the_token_after_the_permissions_sweep_widens_it():
-    # A mode-600 token written before `chmod -R g+rwX /opt/omelet` comes out
+    # A mode-600 token written before `chmod -R g+rwX /opt/eggie` comes out
     # group-readable; written after, its own chmod is the last word.
     commands = _commands()
     token_write = _index_of(f"[[ ! -s {constants.GUEST_TOKEN} ]]")
@@ -266,15 +266,15 @@ def test_install_chgrps_the_token_to_docker():
 def test_install_writes_this_vms_real_docker_gid_for_the_stack():
     # stack.yml's group_add defaults to 999 and the image bakes in 999, but the
     # chgrp above uses whatever GID this VM's docker group actually has. On a VM
-    # where they differ the API can write neither /opt/omelet nor the socket
+    # where they differ the API can write neither /opt/eggie nor the socket
     # -- the same crash-loop the chgrp exists to prevent, one step over.
     commands = _commands()
     env_line = _index_of(f"{constants.GUEST_ROOT}/.env")
     assert env_line < _index_of(" up -d"), "compose reads .env when it starts"
-    assert any("OMELET_DOCKER_GID" in l for l in commands)
+    assert any("EGGIE_DOCKER_GID" in l for l in commands)
     assert any("getent group docker" in l for l in commands), \
         "the GID must be read from the VM, not assumed"
-    assert not any(re.search(r"OMELET_DOCKER_GID=[0-9]", l) for l in commands), \
+    assert not any(re.search(r"EGGIE_DOCKER_GID=[0-9]", l) for l in commands), \
         "a literal GID is the bug this guards against"
 
 
@@ -282,7 +282,7 @@ def test_install_records_the_image_version_the_stack_pulls():
     # stack.yml names no version of its own; the release tag is the only copy.
     commands = _commands()
     assert any("lib/image-version.sh" in l and "$REF" in l for l in commands)
-    assert any("OMELET_VERSION=" in l and f"{constants.GUEST_ROOT}/.env" in l for l in commands)
+    assert any("EGGIE_VERSION=" in l and f"{constants.GUEST_ROOT}/.env" in l for l in commands)
 
 
 def test_install_gets_the_github_cli_from_githubs_own_repo():
@@ -323,7 +323,7 @@ def test_a_github_cli_failure_is_reported_and_stops_the_install():
 
 
 def test_install_removes_what_an_engine_v_install_left_behind():
-    # A VM installed from an engine-v* ref keeps /opt/omelet/engine/,
+    # A VM installed from an engine-v* ref keeps /opt/eggie/engine/,
     # engine.version and agent.token forever otherwise: nothing reads them
     # any more, engine.version sits beside runtime.version to mislead the
     # next person who debugs the box, and agent.token is a live 0640
@@ -332,25 +332,25 @@ def test_install_removes_what_an_engine_v_install_left_behind():
     text = INSTALL.read_text()
     block = text.split("rm -rf ", 1)[1].split("\nif ", 1)[0]
     cleanup = block.replace("\\\n", " ")
-    assert "omelet-setup" in cleanup, "sanity check: not the intended block"
-    for stale in ("/opt/omelet/engine ", "/opt/omelet/engine.version",
-                  "/opt/omelet/agent.token"):
+    assert "eggie-setup" in cleanup, "sanity check: not the intended block"
+    for stale in ("/opt/eggie/engine ", "/opt/eggie/engine.version",
+                  "/opt/eggie/agent.token"):
         assert stale in cleanup, f"cleanup no longer removes {stale!r}"
 
 
 def test_install_reasserts_the_github_file_modes_after_the_permission_sweep():
     text = INSTALL.read_text()
-    sweep = text.index("chmod -R g+rwX /opt/omelet")
-    assert text.index("chmod 600 /opt/omelet/github/token") > sweep
-    assert "install -d -m 2770 -o root -g docker /opt/omelet/github" in text
+    sweep = text.index("chmod -R g+rwX /opt/eggie")
+    assert text.index("chmod 600 /opt/eggie/github/token") > sweep
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/github" in text
 
 
 def test_install_enables_the_github_path_unit_and_applies_before_the_marker():
     text = INSTALL.read_text()
-    assert "systemctl enable --now omelet-github.path" in text
+    assert "systemctl enable --now eggie-github.path" in text
     # The oneshot service, not the script directly: the call still blocks,
     # runs stay serialized, and the unit's environment is clean.
-    apply = text.index("systemctl start omelet-github.service")
+    apply = text.index("systemctl start eggie-github.service")
     assert apply < text.index(f"> {constants.RUNTIME_MARKER}")
 
 
@@ -359,7 +359,7 @@ def test_install_trusts_repositories_owned_by_the_api():
 
 
 def test_the_agent_instructions_never_ask_for_a_github_login():
-    text = (ROOT / "runtime" / "instructions" / "omelet.md").read_text()
+    text = (ROOT / "runtime" / "instructions" / "eggie.md").read_text()
     text_joined = " ".join(text.split())
     assert "Connect GitHub" in text
     assert "do not run `gh auth login`" in text_joined
@@ -368,31 +368,31 @@ def test_the_agent_instructions_never_ask_for_a_github_login():
 
 def test_install_records_how_agents_reach_the_vm_before_the_marker():
     text = INSTALL.read_text()
-    record = text.index("/opt/omelet/connect.json")
-    assert record < text.index("> /opt/omelet/runtime.version")
+    record = text.index("/opt/eggie/connect.json")
+    assert record < text.index("> /opt/eggie/runtime.version")
     assert "/proc/sys/kernel/osrelease" in text and "/mnt/lima-cidata" in text
 
 
 def test_install_enables_the_boot_update_without_running_it_now():
     # Starting it here would run an update inside every install.
     text = INSTALL.read_text()
-    assert "systemctl enable omelet-update.service" in text
-    assert "enable --now omelet-update" not in text
-    assert "start omelet-update" not in text
+    assert "systemctl enable eggie-update.service" in text
+    assert "enable --now eggie-update" not in text
+    assert "start eggie-update" not in text
 
 
 def test_the_boot_update_never_holds_up_boot():
     # A oneshot unit orders multi-user.target after the whole update.
-    unit = (ROOT / "runtime" / "install" / "systemd" / "omelet-update.service").read_text()
+    unit = (ROOT / "runtime" / "install" / "systemd" / "eggie-update.service").read_text()
     assert "Type=exec" in unit
     assert "Type=oneshot" not in unit
 
 
 def test_install_ships_the_shell_start_directory_snippet():
     # A wrong source path here installs nothing, and shells quietly open in $HOME.
-    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/profile\.d/omelet-cwd\.sh',
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/profile\.d/eggie-cwd\.sh',
                       INSTALL.read_text())
-    assert match, "install.sh does not install /etc/profile.d/omelet-cwd.sh"
+    assert match, "install.sh does not install /etc/profile.d/eggie-cwd.sh"
     assert (INSTALL.parent / match.group(1)).is_file()
 
 
@@ -411,6 +411,6 @@ def test_install_keeps_ssh_host_keys_across_reboots():
 
 def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
     text = INSTALL.read_text()
-    assert "systemctl enable --now omelet-agents.path" in text
-    assert "install -d -m 2770 -o root -g docker /opt/omelet/agent-status" in text
-    assert text.index("systemctl start omelet-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
+    assert "systemctl enable --now eggie-agents.path" in text
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/agent-status" in text
+    assert text.index("systemctl start eggie-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")

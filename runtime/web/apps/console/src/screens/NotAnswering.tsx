@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Button, Egg } from "@omelet/ui";
+import { Button, Egg } from "@eggie/ui";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
 
@@ -14,7 +14,7 @@ export function NotAnswering({ onRetry }: { onRetry: () => void }) {
   return (
     <StatusScreen
       art={<Egg tone="cold" size={96} />}
-      title="Omelet isn't answering"
+      title="Eggie isn't answering"
       actions={<Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>}
     >
       <p className={s.lead}>

@@ -80,7 +80,7 @@ def test_the_build_stays_one_dir(spec):
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.parent.name)
 def test_two_executables_never_differ_only_in_case(spec):
     # Both executables share one directory, and a Mac filesystem is
-    # case-insensitive by default: naming them `Omelet` and `omelet` built one
+    # case-insensitive by default: naming them `Eggie` and `eggie` built one
     # file, silently, and the app launched the CLI instead of the setup window.
     names = re.findall(r'EXE\(.*?name="([^"]+)"', spec.read_text(), re.S)
     assert names, f"no EXE names found in {spec}"

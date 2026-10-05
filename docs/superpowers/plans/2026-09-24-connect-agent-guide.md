@@ -4,7 +4,7 @@
 
 **Goal:** A console picker and step-by-step guide for connecting Claude Code or Codex to the VM, driven by JSON files, with separate Windows (WSL) and Mac (Lima, SSH) guides.
 
-**Architecture:** `install.sh` records the VM kind and login user in `/opt/omelet/connect.json`; `GET /connect` turns that into `{vm, ssh}`. The console fetches `/agents/index.json` + `/agents/<id>/agent.json` (static files copied into the `omelet-web` image), validates them in `agents/catalog.ts`, picks the platform from `vm` (browser fallback), and renders `/agents` and `/agents/:id`.
+**Architecture:** `install.sh` records the VM kind and login user in `/opt/eggie/connect.json`; `GET /connect` turns that into `{vm, ssh}`. The console fetches `/agents/index.json` + `/agents/<id>/agent.json` (static files copied into the `eggie-web` image), validates them in `agents/catalog.ts`, picks the platform from `vm` (browser fallback), and renders `/agents` and `/agents/:id`.
 
 **Tech Stack:** FastAPI (API), bash (installer), React 19 + react-router 8 + TanStack Query 5 + Vitest (console), nginx.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Runtime only: no file under `host/` changes; no `API_VERSION` / `SUPPORTED_API` bump.
-- SSH card values: Host `127.0.0.1` (the host's own `LOOPBACK`), Port `39022` (held equal to `host/providers/omelet.yaml` `ssh.localPort`), Key file `~/.lima/_config/user`. No command line, no password.
+- SSH card values: Host `127.0.0.1` (the host's own `LOOPBACK`), Port `39022` (held equal to `host/providers/eggie.yaml` `ssh.localPort`), Key file `~/.lima/_config/user`. No command line, no password.
 - `via_ssh: false` shows no card.
 - Page must work offline; images and icons are served from `/agents/…` on the same origin.
 - Open external links with `openExternal`, never `window.open` (none are needed here).
@@ -32,10 +32,10 @@
 ### Task 1: `GET /connect` in the API
 
 **Files:**
-- Create: `runtime/omelet_api/core/connect.py`
-- Modify: `runtime/omelet_api/core/constants.py` (add `CONNECT_FILE`, `LIMA_SSH_PORT`, `LIMA_KEY_FILE`)
-- Modify: `runtime/omelet_api/core/config.py` (add `connect_path`)
-- Modify: `runtime/omelet_api/routes/app.py` (route next to `/disk`)
+- Create: `runtime/eggie_api/core/connect.py`
+- Modify: `runtime/eggie_api/core/constants.py` (add `CONNECT_FILE`, `LIMA_SSH_PORT`, `LIMA_KEY_FILE`)
+- Modify: `runtime/eggie_api/core/config.py` (add `connect_path`)
+- Modify: `runtime/eggie_api/routes/app.py` (route next to `/disk`)
 - Test: `tests/runtime/api/test_connect.py`, `tests/test_constants_agree.py`
 
 **Interfaces:**
@@ -46,7 +46,7 @@
 ```python
 import json
 
-from omelet_api.core import connect
+from eggie_api.core import connect
 
 
 def _write(tmp_path, value):
@@ -95,7 +95,7 @@ def test_the_ssh_port_the_console_shows_is_the_one_lima_is_asked_for():
     import yaml
     from pathlib import Path
     declared = yaml.safe_load(
-        (Path(__file__).resolve().parents[1] / "host" / "providers" / "omelet.yaml").read_text())
+        (Path(__file__).resolve().parents[1] / "host" / "providers" / "eggie.yaml").read_text())
     assert api_constants.LIMA_SSH_PORT == declared["ssh"]["localPort"]
 ```
 
@@ -106,22 +106,22 @@ Expected: FAIL (`ImportError: cannot import name 'connect'`, missing constants).
 
 - [ ] **Step 3: Implement**
 
-`runtime/omelet_api/core/constants.py` — append:
+`runtime/eggie_api/core/constants.py` — append:
 
 ```python
 CONNECT_FILE = f"{GUEST_ROOT}/connect.json"
-# What omelet.yaml asks Lima to forward; Lima has not been seen honouring it.
+# What eggie.yaml asks Lima to forward; Lima has not been seen honouring it.
 LIMA_SSH_PORT = 39022
 LIMA_KEY_FILE = "~/.lima/_config/user"
 ```
 
-`runtime/omelet_api/core/config.py` — field after `token_path`:
+`runtime/eggie_api/core/config.py` — field after `token_path`:
 
 ```python
     connect_path: Path = Path(constants.CONNECT_FILE)
 ```
 
-`runtime/omelet_api/core/connect.py`:
+`runtime/eggie_api/core/connect.py`:
 
 ```python
 from __future__ import annotations
@@ -153,7 +153,7 @@ def facts(path: Path) -> dict:
     return {"vm": vm, "ssh": ssh}
 ```
 
-`runtime/omelet_api/routes/app.py` — import `connect` alongside the other `core` imports and add after `/disk`:
+`runtime/eggie_api/routes/app.py` — import `connect` alongside the other `core` imports and add after `/disk`:
 
 ```python
     @router.get("/connect")
@@ -174,15 +174,15 @@ def facts(path: Path) -> dict:
 - Test: `tests/runtime/test_install_shell.py`
 
 **Interfaces:**
-- Produces: `/opt/omelet/connect.json` = `{"vm": "wsl"|"lima"|"other", "user": "<name or empty>"}`, consumed by Task 1.
+- Produces: `/opt/eggie/connect.json` = `{"vm": "wsl"|"lima"|"other", "user": "<name or empty>"}`, consumed by Task 1.
 
 - [ ] **Step 1: Write the failing test** — append:
 
 ```python
 def test_install_records_how_agents_reach_the_vm_before_the_marker():
     text = INSTALL.read_text()
-    record = text.index("/opt/omelet/connect.json")
-    assert record < text.index('> /opt/omelet/runtime.version')
+    record = text.index("/opt/eggie/connect.json")
+    assert record < text.index('> /opt/eggie/runtime.version')
     assert "WSLInterop" in text and "/mnt/lima-cidata" in text
 ```
 
@@ -197,8 +197,8 @@ elif [[ -d /mnt/lima-cidata ]]; then vm=lima
 else vm=other
 fi
 agent_user=$(getent passwd | bash "$INSTALL_DIR/lib/login-users.sh" /etc/shells | head -n1 | cut -d: -f1)
-printf '{"vm": "%s", "user": "%s"}\n' "$vm" "$agent_user" > /opt/omelet/connect.json
-chmod 644 /opt/omelet/connect.json
+printf '{"vm": "%s", "user": "%s"}\n' "$vm" "$agent_user" > /opt/eggie/connect.json
+chmod 644 /opt/eggie/connect.json
 ```
 
 Renumber the marker comment to `# 13.`. (`login-users.sh` only emits names from `/etc/passwd`, which cannot contain `"` or `\`, so printf-built JSON is safe.)
@@ -523,7 +523,7 @@ describe("shipped agent content", () => {
       "steps": [
         {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen"},
         {"title": "Switch to WSL", "body": "Open the environment menu next to the prompt box and pick WSL.", "alt": "Screenshot · environment menu with WSL"},
-        {"title": "Pick omelet-vm", "body": "Choose the omelet-vm machine from the list.", "alt": "Screenshot · WSL machine list with omelet-vm"},
+        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine from the list.", "alt": "Screenshot · WSL machine list with eggie-vm"},
         {"title": "Start prompting", "body": "Pick the projects folder and tell it what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen"}
       ]
     }
@@ -554,7 +554,7 @@ describe("shipped agent content", () => {
       "steps": [
         {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
         {"title": "Run it in WSL", "body": "In Codex's settings, choose to run the agent in WSL.", "alt": "Screenshot · Codex settings with WSL"},
-        {"title": "Pick omelet-vm", "body": "Choose the omelet-vm machine.", "alt": "Screenshot · WSL machine list with omelet-vm"},
+        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine.", "alt": "Screenshot · WSL machine list with eggie-vm"},
         {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
       ]
     }

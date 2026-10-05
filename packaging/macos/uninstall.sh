@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Removes Omelet, the VM, and every project inside it.
+# Removes Eggie, the VM, and every project inside it.
 #
 # macOS .pkg has no uninstaller of its own, so this is the counterpart to the
 # Inno [UninstallRun] entry on Windows -- same order, and the same warning:
@@ -10,9 +10,9 @@
 # steps that need root ask for it themselves.
 set -euo pipefail
 
-app="/Applications/Omelet.app"
-cli="$app/Contents/MacOS/omelet"
-link="/usr/local/bin/omelet"
+app="/Applications/Eggie.app"
+cli="$app/Contents/MacOS/eggie"
+link="/usr/local/bin/eggie"
 
 if [ "$(id -u)" = "0" ]; then
     echo "Run this as yourself, without sudo: the VM belongs to your account." >&2
@@ -20,7 +20,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 cat <<'WARNING'
-This permanently deletes the Omelet virtual machine and every project inside
+This permanently deletes the Eggie virtual machine and every project inside
 it. Project files live in the VM, not on this Mac, so nothing is recoverable
 afterwards.
 WARNING
@@ -32,7 +32,7 @@ esac
 
 # Quit through the app's own terminate path, which does not stop the VM: the
 # purge below destroys it anyway, and a running app would keep the bundle busy.
-osascript -e 'quit app "Omelet"' >/dev/null 2>&1 || true
+osascript -e 'quit app "Eggie"' >/dev/null 2>&1 || true
 for _ in 1 2 3 4 5; do
     pgrep -f "$app/Contents/MacOS/" >/dev/null 2>&1 || break
     sleep 1
@@ -40,17 +40,17 @@ done
 
 if [ -x "$cli" ]; then
     "$cli" uninstall --purge || echo "The VM could not be removed; continuing." >&2
-elif command -v omelet >/dev/null 2>&1; then
-    omelet uninstall --purge || echo "The VM could not be removed; continuing." >&2
+elif command -v eggie >/dev/null 2>&1; then
+    eggie uninstall --purge || echo "The VM could not be removed; continuing." >&2
 else
-    echo "No omelet command found; skipping the VM." >&2
+    echo "No eggie command found; skipping the VM." >&2
 fi
 
 echo "Removing the app (this asks for your password)."
 sudo rm -rf "$app"
 [ -L "$link" ] && sudo rm -f "$link"
-# Without this the installer still believes a newer Omelet is present and will
+# Without this the installer still believes a newer Eggie is present and will
 # refuse to downgrade a later reinstall.
-sudo pkgutil --forget dev.omelet.app >/dev/null 2>&1 || true
+sudo pkgutil --forget io.eggie.app >/dev/null 2>&1 || true
 
 echo "Removed."

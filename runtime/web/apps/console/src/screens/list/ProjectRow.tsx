@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Button, Notice, RowCard, StateBadge } from "@omelet/ui";
+import { Button, Notice, RowCard, StateBadge } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";

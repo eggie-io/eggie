@@ -1,8 +1,8 @@
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.constants import VERIFY_PROJECT_ID
-from omelet_api.core.state import State
-from omelet_api.core.sync import Create, Delete, Forget, plan, run_pass
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.constants import VERIFY_PROJECT_ID
+from eggie_api.core.state import State
+from eggie_api.core.sync import Create, Delete, Forget, plan, run_pass
 from tests.runtime.api.fake_cloud import FakeCloud
 
 M = lambda cloud_id, org="org-1": {"cloud_id": cloud_id, "org_id": org}

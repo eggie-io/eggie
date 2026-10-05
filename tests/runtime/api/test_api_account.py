@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudUnavailable
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudUnavailable
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, FakeRunner
 from tests.runtime.api.fake_cloud import CODE, FakeCloud
 

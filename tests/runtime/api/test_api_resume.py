@@ -1,4 +1,4 @@
-from omelet_api.core.project import STARTED_OK
+from eggie_api.core.project import STARTED_OK
 from tests.runtime.api.conftest import COMPOSE_MALFORMED, _create, _write_compose
 
 

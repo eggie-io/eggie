@@ -4,4 +4,4 @@
 *.sh text eol=lf
 host/provision/** text eol=lf
 runtime/** text eol=lf
-host/providers/omelet.yaml text eol=lf
+host/providers/eggie.yaml text eol=lf

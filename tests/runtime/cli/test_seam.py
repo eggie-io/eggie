@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from omelet_api.core.exec import Completed
+from eggie_api.core.exec import Completed
 from tests.runtime.api.conftest import COMPOSE_MALFORMED, COMPOSE_ONE_WEB
 from tests.runtime.cli.loader import load
 
@@ -34,7 +34,7 @@ def test_up_turns_a_folder_in_the_projects_root_into_a_routed_project(guest):
     assert (code, err) == (0, "")
     assert "http://blog.test.local:41080" in out
     # Started with the generated overlay: without it there is no Traefik route.
-    assert guest.runner.argv_containing(f"{folder}/.omelet/overlay.yml")
+    assert guest.runner.argv_containing(f"{folder}/.eggie/overlay.yml")
 
 
 def test_up_from_a_subfolder_starts_the_enclosing_project(guest):
@@ -61,7 +61,7 @@ def test_a_compose_file_under_another_name_is_named_not_reported_missing(guest, 
     code, _out, err = guest.run("up", cwd=folder)
     assert code == 1
     assert alt_name in err
-    assert "Omelet reads only docker-compose.yml" in err
+    assert "Eggie reads only docker-compose.yml" in err
 
 
 def test_a_broken_compose_file_is_reported_in_the_apis_own_words(guest):
@@ -77,7 +77,7 @@ def test_a_start_that_fails_reports_the_guest_output_and_points_at_logs(guest):
     code, _out, err = guest.run("up", cwd=folder)
     assert code == 1
     assert "port is already allocated" in err
-    assert "omelet logs" in err
+    assert "eggie logs" in err
 
 
 def test_a_busy_project_is_waited_for_rather_than_reported(guest):
@@ -103,13 +103,13 @@ def test_status_names_folders_that_are_not_set_up_yet(guest):
     code, out, _err = guest.run("status", cwd=guest.root)
     assert code == 0
     assert out.splitlines()[0].startswith("blog")
-    assert "Not set up yet (run `omelet up` in each): shop" in out
+    assert "Not set up yet (run `eggie up` in each): shop" in out
 
 
 def test_a_leftover_selftest_folder_is_never_listed_as_not_set_up(guest):
     # install.verify_step deletes the self-test project through the API but
     # leaves its folder behind; every fresh VM would otherwise offer it to the
-    # first agent that runs `omelet status`.
+    # first agent that runs `eggie status`.
     (guest.root / cli.VERIFY_PROJECT_ID).mkdir()
     code, out, _err = guest.run("status", cwd=guest.root)
     assert code == 0
@@ -128,7 +128,7 @@ def test_logs_and_down_outside_a_project_say_where_to_run_them(guest):
         code, _out, err = guest.run(command, cwd=guest.root)
         assert code == 1
         assert "inside a project folder" in err
-        assert "~/projects (/opt/omelet/projects)" in err
+        assert "~/projects (/opt/eggie/projects)" in err
 
 
 def test_up_outside_the_projects_root_names_the_real_path_too(guest, tmp_path):
@@ -136,4 +136,4 @@ def test_up_outside_the_projects_root_names_the_real_path_too(guest, tmp_path):
     outside.mkdir()
     code, _out, err = guest.run("up", cwd=outside)
     assert code == 1
-    assert "~/projects (/opt/omelet/projects)" in err
+    assert "~/projects (/opt/eggie/projects)" in err

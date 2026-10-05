@@ -193,7 +193,7 @@ class DesktopApi:
                     enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
             except Exception as e:
                 # The VM is installed; an unsaved flag is not a failed install.
-                print(f"Omelet could not record turning on open at login: {e!r}",
+                print(f"Eggie could not record turning on open at login: {e!r}",
                       file=sys.stderr)
             return terminal_event(None)
 
@@ -269,7 +269,7 @@ class DesktopApi:
         from host.core.diagnose import render_diagnosis
 
         diagnosis = self._provider.preflight()
-        # Rendered by host/core so the modal shows exactly what `omelet doctor`
+        # Rendered by host/core so the modal shows exactly what `eggie doctor`
         # prints -- one wording for the user to read out to whoever helps them.
         return {"ok": diagnosis.ok, "text": render_diagnosis(diagnosis)}
 
@@ -345,7 +345,7 @@ class DesktopApi:
             # Lima refuses to delete a running instance, and its raw error
             # ("expected status `Stopped`, got `Running`") tells the user nothing.
             if self._provider.running():
-                raise RuntimeError("Stop the kitchen before uninstalling Omelet.")
+                raise RuntimeError("Stop the kitchen before uninstalling Eggie.")
             self._provider.destroy()
             install_dir = self._install_dir_factory()
             remove_vm_data(install_dir.parent, install_dir)
@@ -394,7 +394,7 @@ class DesktopApi:
 
     def set_autostart(self, on: bool) -> dict:
         if self._autostart_exe is None:
-            return {"ok": False, "error": "Only an installed Omelet can open when you sign in."}
+            return {"ok": False, "error": "Only an installed Eggie can open when you sign in."}
         try:
             self._provider.set_autostart(bool(on), self._autostart_exe)
         except Exception as e:
@@ -409,16 +409,16 @@ class DesktopApi:
             # Not a job: JobRegistry runs one at a time, and Quit anyway must
             # work while an install still holds it.
             self._quit_thread = threading.Thread(target=self._stop_then_exit,
-                                                 daemon=True, name="omelet-quit")
+                                                 daemon=True, name="eggie-quit")
             self._quit_thread.start()
         return {"quitting": True}
 
     def _stop_then_exit(self) -> None:
-        stopper = threading.Thread(target=self._stop_vm, daemon=True, name="omelet-stop")
+        stopper = threading.Thread(target=self._stop_vm, daemon=True, name="eggie-stop")
         stopper.start()
         stopper.join(self._stop_timeout)
         if stopper.is_alive():
-            print(f"Omelet timed out stopping the virtual machine after "
+            print(f"Eggie timed out stopping the virtual machine after "
                   f"{self._stop_timeout:g} s; quitting anyway.", file=sys.stderr)
         self._quit_app()
 
@@ -428,4 +428,4 @@ class DesktopApi:
                 self._provider.stop()
         except Exception as e:
             # A VM that will not stop must not leave an app that cannot close.
-            print(f"Omelet could not stop the virtual machine: {e!r}", file=sys.stderr)
+            print(f"Eggie could not stop the virtual machine: {e!r}", file=sys.stderr)

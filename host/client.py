@@ -4,7 +4,7 @@ Built on `urllib.request` deliberately. The host ships as a PyInstaller-frozen
 binary, so every dependency it declares lands in that binary; the API, which
 ships as a Docker image, is the side that is free to grow one.
 
-Nothing here imports `omelet_api/` -- the API is reached over HTTP, and its
+Nothing here imports `eggie_api/` -- the API is reached over HTTP, and its
 routes are the only contract between the two.
 """
 
@@ -74,7 +74,7 @@ class JobTimeoutError(RuntimeError):
 
 
 def read_token(provider: VmProvider) -> str:
-    """Read `/opt/omelet/api.token` fresh, once, via `provider.exec()`.
+    """Read `/opt/eggie/api.token` fresh, once, via `provider.exec()`.
 
     Never cached to the host filesystem: a copy at rest is a second secret to
     protect and a second thing to go stale after a VM rebuild. One `wsl.exe`
@@ -99,7 +99,7 @@ def auth_header(token: str) -> dict[str, str]:
 def project_id_for(name: str) -> str:
     """The same slug rule the API applies to an id or a directory name.
     Duplicated rather than imported (nothing under `host/` imports
-    `omelet_api/`) and held equal by a test: the host needs the id before it
+    `eggie_api/`) and held equal by a test: the host needs the id before it
     can ask for the project it just tried to create."""
     return re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")
 
@@ -109,9 +109,9 @@ def project_id_for(name: str) -> str:
 # a non-technical user nothing they can act on.
 _GUIDANCE = {
     "unauthorized": "The VM no longer accepts this token, which usually means "
-                    "the VM was rebuilt. Run `omelet setup` to reconnect.",
+                    "the VM was rebuilt. Run `eggie setup` to reconnect.",
     constants.API_UNCONFIGURED: "The VM has not finished setting itself up. "
-                                "Run `omelet setup`.",
+                                "Run `eggie setup`.",
 }
 
 
@@ -137,10 +137,10 @@ def _api_error(exc: urllib.error.HTTPError) -> ApiError:
 # `.git/config` would carry credentials into the guest as a side effect.
 # Matched on any path component, so a nested node_modules is excluded too.
 EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "__pycache__"})
-# The overlay is generated inside the VM on every `compose_up`. `.omelet/` as a
-# whole is NOT excluded: `.omelet/project.yml` is the user's own configuration
+# The overlay is generated inside the VM on every `compose_up`. `.eggie/` as a
+# whole is NOT excluded: `.eggie/project.yml` is the user's own configuration
 # and the API reads it to resolve web services.
-EXCLUDED_FILES = frozenset({".omelet/overlay.yml"})
+EXCLUDED_FILES = frozenset({".eggie/overlay.yml"})
 
 
 def _uploadable(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
@@ -210,8 +210,8 @@ class ApiClient:
         except (urllib.error.URLError, OSError) as e:
             reason = getattr(e, "reason", e)
             raise ApiUnavailableError(
-                f"could not reach the Omelet API at {self._base} ({reason}). "
-                "The VM may be stopped -- run `omelet vm start`, or run setup "
+                f"could not reach the Eggie API at {self._base} ({reason}). "
+                "The VM may be stopped -- run `eggie vm start`, or run setup "
                 "again if this is a new machine.") from e
 
     def _call(self, method: str, path: str, payload: dict | None = None, *,

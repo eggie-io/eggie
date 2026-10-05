@@ -28,8 +28,8 @@ def _services() -> dict:
 
 def test_stack_yml_hardcodes_no_domain_or_port_outside_a_default():
     # This is the one rule that keeps Phase 5 from becoming a rewrite: every
-    # environment injects its own domain and ports through OMELET_DOMAIN /
-    # OMELET_EDGE_PORT / OMELET_API_PORT, so nothing here may assume the
+    # environment injects its own domain and ports through EGGIE_DOMAIN /
+    # EGGIE_EDGE_PORT / EGGIE_API_PORT, so nothing here may assume the
     # local values.
     stripped = _without_interpolation()
     assert "39080" not in stripped
@@ -38,12 +38,12 @@ def test_stack_yml_hardcodes_no_domain_or_port_outside_a_default():
 
 
 def test_the_api_service_binds_the_port_it_is_published_on():
-    # ApiConfig already reads OMELET_API_PORT; publishing a fixed port
+    # ApiConfig already reads EGGIE_API_PORT; publishing a fixed port
     # while the process binds a configured one forwards the host to nothing.
     api = yaml.safe_load(_text())["services"]["api"]
-    assert api["ports"] == ["${OMELET_API_PORT:-39099}:"
-                            "${OMELET_API_PORT:-39099}"]
-    assert "OMELET_API_PORT=${OMELET_API_PORT:-39099}" in api["environment"]
+    assert api["ports"] == ["${EGGIE_API_PORT:-39099}:"
+                            "${EGGIE_API_PORT:-39099}"]
+    assert "EGGIE_API_PORT=${EGGIE_API_PORT:-39099}" in api["environment"]
 
 
 def test_stack_yml_parses_and_has_no_version_key():
@@ -60,12 +60,12 @@ def test_stack_yml_both_services_restart_always_on_the_external_edge_network():
     assert doc["networks"]["edge"]["external"] is True
 
 
-def test_stack_yml_mounts_opt_omelet_at_the_identical_path_on_both_sides():
+def test_stack_yml_mounts_opt_eggie_at_the_identical_path_on_both_sides():
     # The api service parses compose files, but dockerd on the VM resolves the
     # bind-mount paths inside them. A mismatched path here silently mounts
     # every user project's relative volume onto an empty directory.
     volumes = yaml.safe_load(_text())["services"]["api"]["volumes"]
-    assert "/opt/omelet:/opt/omelet" in volumes
+    assert "/opt/eggie:/opt/eggie" in volumes
 
 
 def test_stack_yml_pins_exact_image_tags():
@@ -74,10 +74,10 @@ def test_stack_yml_pins_exact_image_tags():
     assert ":latest" not in _text()
 
 
-def test_both_omelet_images_run_the_version_the_install_recorded():
+def test_both_eggie_images_run_the_version_the_install_recorded():
     services = yaml.safe_load(_text())["services"]
-    for name, image in (("api", "omelet-api"), ("web", "omelet-web")):
-        assert services[name]["image"].endswith(f"/{image}:${{OMELET_VERSION}}}}"), \
+    for name, image in (("api", "eggie-api"), ("web", "eggie-web")):
+        assert services[name]["image"].endswith(f"/{image}:${{EGGIE_VERSION}}}}"), \
             services[name]["image"]
 
 
@@ -104,8 +104,8 @@ def test_the_web_page_is_reached_only_through_traefik_below_the_api_route():
     # Traefik fronts it.
     services = yaml.safe_load(_text())["services"]
     web, api = _labels(services["web"]), _labels(services["api"])
-    assert int(web["traefik.http.routers.omelet-web.priority"]) \
-        < int(api["traefik.http.routers.omelet-api.priority"])
+    assert int(web["traefik.http.routers.eggie-web.priority"]) \
+        < int(api["traefik.http.routers.eggie-api.priority"])
     assert "ports" not in services["web"]
 
 
@@ -113,7 +113,7 @@ def test_the_web_service_port_label_matches_the_port_nginx_listens_on():
     # A drift here is a silent 502 on the whole page: Traefik would keep
     # routing to a port nginx never binds.
     web = _labels(yaml.safe_load(_text())["services"]["web"])
-    labeled_port = web["traefik.http.services.omelet-web.loadbalancer.server.port"]
+    labeled_port = web["traefik.http.services.eggie-web.loadbalancer.server.port"]
     match = re.search(r"listen\s+(\d+);", NGINX_CONF.read_text())
     assert match, "web/nginx.conf must have a `listen <port>;` directive"
     assert labeled_port == match[1]
@@ -122,8 +122,8 @@ def test_the_web_service_port_label_matches_the_port_nginx_listens_on():
 def test_the_tunnel_client_runs_only_on_demand_from_a_token_file():
     tunnel = yaml.safe_load(_text())["services"]["tunnel"]
     assert tunnel["profiles"] == ["tunnel"]
-    assert "--token-file /run/omelet/token" in tunnel["command"]
-    assert tunnel["volumes"] == ["/opt/omelet/tunnel:/run/omelet:ro"]
+    assert "--token-file /run/eggie/token" in tunnel["command"]
+    assert tunnel["volumes"] == ["/opt/eggie/tunnel:/run/eggie:ro"]
     assert "environment" not in tunnel, "the token must not travel in the environment"
 
 
@@ -138,5 +138,5 @@ def test_the_tunnel_client_shares_a_network_only_with_traefik():
 
 def test_the_api_receives_the_github_client_id_with_the_same_default():
     api = _services()["api"]
-    assert ("OMELET_GITHUB_CLIENT_ID=${OMELET_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}"
+    assert ("EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}"
             in api["environment"])

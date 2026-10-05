@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
-import { Button, cx } from "@omelet/ui";
+import { Button, cx } from "@eggie/ui";
 import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";

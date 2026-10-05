@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Button, Modal, Notice } from "@omelet/ui";
+import { Button, Modal, Notice } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { deleteRows } from "../../projects/format";
 import { useDeletePreview, useDeleteProject } from "../../projects/queries";

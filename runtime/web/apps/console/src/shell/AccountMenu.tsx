@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { cx } from "@omelet/ui";
+import { cx } from "@eggie/ui";
 import type { Account } from "../account/account";
 import { api as consoleApi, createApi } from "../api/client";
 import { useDesktopHome } from "../desktop/DesktopContext";
@@ -123,7 +123,7 @@ function GitHubLine({ onConnect }: { onConnect: () => void }) {
       <span className={s.lineSub}>
         Disconnected.{" "}
         <a href={REVOKE_URL} onClick={(e) => { e.preventDefault(); openExternal(REVOKE_URL); }}>
-          Remove Omelet's access on GitHub
+          Remove Eggie's access on GitHub
         </a>{" "}
         to revoke it fully.
       </span>

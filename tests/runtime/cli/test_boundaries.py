@@ -10,7 +10,7 @@ STACK = Path(__file__).resolve().parents[3] / "runtime" / "stack.yml"
 
 
 def test_the_guest_cli_imports_only_the_standard_library():
-    # It is copied into a VM on its own: an import of host/, omelet_api/ or a
+    # It is copied into a VM on its own: an import of host/, eggie_api/ or a
     # third-party package works in this checkout and fails only in the guest.
     imported = set()
     for node in ast.walk(ast.parse(GUEST_CLI.read_text())):
@@ -40,13 +40,13 @@ def test_restart_api_recreates_the_compose_service_stack_yml_defines():
     # alone fails this test instead of both sides silently agreeing by luck.
     services = yaml.safe_load(STACK.read_text())["services"]
     (api_key,) = [name for name, svc in services.items()
-                  if "omelet-api" in svc.get("image", "")]
+                  if "eggie-api" in svc.get("image", "")]
     assert f"--force-recreate {api_key}" in load().RESTART_API
 
 
 def test_the_guest_cli_slugs_project_names_the_way_the_api_does():
     # The API derives the project folder from the slugged id; a guest that
     # slugs differently checks one folder and registers another.
-    from omelet_api.core.project import _slug
+    from eggie_api.core.project import _slug
     for name in ("Blog", "my app", "My.Repo", "--x--", "Ünïcode 2", "a__b", ""):
         assert load().project_id_for(name) == _slug(name), name

@@ -3,12 +3,12 @@ import stat
 
 import pytest
 
-from omelet_api.core.account import Account
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.exec import Completed
-from omelet_api.core.public import (MESSAGES, Public, PublicBusy, TunnelClient,
+from eggie_api.core.account import Account
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.exec import Completed
+from eggie_api.core.public import (MESSAGES, Public, PublicBusy, TunnelClient,
                                     Unavailable, write_token)
-from omelet_api.core.state import State
+from eggie_api.core.state import State
 from tests.runtime.api.fake_cloud import FakeCloud
 
 HOSTS = [{"service": "web", "hostname": "blog.d.io", "local_url": "http://blog.d.io:39080"}]
@@ -133,7 +133,7 @@ def test_an_unknown_service_refusal_shows_the_services_own_message(tmp_path):
     public.enable("blog")
 
     assert public.status("blog")["reason"] == {
-        "code": "weird", "message": "The Omelet service refused: try later"}
+        "code": "weird", "message": "The Eggie service refused: try later"}
 
 
 def test_a_client_that_will_not_start_is_released_on_the_service(tmp_path):

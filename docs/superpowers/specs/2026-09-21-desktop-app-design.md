@@ -1,7 +1,7 @@
-# Omelet desktop app — design
+# Eggie desktop app — design
 
 Date: 2026-09-21
-Design board: `Omelet Desktop.dc.html` (claude.ai/design project `5a77e605`)
+Design board: `Eggie Desktop.dc.html` (claude.ai/design project `5a77e605`)
 
 ## 1. What this replaces and why
 
@@ -33,7 +33,7 @@ The window uses **native chrome**. The board draws macOS traffic lights and a
 centred title inside each frame; that is read as "this is a window", not as
 chrome to reimplement. The OS draws the title bar — traffic lights on macOS,
 minimise/maximise/close on Windows — and the HTML renders only the content area.
-The window title changes per route ("Omelet", "Setting up", "Ports"). Frameless
+The window title changes per route ("Eggie", "Setting up", "Ports"). Frameless
 chrome was rejected: it would make drag regions, double-click-to-maximise and
 Windows snap our problem, and "which platform am I on" is a branch the
 no-platform-leak invariant forbids outside `host/providers/`.
@@ -72,7 +72,7 @@ stays green.
 `DesktopApi` is passed to `webview.create_window(js_api=...)`. JS calls
 `window.pywebview.api.<method>()` and receives a promise. Anything slow returns
 a job id immediately and runs on a worker thread, which pushes events back with
-`window.evaluate_js("omelet.on(...)")`.
+`window.evaluate_js("eggie.on(...)")`.
 
 This is the queue-and-thread shape `setup_app/wizard.py` already uses, without
 Tk's `after()` pump. A local HTTP server with SSE was rejected: it opens a
@@ -138,7 +138,7 @@ the rows are mutually exclusive — evaluated top to bottom:
 
 `#unreachable` is therefore exactly one case: **reachable, engine installed, and
 the agent would not answer.** That is precisely what the board's copy claims —
-"Your machine is on — we can see it humming — but Omelet can't get a word in" —
+"Your machine is on — we can see it humming — but Eggie can't get a word in" —
 and it is the only state where those words are true. Every other `problem` lands
 on "something's wrong", which is the only state carrying both a log and a Run
 Doctor button.
@@ -185,7 +185,7 @@ main thread          webview.start()  — blocks, owns the window
        worker thread ─── run_install(steps, state, report)
                             report(Progress) → jobs.push()
                                                  │ coalesce
-                                                 └─ evaluate_js("omelet.onProgress(…)")
+                                                 └─ evaluate_js("eggie.onProgress(…)")
 ```
 
 Terminal events are the exceptions `run_install` already raises:
@@ -221,11 +221,11 @@ order.
 
 ### Import
 
-Import is not `omelet up`. The board says "Copy a folder from your computer into
+Import is not `eggie up`. The board says "Copy a folder from your computer into
 the kitchen. The original stays exactly where it is" — nothing is started. So
 Import is `ensure_project` + `upload_directory` and deliberately does **not**
 require a `docker-compose.yml`. A folder a user brings in is one the coding
-agent is about to work on; the `omelet-stack` skill writes the compose file
+agent is about to work on; the `eggie-stack` skill writes the compose file
 later. Requiring one up front would refuse exactly the folders this screen is
 for.
 
@@ -253,7 +253,7 @@ The board's live per-file path (`src/components/CardList.tsx`) is dropped.
 per-file callback to report from, and a fabricated filename ticker would be the
 wrong kind of honest. The real file count, total size and byte progress remain.
 
-### Consequence for `omelet up`
+### Consequence for `eggie up`
 
 `cli.up`'s local compose check is removed too, by decision. Without it,
 `ensure_project` will have run by the time the agent refuses a folder with no
@@ -302,7 +302,7 @@ backend or fake data:
 - **Ports' Project column** is removed rather than labelled, because a column of
   empty cells is worse than three columns that are all true.
 
-**"Open Omelet"**, the primary CTA on `#home · running`, opens
+**"Open Eggie"**, the primary CTA on `#home · running`, opens
 `http://localhost:39080` in the default browser via `webbrowser.open`. That is
 whatever Traefik is serving today, and it becomes correct for free once the
 Phase-1 web app lands behind that port — no host release, no new contract.
@@ -334,7 +334,7 @@ it covers.
 ## 9. Packaging
 
 - Entrypoint swaps to `host/desktop/__main__.py` in
-  `packaging/windows/omelet.spec` and `packaging/macos/omelet.spec`.
+  `packaging/windows/eggie.spec` and `packaging/macos/eggie.spec`.
 - `host/desktop/ui/**` is bundled data.
 - The Windows installer ships and runs Microsoft's evergreen WebView2
   bootstrapper.
@@ -357,7 +357,7 @@ Fonts are SIL OFL 1.1; the woff2 files and their licenses ship in the binary.
 1. **WebView2 missing on un-updated Windows 10.** Window creation raises
    outright. Mitigated twice: the Inno installer runs the evergreen
    bootstrapper, and `__main__.py` catches the creation failure to print the
-   `omelet setup --headless` instruction instead of a traceback. This is the
+   `eggie setup --headless` instruction instead of a traceback. This is the
    risk that will reach real users.
 2. **PyInstaller + pywebview on Windows is fiddly** — pythonnet assemblies and
    `WebView2Loader.dll` must be collected explicitly. Solvable, but expect a

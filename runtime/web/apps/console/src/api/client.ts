@@ -102,7 +102,7 @@ export function createApi(fetchImpl: typeof fetch, { timeoutMs = 10_000 }: { tim
     } catch {
       // The caller's own abort (a paused upload) is not a dropped connection.
       if (payload.signal?.aborted) throw new ApiError("aborted", "the request was cancelled", 0);
-      throw new ApiError("unreachable", "Omelet's service isn't answering", 0);
+      throw new ApiError("unreachable", "Eggie's service isn't answering", 0);
     }
     if (!ok) {
       const parsed = parse(text);

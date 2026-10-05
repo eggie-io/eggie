@@ -8,7 +8,7 @@
 ## The problem
 
 Three gaps, all of them on the path between a user double-clicking
-`OmeletSetup-<version>.pkg` and that user's coding agent working inside the VM.
+`EggieSetup-<version>.pkg` and that user's coding agent working inside the VM.
 
 1. **Lima is the user's problem.** `LimaProvider.preflight()` dead-ends with
    `install Lima (brew install lima) or bundle limactl`. A packaged installer
@@ -22,8 +22,8 @@ Three gaps, all of them on the path between a user double-clicking
    diagnostics** button that has never been built.
 3. **Nothing tells the user how to get a coding agent into the VM.** The engine
    installs Claude Code and Codex inside the guest, with skills, and the host
-   says only `omelet up <folder>`. On macOS the way in is SSH, and the
-   credentials are scattered across `~/.lima/omelet-vm/ssh.config` and
+   says only `eggie up <folder>`. On macOS the way in is SSH, and the
+   credentials are scattered across `~/.lima/eggie-vm/ssh.config` and
    `~/.lima/_config/user`.
 
 ## Decisions taken before the design
@@ -48,8 +48,8 @@ frozen bundle gains no `datas` entry, because Lima is fetched at setup time, not
 shipped.
 
 ```
-Omelet.app
-   └── omelet-setup            host/setup_app/app.py  (router)
+Eggie.app
+   └── eggie-setup            host/setup_app/app.py  (router)
                                  ├── probe()          host/core/status.py
                                  ├── status screen    host/setup_app/status.py
                                  │     └── provider.access()
@@ -149,11 +149,11 @@ round:
 
 - `preflight()` gates on the macOS version alone. Dead-ending on a missing Lima
   would now be setup refusing to do its own job.
-- `is_supported()`, which is what `omelet doctor` prints, reports the macOS
-  version *and* Lima, and tells a user who has neither to run Omelet setup —
+- `is_supported()`, which is what `eggie doctor` prints, reports the macOS
+  version *and* Lima, and tells a user who has neither to run Eggie setup —
   not to run `brew`.
 
-**`host/providers/omelet.yaml` gains an `x86_64` image entry.** It declares only
+**`host/providers/eggie.yaml` gains an `x86_64` image entry.** It declares only
 `aarch64` today, so on an Intel Mac — which `packaging/macos/distribution.xml`
 explicitly supports building for — `limactl start` has no image it can use.
 
@@ -177,9 +177,9 @@ class Access:
     note: str = ""
 ```
 
-`LimaProvider.access()` parses `~/.lima/omelet-vm/ssh.config` — `Hostname`,
+`LimaProvider.access()` parses `~/.lima/eggie-vm/ssh.config` — `Hostname`,
 `Port`, `User`, `IdentityFile`, matched case-insensitively — and falls back to
-the values declared in `omelet.yaml` (`127.0.0.1`, port 39022,
+the values declared in `eggie.yaml` (`127.0.0.1`, port 39022,
 `~/.lima/_config/user`) with a `note` saying the VM has not been started, so the
 screen shows something true even before the first boot.
 
@@ -191,8 +191,8 @@ visible defect on the screen a user looks at first, instead of a silent one
 inside a port forward nobody exercises.
 
 `Wsl2Provider.access()` answers honestly rather than by analogy: a WSL distro
-runs no SSH server, so the command is `wsl -d omelet` and the fields are the
-distro name and the `\\wsl$\omelet\opt\omelet\projects` path. The screen exists
+runs no SSH server, so the command is `wsl -d eggie` and the fields are the
+distro name and the `\\wsl$\eggie\opt\eggie\projects` path. The screen exists
 on both platforms; only its contents differ, and they differ inside
 `providers/`.
 
@@ -245,7 +245,7 @@ The wizard's success path returns to the status screen instead of printing a
 closing sentence, so "you are set up, and here is how to connect" is one surface
 with one owner.
 
-`finish_step` keeps returning its sentence: `omelet setup --headless` is still a
+`finish_step` keeps returning its sentence: `eggie setup --headless` is still a
 supported front door and still has to say something at the end.
 
 ### 4. `host/core/status.py` — the readiness probe
@@ -270,7 +270,7 @@ recorded in `problem` rather than propagated. `vm_reachable` is
 `provider.exec(["true"]).ok` rather than a new provider member for "is it
 running": reaching the guest is the fact that matters, and both platforms answer
 it identically with what the Protocol already offers. Then
-`cat /opt/omelet/engine.version`, then `AgentClient.health()` for the API number.
+`cat /opt/eggie/engine.version`, then `AgentClient.health()` for the API number.
 
 ## Testing
 
@@ -308,7 +308,7 @@ this repository. `install_runtime` ends at a binary that prints its own version;
 `create_vm` remains the first unproven step, and every assumption in
 `docs/lima-verification-report.md` about `vz`, Rosetta, port forwarding and the
 ssh control master stays unproven. **The UNVERIFIED banners in
-`host/providers/lima.py` and `host/providers/omelet.yaml` stay**, and both docs
+`host/providers/lima.py` and `host/providers/eggie.yaml` stay**, and both docs
 will say plainly which of these paths ran and which did not.
 
 It also does not bundle Lima, write to `~/.ssh/config`, upgrade or remove a

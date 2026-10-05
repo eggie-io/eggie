@@ -32,7 +32,7 @@ LIFECYCLE_SURFACE = {
 # the same caller: `default_steps` reads every name here except `access`,
 # which only `host/setup_app/app.py::show_status` calls. They are still a
 # contract every provider owes, and nothing noticed that LimaProvider owed two
-# of them and had neither -- `omelet setup` on macOS died with an
+# of them and had neither -- `eggie setup` on macOS died with an
 # AttributeError before its first step.
 INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "remediable", "runtime", "access", "ssh_shortcut",

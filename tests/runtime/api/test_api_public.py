@@ -2,10 +2,10 @@ import time
 
 from fastapi.testclient import TestClient
 
-from omelet_api.core.account import Account
-from omelet_api.core.public import Public, TunnelClient
-from omelet_api.core.state import State
-from omelet_api.routes.app import create_app
+from eggie_api.core.account import Account
+from eggie_api.core.public import Public, TunnelClient
+from eggie_api.core.state import State
+from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, BROWSER, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.api.test_public import ON, Clock, TunnelRunner

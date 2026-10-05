@@ -7,7 +7,7 @@ Issue: #23
 ## 1. Problem
 
 A signed-in user wants to share a running project with someone outside their
-computer. The Omelet service (`OMELET_CLOUD_URL`) runs the control plane on top of
+computer. The Eggie service (`EGGIE_CLOUD_URL`) runs the control plane on top of
 Cloudflare Tunnel: it owns the tunnel, its routing config in Cloudflare, the public
 hostnames and the limits. This spec is the part inside the VM: asking the service
 for a public URL, running the tunnel client, and showing the result.
@@ -21,7 +21,7 @@ Everything here lives in `runtime/`. No host change and no host release.
 | 1 | The VM is written against the service contract in section 3, agreed with the service on 2026-09-25. | The live API did not match on 2026-09-24; the service dev changed it to this. As with sign-in, no client-side workarounds for service gaps. |
 | 2 | The service rewrites the Host header to the project's local hostname; project routing and overlays do not change. | Verified: project routers are `Host(<local hostname>)` with no entrypoint restriction (`core/overlay.py`), and Traefik v3's `Host()` ignores the port. |
 | 3 | Apps that build absolute URLs from the Host header send public visitors to `*.127-0-0-1.sslip.io`. Accepted as a known limit (section 10). | Most dev apps use relative links. The fix (public-host routes via a Traefik dynamic file) is a follow-up. |
-| 4 | Only the console turns a public URL on or off. The in-VM `omelet` CLI and coding agents never see public URLs. | Putting a project on the internet is a human decision. Agents only need local URLs. |
+| 4 | Only the console turns a public URL on or off. The in-VM `eggie` CLI and coding agents never see public URLs. | Putting a project on the internet is a human decision. Agents only need local URLs. |
 | 5 | The tunnel client is a `stack.yml` service behind a compose profile, started and stopped by the API. | Absent when unused, visible in the stack, and the API already runs compose. |
 | 6 | The tunnel client sits on its own network, shared only with Traefik. | Cloudflare, not us, decides where the client sends traffic. A bad remote config must not reach the api container (it holds the Docker socket) or project containers directly. |
 | 7 | The VM hardcodes no limits: no duration, no "one at a time" check. | Limits come from the service (`expires_at`, 409) and will vary by plan. |
@@ -43,11 +43,11 @@ request: {"origin": "http://traefik:39080",
 
 201:     {"id": "…", "project_id": "…", "slug": "k3x9m2p7qa", "created_at": "…",
           "expires_at": "2026-09-24T15:00:00Z",
-          "url": "https://k3x9m2p7qa.omelet.app",
+          "url": "https://k3x9m2p7qa.eggie.io",
           "urls": [{"service": "web", "local_hostname": "recipe-box.127-0-0-1.sslip.io",
-                    "url": "https://k3x9m2p7qa.omelet.app"},
+                    "url": "https://k3x9m2p7qa.eggie.io"},
                    {"service": "api_v2", "local_hostname": "api.recipe-box.127-0-0-1.sslip.io",
-                    "url": "https://api-v2--k3x9m2p7qa.omelet.app"}],
+                    "url": "https://api-v2--k3x9m2p7qa.eggie.io"}],
           "credentials": {"provider": "cloudflare", "token": "…"}}
 ```
 
@@ -114,11 +114,11 @@ does not yet declare `origin`, `urls[].local_hostname`, the error codes or a
     image: cloudflare/cloudflared:<pinned version>
     profiles: [tunnel]
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token-file /run/omelet/token
+    command: tunnel --no-autoupdate run --token-file /run/eggie/token
     volumes:
-      - /opt/omelet/tunnel:/run/omelet:ro
+      - /opt/eggie/tunnel:/run/eggie:ro
     group_add:
-      - "${OMELET_DOCKER_GID:-999}"
+      - "${EGGIE_DOCKER_GID:-999}"
     networks:
       - tunnel
 ```
@@ -137,20 +137,20 @@ does not yet declare `origin`, `urls[].local_hostname`, the error codes or a
 
 ### `runtime/install/install.sh`
 
-`docker compose -f /opt/omelet/stack.yml pull` becomes `... --profile tunnel pull`,
+`docker compose -f /opt/eggie/stack.yml pull` becomes `... --profile tunnel pull`,
 so the first "turn on" never waits for an image download. `up -d` stays
 profile-less. Nothing else changes: after a repair the API's startup reconcile
 brings the client back if a URL is on.
 
 ### The API drives the client
 
-Through `LocalRunner`, inside the api container, where `/opt/omelet/stack.yml` and
-`/opt/omelet/.env` are visible at the same paths:
+Through `LocalRunner`, inside the api container, where `/opt/eggie/stack.yml` and
+`/opt/eggie/.env` are visible at the same paths:
 
 - on: `docker compose -f <stack_file> --profile tunnel up -d --no-deps tunnel`
 - off: `docker compose -f <stack_file> --profile tunnel rm -sf tunnel`
 
-The compose project name is derived from `/opt/omelet`, the same on both sides.
+The compose project name is derived from `/opt/eggie`, the same on both sides.
 
 ## 5. Runtime: `core/public.py`
 
@@ -159,9 +159,9 @@ stack file, plus injectable `clock` and `spawn` (the `Account` pattern).
 
 ### Config
 
-`ApiConfig` gains `stack_file` (default `/opt/omelet/stack.yml`, env
-`OMELET_STACK_FILE`) and `tunnel_token_path` (default `/opt/omelet/tunnel/token`,
-env `OMELET_TUNNEL_TOKEN`). `origin` is `http://{traefik_host}:{edge_port}`, from
+`ApiConfig` gains `stack_file` (default `/opt/eggie/stack.yml`, env
+`EGGIE_STACK_FILE`) and `tunnel_token_path` (default `/opt/eggie/tunnel/token`,
+env `EGGIE_TUNNEL_TOKEN`). `origin` is `http://{traefik_host}:{edge_port}`, from
 values that already exist.
 
 ### Storage
@@ -182,9 +182,9 @@ as off. A failure shown before the restart is gone.
 
 ### Token file
 
-`/opt/omelet/tunnel/token`, in a directory created on first write and mounted
+`/opt/eggie/tunnel/token`, in a directory created on first write and mounted
 read-only into the client: written to a temp file created with mode 0640 in the
-same directory, then renamed over; group `docker` via `/opt/omelet`'s setgid bit.
+same directory, then renamed over; group `docker` via `/opt/eggie`'s setgid bit.
 It exists only while a URL is on. Turning off, expiry, sign-out and delete remove it.
 
 ### Turn on
@@ -272,24 +272,24 @@ Additive: `API_VERSION` does not change and the host never calls them.
 ### Wording
 
 The API owns these sentences so every surface says the same thing. A service error
-code not listed here reads "The Omelet service refused: <its message>".
+code not listed here reads "The Eggie service refused: <its message>".
 
 | code | shown as | message |
 |---|---|---|
-| `signed_out` | unavailable | Public addresses need an Omelet account. Sign in to use them. |
+| `signed_out` | unavailable | Public addresses need an Eggie account. Sign in to use them. |
 | `not_registered` | unavailable | This project isn't linked to your account yet. Try again in a minute. |
 | `no_web` | unavailable | This project has no web page to share. |
 | `public_url_active` | failed | Only one public address can be on at a time. Turn off the one on "<project>" first. — or, when none is on in this VM: One is already on for another project or computer. Turn it off there first. |
 | `public_url_unavailable` | failed | Your plan doesn't include public addresses. |
-| `cloud_unavailable` | failed | The Omelet service couldn't be reached. Check the internet connection and try again. |
+| `cloud_unavailable` | failed | The Eggie service couldn't be reached. Check the internet connection and try again. |
 | `client_failed` | failed | The public connection couldn't start on this computer. |
 | `expired` | off note | The public address expired. Start a new one; it will be a different address. |
-| `released_elsewhere` | off note | The public address was turned off from the Omelet website. |
+| `released_elsewhere` | off note | The public address was turned off from the Eggie website. |
 | `project_not_found` | failed | This project isn't linked to your account yet. Try again in a minute. |
 | `device_required` | failed | This computer's sign-in can't make public addresses. Sign out and sign in again. |
 | `tunnel_provider_error` | failed | The public address couldn't be set up. Try again in a few minutes. |
-| `public_urls_disabled` | failed | Public addresses are switched off on the Omelet service right now. |
-| `validation_error` | failed | The Omelet service couldn't accept this project's addresses. |
+| `public_urls_disabled` | failed | Public addresses are switched off on the Eggie service right now. |
+| `validation_error` | failed | The Eggie service couldn't accept this project's addresses. |
 
 ## 7. Console
 
@@ -370,6 +370,6 @@ Not tested: the enable thread and event wiring, the modal's rendering (glue).
   published on 0.0.0.0 (the api's, and any `ports:` a user project publishes) is
   reachable from the tunnel client.
 - The service accepts at most 10 routes per URL; a project with more web services
-  gets `validation_error` ("The Omelet service couldn't accept this project's
+  gets `validation_error` ("The Eggie service couldn't accept this project's
   addresses.").
 - A CLI command for public URLs, host changes, and the service changes themselves.

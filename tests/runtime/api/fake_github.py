@@ -1,4 +1,4 @@
-from omelet_api.core.github import GitHubError
+from eggie_api.core.github import GitHubError
 
 CODE = {"device_code": "dc-1", "user_code": "WDJB-MJHT",
         "verification_uri": "https://github.com/login/device",

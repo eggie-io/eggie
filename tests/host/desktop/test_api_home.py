@@ -116,7 +116,7 @@ def test_home_never_declares_to_a_vm_that_is_not_answering(tmp_path):
 
 def test_a_hidden_tray_launch_keeps_the_console_entry_for_the_first_visible_home(tmp_path):
     """A login launch draws Home in a window nobody sees, while the VM boots.
-    That call must not spend the one-shot, or the user opens a running Omelet
+    That call must not spend the one-shot, or the user opens a running Eggie
     and is never taken into the console. Once used, it stays used."""
     shown = {"yet": False}
     state = InstallState(tmp_path / "install-state.json")

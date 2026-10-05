@@ -26,7 +26,7 @@ def test_skills_are_left_to_npx(tmp_path):
 def _source(tmp_path, manifests):
     source = tmp_path / "src"
     (source / "instructions").mkdir(parents=True)
-    shutil.copy(SOURCE / "instructions" / "omelet.md", source / "instructions" / "omelet.md")
+    shutil.copy(SOURCE / "instructions" / "eggie.md", source / "instructions" / "eggie.md")
     agents = source / "agents"
     agents.mkdir()
     (agents / "index.json").write_text(json.dumps({"agents": list(manifests)}))
@@ -44,14 +44,14 @@ def test_the_block_is_replaced_and_the_users_own_text_kept(tmp_path):
     source = _source(tmp_path, {"codex": {"home": ".codex", "instructions": ["~/.codex/AGENTS.md"]}})
 
     _install(home, source)
-    (source / "instructions" / "omelet.md").write_text("new instructions\n")
+    (source / "instructions" / "eggie.md").write_text("new instructions\n")
     _install(home, source)
 
     text = agents_md.read_text()
     assert text.startswith("# my notes\nkeep me\n")
-    assert text.count("<!-- omelet:begin -->") == 1
+    assert text.count("<!-- eggie:begin -->") == 1
     assert "new instructions" in text
-    assert "You are working inside an Omelet VM" not in text
+    assert "You are working inside an Eggie VM" not in text
 
 
 def test_missing_parent_dirs_of_a_target_are_created(tmp_path):
@@ -59,7 +59,7 @@ def test_missing_parent_dirs_of_a_target_are_created(tmp_path):
     home.mkdir()
     source = _source(tmp_path, {"x": {"home": ".config/x", "instructions": ["~/.config/x/AGENTS.md"]}})
     _install(home, source)
-    assert "<!-- omelet:begin -->" in (home / ".config" / "x" / "AGENTS.md").read_text()
+    assert "<!-- eggie:begin -->" in (home / ".config" / "x" / "AGENTS.md").read_text()
 
 
 def test_every_per_account_target_gets_the_block_and_system_ones_are_left_to_install(tmp_path):
@@ -72,7 +72,7 @@ def test_every_per_account_target_gets_the_block_and_system_ones_are_left_to_ins
     })
     _install(home, source)
     for target in (home / ".codex" / "AGENTS.md", home / ".cursor" / "AGENTS.md"):
-        assert "<!-- omelet:begin -->" in target.read_text()
+        assert "<!-- eggie:begin -->" in target.read_text()
     assert not (home / ".claude").exists()
 
 
@@ -81,7 +81,7 @@ def test_the_projects_link_is_made_once_and_a_real_folder_is_left_alone(tmp_path
     fresh.mkdir()
     _install(fresh)
     _install(fresh)
-    assert os.readlink(fresh / "projects") == "/opt/omelet/projects"
+    assert os.readlink(fresh / "projects") == "/opt/eggie/projects"
 
     taken = tmp_path / "taken"
     (taken / "projects").mkdir(parents=True)

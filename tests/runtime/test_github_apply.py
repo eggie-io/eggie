@@ -48,9 +48,9 @@ def setup(tmp_path, desired=None, applied=None):
     if applied is not None:
         (gh_dir / "applied.json").write_text(json.dumps(applied))
     path = f"{bin_dir}:/usr/bin:/bin"
-    env = {**os.environ, "PATH": path, "OMELET_APPLY_PATH": path,
-           "OMELET_ROOT_HOME": str(tmp_path / "root"),
-           "OMELET_SHELLS_FILE": str(shells), "LOG": str(log),
+    env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path,
+           "EGGIE_ROOT_HOME": str(tmp_path / "root"),
+           "EGGIE_SHELLS_FILE": str(shells), "LOG": str(log),
            "ADA_HOME": str(tmp_path / "ada"),
            "TOKEN_FILE": str(gh_dir / "token")}
     return env, gh_dir, log

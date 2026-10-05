@@ -12,4 +12,4 @@
 | [superpowers/](superpowers/) | The original blueprint and every dated design spec and plan |
 
 Code-level guidance for contributors and coding agents is in the `CLAUDE.md` files: one at the
-repo root and one in each of `host/`, `runtime/`, `runtime/web/` and `runtime/omelet_api/`.
+repo root and one in each of `host/`, `runtime/`, `runtime/web/` and `runtime/eggie_api/`.

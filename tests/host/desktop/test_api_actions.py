@@ -64,7 +64,7 @@ def test_uninstall_removes_the_vm_directory_but_keeps_downloads(tmp_path):
     """Purge is the app's second level: without it the cached image and the
     managed runtime survive, because they are disk space rather than state
     and re-downloading them costs hundreds of megabytes."""
-    root = tmp_path / "omelet"
+    root = tmp_path / "eggie"
     install_dir = root / "vm"
     install_dir.mkdir(parents=True)
     (install_dir / "disk.vhdx").write_text("x")
@@ -103,7 +103,7 @@ def test_uninstall_removes_the_vm_directory_but_keeps_downloads(tmp_path):
 def test_uninstall_refuses_a_running_kitchen(tmp_path):
     """Lima will not delete a running instance; its raw `expected status
     Stopped, got Running` is no use to the user. Nothing is touched."""
-    install_dir = tmp_path / "omelet" / "vm"
+    install_dir = tmp_path / "eggie" / "vm"
     install_dir.mkdir(parents=True)
     destroyed = []
 
@@ -128,7 +128,7 @@ def test_uninstall_refuses_a_running_kitchen(tmp_path):
 
 
 def test_purge_also_removes_the_downloads(tmp_path):
-    root = tmp_path / "omelet"
+    root = tmp_path / "eggie"
     install_dir = root / "vm"
     install_dir.mkdir(parents=True)
     (root / "cache").mkdir()
@@ -161,7 +161,7 @@ def test_uninstall_touches_nothing_outside_the_injected_directory(tmp_path, monk
 
     monkeypatch.setattr("host.providers.default_install_dir", explode)
 
-    root = tmp_path / "omelet"
+    root = tmp_path / "eggie"
     (root / "vm").mkdir(parents=True)
 
     class Provider:

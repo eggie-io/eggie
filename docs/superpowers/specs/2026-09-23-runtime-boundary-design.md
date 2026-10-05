@@ -9,7 +9,7 @@ Three things are wrong with the current top-level layout, and all three get more
 expensive the day the first host binary ships.
 
 **The word `agent` means two things.** `agent/` is the FastAPI service in the VM.
-"Agent" everywhere else — `engine/lib/install-agents.sh`, `/opt/omelet/agents`,
+"Agent" everywhere else — `engine/lib/install-agents.sh`, `/opt/eggie/agents`,
 `-a claude-code codex` — means a coding agent: Claude Code, Codex, Cursor. The
 collision is already in the tree, and the industry has taken the word. It is not
 reclaimable.
@@ -30,8 +30,8 @@ there by three tests in `tests/test_constants_agree.py`, and nothing in the
 layout says so.
 
 Nothing has shipped. Guest paths, environment variables and tag names are still
-free to change. After the first host binary is out, `OMELET_ENGINE_URL`,
-`/opt/omelet/engine.version` and their siblings are frozen for every host in the
+free to change. After the first host binary is out, `EGGIE_ENGINE_URL`,
+`/opt/eggie/engine.version` and their siblings are frozen for every host in the
 field, and the vocabulary outlives the concepts permanently.
 
 ## 2. Decisions
@@ -40,30 +40,30 @@ field, and the vocabulary outlives the concepts permanently.
 |---|---|
 | 1 | The guest component is named **`runtime`**. It says what it does, carries no AI association, and stays true when the target moves from a VM to a VPS. |
 | 2 | `engine/` **dissolves**. It is not renamed — once the skills leave, every remaining file has a home inside `runtime/`. |
-| 3 | The skills move to **`github.com/omelet-app/omelet-skills`** and are installed from there by pinned ref. They leave this repository in this change — see §6. |
+| 3 | The skills move to **`github.com/eggie-io/eggie-skills`** and are installed from there by pinned ref. They leave this repository in this change — see §6. |
 | 4 | `web/` is a **sibling of the service inside `runtime/`**, never nested in the Python package. Two images behind Traefik are peers, not container and contained. |
-| 5 | `instructions/omelet.md` goes with **`runtime`**, not the skills. It documents the `omelet` CLI and must move in lockstep with `cli/omelet.py`; alone in a skills repo it would describe something that may not be installed. `install-agents.sh` reads it and nothing else from the tree, so this costs nothing. |
-| 6 | The two published images are **`omelet-api`** and **`omelet-web`**. Traefik already names the first router `omelet-api` (`engine/stack.yml:78`), so this adopts a name the stack half-uses already. |
-| 7 | `/opt/omelet/agent.token` becomes **`/opt/omelet/api.token`** — see §7. |
+| 5 | `instructions/eggie.md` goes with **`runtime`**, not the skills. It documents the `eggie` CLI and must move in lockstep with `cli/eggie.py`; alone in a skills repo it would describe something that may not be installed. `install-agents.sh` reads it and nothing else from the tree, so this costs nothing. |
+| 6 | The two published images are **`eggie-api`** and **`eggie-web`**. Traefik already names the first router `eggie-api` (`engine/stack.yml:78`), so this adopts a name the stack half-uses already. |
+| 7 | `/opt/eggie/agent.token` becomes **`/opt/eggie/api.token`** — see §7. |
 | 8 | The rename is **complete, not staged**: the Python package, the host's client classes and the prose all move in this change, before the first installation. Staged inside the PR as ordered commits — see §8. |
-| 9 | The skills install **unpinned** from `main` at first, through an `OMELET_SKILLS_SOURCE` override that makes pinning a later config change rather than a code change — see §12. |
+| 9 | The skills install **unpinned** from `main` at first, through an `EGGIE_SKILLS_SOURCE` override that makes pinning a later config change rather than a code change — see §12. |
 
 ## 3. Target layout
 
 ### Repository
 
 ```
-runtime/                     ← the future omelet-runtime repo, verbatim
-  omelet_api/                ← the Python package, was agent/ (see §8)
+runtime/                     ← the future eggie-runtime repo, verbatim
+  eggie_api/                ← the Python package, was agent/ (see §8)
     __init__.py              ← __version__, the pair's release version
     core/
-    routes/                  ← was agent/api/; omelet_api.api would stutter
+    routes/                  ← was agent/api/; eggie_api.api would stutter
     Dockerfile
     Dockerfile.debug
     pyproject.toml
   web/                       ← unchanged npm workspace
-  cli/omelet.py              ← the API's own client, was engine/cli/
-  instructions/omelet.md     ← was engine/instructions/
+  cli/eggie.py              ← the API's own client, was engine/cli/
+  instructions/eggie.md     ← was engine/instructions/
   install/                   ← was engine/{get,install}.sh + engine/lib/
     get.sh
     install.sh
@@ -88,12 +88,12 @@ eventual split is `git filter-repo --path runtime/` and nothing else.
 ### Guest
 
 ```
-/opt/omelet/runtime/         install/, cli/, instructions/, stack.yml
-/opt/omelet/runtime.version
-/opt/omelet/api.token
+/opt/eggie/runtime/         install/, cli/, instructions/, stack.yml
+/opt/eggie/runtime.version
+/opt/eggie/api.token
 ```
 
-There is no `/opt/omelet/skills/`. Skills are no longer unpacked from the
+There is no `/opt/eggie/skills/`. Skills are no longer unpacked from the
 tarball; `skills add` fetches them from GitHub into each account's own skill
 directories, which is where they already lived after install.
 
@@ -103,19 +103,19 @@ directories, which is where they already lived after install.
 
 - Every directory move in §3.
 - The contract renames in §5.
-- Extracting `engine/skills/` to `omelet-skills` and repointing `install.sh`'s
+- Extracting `engine/skills/` to `eggie-skills` and repointing `install.sh`'s
   one `skills add` argument at it (§6).
 - Path updates in the eight non-Python files that name these directories:
   `agent/Dockerfile`, `web/Dockerfile`, `engine/stack.yml`, `engine/get.sh`,
   `packaging/images/build.sh`, both PyInstaller `.spec` files, `.vscode/launch.json`.
 - Re-anchoring the three boundary tests (§9).
-- Renaming the Python package `agent` → `omelet_api`, and `agent/api/` →
-  `omelet_api/routes/`. 66 import lines across 29 files.
+- Renaming the Python package `agent` → `eggie_api`, and `agent/api/` →
+  `eggie_api/routes/`. 66 import lines across 29 files.
 - Renaming the host's client vocabulary: `AgentClient` → `ApiClient`,
   `AgentError` → `ApiError`, `AgentUnavailableError` → `ApiUnavailableError`,
   and the 588 comments, test names and prose lines that describe the service
   rather than a coding agent (§8).
-- A `README.md` for `omelet-skills` (§13).
+- A `README.md` for `eggie-skills` (§13).
 
 **Explicitly out of scope:**
 
@@ -136,20 +136,20 @@ one is free today and frozen after the first shipped host.
 
 | Old | New | Declared in |
 |---|---|---|
-| `OMELET_ENGINE_REPO` | `OMELET_RUNTIME_REPO` | `get.sh` |
-| `OMELET_ENGINE_REF` | `OMELET_RUNTIME_REF` | `get.sh` |
-| `OMELET_ENGINE_REPAIR` | `OMELET_RUNTIME_REPAIR` | `get.sh`, `host/core/bootstrap.py` |
+| `EGGIE_ENGINE_REPO` | `EGGIE_RUNTIME_REPO` | `get.sh` |
+| `EGGIE_ENGINE_REF` | `EGGIE_RUNTIME_REF` | `get.sh` |
+| `EGGIE_ENGINE_REPAIR` | `EGGIE_RUNTIME_REPAIR` | `get.sh`, `host/core/bootstrap.py` |
 | `ENGINE_URL` → `…/main/engine/get.sh` | `RUNTIME_URL` → `…/main/runtime/install/get.sh` | `host/core/constants.py:34` |
-| `ENGINE_MARKER` = `/opt/omelet/engine.version` | `RUNTIME_MARKER` = `/opt/omelet/runtime.version` | `host/core/constants.py:36` |
-| `GUEST_TOKEN` = `/opt/omelet/agent.token` | `/opt/omelet/api.token` | `host/core/constants.py:41`, `install.sh:93` |
-| `/opt/omelet/engine/` | `/opt/omelet/runtime/` | `get.sh`, `install.sh` |
+| `ENGINE_MARKER` = `/opt/eggie/engine.version` | `RUNTIME_MARKER` = `/opt/eggie/runtime.version` | `host/core/constants.py:36` |
+| `GUEST_TOKEN` = `/opt/eggie/agent.token` | `/opt/eggie/api.token` | `host/core/constants.py:41`, `install.sh:93` |
+| `/opt/eggie/engine/` | `/opt/eggie/runtime/` | `get.sh`, `install.sh` |
 | `engine-v*` tags | `runtime-v*` | `get.sh` `resolve_ref`, release process |
-| `omelet-agent` image | `omelet-api` | `stack.yml:40`, `build.sh` |
-| `OMELET_AGENT_IMAGE` | `OMELET_API_IMAGE` | `stack.yml:40` |
+| `eggie-agent` image | `eggie-api` | `stack.yml:40`, `build.sh` |
+| `EGGIE_AGENT_IMAGE` | `EGGIE_API_IMAGE` | `stack.yml:40` |
 | compose service `agent` | `api` | `stack.yml:39`, `install.sh:138` |
 | `ARG AGENT_VERSION` | `ARG SERVICE_VERSION` | `Dockerfile`, `build.sh` |
-| `ENV OMELET_AGENT_VERSION` | `ENV OMELET_SERVICE_VERSION` | `Dockerfile:20` |
-| `$ENGINE_DIR/skills` | `$OMELET_SKILLS_SOURCE` (§6) | `install.sh:223` |
+| `ENV EGGIE_AGENT_VERSION` | `ENV EGGIE_SERVICE_VERSION` | `Dockerfile:20` |
+| `$ENGINE_DIR/skills` | `$EGGIE_SKILLS_SOURCE` (§6) | `install.sh:223` |
 | `Readiness.engine_version` | `Readiness.runtime_version` | `host/core/status.py:25` |
 | `Readiness.agent_api` | `Readiness.api_version` | `host/core/status.py:26` |
 | image account `agent` | `api` | `Dockerfile` `useradd`/`USER` |
@@ -169,7 +169,7 @@ image built before this account rename would fail only at `docker run`, not
 at build. `test_the_debug_image_is_built_on_the_current_release_not_a_stale_one`
 (`tests/test_constants_agree.py`) exists to catch exactly that.
 
-`OMELET_WEB_IMAGE` and `omelet-web` are already correct and do not change.
+`EGGIE_WEB_IMAGE` and `eggie-web` are already correct and do not change.
 
 ## 6. The skills become remote
 
@@ -188,13 +188,13 @@ git hosts, and a `/tree/<ref>/<path>` form that carries a ref. So the entire
 change is the argument:
 
 ```
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
+SKILLS_SOURCE="${EGGIE_SKILLS_SOURCE:-eggie-io/eggie-skills}"
 npx -y "$SKILLS_CLI" add "$SKILLS_SOURCE" -s '*' -g -a claude-code codex -y
 ```
 
 This *simplifies* the rest of the design rather than complicating it. `get.sh`
 keeps extracting exactly one directory, as it does today; there is no
-`/opt/omelet/skills/`; and `tests/engine/test_skills.py` moves to the skills repo
+`/opt/eggie/skills/`; and `tests/engine/test_skills.py` moves to the skills repo
 where it belongs, since it only ever checked frontmatter, hand-off names and
 bundled files.
 
@@ -203,7 +203,7 @@ bundled files.
 the one thing holding its declarations in agreement, and a preview of the problem
 §13 describes. §12 says what that buys and what it defers.
 
-**New release gate.** `omelet-skills` must be public and populated before any
+**New release gate.** `eggie-skills` must be public and populated before any
 install works, exactly like the ghcr images. The repository exists and is empty;
 populating it — with the skills and a README — is part of this change.
 
@@ -214,7 +214,7 @@ behind it — nobody reads `agent.token` and thinks of an LLM.
 
 Rename it anyway. It is the one remaining host-contract path that a person
 debugging a box will actually look at, and leaving it sitting next to
-`runtime.version` and an `omelet-api` container makes it the single surviving
+`runtime.version` and an `eggie-api` container makes it the single surviving
 trace of the word this whole change exists to remove. The cost is two lines
 (`host/core/constants.py:41`, `install.sh:93`) inside a change that already
 requires a live-VM run to prove the guest paths. Done separately later, it would
@@ -224,7 +224,7 @@ the first shipped host" applies to it exactly as it does to the others.
 ## 8. The rename is complete, and ordered
 
 A half-rename leaves `runtime/agent/` sitting next to `runtime/web/` and an
-`omelet-api` container indefinitely, and deferred cleanup of that shape does not
+`eggie-api` container indefinitely, and deferred cleanup of that shape does not
 get done. Everything moves in this change, before the first installation.
 
 The concern that argued for staging was never cost — it was **blast radius during
@@ -233,7 +233,7 @@ rename is in flight at the same time, a failed run has two unrelated classes of
 mistake in it. That is a commit-ordering problem, not a reason to defer, so:
 
 1. **Moves.** `git mv` only, no content edits. `pytest` green.
-2. **Package rename.** `agent` → `omelet_api`, `agent/api/` → `omelet_api/routes/`,
+2. **Package rename.** `agent` → `eggie_api`, `agent/api/` → `eggie_api/routes/`,
    66 imports, `pythonpath = ["runtime"]` in the root pytest config. Pure Python,
    touches no guest path, proved entirely by `pytest`. Green before step 3 starts.
 3. **Contract renames.** §5. The only commit the live run has to judge.
@@ -243,17 +243,17 @@ mistake in it. That is a commit-ordering problem, not a reason to defer, so:
 Steps 2 and 5 are reviewable on their own and cannot break the VM. Step 3 arrives
 at the live run alone.
 
-### Why the package is `omelet_api`, not `api`
+### Why the package is `eggie_api`, not `api`
 
 At test time a package's name is its directory name — `package-dir` in
 `agent/pyproject.toml` only affects builds. So `runtime/api/` would mean
 `import api.core`, claiming a top-level name generic enough to collide with
-anything on `sys.path`. `omelet_api` is unambiguous and matches the dist name the
-image already publishes. `runtime/omelet_api/` reads slightly against its plain
+anything on `sys.path`. `eggie_api` is unambiguous and matches the dist name the
+image already publishes. `runtime/eggie_api/` reads slightly against its plain
 siblings (`web/`, `cli/`, `install/`), which is the ordinary cost of Python
 package naming and not worth fighting.
 
-`agent/api/` becomes `omelet_api/routes/` rather than `omelet_api/api/`, which
+`agent/api/` becomes `eggie_api/routes/` rather than `eggie_api/api/`, which
 would stutter on every import.
 
 ### The vocabulary sweep is a review, not a `sed`
@@ -296,7 +296,7 @@ may be unreachable") becomes wrong and should name GitHub too.
 both PyInstaller specs and `.vscode/launch.json` also name these paths. Eight
 files total, but a wrong context fails at image-build time, not at test time.
 
-**Images must be re-pushed under the new name.** `omelet-api` is a new ghcr
+**Images must be re-pushed under the new name.** `eggie-api` is a new ghcr
 package, and CLAUDE.md's standing gotcha applies: a newly pushed package is
 private, and `install.sh` fails the whole install on any image it cannot pull.
 Its visibility needs flipping by hand before the first install against the new
@@ -310,7 +310,7 @@ name.
 - `packaging/images/build.sh` without `--push` — proves both contexts resolve.
 - A **live WSL2 run**: `create_vm` → bootstrap → `verify`, from a host whose
   `RUNTIME_URL` points at the branch. This is the only proof for the guest-path
-  renames and for `skills add` against the real `omelet-skills` repo, and it is
+  renames and for `skills add` against the real `eggie-skills` repo, and it is
   the real cost of the change. Per project convention it is driven from
   PowerShell on the Windows side, not from the WSL dev shell.
 
@@ -326,8 +326,8 @@ reviewing:
 | Part | Deadline |
 |---|---|
 | Moves (§3), package rename (§8), vocabulary sweep (§8) | None. Same price forever. |
-| Published names — `omelet-api`, `runtime-v*` (§5) | None, but gated on flipping ghcr visibility by hand. |
-| Skills extraction (§6) | None, but gated on populating `omelet-skills`. |
+| Published names — `eggie-api`, `runtime-v*` (§5) | None, but gated on flipping ghcr visibility by hand. |
+| Skills extraction (§6) | None, but gated on populating `eggie-skills`. |
 | **Host contract — guest paths, env vars, `api.token` (§5)** | **The first shipped host binary.** After that it is not a rename but a commitment to support both vocabularies forever. |
 
 If the PR has to be cut down under review, that last row is what must survive.
@@ -335,14 +335,14 @@ Everything above it can be redone at leisure.
 
 ## 12. The skills ship unpinned, for now
 
-`omelet-skills` gets no tags yet. `install.sh` uses the `owner/repo` shorthand,
+`eggie-skills` gets no tags yet. `install.sh` uses the `owner/repo` shorthand,
 which the CLI documents plainly, and skips the question of whether a bare
 `…/tree/<tag>` URL resolves a whole repository — the documented `/tree/` examples
 all point at a single skill directory, so that form would need verifying before it
 could be relied on.
 
 ```
-SKILLS_SOURCE="${OMELET_SKILLS_SOURCE:-omelet-app/omelet-skills}"
+SKILLS_SOURCE="${EGGIE_SKILLS_SOURCE:-eggie-io/eggie-skills}"
 ```
 
 The override is the point. Every box installs whatever `main` holds at that
@@ -361,11 +361,11 @@ Three repositories, created in this order:
 
 | Repository | Exists | Populated by |
 |---|---|---|
-| `omelet-skills` | yes, empty | **this change** (§6) |
-| `omelet` (this one) | yes | stays the host + runtime home for now |
-| `omelet-runtime` | not yet | a later change — reserve the name now, split later |
+| `eggie-skills` | yes, empty | **this change** (§6) |
+| `eggie` (this one) | yes | stays the host + runtime home for now |
+| `eggie-runtime` | not yet | a later change — reserve the name now, split later |
 
-**Create `omelet-runtime` now if you like — but do not split into it yet.** The
+**Create `eggie-runtime` now if you like — but do not split into it yet.** The
 name is worth reserving and an empty repository costs nothing. The split itself
 is blocked on a problem this spec deliberately does not solve:
 `tests/test_constants_agree.py` holds six version and API declarations equal
@@ -386,8 +386,8 @@ is exactly the table in §5.
 
 ### README and bundling
 
-`omelet-skills` gets a short `README.md` in this change — one paragraph on what
-the skills are, the `npx skills add omelet-app/omelet-skills` line, and a
+`eggie-skills` gets a short `README.md` in this change — one paragraph on what
+the skills are, the `npx skills add eggie-io/eggie-skills` line, and a
 sentence each on the five skills. It is the public face of the extraction, the
 repository is public, and an empty repository that `install.sh` points at is
 worse than no repository.
@@ -405,21 +405,21 @@ change the decisions above:
 - **`agent_unconfigured` → `api_unconfigured` joined the rename inventory (§5).**
   The table missed this wire error code; it is renamed everywhere the API returns
   it and everywhere the host and the guest CLI match on it.
-- **`AGENT_PORT`, `OMELET_AGENT_PORT`, `OMELET_AGENT_TOKEN` and `OMELET_AGENT_HOST`
-  → their `API_*` / `OMELET_API_*` equivalents.** Also missing from §5 — found
+- **`AGENT_PORT`, `EGGIE_AGENT_PORT`, `EGGIE_AGENT_TOKEN` and `EGGIE_AGENT_HOST`
+  → their `API_*` / `EGGIE_API_*` equivalents.** Also missing from §5 — found
   during the vocabulary sweep (§8 step 5), not planned for ahead of time.
 - **The package rename shipped in this change, not staged separately**, as §8
   already concludes — recorded here because staging it was raised again during
   execution and the user chose, again, to keep it in scope rather than open a
   second PR.
 - **`test_stack_recipes.py` left with the skills**, not just `test_skills.py`
-  (§6). It tested the compose recipes bundled in `omelet-stack/references/`, so
+  (§6). It tested the compose recipes bundled in `eggie-stack/references/`, so
   it belongs with the skill content it exercises, not with this repository.
 - **`Readiness.engine_version` → `runtime_version` and `Readiness.agent_api` →
   `api_version`** (§5). Also missing from the table; these are the status
   probe's own field names, read by both the desktop UI markup and
   `DesktopApi.home()`.
-- **`OMELET_AGENT_VERSION` → `OMELET_SERVICE_VERSION`** (§5), the `ENV`
+- **`EGGIE_AGENT_VERSION` → `EGGIE_SERVICE_VERSION`** (§5), the `ENV`
   companion to `ARG SERVICE_VERSION` that the table listed on its own.
 - **The image's Linux account `agent` → `api`** (§5), which is why
   `Dockerfile.debug`'s `USER api` and the version guard in

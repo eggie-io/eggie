@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Button } from "@omelet/ui";
+import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
 import { SleepyEgg } from "./SleepyEgg";
 import { StatusScreen } from "./StatusScreen";
@@ -7,7 +7,7 @@ import s from "./StatusScreen.module.css";
 
 export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetry: () => void }) {
   useEffect(() => {
-    // "Open Omelet" opens a new tab; this one catches up when it's looked at again.
+    // "Open Eggie" opens a new tab; this one catches up when it's looked at again.
     const onVisible = () => {
       if (document.visibilityState === "visible") onRetry();
     };
@@ -28,7 +28,7 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
           : "This page can't tell who you are any more — that happens after a while."}
       </p>
       <p className={s.lead}>
-        Open the Omelet app on your desktop and press <strong>Open Omelet</strong>. It'll hand the keys back.
+        Open the Eggie app on your desktop and press <strong>Open Eggie</strong>. It'll hand the keys back.
       </p>
     </StatusScreen>
   );

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button, Modal, Notice } from "@omelet/ui";
+import { Button, Modal, Notice } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";

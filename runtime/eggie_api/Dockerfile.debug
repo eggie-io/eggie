@@ -1,0 +1,20 @@
+# The released api service image plus debugpy, for stepping through it while
+# it runs in the VM. Not part of any build or release path -- stack.debug.yml
+# is the only thing that references it.
+#
+# It has no build context of its own, so it can be built straight into the VM
+# over stdin, on top of the release the VM runs (/opt/eggie/.env names it):
+#   . /opt/eggie/.env && docker build -t eggie-api:debug \
+#     --build-arg SERVICE_IMAGE=ghcr.io/eggie-io/eggie-api:$EGGIE_VERSION \
+#     - < /opt/eggie/runtime/eggie_api/Dockerfile.debug
+ARG SERVICE_IMAGE
+FROM ${SERVICE_IMAGE}
+
+USER root
+RUN pip install --no-cache-dir debugpy==1.8.5
+USER api
+
+# No --wait-for-client: the container starts and serves normally, and the
+# debugger attaches whenever you want it. Waiting would hang the HEALTHCHECK
+# and leave restart:always looping a container nobody has attached to yet.
+CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "eggie_api.routes"]

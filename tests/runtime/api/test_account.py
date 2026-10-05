@@ -1,8 +1,8 @@
 import pytest
 
-from omelet_api.core.account import Account, NotSignedIn
-from omelet_api.core.cloud import CloudError, CloudUnavailable
-from omelet_api.core.state import State
+from eggie_api.core.account import Account, NotSignedIn
+from eggie_api.core.cloud import CloudError, CloudUnavailable
+from eggie_api.core.state import State
 from tests.runtime.api.fake_cloud import CODE, ME, TOKENS, FakeCloud
 
 

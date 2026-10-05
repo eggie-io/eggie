@@ -84,7 +84,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-windows
-          path: dist/OmeletSetup-${{ inputs.version }}.exe
+          path: dist/EggieSetup-${{ inputs.version }}.exe
           if-no-files-found: error
 
   build-macos:
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-macos-${{ matrix.arch }}
-          path: dist/OmeletSetup-${{ inputs.version }}-${{ matrix.arch }}.pkg
+          path: dist/EggieSetup-${{ inputs.version }}-${{ matrix.arch }}.pkg
           if-no-files-found: error
 
   publish:
@@ -131,10 +131,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sha256sum OmeletSetup-* > SHA256SUMS
+          sha256sum EggieSetup-* > SHA256SUMS
           cat SHA256SUMS
-          gh release create "app-v$VERSION" OmeletSetup-* SHA256SUMS \
+          gh release create "app-v$VERSION" EggieSetup-* SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Omelet $VERSION" \
-            --notes "Omelet desktop app $VERSION."
+            --title "Eggie $VERSION" \
+            --notes "Eggie desktop app $VERSION."

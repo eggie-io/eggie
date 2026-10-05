@@ -20,7 +20,7 @@ class FakeRunner:
 def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"),
          spawner=None):
     return Wsl2Provider(
-        distro="omelet-vm",
+        distro="eggie-vm",
         install_dir=install_dir,
         rootfs=rootfs,
         wsl="wsl.exe",
@@ -32,7 +32,7 @@ def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"
 def test_exec_builds_passthrough_argv_and_decodes_utf8():
     r = FakeRunner(stdout=b"Linux 6.6\n")
     result = make(r).exec(["uname", "-sr"])
-    assert r.calls[-1] == ["wsl.exe", "-d", "omelet-vm", "--", "uname", "-sr"]
+    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "--", "uname", "-sr"]
     assert result.stdout == "Linux 6.6"
     assert result.ok is True
 
@@ -40,11 +40,11 @@ def test_exec_builds_passthrough_argv_and_decodes_utf8():
 def test_exec_root_inserts_user_root():
     r = FakeRunner()
     make(r).exec(["id", "-un"], root=True)
-    assert r.calls[-1] == ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--", "id", "-un"]
+    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--", "id", "-un"]
 
 
 def test_exists_true_when_distro_in_list():
-    listing = "omelet-vm\r\nUbuntu\r\n".encode("utf-16-le")
+    listing = "eggie-vm\r\nUbuntu\r\n".encode("utf-16-le")
     r = FakeRunner(stdout=listing)
     assert make(r).exists() is True
     assert r.calls[-1] == ["wsl.exe", "-l", "-q"]
@@ -63,15 +63,15 @@ def test_create_imports_then_enables_systemd_then_reboots(tmp_path):
     make(r, install_dir=install, rootfs=rootfs).create()
     argvs = r.calls
     assert argvs[0][:2] == ["wsl.exe", "--import"]
-    assert argvs[0][2] == "omelet-vm"
+    assert argvs[0][2] == "eggie-vm"
     assert str(install) in argvs[0][3]
     assert str(rootfs) in argvs[0][4]
     assert argvs[0][-2:] == ["--version", "2"]
     # systemd fixup runs as root, writes wsl.conf
     assert any("-u" in a and "root" in a and "wsl.conf" in " ".join(a) for a in argvs)
     # terminates so systemd takes effect, then boots again
-    terminate = argvs.index(["wsl.exe", "--terminate", "omelet-vm"])
-    assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in argvs[terminate:]
+    terminate = argvs.index(["wsl.exe", "--terminate", "eggie-vm"])
+    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in argvs[terminate:]
 
 
 def test_create_terminates_without_a_poweroff_wait(tmp_path):
@@ -82,7 +82,7 @@ def test_create_terminates_without_a_poweroff_wait(tmp_path):
     r = FakeRunner()
     make(r, install_dir=tmp_path / "inst", rootfs=rootfs).create()
     assert not any("poweroff" in a for a in r.calls)
-    assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
+    assert ["wsl.exe", "--terminate", "eggie-vm"] in r.calls
 
 
 def test_create_rejects_a_rootfs_path_that_does_not_exist():
@@ -110,17 +110,17 @@ def test_stop_terminates_and_destroy_unregisters():
     r = FakeRunner()
     p = make(r)
     p.stop()
-    assert r.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert r.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
     p.destroy()
-    assert r.calls[-1] == ["wsl.exe", "--unregister", "omelet-vm"]
+    assert r.calls[-1] == ["wsl.exe", "--unregister", "eggie-vm"]
 
 
 def test_start_holds_the_vm_open_so_wsl_does_not_idle_it_out():
     spawned = []
     make(ScriptedRunner("pgrep"), spawner=spawned.append).start()
     assert len(spawned) == 1
-    assert spawned[0][:5] == ["wsl.exe", "-d", "omelet-vm", "-u", "root"]
-    assert "exec -a omelet-hold sleep infinity" in spawned[0]
+    assert spawned[0][:5] == ["wsl.exe", "-d", "eggie-vm", "-u", "root"]
+    assert "exec -a eggie-hold sleep infinity" in spawned[0]
 
 
 def test_start_does_not_stack_a_second_hold_on_a_held_vm():
@@ -192,7 +192,7 @@ def test_stop_and_destroy_report_failures_instead_of_claiming_success():
 def test_running_reads_the_running_list_without_booting_the_distro():
     # Any `wsl -d` boots the distro, so a probe using exec() restarts a VM
     # the user just stopped.
-    r = FakeRunner(stdout="Ubuntu\r\nomelet-vm\r\n".encode("utf-16-le"))
+    r = FakeRunner(stdout="Ubuntu\r\neggie-vm\r\n".encode("utf-16-le"))
     assert make(r).running() is True
     assert r.calls == [["wsl.exe", "-l", "--running", "-q"]]
 
@@ -217,7 +217,7 @@ def test_a_hung_wsl_is_reported_as_unresponsive_not_as_a_failed_command():
     for stderr in (_HUNG.encode(), _HUNG.encode("utf-16-le")):
         r = FakeRunner(stderr=stderr, returncode=4294967295)
         try:
-            make(r).exec(["cat", "/opt/omelet/api.token"], root=True)
+            make(r).exec(["cat", "/opt/eggie/api.token"], root=True)
         except VmUnresponsive as e:
             assert "0x8007274c" in str(e)
         else:
@@ -225,25 +225,25 @@ def test_a_hung_wsl_is_reported_as_unresponsive_not_as_a_failed_command():
 
 
 def test_a_command_failing_inside_the_vm_still_returns_its_result():
-    r = FakeRunner(stderr=b"cat: /opt/omelet/api.token: No such file or directory",
+    r = FakeRunner(stderr=b"cat: /opt/eggie/api.token: No such file or directory",
                    returncode=1)
-    result = make(r).exec(["cat", "/opt/omelet/api.token"], root=True)
+    result = make(r).exec(["cat", "/opt/eggie/api.token"], root=True)
     assert result.returncode == 1
 
 
 def test_recover_restarts_only_this_vm():
     r = FakeRunner()
     make(r).recover()
-    assert ["wsl.exe", "--terminate", "omelet-vm"] in r.calls
+    assert ["wsl.exe", "--terminate", "eggie-vm"] in r.calls
     assert ["wsl.exe", "--shutdown"] not in r.calls
-    assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in r.calls
+    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in r.calls
 
 
 def test_recover_everything_shuts_all_of_wsl_down_first():
     r = FakeRunner()
     make(r).recover(everything=True)
     assert r.calls[0] == ["wsl.exe", "--shutdown"]
-    assert ["wsl.exe", "-d", "omelet-vm", "--", "true"] in r.calls
+    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in r.calls
 
 
 def test_recover_reports_a_vm_still_not_answering():
@@ -259,13 +259,13 @@ def test_recover_reports_a_vm_still_not_answering():
 
 def test_the_windows_installer_updates_silently_and_closes_the_running_app(tmp_path):
     spawned = []
-    provider = Wsl2Provider(distro="omelet-vm", install_dir=Path("/tmp/inst"),
+    provider = Wsl2Provider(distro="eggie-vm", install_dir=Path("/tmp/inst"),
                            rootfs=Path("/tmp/ubuntu.tar.gz"), wsl="wsl.exe",
                            runner=FakeRunner(), spawner=spawned.append, arch="amd64")
-    assert provider.installer_asset("0.2.0") == "OmeletSetup-0.2.0.exe"
-    provider.launch_installer(Path("C:/cache/OmeletSetup-0.2.0.exe"))
+    assert provider.installer_asset("0.2.0") == "EggieSetup-0.2.0.exe"
+    provider.launch_installer(Path("C:/cache/EggieSetup-0.2.0.exe"))
     (argv,) = spawned
-    assert argv[0].endswith("OmeletSetup-0.2.0.exe")
+    assert argv[0].endswith("EggieSetup-0.2.0.exe")
     assert {"/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/NORESTART"} <= set(argv[1:])
 
 
@@ -295,12 +295,12 @@ class PrefixRunner:
 
 def _stopper(runner, clock_values):
     ticks = iter(clock_values)
-    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=runner,
+    return Wsl2Provider(distro="eggie-vm", wsl="wsl.exe", runner=runner,
                         spawner=[].append, sleep=lambda s: None,
                         clock=lambda: next(ticks))
 
 
-RUNNING = ("omelet-vm\r\n").encode("utf-16-le")
+RUNNING = ("eggie-vm\r\n").encode("utf-16-le")
 
 
 class PoweroffEnds(PrefixRunner):
@@ -321,24 +321,24 @@ class PoweroffEnds(PrefixRunner):
 def test_stop_powers_off_through_systemd_before_terminating():
     runner = PoweroffEnds({})
     _stopper(runner, [0, 1]).stop()
-    assert ["wsl.exe", "-d", "omelet-vm", "-u", "root", "--",
+    assert ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--",
             "systemctl", "poweroff"] in runner.calls
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_on_a_stopped_distro_does_not_boot_it():
     runner = PrefixRunner({("wsl.exe", "-l", "--running", "-q"): (1, b"")})
     _stopper(runner, [0, 1]).stop()
     assert not any(c[:2] == ["wsl.exe", "-d"] for c in runner.calls)
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_terminates_even_when_poweroff_fails():
     runner = PoweroffEnds({
-        ("wsl.exe", "-d", "omelet-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
+        ("wsl.exe", "-d", "eggie-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
     })
     _stopper(runner, [0, 1]).stop()
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
@@ -346,7 +346,7 @@ def test_stop_gives_up_waiting_after_thirty_seconds_and_terminates():
     _stopper(runner, [0, 10, 20, 31]).stop()
     polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
     assert len(polls) == 4  # one to see it up, three while waiting
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_terminates_when_the_hung_wsl_rejects_poweroff():
@@ -367,7 +367,7 @@ def test_stop_terminates_when_the_hung_wsl_rejects_poweroff():
     _stopper(runner, [0, 1]).stop()
     polls = [c for c in runner.calls if c[:3] == ["wsl.exe", "-l", "--running"]]
     assert len(polls) == 1, "a hung poweroff must not be waited out"
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
@@ -386,11 +386,11 @@ def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
 
     runner = HungPoll({})
     _stopper(runner, [0, 1]).stop()
-    assert runner.calls[-1] == ["wsl.exe", "--terminate", "omelet-vm"]
+    assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
 def test_run_value_quotes_a_path_with_spaces():
-    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Omelet\setup.exe"
+    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Eggie\setup.exe"
     assert run_value(exe) == f'"{exe}" setup --background'
 
 
@@ -408,13 +408,13 @@ def _autostart(store):
     def deleter(key, name):
         store.pop((key, name), None)
 
-    return Wsl2Provider(distro="omelet-vm", wsl="wsl.exe", runner=lambda a: None,
+    return Wsl2Provider(distro="eggie-vm", wsl="wsl.exe", runner=lambda a: None,
                         spawner=[].append, registry_reader=reader,
                         registry_writer=writer, registry_deleter=deleter,
                         registry_binary_reader=binary_reader)
 
 
-EXE = r"C:\Program Files\Omelet\setup.exe"
+EXE = r"C:\Program Files\Eggie\setup.exe"
 
 
 def test_set_autostart_on_writes_the_run_value():
@@ -458,7 +458,7 @@ def test_re_enabled_in_task_manager_reads_as_on():
     assert _autostart(store).autostart_enabled(EXE) is True
 
 
-def test_turning_on_from_omelet_clears_the_task_manager_disable():
+def test_turning_on_from_eggie_clears_the_task_manager_disable():
     store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(EXE),
              (STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME): DISABLED_IN_TASK_MANAGER}
     provider = _autostart(store)
@@ -468,11 +468,11 @@ def test_turning_on_from_omelet_clears_the_task_manager_disable():
 
 
 def test_autostart_registers_the_gui_exe_when_given_the_console_exe(tmp_path):
-    """`omelet setup` runs the window from omelet.exe; a login entry pointing
+    """`eggie setup` runs the window from eggie.exe; a login entry pointing
     there flashes a console at every sign-in."""
-    (tmp_path / "omelet.exe").write_bytes(b"")
+    (tmp_path / "eggie.exe").write_bytes(b"")
     (tmp_path / "setup.exe").write_bytes(b"")
-    console, gui = str(tmp_path / "OMELET.EXE"), str(tmp_path / "setup.exe")
+    console, gui = str(tmp_path / "EGGIE.EXE"), str(tmp_path / "setup.exe")
     store = {}
     provider = _autostart(store)
     provider.set_autostart(True, console)
@@ -482,8 +482,8 @@ def test_autostart_registers_the_gui_exe_when_given_the_console_exe(tmp_path):
 
 
 def test_autostart_keeps_the_console_exe_when_there_is_no_gui_sibling(tmp_path):
-    (tmp_path / "omelet.exe").write_bytes(b"")
-    console = str(tmp_path / "omelet.exe")
+    (tmp_path / "eggie.exe").write_bytes(b"")
+    console = str(tmp_path / "eggie.exe")
     store = {}
     _autostart(store).set_autostart(True, console)
     assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(console)

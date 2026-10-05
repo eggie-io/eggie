@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-from omelet_api.core.cloud import Cloud, CloudError, CloudUnavailable
+from eggie_api.core.cloud import Cloud, CloudError, CloudUnavailable
 
 
 class _Response:

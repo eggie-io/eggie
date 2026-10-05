@@ -1,8 +1,0 @@
-[Unit]
-Description=Check Omelet's coding agents when the API asks
-
-[Path]
-PathChanged=/opt/omelet/agent-status/check
-
-[Install]
-WantedBy=multi-user.target

@@ -4,7 +4,7 @@
 
 **Goal:** Make the host a VM shell that runs one configurable bootstrap command, and move everything that runs inside the VM into a separately released `engine/`.
 
-**Architecture:** The host's `bootstrap()` stops pushing seven guest files and instead runs a tiny base64 stub that downloads `OMELET_ENGINE_URL` (default: `engine/get.sh` on GitHub) and executes it. `get.sh` picks an `engine-v*` tag, unpacks that tag's `engine/` into `/opt/omelet/engine`, and runs `install.sh`, which installs Docker, the stack, Node 22, the in-VM CLI, agent instructions and skills (`npx skills add` from the local folder), then writes `/opt/omelet/engine.version`. The host's version check becomes an API-number check plus a token-refusal repair.
+**Architecture:** The host's `bootstrap()` stops pushing seven guest files and instead runs a tiny base64 stub that downloads `EGGIE_ENGINE_URL` (default: `engine/get.sh` on GitHub) and executes it. `get.sh` picks an `engine-v*` tag, unpacks that tag's `engine/` into `/opt/eggie/engine`, and runs `install.sh`, which installs Docker, the stack, Node 22, the in-VM CLI, agent instructions and skills (`npx skills add` from the local folder), then writes `/opt/eggie/engine.version`. The host's version check becomes an API-number check plus a token-refusal repair.
 
 **Tech Stack:** Python 3.12 (host: stdlib + typer; agent: FastAPI), bash, pytest, `skills@1.5.26` (npx), NodeSource Node 22.
 
@@ -14,13 +14,13 @@
 
 - `host/` never imports `agent/`; host runtime dependency stays `typer` only; no `sys.platform`/`platform.system()`/`os.name` outside `host/providers/`.
 - Every test reaches repo files through `Path(__file__).resolve()`, never a cwd-relative path.
-- Engine entrypoint default: `https://raw.githubusercontent.com/omelet-app/omelet/main/engine/get.sh`.
-- Engine repository default: `https://github.com/omelet-app/omelet`.
-- Installed marker: `/opt/omelet/engine.version` — the host checks presence only.
+- Engine entrypoint default: `https://raw.githubusercontent.com/eggie-io/eggie/main/engine/get.sh`.
+- Engine repository default: `https://github.com/eggie-io/eggie`.
+- Installed marker: `/opt/eggie/engine.version` — the host checks presence only.
 - Engine versions are git tags `engine-vX.Y.Z`.
 - Skills CLI pinned to `skills@1.5.26`; it requires Node `>=22.20.0`.
 - Host `SUPPORTED_API = frozenset({1})`; agent `API_VERSION = 1`; a `/health` without `api` counts as 1.
-- `BOOTSTRAP_VERSION` and `/opt/omelet/.bootstrapped` are gone; nothing replaces them on the host.
+- `BOOTSTRAP_VERSION` and `/opt/eggie/.bootstrapped` are gone; nothing replaces them on the host.
 - No self-update command (deferred — `docs/future/engine-self-update.md`).
 - Comments: only for non-obvious edge cases/workarounds, short, never mention docs, tickets or issues.
 - Do not touch `host/provision/Untitled` or the deleted `task.md` — they are the user's uncommitted changes. Never `git add -A`; add the paths each task names.
@@ -41,14 +41,14 @@
 | `host/core/install.py` | modify | `connect_step` replaces `agent_version_step`; repair = `bootstrap(repair=True)` |
 | `host/cli.py` | modify | `vm create` wording; `selfcheck` checks only bundled host assets |
 | `host/setup_app/app.py` | modify | Step label `connect` |
-| `packaging/windows/omelet.spec` | modify | `datas` = nginx-hello + omelet.yaml |
+| `packaging/windows/eggie.spec` | modify | `datas` = nginx-hello + eggie.yaml |
 | `agent/core/constants.py`, `agent/api/app.py` | modify | `API_VERSION`, `/health` `api` |
 | `engine/get.sh` | create | Resolve ref, download tarball, run install.sh |
 | `engine/install.sh` | move+modify | Was `host/provision/bootstrap.sh` |
 | `engine/stack.yml`, `engine/stack.debug.yml` | move | Was `host/provision/` |
-| `engine/cli/omelet.py` | move | Was `host/provision/guest/omelet.py` |
-| `engine/instructions/omelet.md` | move | Was `host/provision/agents/omelet.md` |
-| `engine/skills/omelet-setup/SKILL.md` | move | Was `host/provision/agents/skills/omelet-setup/` |
+| `engine/cli/eggie.py` | move | Was `host/provision/guest/eggie.py` |
+| `engine/instructions/eggie.md` | move | Was `host/provision/agents/eggie.md` |
+| `engine/skills/eggie-setup/SKILL.md` | move | Was `host/provision/agents/skills/eggie-setup/` |
 | `engine/lib/install-agents.sh`, `engine/lib/login-users.sh` | move+modify | Codex block + `~/projects` link; account selection |
 | `tests/engine/…` | move/create | Engine script and guest CLI tests |
 | `tests/host/test_bootstrap.py` | rewrite | Host bootstrap behaviour |
@@ -65,13 +65,13 @@
 - Rewrite: `host/core/bootstrap.py`
 - Modify: `host/core/install.py` (`_bootstrap`, `_reconnect`, the `agent` step)
 - Modify: `host/cli.py` (`vm_create`, `selfcheck`)
-- Modify: `packaging/windows/omelet.spec`
+- Modify: `packaging/windows/eggie.spec`
 - Rewrite: `tests/host/test_bootstrap.py`
 - Modify: `tests/host/test_bootstrap_shell.py`, `tests/host/test_frozen_bundle.py`, `tests/host/test_exec_callers.py`, `tests/test_vm_cli.py`, `tests/test_setup_cli.py`, `tests/test_constants_agree.py`
 
 **Interfaces:**
 - Produces: `host.core.bootstrap.bootstrap(provider, *, source: str | None = None, repair: bool = False) -> None`; `host.core.bootstrap.BootstrapError`; `host.core.constants.ENGINE_URL: str`, `ENGINE_MARKER: str`.
-- Produces (guest command contract): one `provider.exec(["bash", "-lc", "<cmd>"], root=True)` where `<cmd>` is `echo <b64 stub> | base64 -d > /tmp/omelet-bootstrap.sh && [OMELET_ENGINE_REF=<ref>] [OMELET_ENGINE_REPAIR=1] bash /tmp/omelet-bootstrap.sh <url>`; marker check is `provider.exec(["test", "-s", ENGINE_MARKER], root=True)`.
+- Produces (guest command contract): one `provider.exec(["bash", "-lc", "<cmd>"], root=True)` where `<cmd>` is `echo <b64 stub> | base64 -d > /tmp/eggie-bootstrap.sh && [EGGIE_ENGINE_REF=<ref>] [EGGIE_ENGINE_REPAIR=1] bash /tmp/eggie-bootstrap.sh <url>`; marker check is `provider.exec(["test", "-s", ENGINE_MARKER], root=True)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -117,7 +117,7 @@ class FakeProvider:
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for name in ("OMELET_ENGINE_URL", "OMELET_ENGINE_REF"):
+    for name in ("EGGIE_ENGINE_URL", "EGGIE_ENGINE_REF"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -148,7 +148,7 @@ def test_a_missing_engine_runs_the_default_entrypoint_as_root():
 
 
 def test_the_entrypoint_can_be_pointed_elsewhere_from_the_environment(monkeypatch):
-    monkeypatch.setenv("OMELET_ENGINE_URL", "https://example.invalid/branch/get.sh")
+    monkeypatch.setenv("EGGIE_ENGINE_URL", "https://example.invalid/branch/get.sh")
     p = FakeProvider()
     bootstrap(p)
     assert _command(p).rstrip().endswith("https://example.invalid/branch/get.sh")
@@ -158,22 +158,22 @@ def test_the_entrypoint_can_be_pointed_elsewhere_from_the_environment(monkeypatc
 def test_a_ref_reaches_the_guest_only_when_one_is_set(monkeypatch):
     p = FakeProvider()
     bootstrap(p)
-    assert "OMELET_ENGINE_REF" not in _command(p)
+    assert "EGGIE_ENGINE_REF" not in _command(p)
 
-    monkeypatch.setenv("OMELET_ENGINE_REF", "feature/engine-work")
+    monkeypatch.setenv("EGGIE_ENGINE_REF", "feature/engine-work")
     p = FakeProvider()
     bootstrap(p)
-    assert "OMELET_ENGINE_REF=feature/engine-work" in _command(p)
+    assert "EGGIE_ENGINE_REF=feature/engine-work" in _command(p)
 
 
 def test_repair_reinstalls_an_installed_engine_and_tells_the_installer_so():
     plain = FakeProvider()
     bootstrap(plain)
-    assert "OMELET_ENGINE_REPAIR" not in _command(plain)
+    assert "EGGIE_ENGINE_REPAIR" not in _command(plain)
 
     p = FakeProvider(installed=True)
     bootstrap(p, repair=True)
-    assert "OMELET_ENGINE_REPAIR=1" in _command(p)
+    assert "EGGIE_ENGINE_REPAIR=1" in _command(p)
 
 
 def test_a_failing_installer_raises_with_the_guests_own_error():
@@ -191,9 +191,9 @@ def test_an_installer_that_exits_zero_without_the_marker_is_a_failure():
 def test_a_value_that_would_be_re_split_on_the_guest_command_line_is_refused(monkeypatch):
     # The command crosses wsl.exe or ssh as one argument; a space or quote in
     # it would be parsed as shell by the guest.
-    monkeypatch.setenv("OMELET_ENGINE_REF", "main; rm -rf /")
+    monkeypatch.setenv("EGGIE_ENGINE_REF", "main; rm -rf /")
     p = FakeProvider()
-    with pytest.raises(BootstrapError, match="OMELET_ENGINE_REF"):
+    with pytest.raises(BootstrapError, match="EGGIE_ENGINE_REF"):
         bootstrap(p)
     assert p.installer_runs() == []
 
@@ -260,8 +260,8 @@ Replace the block from `# Bootstrap is purely host-side provisioning;` through `
 ```python
 # The host knows only where the engine's entrypoint lives and which file says
 # it finished; what gets installed, and which version, is decided in the VM.
-ENGINE_URL = ("https://raw.githubusercontent.com/omelet-app/"
-              "omelet/main/engine/get.sh")
+ENGINE_URL = ("https://raw.githubusercontent.com/eggie-io/"
+              "eggie/main/engine/get.sh")
 ENGINE_MARKER = f"{GUEST_ROOT}/engine.version"
 ```
 
@@ -296,14 +296,14 @@ class BootstrapError(RuntimeError):
 # before a dropped connection. python3 covers a rootfs that ships without curl.
 _STUB = """set -euo pipefail
 if command -v curl >/dev/null 2>&1; then
-  script="$(curl -fsSL "$1")" || { echo "could not download the Omelet installer from $1" >&2; exit 1; }
+  script="$(curl -fsSL "$1")" || { echo "could not download the Eggie installer from $1" >&2; exit 1; }
 else
   script="$(python3 -c 'import sys, urllib.request; sys.stdout.write(urllib.request.urlopen(sys.argv[1], timeout=60).read().decode())' "$1")" \\
-    || { echo "could not download the Omelet installer from $1" >&2; exit 1; }
+    || { echo "could not download the Eggie installer from $1" >&2; exit 1; }
 fi
 bash -c "$script"
 """
-_STUB_PATH = "/tmp/omelet-bootstrap.sh"
+_STUB_PATH = "/tmp/eggie-bootstrap.sh"
 
 # The command reaches the guest as one `bash -lc` argument through wsl.exe or
 # ssh, where a space or quote would be parsed again.
@@ -340,24 +340,24 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False) -> N
     if not repair and _installed(provider):
         return
     url = _shell_safe(
-        source or os.environ.get("OMELET_ENGINE_URL") or constants.ENGINE_URL,
-        "OMELET_ENGINE_URL")
+        source or os.environ.get("EGGIE_ENGINE_URL") or constants.ENGINE_URL,
+        "EGGIE_ENGINE_URL")
     assignments = []
-    ref = os.environ.get("OMELET_ENGINE_REF")
+    ref = os.environ.get("EGGIE_ENGINE_REF")
     if ref:
-        assignments.append(f"OMELET_ENGINE_REF={_shell_safe(ref, 'OMELET_ENGINE_REF')}")
+        assignments.append(f"EGGIE_ENGINE_REF={_shell_safe(ref, 'EGGIE_ENGINE_REF')}")
     if repair:
-        assignments.append("OMELET_ENGINE_REPAIR=1")
+        assignments.append("EGGIE_ENGINE_REPAIR=1")
     encoded = base64.b64encode(_STUB.encode()).decode("ascii")
     command = " ".join([*assignments, "bash", _STUB_PATH, url])
     _run(provider,
          ["bash", "-lc", f"echo {encoded} | base64 -d > {_STUB_PATH} && {command}"],
-         step="installing Omelet inside the VM")
+         step="installing Eggie inside the VM")
     # The installer writes the marker last, so its absence means it stopped
     # early without a non-zero status reaching us.
     if not _installed(provider):
         raise BootstrapError(
-            "the Omelet installer reported success but left no "
+            "the Eggie installer reported success but left no "
             f"{constants.ENGINE_MARKER}")
 ```
 
@@ -404,13 +404,13 @@ def _reconnect(provider):
 
 In `vm_create`, replace the docstring and the two messages:
 ```python
-    """Create the VM and install Omelet inside it."""
+    """Create the VM and install Eggie inside it."""
 ```
 ```python
-            typer.echo("VM already exists; checking the Omelet install.")
+            typer.echo("VM already exists; checking the Eggie install.")
 ```
 ```python
-        typer.echo("Installing Omelet in the VM (a few minutes)…")
+        typer.echo("Installing Eggie in the VM (a few minutes)…")
 ```
 (The `typer.echo("\nBootstrap failed.\n{e}")` line stays.)
 
@@ -424,18 +424,18 @@ In `selfcheck`, replace everything from `from host.core import bootstrap as _boo
     checks = [
         ("host/provision/nginx-hello/docker-compose.yml",
          VERIFY_TEMPLATE / "docker-compose.yml"),
-        ("host/providers/omelet.yaml", Path(_providers.__file__).parent / "omelet.yaml"),
+        ("host/providers/eggie.yaml", Path(_providers.__file__).parent / "eggie.yaml"),
     ]
 ```
 
 - [ ] **Step 8: Shrink the PyInstaller `datas`**
 
-In `packaging/windows/omelet.spec`, replace the `datas=[...]` list with:
+In `packaging/windows/eggie.spec`, replace the `datas=[...]` list with:
 ```python
     datas=[
         ("../../host/provision/nginx-hello/docker-compose.yml",
          "host/provision/nginx-hello"),
-        ("../../host/providers/omelet.yaml", "host/providers"),
+        ("../../host/providers/eggie.yaml", "host/providers"),
     ],
 ```
 and replace the comment under it with:
@@ -504,7 +504,7 @@ and in `FailingProvider.exec`:
 
 `tests/test_setup_cli.py` — in `test_selfcheck_reports_ok_for_every_bundled_asset`, replace the names tuple:
 ```python
-    for name in ("docker-compose.yml", "omelet.yaml"):
+    for name in ("docker-compose.yml", "eggie.yaml"):
 ```
 
 `tests/test_constants_agree.py` — replace `test_bootstrap_constants_live_only_on_the_host`:
@@ -533,7 +533,7 @@ Expected: all pass. If anything still imports `read_marker`, `restart_agent`, `g
 
 ```bash
 git add host/core/constants.py host/core/bootstrap.py host/core/install.py host/cli.py \
-  packaging/windows/omelet.spec tests/host/test_bootstrap.py tests/host/test_bootstrap_shell.py \
+  packaging/windows/eggie.spec tests/host/test_bootstrap.py tests/host/test_bootstrap_shell.py \
   tests/host/test_frozen_bundle.py tests/host/test_exec_callers.py tests/test_vm_cli.py \
   tests/test_setup_cli.py tests/test_constants_agree.py
 git commit -m "feat: host bootstrap runs the engine entrypoint instead of pushing guest files"
@@ -683,11 +683,11 @@ def test_the_stack_deploys_the_image_version_the_agent_reports():
     from agent import __version__ as package_version
 
     root = Path(__file__).resolve().parent.parent
-    stack = re.search(r"\$\{OMELET_AGENT_IMAGE:-[^}]+:([^}:]+)\}",
+    stack = re.search(r"\$\{EGGIE_AGENT_IMAGE:-[^}]+:([^}:]+)\}",
                       (root / "host" / "provision" / "stack.yml").read_text())
     dockerfile = re.search(r"^ARG AGENT_VERSION=(\S+)",
                            (root / "agent" / "Dockerfile").read_text(), re.M)
-    assert stack, "stack.yml must default OMELET_AGENT_IMAGE with a tag"
+    assert stack, "stack.yml must default EGGIE_AGENT_IMAGE with a tag"
     assert dockerfile, "the Dockerfile must default AGENT_VERSION"
     assert stack[1] == dockerfile[1] == package_version
 
@@ -730,7 +730,7 @@ In `agent/api/app.py`, in `health()`, add the field after `"version": config.ver
 
 - [ ] **Step 4: Host constants**
 
-In `host/core/constants.py`, replace the block from `# Must match stack.yml's OMELET_AGENT_IMAGE default;` through `EXPECTED_AGENT_VERSION = AGENT_IMAGE.rsplit(":", 1)[-1]` with:
+In `host/core/constants.py`, replace the block from `# Must match stack.yml's EGGIE_AGENT_IMAGE default;` through `EXPECTED_AGENT_VERSION = AGENT_IMAGE.rsplit(":", 1)[-1]` with:
 ```python
 # The agent API numbers this host can drive. An engine release that keeps the
 # routes compatible keeps the number, so it never needs a host release.
@@ -784,7 +784,7 @@ def connect_step(provider, *, client=None, reconnect=None, sleep=time.sleep):
     if api not in constants.SUPPORTED_API:
         supported = ", ".join(str(n) for n in sorted(constants.SUPPORTED_API))
         raise AgentIncompatible(
-            "This app and the Omelet service inside the virtual machine are "
+            "This app and the Eggie service inside the virtual machine are "
             "versions that cannot work together.\n"
             f"service API {api}, app supports {supported}")
     # /health skips the token check; /version is the cheapest route that does not.
@@ -800,10 +800,10 @@ def connect_step(provider, *, client=None, reconnect=None, sleep=time.sleep):
             if again.code not in _TOKEN_CODES:
                 raise
             raise AgentNotAccepted(
-                "The Omelet service inside the virtual machine did not accept "
+                "The Eggie service inside the virtual machine did not accept "
                 "this computer, and setting the virtual machine up again did "
                 f"not change that.\n{again.message}") from again
-        return ("The Omelet service in the virtual machine was not accepting "
+        return ("The Eggie service in the virtual machine was not accepting "
                 "this computer, and has been reconnected.")
     return None
 ```
@@ -819,14 +819,14 @@ In `default_steps`, replace the `agent` step and its comment with:
 
 In `_ACTIONS`, replace the `"agent"` entry with:
 ```python
-    "connect": "The Omelet service inside the virtual machine would not work "
+    "connect": "The Eggie service inside the virtual machine would not work "
                "with this app, or would not accept this computer — the "
                "message above says which. Run setup again; if it fails the "
                "same way twice, use Copy diagnostics and send us the text.",
 ```
 and the `"bootstrap"` entry with:
 ```python
-    "bootstrap": "Omelet could not be installed inside the virtual machine. The "
+    "bootstrap": "Eggie could not be installed inside the virtual machine. The "
                  "detail above comes from inside the VM. Run setup again; if it "
                  "fails the same way twice, send us that text.",
 ```
@@ -835,8 +835,8 @@ and the `"bootstrap"` entry with:
 
 In `host/setup_app/app.py`, replace the `"bootstrap"` and `"agent"` label entries (and the comment above `"agent"`) with:
 ```python
-    "bootstrap": "Installing Omelet",
-    "connect": "Connecting to the Omelet service",
+    "bootstrap": "Installing Eggie",
+    "connect": "Connecting to the Eggie service",
 ```
 
 - [ ] **Step 7: Run the full suite**
@@ -858,7 +858,7 @@ git commit -m "feat: connect step checks the agent API number instead of its ver
 ### Task 3: Move every guest asset into `engine/`
 
 **Files:**
-- Move: `host/provision/{bootstrap.sh → ../../engine/install.sh, stack.yml, stack.debug.yml, guest/omelet.py → cli/omelet.py, agents/omelet.md → instructions/omelet.md, agents/skills → skills, install-agents.sh → lib/, login-users.sh → lib/}`
+- Move: `host/provision/{bootstrap.sh → ../../engine/install.sh, stack.yml, stack.debug.yml, guest/eggie.py → cli/eggie.py, agents/eggie.md → instructions/eggie.md, agents/skills → skills, install-agents.sh → lib/, login-users.sh → lib/}`
 - Modify: `engine/install.sh` (read files from its own directory), `engine/lib/install-agents.sh` (instructions path)
 - Move: `tests/guest/ → tests/engine/cli/`; `tests/host/test_bootstrap_shell.py → tests/engine/test_install_shell.py`; `tests/host/test_install_agents.py`, `tests/host/test_login_users.py`, `tests/host/test_stack_yml.py → tests/engine/`
 - Create: `tests/engine/__init__.py`, `tests/host/test_no_guest_assets.py`
@@ -866,7 +866,7 @@ git commit -m "feat: connect step checks the agent API number instead of its ver
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `engine/install.sh` resolves siblings via `ENGINE_DIR`; `engine/lib/install-agents.sh <engine-dir> <home> <uid:gid>` reads `<engine-dir>/instructions/omelet.md` and `<engine-dir>/skills/omelet-setup`; test loader `tests.engine.cli.loader.load()` / `GUEST_CLI`.
+- Produces: `engine/install.sh` resolves siblings via `ENGINE_DIR`; `engine/lib/install-agents.sh <engine-dir> <home> <uid:gid>` reads `<engine-dir>/instructions/eggie.md` and `<engine-dir>/skills/eggie-setup`; test loader `tests.engine.cli.loader.load()` / `GUEST_CLI`.
 
 - [ ] **Step 1: Write the failing boundary test**
 
@@ -894,7 +894,7 @@ def test_host_provision_holds_only_the_smoke_test_project():
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `python3 -m pytest tests/host/test_no_guest_assets.py -q`
-Expected: FAIL listing `bootstrap.sh`, `stack.yml`, `guest/omelet.py`, …
+Expected: FAIL listing `bootstrap.sh`, `stack.yml`, `guest/eggie.py`, …
 
 - [ ] **Step 3: Move the files**
 
@@ -903,8 +903,8 @@ mkdir -p engine/cli engine/instructions engine/lib
 git mv host/provision/bootstrap.sh engine/install.sh
 git mv host/provision/stack.yml engine/stack.yml
 git mv host/provision/stack.debug.yml engine/stack.debug.yml
-git mv host/provision/guest/omelet.py engine/cli/omelet.py
-git mv host/provision/agents/omelet.md engine/instructions/omelet.md
+git mv host/provision/guest/eggie.py engine/cli/eggie.py
+git mv host/provision/agents/eggie.md engine/instructions/eggie.md
 git mv host/provision/agents/skills engine/skills
 git mv host/provision/install-agents.sh engine/lib/install-agents.sh
 git mv host/provision/login-users.sh engine/lib/login-users.sh
@@ -936,21 +936,21 @@ ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 Replace step 7's
 ```bash
-test -f /opt/omelet/stack.yml || { echo 'stack.yml was never pushed to the VM' >&2; exit 1; }
+test -f /opt/eggie/stack.yml || { echo 'stack.yml was never pushed to the VM' >&2; exit 1; }
 ```
 with
 ```bash
-install -m 644 "$ENGINE_DIR/stack.yml" /opt/omelet/stack.yml
+install -m 644 "$ENGINE_DIR/stack.yml" /opt/eggie/stack.yml
 ```
 
 In step 8 replace the four asset paths:
 ```bash
-install -m 755 "$ENGINE_DIR/cli/omelet.py" /usr/local/bin/omelet
+install -m 755 "$ENGINE_DIR/cli/eggie.py" /usr/local/bin/eggie
 ```
 ```bash
-install -m 644 "$ENGINE_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
-rm -rf /etc/codex/skills/omelet-setup
-cp -r "$ENGINE_DIR/skills/omelet-setup" /etc/codex/skills/
+install -m 644 "$ENGINE_DIR/instructions/eggie.md" /etc/claude-code/CLAUDE.md
+rm -rf /etc/codex/skills/eggie-setup
+cp -r "$ENGINE_DIR/skills/eggie-setup" /etc/codex/skills/
 ```
 ```bash
 bash "$ENGINE_DIR/lib/install-agents.sh" "$ENGINE_DIR" /root 0:0
@@ -963,12 +963,12 @@ done < <(getent passwd | bash "$ENGINE_DIR/lib/login-users.sh" /etc/shells)
 
 In `engine/lib/install-agents.sh`, update the usage comment to `install-agents.sh <engine-dir> <home> <owner uid:gid>` and the Codex block line:
 ```bash
-{ echo "$BEGIN"; cat "$SRC/instructions/omelet.md"; echo "$END"; } >> "$AGENTS_MD"
+{ echo "$BEGIN"; cat "$SRC/instructions/eggie.md"; echo "$END"; } >> "$AGENTS_MD"
 ```
 
 - [ ] **Step 5: Repoint the moved tests**
 
-- `tests/engine/cli/loader.py`: `GUEST_CLI = (Path(__file__).resolve().parents[3] / "engine" / "cli" / "omelet.py")` and the docstring's "copied into the VM" wording stays.
+- `tests/engine/cli/loader.py`: `GUEST_CLI = (Path(__file__).resolve().parents[3] / "engine" / "cli" / "eggie.py")` and the docstring's "copied into the VM" wording stays.
 - Every `from tests.guest.loader import` → `from tests.engine.cli.loader import` (files: `tests/engine/cli/conftest.py`, `tests/engine/cli/test_boundaries.py`, any other `tests/engine/cli/test_*.py`, `tests/test_constants_agree.py`). Find them with `grep -rln "tests.guest" tests`.
 - `tests/engine/test_install_shell.py`: `BOOTSTRAP = ROOT / "engine" / "install.sh"`; delete `test_smoke_test_template_publishes_no_host_port` from this file.
 - Append that test, unchanged except its path, to `tests/host/test_verify_step.py`:
@@ -984,7 +984,7 @@ def test_smoke_test_template_publishes_no_host_port():
     for name, svc in compose["services"].items():
         assert not svc.get("ports"), f"{name} publishes a host port"
 ```
-- `tests/engine/test_install_agents.py`: `SCRIPT = ROOT / "engine" / "lib" / "install-agents.sh"`, `SOURCE = ROOT / "engine"`, and in `test_the_codex_block_is_replaced_and_the_users_own_text_kept` write the new text to `source / "instructions" / "omelet.md"`.
+- `tests/engine/test_install_agents.py`: `SCRIPT = ROOT / "engine" / "lib" / "install-agents.sh"`, `SOURCE = ROOT / "engine"`, and in `test_the_codex_block_is_replaced_and_the_users_own_text_kept` write the new text to `source / "instructions" / "eggie.md"`.
 - `tests/engine/test_login_users.py`: `SCRIPT = ROOT / "engine" / "lib" / "login-users.sh"`.
 - `tests/engine/test_stack_yml.py`: `STACK = Path(__file__).resolve().parents[2] / "engine" / "stack.yml"`.
 - `tests/test_constants_agree.py`: in `test_the_stack_deploys_the_image_version_the_agent_reports`, read `root / "engine" / "stack.yml"`.
@@ -1025,7 +1025,7 @@ git commit -m "refactor: move every guest asset from host/provision into engine/
 
 **Interfaces:**
 - Consumes: `engine/install.sh <ref> [--repair]` (Task 5 gives it those arguments; until then extra arguments are ignored).
-- Produces: `get.sh` environment contract — `OMELET_ENGINE_REPO` (default repository URL), `OMELET_ENGINE_REF`, `OMELET_ENGINE_REPAIR=1`; shell function `resolve_ref <repo> <marker-path>` printing one ref; unpacked engine at `/opt/omelet/engine/`.
+- Produces: `get.sh` environment contract — `EGGIE_ENGINE_REPO` (default repository URL), `EGGIE_ENGINE_REF`, `EGGIE_ENGINE_REPAIR=1`; shell function `resolve_ref <repo> <marker-path>` printing one ref; unpacked engine at `/opt/eggie/engine/`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1042,7 +1042,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 GET = ROOT / "engine" / "get.sh"
-REPO = "https://example.invalid/omelet"
+REPO = "https://example.invalid/eggie"
 
 
 def _bin(tmp_path: Path, **scripts: str) -> dict:
@@ -1066,7 +1066,7 @@ def _resolve(tmp_path, *, tags=(), git_code=0, installed="", **env):
     if installed:
         marker.write_text(installed + "\n")
     environ = _bin(tmp_path, git=_git_listing(tmp_path, tags, git_code))
-    for name in ("OMELET_ENGINE_REF", "OMELET_ENGINE_REPAIR"):
+    for name in ("EGGIE_ENGINE_REF", "EGGIE_ENGINE_REPAIR"):
         environ.pop(name, None)
     environ.update(env)
     return subprocess.run(
@@ -1086,18 +1086,18 @@ def test_the_highest_engine_tag_wins_by_version_not_by_text(tmp_path):
 
 
 def test_an_explicit_ref_wins_over_every_tag(tmp_path):
-    result = _resolve(tmp_path, tags=["engine-v0.3.0"], OMELET_ENGINE_REF="feature/x")
+    result = _resolve(tmp_path, tags=["engine-v0.3.0"], EGGIE_ENGINE_REF="feature/x")
     assert result.stdout.strip() == "feature/x"
 
 
 def test_a_repair_keeps_the_installed_ref_instead_of_upgrading(tmp_path):
     result = _resolve(tmp_path, tags=["engine-v0.3.0"], installed="engine-v0.2.0",
-                      OMELET_ENGINE_REPAIR="1")
+                      EGGIE_ENGINE_REPAIR="1")
     assert result.stdout.strip() == "engine-v0.2.0"
 
 
 def test_a_repair_with_nothing_installed_installs_the_latest(tmp_path):
-    result = _resolve(tmp_path, tags=["engine-v0.3.0"], OMELET_ENGINE_REPAIR="1")
+    result = _resolve(tmp_path, tags=["engine-v0.3.0"], EGGIE_ENGINE_REPAIR="1")
     assert result.stdout.strip() == "engine-v0.3.0"
 
 
@@ -1119,7 +1119,7 @@ def test_fetching_the_script_runs_the_install_not_just_its_functions(tmp_path, h
     # a sourcing guard that misfires there would define functions and exit 0.
     environ = _bin(tmp_path, dpkg="exit 0\n", curl="exit 22\n",
                    git=_git_listing(tmp_path, ["engine-v0.1.0"]))
-    for name in ("OMELET_ENGINE_REF", "OMELET_ENGINE_REPAIR"):
+    for name in ("EGGIE_ENGINE_REF", "EGGIE_ENGINE_REPAIR"):
         environ.pop(name, None)
     script = GET.read_text()
     if how == "bash -c":
@@ -1129,7 +1129,7 @@ def test_fetching_the_script_runs_the_install_not_just_its_functions(tmp_path, h
         result = subprocess.run(["bash"], input=script, env=environ,
                                 capture_output=True, text=True)
     assert result.returncode != 0
-    assert "could not download Omelet engine engine-v0.1.0" in result.stderr
+    assert "could not download Eggie engine engine-v0.1.0" in result.stderr
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1142,29 +1142,29 @@ Expected: FAIL — `bash: .../engine/get.sh: No such file or directory`.
 ```bash
 #!/usr/bin/env bash
 # The engine's entrypoint: choose an engine ref, unpack that ref's engine/ into
-# /opt/omelet/engine and run its install.sh. Fetched on its own (the host's
+# /opt/eggie/engine and run its install.sh. Fetched on its own (the host's
 # bootstrap, or `curl -fsSL <url> | sudo bash` on a cloud VM), so it can rely
 # on nothing beside it. Run as root.
 set -euo pipefail
 
-REPO="${OMELET_ENGINE_REPO:-https://github.com/omelet-app/omelet}"
-MARKER=/opt/omelet/engine.version
-ENGINE_DIR=/opt/omelet/engine
+REPO="${EGGIE_ENGINE_REPO:-https://github.com/eggie-io/eggie}"
+MARKER=/opt/eggie/engine.version
+ENGINE_DIR=/opt/eggie/engine
 
 # resolve_ref <repo> <marker>: an explicit ref wins, a repair keeps what is
 # installed, anything else takes the highest engine-v* tag.
 resolve_ref() {
   local repo=$1 marker=$2 tags latest
-  if [[ -n "${OMELET_ENGINE_REF:-}" ]]; then
-    echo "$OMELET_ENGINE_REF"
+  if [[ -n "${EGGIE_ENGINE_REF:-}" ]]; then
+    echo "$EGGIE_ENGINE_REF"
     return
   fi
-  if [[ "${OMELET_ENGINE_REPAIR:-}" == 1 && -s "$marker" ]]; then
+  if [[ "${EGGIE_ENGINE_REPAIR:-}" == 1 && -s "$marker" ]]; then
     cat "$marker"
     return
   fi
   if ! tags="$(git ls-remote --tags --refs "$repo" 'engine-v*')"; then
-    echo "could not reach $repo to find the latest Omelet engine" >&2
+    echo "could not reach $repo to find the latest Eggie engine" >&2
     return 1
   fi
   latest="$(sed -n 's#.*refs/tags/##p' <<<"$tags" | sort -V | tail -n 1)"
@@ -1188,12 +1188,12 @@ main() {
 
   local ref tmp
   ref="$(resolve_ref "$REPO" "$MARKER")"
-  echo "installing Omelet engine $ref"
+  echo "installing Eggie engine $ref"
 
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   if ! curl -fsSL "$REPO/archive/$ref.tar.gz" -o "$tmp/engine.tar.gz"; then
-    echo "could not download Omelet engine $ref from $REPO" >&2
+    echo "could not download Eggie engine $ref from $REPO" >&2
     exit 1
   fi
   tar -xzf "$tmp/engine.tar.gz" -C "$tmp" --strip-components=1 --wildcards '*/engine/'
@@ -1202,13 +1202,13 @@ main() {
     exit 1
   fi
   # Replaced, not merged: a file dropped from the engine must not linger.
-  mkdir -p /opt/omelet
+  mkdir -p /opt/eggie
   rm -rf "$ENGINE_DIR"
   mv "$tmp/engine" "$ENGINE_DIR"
   chmod 755 "$ENGINE_DIR"
 
   local args=("$ref")
-  if [[ "${OMELET_ENGINE_REPAIR:-}" == 1 ]]; then
+  if [[ "${EGGIE_ENGINE_REPAIR:-}" == 1 ]]; then
     args+=(--repair)
   fi
   bash "$ENGINE_DIR/install.sh" "${args[@]}"
@@ -1242,7 +1242,7 @@ git commit -m "feat: engine entrypoint resolves an engine-v tag and runs its ins
 
 **Interfaces:**
 - Consumes: `get.sh` calls `bash install.sh <ref> [--repair]` (Task 4); `host.core.constants.ENGINE_MARKER` (Task 1).
-- Produces: `/opt/omelet/engine.version` containing `<ref>`, written last; skills at `~/.agents/skills/omelet-setup` (+ `~/.claude/skills/omelet-setup` symlink) for root and every login account.
+- Produces: `/opt/eggie/engine.version` containing `<ref>`, written last; skills at `~/.agents/skills/eggie-setup` (+ `~/.claude/skills/eggie-setup` symlink) for root and every login account.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1309,7 +1309,7 @@ Expected: FAIL — marker path, `skills add`, `runuser`, `--force-recreate` not 
 
 - [ ] **Step 3: Rewrite the top of `engine/install.sh`**
 
-Replace everything from `MARKER=/opt/omelet/.bootstrapped` through the closing `fi` of the marker early-exit with:
+Replace everything from `MARKER=/opt/eggie/.bootstrapped` through the closing `fi` of the marker early-exit with:
 ```bash
 REF="${1:?usage: install.sh <engine ref> [--repair]}"
 REPAIR=0
@@ -1322,17 +1322,17 @@ NODE_MIN=22.20.0
 TOKEN_CREATED=0
 ```
 
-In step 6, inside `if [[ ! -s /opt/omelet/agent.token ]]; then`, add as the first line:
+In step 6, inside `if [[ ! -s /opt/eggie/agent.token ]]; then`, add as the first line:
 ```bash
   TOKEN_CREATED=1
 ```
 
-In step 7, after `/usr/bin/docker compose -f /opt/omelet/stack.yml up -d`, add:
+In step 7, after `/usr/bin/docker compose -f /opt/eggie/stack.yml up -d`, add:
 ```bash
 # The agent reads its token once, at startup, and `up -d` leaves an unchanged
 # container running.
 if (( TOKEN_CREATED || REPAIR )); then
-  /usr/bin/docker compose -f /opt/omelet/stack.yml up -d --force-recreate agent
+  /usr/bin/docker compose -f /opt/eggie/stack.yml up -d --force-recreate agent
 fi
 ```
 
@@ -1340,7 +1340,7 @@ fi
 
 Replace everything from `# 8. coding agents:` to the end of the file with:
 ```bash
-# 8. git for `omelet clone`, Node for `npx skills`.
+# 8. git for `eggie clone`, Node for `npx skills`.
 if ! dpkg -s git >/dev/null 2>&1; then
   apt-get update
   apt-get install -y git
@@ -1366,15 +1366,15 @@ if ! node_ok; then
   node_ok || { echo "Node.js $NODE_MIN or newer did not install" >&2; exit 1; }
 fi
 
-# 9. the in-VM omelet command and the instructions every session loads.
-install -m 755 "$ENGINE_DIR/cli/omelet.py" /usr/local/bin/omelet
+# 9. the in-VM eggie command and the instructions every session loads.
+install -m 755 "$ENGINE_DIR/cli/eggie.py" /usr/local/bin/eggie
 install -d /etc/claude-code
-install -m 644 "$ENGINE_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
+install -m 644 "$ENGINE_DIR/instructions/eggie.md" /etc/claude-code/CLAUDE.md
 
 # 10. copies earlier provisioning made, which npx now owns or nothing reads.
-rm -rf /etc/codex/skills/omelet-setup /opt/omelet/bin /opt/omelet/agents \
-  /opt/omelet/.bootstrapped \
-  /etc/skel/.claude/skills/omelet-setup /etc/skel/.agents/skills/omelet-setup
+rm -rf /etc/codex/skills/eggie-setup /opt/eggie/bin /opt/eggie/agents \
+  /opt/eggie/.bootstrapped \
+  /etc/skel/.claude/skills/eggie-setup /etc/skel/.agents/skills/eggie-setup
 
 # 11. per account: docker group, Codex block, ~/projects, skills.
 accounts() {
@@ -1388,21 +1388,21 @@ while IFS=: read -r name uid gid home; do
   bash "$ENGINE_DIR/lib/install-agents.sh" "$ENGINE_DIR" "$home" "$uid:$gid"
   # npx symlinks ~/.claude/skills/<name>; a real directory left there by the
   # old copy-based install would block it.
-  for old in "$home/.claude/skills/omelet-setup" "$home/.agents/skills/omelet-setup"; do
+  for old in "$home/.claude/skills/eggie-setup" "$home/.agents/skills/eggie-setup"; do
     if [[ -d "$old" && ! -L "$old" ]]; then
       rm -rf "$old"
     fi
   done
   # stdin is the account list this loop is reading.
   if ! runuser -u "$name" -- env HOME="$home" DISABLE_TELEMETRY=1 npx -y "$SKILLS_CLI" add "$ENGINE_DIR/skills" -s '*' -g -a claude-code codex -y </dev/null; then
-    echo "could not install Omelet's skills for $name: the npm registry may be unreachable" >&2
+    echo "could not install Eggie's skills for $name: the npm registry may be unreachable" >&2
     exit 1
   fi
 done < <(accounts)
 
 # 12. marker, last: a failure above must leave no marker behind.
-echo "$REF" > /opt/omelet/engine.version
-echo "Omelet engine $REF installed"
+echo "$REF" > /opt/eggie/engine.version
+echo "Eggie engine $REF installed"
 ```
 
 - [ ] **Step 5: Drop skill copying from `engine/lib/install-agents.sh`**
@@ -1410,7 +1410,7 @@ echo "Omelet engine $REF installed"
 Replace the file with:
 ```bash
 #!/usr/bin/env bash
-# Writes Omelet's Codex instructions block and the ~/projects link into one
+# Writes Eggie's Codex instructions block and the ~/projects link into one
 # home directory. Skills are installed separately, with npx.
 # Run by install.sh as root, once per home:
 #   install-agents.sh <engine-dir> <home> <owner uid:gid>
@@ -1419,9 +1419,9 @@ set -euo pipefail
 SRC=$1
 HOME_DIR=$2
 OWNER=$3
-BEGIN='<!-- omelet:begin -->'
-END='<!-- omelet:end -->'
-TARGET=/opt/omelet/projects
+BEGIN='<!-- eggie:begin -->'
+END='<!-- eggie:end -->'
+TARGET=/opt/eggie/projects
 
 # Codex has no system-wide AGENTS.md, and the user may keep their own text in
 # this one: only the block between the markers is ours to replace.
@@ -1432,14 +1432,14 @@ sed -i "\|^$BEGIN\$|,\|^$END\$|d" "$AGENTS_MD"
 if [[ -s "$AGENTS_MD" && -n "$(tail -c1 "$AGENTS_MD")" ]]; then
   echo >> "$AGENTS_MD"
 fi
-{ echo "$BEGIN"; cat "$SRC/instructions/omelet.md"; echo "$END"; } >> "$AGENTS_MD"
+{ echo "$BEGIN"; cat "$SRC/instructions/eggie.md"; echo "$END"; } >> "$AGENTS_MD"
 
 if [[ ! -e "$HOME_DIR/projects" && ! -L "$HOME_DIR/projects" ]]; then
   ln -s "$TARGET" "$HOME_DIR/projects"
 elif [[ -L "$HOME_DIR/projects" && "$(readlink "$HOME_DIR/projects")" == "$TARGET" ]]; then
   :
 elif [[ -e "$HOME_DIR/projects" || -L "$HOME_DIR/projects" ]]; then
-  echo "left $HOME_DIR/projects alone: it already exists and is not Omelet's link"
+  echo "left $HOME_DIR/projects alone: it already exists and is not Eggie's link"
 fi
 
 chown "$OWNER" "$AGENTS_MD" "$HOME_DIR/.codex"
@@ -1483,21 +1483,21 @@ Insert after the "What this is" section (before `## Commands`):
 Two halves, shipped and versioned independently:
 
 - **Host** (`host/`, a frozen desktop binary) — creates and runs the VM, runs one bootstrap
-  command in it (fetch `OMELET_ENGINE_URL` → `bash`), reads the token, forwards ports, and talks
+  command in it (fetch `EGGIE_ENGINE_URL` → `bash`), reads the token, forwards ports, and talks
   to the agent over HTTP. It holds no guest files and no knowledge of what the engine installs.
 - **Engine** (`engine/` + `agent/`) — everything inside the VM: Docker, the Traefik+agent stack,
-  the in-VM `omelet` CLI, agent instructions and skills (via `npx skills add`). Released as
-  `engine-v*` tags with a matching `omelet-agent` image. The same `get.sh` provisions a cloud VM.
+  the in-VM `eggie` CLI, agent instructions and skills (via `npx skills add`). Released as
+  `engine-v*` tags with a matching `eggie-agent` image. The same `get.sh` provisions a cloud VM.
 
 The seam between them is a fixed contract — token path, agent port + `/health` `api` number, edge
-port, `/opt/omelet/engine.version` — and nothing else. A change inside the VM must never need a
+port, `/opt/eggie/engine.version` — and nothing else. A change inside the VM must never need a
 host release; if it does, the logic is on the wrong side.
 
 ### Releasing the engine (manual until CI exists)
 
 1. Bump `agent/__init__.py`'s `__version__`, the Dockerfile's `AGENT_VERSION` and
    `engine/stack.yml`'s image tag together (`tests/test_constants_agree.py` holds them equal).
-2. `docker build -t ghcr.io/omelet-app/omelet-agent:X.Y.Z agent/ && docker push ghcr.io/omelet-app/omelet-agent:X.Y.Z`
+2. `docker build -t ghcr.io/eggie-io/eggie-agent:X.Y.Z agent/ && docker push ghcr.io/eggie-io/eggie-agent:X.Y.Z`
 3. `git tag engine-vX.Y.Z && git push origin engine-vX.Y.Z`
 
 Bump `agent/core/constants.API_VERSION` (and the host's `SUPPORTED_API`) only when a route the host
@@ -1508,23 +1508,23 @@ calls changes incompatibly — that one needs a host release.
 
 - Commands: replace `(422 tests, ~6s)` with the count from `python3 -m pytest -q` now.
 - Architecture diagram: replace `guest: dockerd, the token read, bootstrap` with `guest: the engine bootstrap, the token read`.
-- Layers: replace the `host/provision/` bullet and the `host/provision/guest/omelet.py` bullet with:
+- Layers: replace the `host/provision/` bullet and the `host/provision/guest/eggie.py` bullet with:
 ```markdown
 - `host/core/bootstrap.py` — the host's whole share of provisioning: unless
-  `/opt/omelet/engine.version` exists (or `repair=True`), it runs a base64 stub as one `bash -lc`
-  argument that downloads `OMELET_ENGINE_URL` in full and runs it, forwarding `OMELET_ENGINE_REF`
-  when set and `OMELET_ENGINE_REPAIR=1` on repair. Values are checked against a shell-safe pattern
+  `/opt/eggie/engine.version` exists (or `repair=True`), it runs a base64 stub as one `bash -lc`
+  argument that downloads `EGGIE_ENGINE_URL` in full and runs it, forwarding `EGGIE_ENGINE_REF`
+  when set and `EGGIE_ENGINE_REPAIR=1` on repair. Values are checked against a shell-safe pattern
   because the argument is re-parsed by wsl.exe/ssh. `host/provision/` holds only the installer's
   `nginx-hello` smoke-test project (`tests/host/test_no_guest_assets.py`).
-- `engine/get.sh` — the entrypoint: `resolve_ref` (explicit `OMELET_ENGINE_REF` → installed ref on
+- `engine/get.sh` — the entrypoint: `resolve_ref` (explicit `EGGIE_ENGINE_REF` → installed ref on
   repair → highest `engine-v*` tag by `sort -V`), downloads that ref's tarball, replaces
-  `/opt/omelet/engine/` with its `engine/`, runs `install.sh <ref> [--repair]`.
-- `engine/install.sh` — Docker, `edge`, `/opt/omelet` permissions, token, the stack (recreating the
-  agent on a new token or repair), Node ≥ 22.20 from NodeSource, `/usr/local/bin/omelet`,
+  `/opt/eggie/engine/` with its `engine/`, runs `install.sh <ref> [--repair]`.
+- `engine/install.sh` — Docker, `edge`, `/opt/eggie` permissions, token, the stack (recreating the
+  agent on a new token or repair), Node ≥ 22.20 from NodeSource, `/usr/local/bin/eggie`,
   `/etc/claude-code/CLAUDE.md`, then per account (root + `lib/login-users.sh`) the Codex block and
-  `~/projects` link (`lib/install-agents.sh`) and `npx -y skills@1.5.26 add /opt/omelet/engine/skills
+  `~/projects` link (`lib/install-agents.sh`) and `npx -y skills@1.5.26 add /opt/eggie/engine/skills
   -g -a claude-code codex`. Writes `engine.version` last.
-- `engine/cli/omelet.py` — the `omelet` command **inside** the VM, used by coding agents:
+- `engine/cli/eggie.py` — the `eggie` command **inside** the VM, used by coding agents:
   `up`/`new`/`clone`/`status`/`logs`/`down` over the agent API with the guest token. One
   stdlib-only file, loaded by tests by path (`tests/engine/cli/loader.py`); it shares constants
   with both sides, held equal by `tests/test_constants_agree.py`. `engine/instructions/` and
@@ -1545,7 +1545,7 @@ calls changes incompatibly — that one needs a host release.
 ```markdown
 - **Nothing under `agent/` or `engine/` is bundled into the frozen host binary**, and
   `tests/host/test_frozen_bundle.py` fails if a `datas` entry reappears. The VM pulls the image
-  and fetches the engine itself; only the `nginx-hello` smoke test and `omelet.yaml` ship with the host.
+  and fetches the engine itself; only the `nginx-hello` smoke test and `eggie.yaml` ship with the host.
 ```
   - In the "agent container runs as a non-root user" bullet, replace `bootstrap.sh` with `engine/install.sh`.
   - In "Guest failures must stay loud", replace "re-reads the marker afterwards" with "re-checks `engine.version` afterwards".
@@ -1568,17 +1568,17 @@ the host re-reads the token and dials again.
 
 - [ ] **Step 3: Update `README.md`**
 
-- In the `vm create` paragraph, replace `bootstraps Docker + Traefik inside it` with `installs the Omelet engine inside it (fetched from \`OMELET_ENGINE_URL\`, default \`engine/get.sh\` on GitHub; set \`OMELET_ENGINE_REF\` to a branch or tag to install something other than the latest \`engine-v*\` release)`.
+- In the `vm create` paragraph, replace `bootstraps Docker + Traefik inside it` with `installs the Eggie engine inside it (fetched from \`EGGIE_ENGINE_URL\`, default \`engine/get.sh\` on GitHub; set \`EGGIE_ENGINE_REF\` to a branch or tag to install something other than the latest \`engine-v*\` release)`.
 - In "Looking inside the VM", replace the two `.bootstrapped` / `bootstrap.sh` lines with:
 ```powershell
-wsl -d omelet-vm -u root -- cat /opt/omelet/engine.version            # installed engine ref
-wsl -d omelet-vm -u root -- bash /opt/omelet/engine/install.sh engine-vX.Y.Z --repair   # re-run, live output
+wsl -d eggie-vm -u root -- cat /opt/eggie/engine.version            # installed engine ref
+wsl -d eggie-vm -u root -- bash /opt/eggie/engine/install.sh engine-vX.Y.Z --repair   # re-run, live output
 ```
 
 - [ ] **Step 4: Verify nothing stale is left**
 
 Run: `grep -rn "BOOTSTRAP_VERSION\|\.bootstrapped\|host/provision/guest\|host/provision/agents\|agent_version_step\|guest_assets" CLAUDE.md README.md host tests engine agent packaging`
-Expected: no output except `rm -rf ... /opt/omelet/.bootstrapped` in `engine/install.sh` and the test asserting no early exit on it.
+Expected: no output except `rm -rf ... /opt/eggie/.bootstrapped` in `engine/install.sh` and the test asserting no early exit on it.
 
 Run: `python3 -m pytest -q`
 Expected: all pass.
@@ -1596,4 +1596,4 @@ git commit -m "docs: state the host-shell / engine architecture and the engine r
 
 - Push the branch and open a PR to `main` with `gh pr create`; the description lists what was deliberately left untested (network/apt/NodeSource/npm/ghcr steps, the stub's python3 fallback, `npx skills add` inside a real VM) and that the repository must be public and an `engine-v0.1.0` tag pushed before a fresh VM can install.
 - Run a code review with a separate agent after the PR is created.
-- Manual acceptance (user, PowerShell): fresh `omelet setup`; `wsl -d omelet-vm -u root -- cat /opt/omelet/engine.version`; `ls -la ~/.claude/skills ~/.agents/skills` as the login user; an existing PR #3 VM re-running setup migrates without duplicate `omelet-setup` skills.
+- Manual acceptance (user, PowerShell): fresh `eggie setup`; `wsl -d eggie-vm -u root -- cat /opt/eggie/engine.version`; `ls -la ~/.claude/skills ~/.agents/skills` as the login user; an existing PR #3 VM re-running setup migrates without duplicate `eggie-setup` skills.

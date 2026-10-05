@@ -1,7 +1,7 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`,
+`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`, `test_agents_run.py`,
 `tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
@@ -60,6 +60,13 @@ read them before reordering.
 
 `lib/github-apply.sh` runs as root from the `systemd/omelet-github.path` unit when the API writes
 `/opt/omelet/github/desired.json` (see `runtime/omelet_api/CLAUDE.md`).
+
+`lib/agents-run.sh` runs as root from `systemd/omelet-agents.path` whenever the API writes
+`/opt/omelet/agent-status/check`: `lib/agents.py run` marks each agent in the manifests
+(`runtime/agents/`) connected or not and runs `setup.run` for every `setup/<id>` request number
+above the one it last handled, into `status.json`. systemd drops triggers that arrive during a pass,
+so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
+meanwhile.
 
 ## Testing
 

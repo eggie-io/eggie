@@ -10,14 +10,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 DEFAULT_DIR = Path(__file__).resolve().parents[2] / "agents"
+
+SETUP_TIMEOUT = "10m"
+MAX_PASSES = 5
+STATES = {"installing", "ready", "failed"}
 
 
 @dataclass(frozen=True)
@@ -83,6 +90,103 @@ def load(agents_dir: Path) -> list[Agent]:
     return agents
 
 
+def connected(agent: Agent, homes: list[str]) -> bool:
+    for home in homes:
+        try:
+            names = os.listdir(Path(home) / agent.home)
+        except OSError:
+            continue
+        if any(name not in agent.ignore for name in names):
+            return True
+    return False
+
+
+def _number(path: Path) -> int:
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def _previous(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    agents = data.get("agents") if isinstance(data, dict) else None
+    return agents if isinstance(agents, dict) else {}
+
+
+def _write(path: Path, value: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".status-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(value, f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def _run_setup(agent: Agent, accounts: list[tuple[str, str]], status_dir: Path, path: str) -> bool:
+    log = os.open(status_dir / f"setup-{agent.id}.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    ok = True
+    with os.fdopen(log, "w") as out:
+        for name, home in accounts:
+            out.write(f"== {name}\n")
+            out.flush()
+            argv = ["timeout", SETUP_TIMEOUT, "runuser", "-u", name, "--", "env",
+                    f"HOME={home}", f"PATH={path}", "bash", "-c", agent.setup]
+            try:
+                code = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=out,
+                                      stderr=subprocess.STDOUT).returncode
+            except OSError as e:
+                out.write(f"{e}\n")
+                code = 1
+            ok = ok and code == 0
+    return ok
+
+
+def run_pass(agents: list[Agent], accounts: list[tuple[str, str]], status_dir: Path,
+             path: str, generation: int) -> None:
+    status_path = status_dir / "status.json"
+    previous = _previous(status_path)
+    homes = [home for _, home in accounts]
+    out: dict[str, dict] = {}
+    for agent in agents:
+        before = previous.get(agent.id) if isinstance(previous.get(agent.id), dict) else {}
+        setup = before.get("setup") if before.get("setup") in STATES else None
+        # Passes are serialized, so an "installing" left behind was interrupted.
+        if setup == "installing":
+            setup = "failed"
+        done = before.get("setup_generation")
+        out[agent.id] = {"connected": connected(agent, homes), "setup": setup,
+                         "setup_generation": done if isinstance(done, int) else 0}
+
+    for agent in agents:
+        entry = out[agent.id]
+        wanted = _number(status_dir / "setup" / agent.id)
+        if agent.setup is None or wanted <= entry["setup_generation"]:
+            continue
+        entry["setup_generation"] = wanted
+        if entry["connected"]:
+            entry["setup"] = "ready"
+            continue
+        entry["setup"] = "installing"
+        _write(status_path, {"generation": generation, "agents": out})
+        entry["setup"] = "ready" if _run_setup(agent, accounts, status_dir, path) else "failed"
+
+    for agent in agents:
+        out[agent.id]["connected"] = connected(agent, homes)
+    _write(status_path, {"generation": generation, "agents": out})
+
+
+def run(agents: list[Agent], accounts: list[tuple[str, str]], status_dir: Path, path: str) -> None:
+    # Triggers that arrive while a pass runs are dropped by systemd, so look again.
+    for _ in range(MAX_PASSES):
+        start = _number(status_dir / "check")
+        run_pass(agents, accounts, status_dir, path, start)
+        if _number(status_dir / "check") == start:
+            return
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agents-dir", type=Path, default=DEFAULT_DIR)
@@ -92,6 +196,9 @@ def main(argv: list[str]) -> int:
     where = instructions.add_mutually_exclusive_group(required=True)
     where.add_argument("--system", action="store_true")
     where.add_argument("--home")
+    runner = sub.add_parser("run")
+    runner.add_argument("status_dir", type=Path)
+    runner.add_argument("--path", required=True)
     args = parser.parse_args(argv)
 
     try:
@@ -109,6 +216,13 @@ def main(argv: list[str]) -> int:
                     print(target)
                 elif args.home and target.startswith("~/"):
                     print(f"{args.home.rstrip('/')}/{target[2:]}")
+    elif args.command == "run":
+        accounts = []
+        for line in sys.stdin:
+            parts = line.rstrip("\n").split(":")
+            if len(parts) == 4:
+                accounts.append((parts[0], parts[3]))
+        run(agents, accounts, args.status_dir, args.path)
     return 0
 
 

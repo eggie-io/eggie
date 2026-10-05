@@ -285,6 +285,17 @@ install -m 644 "$INSTALL_DIR/systemd/omelet-update.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable omelet-update.service
 
+# 12c. coding agents: the root-side runner the API pokes to detect connected
+# agents and run their setup. The API writes counters here, never into a home.
+install -d -m 2770 -o root -g docker /opt/omelet/agent-status /opt/omelet/agent-status/setup
+chmod 2770 /opt/omelet/agent-status /opt/omelet/agent-status/setup
+install -m 644 "$INSTALL_DIR/systemd/omelet-agents.path" \
+  "$INSTALL_DIR/systemd/omelet-agents.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now omelet-agents.path
+# Not fatal: the console only loses its "connected" line until the next poll.
+systemctl start omelet-agents.service || echo "could not check this machine's coding agents" >&2
+
 # 13. what the console's "Connect an agent" guide needs to know.
 if grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
 elif [[ -d /mnt/lima-cidata ]]; then vm=lima

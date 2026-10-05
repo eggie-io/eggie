@@ -63,8 +63,8 @@ def _split(text: str) -> tuple[list[str], int | None]:
 def _first_host(lines: list[str]) -> int:
     """Where a new block has to go: before the first Host or Match line.
 
-    Not at the top -- every global option and Include after it (OrbStack's
-    among them) would then apply to `omelet` alone. Not at the end either --
+    Not at the top -- every global option and Include after it would then
+    apply to `omelet` alone. Not at the end either --
     ssh takes the first value it finds, so a `Host *` with a User line above
     it would override ours."""
     for i, line in enumerate(lines):

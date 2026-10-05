@@ -29,11 +29,11 @@ ssh-ed25519 AAAAC3NzaC1l root@lima-omelet-vm
 ssh-rsa AAAAB3NzaC1y root@lima-omelet-vm
 """
 
-ORBSTACK = """\
-# Added by OrbStack: 'orb' SSH host for Linux machines
-Include ~/.orbstack/ssh/config
+USER_CONFIG = """\
+# Global options come before any Host block.
+Include ~/.ssh/config.d/*
 
-host trex
+Host work
 HostName example.com
 Port 2200
 """
@@ -88,23 +88,23 @@ def test_a_value_with_a_space_is_quoted():
 def test_the_block_is_written_into_the_config_not_included(tmp_path):
     # Cursor's host list does not follow Include.
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     ssh_alias.install(config, FOUND)
     text = config.read_text()
     assert "Host omelet\n" in text
-    assert text.count("Include") == 1          # OrbStack's only
+    assert text.count("Include") == 1          # the user's own only
     assert ssh_alias.installed(config)
 
 
 def test_the_block_goes_after_global_options_and_before_every_host(tmp_path):
-    # Above OrbStack's Include, that Include would apply to omelet alone; after
+    # Above the user's Include, that Include would apply to omelet alone; after
     # a `Host *` with a User line, ssh would take that User instead of ours.
     config = tmp_path / "config"
-    config.write_text(ORBSTACK + "\nHost *\n  User someone\n")
+    config.write_text(USER_CONFIG + "\nHost *\n  User someone\n")
     ssh_alias.install(config, FOUND)
     text = config.read_text()
-    assert text.index("Include ~/.orbstack") < text.index("Host omelet")
-    assert text.index("Host omelet") < text.index("host trex") < text.index("Host *")
+    assert text.index("Include ~/.ssh/config.d") < text.index("Host omelet")
+    assert text.index("Host omelet") < text.index("Host work") < text.index("Host *")
 
 
 def test_a_config_with_no_hosts_gets_the_block_at_the_end(tmp_path):
@@ -116,17 +116,17 @@ def test_a_config_with_no_hosts_gets_the_block_at_the_end(tmp_path):
 
 def test_a_block_whose_end_marker_was_deleted_takes_nothing_with_it(tmp_path):
     config = tmp_path / "config"
-    damaged = ORBSTACK.replace("host trex", ssh_alias._BEGIN + "\nhost trex")
+    damaged = USER_CONFIG.replace("Host work", ssh_alias._BEGIN + "\nHost work")
     config.write_text(damaged)
     ssh_alias.remove(config)
     assert config.read_text() == damaged
     ssh_alias.install(config, FOUND)
-    assert "host trex\nHostName example.com\nPort 2200\n" in config.read_text()
+    assert "Host work\nHostName example.com\nPort 2200\n" in config.read_text()
 
 
 def test_the_config_keeps_its_mode(tmp_path):
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     config.chmod(0o644)
     ssh_alias.install(config, FOUND)
     assert config.stat().st_mode & 0o777 == 0o644
@@ -135,7 +135,7 @@ def test_the_config_keeps_its_mode(tmp_path):
 
 def test_installing_again_replaces_the_block(tmp_path):
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     ssh_alias.install(config, FOUND)
     ssh_alias.install(config, {**FOUND, "Port": "40000"})
     text = config.read_text()
@@ -145,7 +145,7 @@ def test_installing_again_replaces_the_block(tmp_path):
 
 def test_text_the_user_added_after_the_block_is_kept(tmp_path):
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     ssh_alias.install(config, FOUND)
     config.write_text(config.read_text() + "\nHost later\n  Port 1\n")
     ssh_alias.install(config, FOUND)
@@ -162,7 +162,7 @@ def test_a_missing_ssh_config_is_created_private(tmp_path):
 def test_a_symlinked_config_is_written_through(tmp_path):
     real = tmp_path / "dotfiles" / "ssh_config"
     real.parent.mkdir()
-    real.write_text(ORBSTACK)
+    real.write_text(USER_CONFIG)
     link = tmp_path / "config"
     link.symlink_to(real)
     ssh_alias.install(link, FOUND)
@@ -172,18 +172,18 @@ def test_a_symlinked_config_is_written_through(tmp_path):
 
 def test_remove_restores_the_file_it_found(tmp_path):
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     ssh_alias.install(config, FOUND)
     ssh_alias.remove(config)
-    assert config.read_text() == ORBSTACK
+    assert config.read_text() == USER_CONFIG
 
 
 def test_remove_without_an_install_changes_nothing(tmp_path):
     config = tmp_path / "config"
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     ssh_alias.remove(config)
     ssh_alias.remove(tmp_path / "absent")
-    assert config.read_text() == ORBSTACK
+    assert config.read_text() == USER_CONFIG
 
 
 # --- known_hosts ---
@@ -262,11 +262,11 @@ def test_destroy_takes_the_host_and_its_keys_away(tmp_path):
 
     config = tmp_path / ".ssh" / "config"
     config.parent.mkdir()
-    config.write_text(ORBSTACK)
+    config.write_text(USER_CONFIG)
     provider = _provider(tmp_path, runner=Lima())
     provider.ssh_shortcut()()
     provider.destroy()
-    assert config.read_text() == ORBSTACK
+    assert config.read_text() == USER_CONFIG
     assert "39022" not in (tmp_path / ".ssh" / "known_hosts").read_text()
 
 

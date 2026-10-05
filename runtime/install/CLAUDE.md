@@ -1,7 +1,7 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_login_users.py`, `test_github_apply.py`,
+`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`,
 `tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
@@ -49,9 +49,9 @@ Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `OMELET_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → Node ≥ 22.20 from NodeSource →
-`/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
-the Codex block and `~/projects` link (`lib/install-agents.sh`) and
-`npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a claude-code codex -y </dev/null`
+`/usr/local/bin/omelet` → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
+each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
+`npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
 (`SKILLS_SOURCE` defaults to `omelet-app/omelet-skills`, unpinned on purpose;
 `OMELET_SKILLS_SOURCE` overrides) → the VM kind (`wsl`/`lima`/`other`) and first login user into
 `/opt/omelet/connect.json` (read by `GET /connect`) → **`runtime.version` last**, so a failed

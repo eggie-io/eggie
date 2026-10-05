@@ -35,7 +35,7 @@ LIFECYCLE_SURFACE = {
 # of them and had neither -- `omelet setup` on macOS died with an
 # AttributeError before its first step.
 INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
-                   "remediable", "runtime", "access",
+                   "remediable", "runtime", "access", "ssh_shortcut",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 

@@ -25,7 +25,9 @@ def _mac(version="14.5"):
 def make(runner, mac_ver=None):
     return LimaProvider(name="omelet-vm", config=Path("/tmp/omelet.yaml"),
                         limactl="limactl", runner=runner,
-                        mac_ver=mac_ver or _mac())
+                        mac_ver=mac_ver or _mac(),
+                        ssh_dir=Path("/nonexistent/.ssh"),
+                        data_root=Path("/nonexistent/omelet"))
 
 
 def test_exec_uses_limactl_shell():

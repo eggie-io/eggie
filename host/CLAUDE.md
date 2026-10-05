@@ -72,3 +72,7 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   Docker Desktop, so the desktop app asks before using it.
 - The imported WSL distro runs as root: `create()` replaces `/etc/wsl.conf` with a
   `[boot] systemd=true` stanza, dropping the image's default user.
+- Lima gives cloud-init a new `instance-id` on every `limactl start`, so the guest's SSH host keys
+  change on every boot. Anything that pins them in `~/.ssh/known_hosts` breaks after a restart or
+  reinstall. Setup's `ssh_alias` step (`providers/ssh_alias.py`) adds `Host omelet` to the user's
+  `~/.ssh/config` with host-key checking off. That's safe only because the port is loopback-only.

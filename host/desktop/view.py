@@ -62,6 +62,7 @@ STEP_LABELS = {
     "reboot_gate": "Restart needed",
     "fetch_image": "Downloading Linux image",
     "create_vm": "Preparing the virtual machine",
+    "ssh_alias": "Adding the omelet SSH host",
     "bootstrap": "Installing Omelet",
     "connect": "Connecting to the Omelet service",
     "verify": "Testing the setup",

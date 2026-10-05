@@ -126,6 +126,18 @@ def test_a_setup_left_installing_by_an_interrupted_pass_becomes_failed(tmp_path)
 def test_the_setup_log_is_readable_by_root_only(tmp_path):
     t = make(tmp_path)
     request(t, "codex", 1)
+    (t.status / "setup-codex.log").write_text("old")
+    (t.status / "setup-codex.log").chmod(0o660)
     run(t)
     mode = stat.S_IMODE((t.status / "setup-codex.log").stat().st_mode)
     assert mode == 0o600
+
+
+def test_a_check_bumped_during_a_pass_triggers_another_pass(tmp_path):
+    t = make(tmp_path)
+    manifest = {"home": ".codex", "setup": {"run": 'echo 7 > "$STATUS/check"'}}
+    (tmp_path / "agents" / "codex" / "agent.json").write_text(json.dumps(manifest))
+    t.env["STATUS"] = str(t.status)
+    request(t, "codex", 1)
+    run(t)
+    assert json.loads((t.status / "status.json").read_text())["generation"] == 7

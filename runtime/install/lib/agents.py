@@ -101,16 +101,26 @@ def connected(agent: Agent, homes: list[str]) -> bool:
     return False
 
 
+def _read(path: Path, limit: int) -> str:
+    # NOFOLLOW/NONBLOCK: group-writable inputs must not hang the runner
+    # (symlink to /dev/zero, a FIFO) or be read unbounded.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        return os.read(fd, limit).decode()
+    finally:
+        os.close(fd)
+
+
 def _number(path: Path) -> int:
     try:
-        return int(path.read_text().strip())
+        return int(_read(path, 64).strip())
     except (OSError, ValueError):
         return 0
 
 
 def _previous(path: Path) -> dict:
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(_read(path, 1 << 20))
     except (OSError, ValueError):
         return {}
     agents = data.get("agents") if isinstance(data, dict) else None
@@ -126,16 +136,19 @@ def _write(path: Path, value: dict) -> None:
 
 
 def _run_setup(agent: Agent, accounts: list[tuple[str, str]], status_dir: Path, path: str) -> bool:
-    log = os.open(status_dir / f"setup-{agent.id}.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # fchmod: an existing log keeps whatever mode a recursive chmod gave it.
+    log = os.open(status_dir / f"setup-{agent.id}.log",
+                  os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    os.fchmod(log, 0o600)
     ok = True
     with os.fdopen(log, "w") as out:
         for name, home in accounts:
             out.write(f"== {name}\n")
             out.flush()
-            argv = ["timeout", SETUP_TIMEOUT, "runuser", "-u", name, "--", "env",
+            argv = ["timeout", "-k", "30s", SETUP_TIMEOUT, "runuser", "-u", name, "--", "env",
                     f"HOME={home}", f"PATH={path}", "bash", "-c", agent.setup]
             try:
-                code = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=out,
+                code = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=out, cwd=home,
                                       stderr=subprocess.STDOUT).returncode
             except OSError as e:
                 out.write(f"{e}\n")

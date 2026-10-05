@@ -24,6 +24,8 @@ release — if it does, the logic is on the wrong side of the seam (see the root
   five skills live in the separate `omelet-skills` repo (github.com/omelet-app/omelet-skills)
   and are installed by `install.sh` via `npx skills add`; they are not in this tree. The runtime
   writes nothing into user repositories.
+- `agents/` — one manifest folder per coding agent (guide, instructions targets, skills name,
+  detection, setup). Own CLAUDE.md.
 
 ## Two version numbers — never collapse them
 

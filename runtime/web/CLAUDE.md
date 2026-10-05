@@ -17,7 +17,8 @@ npm run typecheck
 npm run build && npm run check-offline
 ```
 
-The image build needs `--build-context fixtures=tests/fixtures` (use `packaging/images/build.sh`);
+The image build needs `--build-context fixtures=tests/fixtures` and
+`--build-context agents=runtime/agents` (use `packaging/images/build.sh`);
 a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUDE.md`.
 
 ## Structure
@@ -37,7 +38,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
     `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
   - `/agents` and `/agents/:id` — the "Connect an agent" guide. All content is in
-    `apps/console/agent-guides/` (served at `/agent-guides/`): `index.json` for order,
+    `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
     `<id>/agent.json` with `windows` and `mac` blocks, `via_ssh`, steps, optional screenshots.
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
     names a missing image.
@@ -56,7 +57,8 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   counting `../` segments from its own location, and that count must agree with `Dockerfile`'s
   `WORKDIR` (and the `COPY --from=fixtures` destination). Changing one without the other passes
   `npm test` in the checkout and fails only inside the image build.
-- `agent-guides/` is outside Vite's build output (`publicDir` is dev-only): the Dockerfile copies it
-  into the nginx root, so `npm run build` + `preview` shows no guides.
+- `runtime/agents/` is outside this workspace: the image needs `--build-context agents=runtime/agents`
+  (use `packaging/images/build.sh`), and `content.test.ts` reaches it with five `../`, which
+  matches `/runtime/agents` in the image only because `WORKDIR` is `/runtime/web`.
 - nginx's `/agent-guides/` location has no SPA fallback, so its path must never be a console route
   prefix: `/agents/` once turned every guide reload into a bare 404. `content.test.ts` checks.

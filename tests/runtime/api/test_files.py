@@ -323,7 +323,7 @@ def test_a_5mb_archive_round_trips_proving_the_command_line_ceiling_is_gone(env)
     client, _config = env
     _create(client)
 
-    payload = (b"eggie-poc-" * 500_000)  # ~5.5 MB, well past the old ~24 KB cap
+    payload = (b"eggie-poc-" * 550_000)  # ~5.5 MB, well past the old ~24 KB cap
     assert len(payload) > 5 * 1024 * 1024
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:

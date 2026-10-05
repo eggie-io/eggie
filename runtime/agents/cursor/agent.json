@@ -1,6 +1,10 @@
 {
   "name": "Cursor",
   "icon": "icon.webp",
+  "home": [".cursor", ".cursor-server"],
+  "instructions": ["~/.cursor/AGENTS.md"],
+  "skills": "cursor",
+  "detect": {"ignore": ["AGENTS.md", "skills"]},
   "platforms": {
     "mac": {
       "via_ssh": true,

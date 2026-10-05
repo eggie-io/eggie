@@ -17,6 +17,8 @@ API_VERSION = 1
 GUEST_TOKEN = f"{GUEST_ROOT}/api.token"
 
 GITHUB_DIR = f"{GUEST_ROOT}/github"
+AGENT_STATUS_DIR = f"{GUEST_ROOT}/agent-status"
+AGENTS_DIR = f"{GUEST_ROOT}/runtime/agents"
 # Omelet's OAuth App. Public by design: the Device Flow needs no secret.
 GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"
 

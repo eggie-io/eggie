@@ -80,6 +80,11 @@ and a host release. Prefer additive changes.
   network reaches the VM through its gateway, so every port published on 0.0.0.0 (the api's, a
   project's `ports:`) is reachable from the tunnel client. Design:
   `docs/superpowers/specs/2026-09-24-public-url-design.md`.
+- **Agents** (`core/agents.py`) — `GET /agents/status` and `POST /agents/{id}/setup`. The API never
+  reads a home: it bumps counters in `/opt/omelet/agent-status/` (`check`, `setup/<id>`) and returns
+  the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
+  requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
+  `failed` is the same call. Manifests are read from `/opt/omelet/runtime/agents`.
 
 ## Testing
 

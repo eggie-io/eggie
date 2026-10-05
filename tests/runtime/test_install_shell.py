@@ -407,3 +407,10 @@ def test_install_keeps_ssh_host_keys_across_reboots():
     # Never on a cloud VM: a disk cloned from it must get keys of its own.
     guard = INSTALL.read_text()[:match.start()].rsplit("\n", 2)[-2]
     assert "/mnt/lima-cidata" in guard
+
+
+def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
+    text = INSTALL.read_text()
+    assert "systemctl enable --now omelet-agents.path" in text
+    assert "install -d -m 2770 -o root -g docker /opt/omelet/agent-status" in text
+    assert text.index("systemctl start omelet-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")

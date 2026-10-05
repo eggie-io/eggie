@@ -1,7 +1,7 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_login_users.py`, `test_github_apply.py`,
+`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`, `test_agents_run.py`,
 `tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
@@ -49,9 +49,9 @@ Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `OMELET_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → Node ≥ 22.20 from NodeSource →
-`/usr/local/bin/omelet` → `/etc/claude-code/CLAUDE.md` → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
-the Codex block and `~/projects` link (`lib/install-agents.sh`) and
-`npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a claude-code codex -y </dev/null`
+`/usr/local/bin/omelet` → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/omelet-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
+each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
+`npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
 (`SKILLS_SOURCE` defaults to `omelet-app/omelet-skills`, unpinned on purpose;
 `OMELET_SKILLS_SOURCE` overrides) → the VM kind (`wsl`/`lima`/`other`) and first login user into
 `/opt/omelet/connect.json` (read by `GET /connect`) → **`runtime.version` last**, so a failed
@@ -60,6 +60,13 @@ read them before reordering.
 
 `lib/github-apply.sh` runs as root from the `systemd/omelet-github.path` unit when the API writes
 `/opt/omelet/github/desired.json` (see `runtime/omelet_api/CLAUDE.md`).
+
+`lib/agents-run.sh` runs as root from `systemd/omelet-agents.path` whenever the API writes
+`/opt/omelet/agent-status/check`: `lib/agents.py run` marks each agent in the manifests
+(`runtime/agents/`) connected or not and runs `setup.run` for every `setup/<id>` request number
+above the one it last handled, into `status.json`. systemd drops triggers that arrive during a pass,
+so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
+meanwhile.
 
 ## Testing
 
@@ -75,5 +82,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - Login accounts are never the API's uid 1000: WSL2 has only root, and Lima's user carries the macOS
   uid. The API writes into projects through the docker group, so anything it creates there needs
   `umask 002` (see `clone_argv`), and `/etc/gitconfig` trusts `safe.directory '*'`.
+- Every console status poll starts `omelet-agents.service`, so journald shows a Started/Finished
+  pair every 3 s while an agents screen is open; and `systemctl start omelet-agents.service` in
+  `install.sh` step 12c blocks while a requested setup runs.
 - Use `/usr/bin/docker` by absolute path: Docker Desktop's WSL integration can put its own `docker`
   on `PATH`, which talks to Desktop's engine instead of this VM's.

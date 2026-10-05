@@ -65,7 +65,7 @@ build() {
 }
 
 [[ "$only" == web ]] || build omelet-api "$repo/runtime/omelet_api" --build-arg "SERVICE_VERSION=$version"
-[[ "$only" == api ]] || build omelet-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures"
+[[ "$only" == api ]] || build omelet-web "$repo/runtime/web" --build-context "fixtures=$repo/tests/fixtures" --build-context "agents=$repo/runtime/agents"
 
 if (( push )); then
   echo

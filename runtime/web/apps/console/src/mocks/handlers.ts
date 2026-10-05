@@ -32,6 +32,9 @@ export const SCENARIOS = [
   "github-outdated",
   "github-reconnect",
   "github-clone-fails",
+  "agents-connected",
+  "agents-installing",
+  "agents-failed",
   "windows",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
@@ -342,6 +345,13 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.post("/api/sessions/handoff", () => HttpResponse.json({ code: "mock-code", expires_in: 60 })),
 
+    http.get("/api/agents/status", () => {
+      if (scenario === "agents-connected") return HttpResponse.json({ agents: { "claude-code": { connected: true, setup: null }, codex: { connected: true, setup: "ready" } } });
+      if (scenario === "agents-installing") return HttpResponse.json({ agents: { codex: { connected: false, setup: "installing" } } });
+      if (scenario === "agents-failed") return HttpResponse.json({ agents: { codex: { connected: false, setup: "failed" } } });
+      return HttpResponse.json({ agents: {} });
+    }),
+    http.post("/api/agents/:id/setup", () => HttpResponse.json({ requested: true })),
     http.get("/api/github", () => {
       if ((github.state === "pending" || github.setup === "applying") && ghSettleAt === 0) ghSettleAt = Date.now() + 5000;
       if (ghSettleAt && Date.now() >= ghSettleAt) {

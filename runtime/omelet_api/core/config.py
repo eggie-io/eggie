@@ -52,6 +52,8 @@ class ApiConfig:
     github_url: str = "https://github.com"
     github_api_url: str = "https://api.github.com"
     github_dir: Path = Path(constants.GITHUB_DIR)
+    agent_status_dir: Path = Path(constants.AGENT_STATUS_DIR)
+    agents_dir: Path = Path(constants.AGENTS_DIR)
     version: str = __version__
 
     @classmethod
@@ -84,5 +86,7 @@ class ApiConfig:
             github_api_url=env.get("OMELET_GITHUB_API_URL",
                                    "https://api.github.com"),
             github_dir=Path(env.get("OMELET_GITHUB_DIR", constants.GITHUB_DIR)),
+            agent_status_dir=Path(env.get("OMELET_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
+            agents_dir=Path(env.get("OMELET_AGENTS_DIR", constants.AGENTS_DIR)),
             version=env.get("OMELET_SERVICE_VERSION", __version__),
         )

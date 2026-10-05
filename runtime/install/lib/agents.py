@@ -33,7 +33,7 @@ class Agent:
 def _inside(path: object) -> bool:
     if not isinstance(path, str) or path == "" or path.startswith("/"):
         return False
-    return all(SEGMENT.match(part) and part not in {".", ".."} for part in path.split("/"))
+    return all(SEGMENT.fullmatch(part) and part not in {".", ".."} for part in path.split("/"))
 
 
 def _target(path: object) -> bool:
@@ -45,7 +45,7 @@ def _target(path: object) -> bool:
 
 
 def parse(agent_id: str, raw: object) -> Agent:
-    if not ID.match(agent_id):
+    if not (isinstance(agent_id, str) and ID.fullmatch(agent_id)):
         raise ValueError("the id is not a plain name")
     if not isinstance(raw, dict):
         raise ValueError("agent.json is not an object")
@@ -55,11 +55,11 @@ def parse(agent_id: str, raw: object) -> Agent:
     if not isinstance(instructions, list) or not all(_target(t) for t in instructions):
         raise ValueError("instructions must be /absolute or ~/ paths")
     skills = raw.get("skills")
-    if skills is not None and not (isinstance(skills, str) and ID.match(skills)):
+    if skills is not None and not (isinstance(skills, str) and ID.fullmatch(skills)):
         raise ValueError("skills must be a plain name")
     detect = raw.get("detect", {})
     ignore = detect.get("ignore", []) if isinstance(detect, dict) else None
-    if not isinstance(ignore, list) or not all(isinstance(n, str) and SEGMENT.match(n) for n in ignore):
+    if not isinstance(ignore, list) or not all(isinstance(n, str) and SEGMENT.fullmatch(n) for n in ignore):
         raise ValueError("detect.ignore must be a list of names")
     setup = raw.get("setup")
     if setup is not None and not (isinstance(setup, dict) and isinstance(setup.get("run"), str)

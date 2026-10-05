@@ -51,10 +51,13 @@ def test_system_wide_and_per_account_instruction_files_are_kept_apart(tmp_path):
     {"home": ".x", "detect": {"ignore": ["a/b"]}},
     {"home": ".x", "setup": {"run": "  "}},
     {},
+    {"home": "..\n"},
+    {"home": ".x", "instructions": ["~/..\n"]},
+    {"home": ".x", "skills": "x\n"},
 ])
 def test_a_manifest_that_could_escape_or_is_incomplete_is_skipped_by_name(tmp_path, bad):
     root = write_agents(tmp_path, {"good": {"home": ".g", "skills": "good"},
-                                   "bad": {**bad, "skills": "bad"}})
+                                   "bad": {"skills": "bad", **bad}})
     result = agents_py("skills", agents_dir=root)
     assert result.returncode == 0
     assert result.stdout.split() == ["good"]
@@ -66,3 +69,12 @@ def test_an_unreadable_index_fails(tmp_path):
     root.mkdir()
     (root / "index.json").write_text("{nope")
     assert agents_py("skills", agents_dir=root).returncode == 1
+
+
+def test_a_non_string_agent_id_in_the_index_is_skipped(tmp_path):
+    root = write_agents(tmp_path, {"good": {"home": ".g", "skills": "good"}})
+    (root / "index.json").write_text(json.dumps({"agents": [1, "good"]}))
+    result = agents_py("skills", agents_dir=root)
+    assert result.returncode == 0
+    assert result.stdout.split() == ["good"]
+    assert "skipping agent 1" in result.stderr

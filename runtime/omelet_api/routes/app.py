@@ -30,6 +30,7 @@ from ..core.detect import AmbiguousError
 from ..core.exec import LocalRunner
 from ..core.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
                            clone_argv, redact, valid_repo)
+from ..core.agents import AgentStatus, UnknownAgent
 from ..core.github_link import GitHubLink, NotConnected
 # Imported by name: the /health route below shadows a module named `health`.
 from ..core.health import answers, default_probe, diagnose
@@ -225,6 +226,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     github_link = github_link or GitHubLink(
         state, github, client_id=config.github_client_id,
         directory=config.github_dir)
+    agent_status = AgentStatus(config.agent_status_dir, config.agents_dir)
 
     app = FastAPI(title="omelet-api", version=config.version)
     app.state.config = config
@@ -481,6 +483,20 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.get("/connect")
     def connect_facts() -> dict:
         return connect.facts(Path(config.connect_path))
+
+    @router.get("/agents/status")
+    def agents_status() -> dict:
+        return agent_status.status()
+
+    @router.post("/agents/{agent_id}/setup")
+    def agent_setup(agent_id: str) -> dict:
+        try:
+            return agent_status.ensure_setup(agent_id)
+        except UnknownAgent:
+            raise ApiError("agent_not_found", "Omelet has nothing to set up for that agent.", 404) from None
+        except OSError:
+            raise ApiError("agent_setup_unavailable", "This VM can't set up agents yet. "
+                           "Restart Omelet and try again.", 503) from None
 
     @router.get("/account")
     def account_status() -> dict:

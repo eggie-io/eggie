@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { useAgents } from "../../agents/queries";
+import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CHEVRON_RIGHT } from "../icons";
 import s from "./Agents.module.css";
 
 export function AgentPicker() {
   const { platform, agents, error } = useAgents();
+  const status = useAgentStatus();
 
   let body: ReactNode;
   if (error) body = <p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p>;
@@ -19,6 +20,7 @@ export function AgentPicker() {
             <Link className={s.card} to={`/agents/${agent.id}`}>
               <span className={s.cardTop}>
                 <img className={s.icon} src={agent.icon} alt="" width={40} height={40} />
+                {status.data?.agents[agent.id]?.connected && <span className={s.badge}>Connected</span>}
                 {CHEVRON_RIGHT}
               </span>
               <span className={s.cardText}>

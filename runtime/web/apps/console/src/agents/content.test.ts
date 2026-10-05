@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseAgent, parseIndex } from "./catalog";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../agent-guides");
+// The manifests live outside the web workspace; the Dockerfile copies them to
+// the same relative place (/runtime/agents) so this path holds in the image too.
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../../../../agents");
 const read = (path: string) => JSON.parse(readFileSync(join(ROOT, path), "utf8"));
 
 describe("shipped agent content", () => {

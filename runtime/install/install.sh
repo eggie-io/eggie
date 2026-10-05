@@ -221,8 +221,13 @@ fi
 
 # 9. the in-VM omelet command, the instructions every session loads, and the shell's start directory.
 install -m 755 "$RUNTIME_DIR/cli/omelet.py" /usr/local/bin/omelet
-install -d /etc/claude-code
-install -m 644 "$RUNTIME_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
+if ! system_instructions="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$RUNTIME_DIR/agents" instructions --system)"; then
+  echo "the coding-agent manifests in this runtime are damaged" >&2
+  exit 1
+fi
+while IFS= read -r target; do
+  [[ -n "$target" ]] && install -D -m 644 "$RUNTIME_DIR/instructions/omelet.md" "$target"
+done <<< "$system_instructions"
 install -m 644 "$INSTALL_DIR/profile/omelet-cwd.sh" /etc/profile.d/omelet-cwd.sh
 
 # 10. copies earlier provisioning made, which npx now owns or nothing reads.
@@ -241,7 +246,12 @@ if [[ -L /etc/skel/projects && "$(readlink /etc/skel/projects)" == /opt/omelet/p
   rm -f /etc/skel/projects
 fi
 
-# 11. per account: docker group, Codex block, ~/projects, skills.
+# 11. per account: docker group, agent instructions, ~/projects, skills.
+if ! skill_agents="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$RUNTIME_DIR/agents" skills)"; then
+  echo "the coding-agent manifests in this runtime are damaged" >&2
+  exit 1
+fi
+read -ra skill_agents <<< "$skill_agents"
 accounts() {
   echo "root:0:0:/root"
   getent passwd | bash "$INSTALL_DIR/lib/login-users.sh" /etc/shells
@@ -252,7 +262,7 @@ while IFS=: read -r name uid gid home; do
   fi
   bash "$INSTALL_DIR/lib/install-agents.sh" "$RUNTIME_DIR" "$home" "$uid:$gid"
   # stdin is the account list this loop is reading.
-  if ! runuser -u "$name" -- env HOME="$home" DISABLE_TELEMETRY=1 npx -y "$SKILLS_CLI" add "$SKILLS_SOURCE" -s '*' -g -a claude-code codex -y </dev/null; then
+  if ! runuser -u "$name" -- env HOME="$home" DISABLE_TELEMETRY=1 npx -y "$SKILLS_CLI" add "$SKILLS_SOURCE" -s '*' -g -a "${skill_agents[@]}" -y </dev/null; then
     echo "could not install Omelet's skills for $name: the npm registry or GitHub may be unreachable" >&2
     exit 1
   fi
@@ -274,6 +284,17 @@ fi
 install -m 644 "$INSTALL_DIR/systemd/omelet-update.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable omelet-update.service
+
+# 12c. coding agents: the root-side runner the API pokes to detect connected
+# agents and run their setup. The API writes counters here, never into a home.
+install -d -m 2770 -o root -g docker /opt/omelet/agent-status /opt/omelet/agent-status/setup
+chmod 2770 /opt/omelet/agent-status /opt/omelet/agent-status/setup
+install -m 644 "$INSTALL_DIR/systemd/omelet-agents.path" \
+  "$INSTALL_DIR/systemd/omelet-agents.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now omelet-agents.path
+# Not fatal: the console only loses its "connected" line until the next poll.
+systemctl start omelet-agents.service || echo "could not check this machine's coding agents" >&2
 
 # 13. what the console's "Connect an agent" guide needs to know.
 if grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl

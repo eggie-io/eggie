@@ -84,3 +84,15 @@
 }
 .nav { display: flex; align-items: center; gap: 8px; }
 .count { margin-right: auto; font: 600 13px var(--font-body); color: var(--ink-3); }
+
+.status {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line); font: 600 14px var(--font-body); color: var(--ink-2);
+}
+.statusText { flex: 1; min-width: 0; }
+.statusConnected { border-color: var(--yolk); color: var(--ink); }
+.statusFailed { color: var(--paprika); }
+.badge {
+  margin-left: auto; margin-right: 6px; padding: 2px 8px; border-radius: 999px;
+  background: var(--yolk-soft); color: var(--ink); font: 700 12px var(--font-body);
+}

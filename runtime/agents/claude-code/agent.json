@@ -1,6 +1,10 @@
 {
   "name": "Claude Code",
   "icon": "icon.webp",
+  "home": ".claude",
+  "instructions": ["/etc/claude-code/CLAUDE.md"],
+  "skills": "claude-code",
+  "detect": {"ignore": ["skills"]},
   "platforms": {
     "mac": {
       "via_ssh": true,

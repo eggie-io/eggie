@@ -394,3 +394,10 @@ def test_install_ships_the_shell_start_directory_snippet():
                       INSTALL.read_text())
     assert match, "install.sh does not install /etc/profile.d/omelet-cwd.sh"
     assert (INSTALL.parent / match.group(1)).is_file()
+
+
+def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
+    text = INSTALL.read_text()
+    assert "systemctl enable --now omelet-agents.path" in text
+    assert "install -d -m 2770 -o root -g docker /opt/omelet/agent-status" in text
+    assert text.index("systemctl start omelet-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")

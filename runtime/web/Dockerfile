@@ -10,12 +10,17 @@ COPY . .
 # slugify.test.ts shares its cases with the API's tests, from outside
 # runtime/web/; build with `--build-context fixtures=tests/fixtures`.
 COPY --from=fixtures slugify-cases.json /tests/fixtures/
+# The agent manifests live in runtime/agents/, outside this build context;
+# build with `--build-context agents=runtime/agents`.
+COPY --from=agents . /runtime/agents/
 RUN npm run typecheck && npm test && npm run build && npm run check-offline
+# Maintainer notes for this folder, not a guide.
+RUN rm -f /runtime/agents/CLAUDE.md
 
 FROM nginxinc/nginx-unprivileged:stable-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.inc /etc/nginx/security-headers.inc
 COPY --from=build /runtime/web/apps/console/dist /usr/share/nginx/html
 # Outside Vite's build output: guides are data read at page load, not bundled.
-COPY --from=build /runtime/web/apps/console/agent-guides /usr/share/nginx/html/agent-guides
+COPY --from=build /runtime/agents /usr/share/nginx/html/agent-guides
 EXPOSE 8080

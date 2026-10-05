@@ -1,10 +1,23 @@
 import { Button, Egg } from "@omelet/ui";
-import { FOLDER, GITHUB, PLUS } from "../icons";
+import { CHECK, FOLDER, GITHUB, PLUS } from "../icons";
 import s from "./ProjectList.module.css";
 
-export function EmptyCounter({ onNew, onGitHub }: { onNew: () => void; onGitHub: () => void }) {
+export function EmptyCounter({
+  onNew,
+  onGitHub,
+  connectedAgent,
+}: {
+  onNew: () => void;
+  onGitHub: () => void;
+  connectedAgent: string | null;
+}) {
   return (
     <section className={s.empty}>
+      {connectedAgent && (
+        <p className={s.connected} role="status">
+          {CHECK}{connectedAgent} is connected. Now give it something to work on.
+        </p>
+      )}
       <div className={s.emptyHead}>
         <Egg size={40} dim bob />
         <div className={s.emptyText}>

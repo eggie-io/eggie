@@ -7,6 +7,7 @@ import { ONE, useProjects } from "../../projects/queries";
 import type { DeleteResult } from "../../projects/types";
 import { projectView } from "../../projects/view";
 import { GitHubModal } from "../github/GitHubModal";
+import { useOnboarding } from "../onboarding/Onboarding";
 import { PLUS } from "../icons";
 import { DiscoveredBand } from "./DiscoveredBand";
 import { EmptyCounter } from "./EmptyCounter";
@@ -31,6 +32,7 @@ export function ProjectList() {
   const [creating, setCreating] = useState(false);
   const [github, setGitHub] = useState(false);
   const deleted = (useLocation().state as { deleted?: DeleteResult } | null)?.deleted;
+  const { connectedAgent } = useOnboarding();
   const modal = <NewProjectModal open={creating} onClose={() => setCreating(false)} />;
 
   // The single-project cache for a deleted project is dropped only once the
@@ -49,7 +51,7 @@ export function ProjectList() {
       body = (
         <>
           {deleted && <DeletedNotice result={deleted} />}
-          <EmptyCounter onNew={() => setCreating(true)} onGitHub={() => setGitHub(true)} />
+          <EmptyCounter onNew={() => setCreating(true)} onGitHub={() => setGitHub(true)} connectedAgent={connectedAgent} />
         </>
       );
     } else {

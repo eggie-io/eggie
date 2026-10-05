@@ -31,7 +31,7 @@
 .tab svg { flex: none; }
 .active, .active:hover { background: var(--yolk-soft); color: var(--ink); font-weight: 700; }
 
-.end { margin-left: auto; display: flex; align-items: center; }
+.end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 
 .account { position: relative; }
 .avatarButton {

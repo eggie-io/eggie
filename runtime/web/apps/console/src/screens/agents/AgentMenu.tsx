@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { cx } from "@omelet/ui";
 import type { Agent } from "../../agents/catalog";
+import type { AgentBase } from "./AgentPicker";
 import { CHECK, CHEVRON_DOWN } from "../icons";
 import s from "./Agents.module.css";
 
-export function AgentMenu({ agents, current }: { agents: Agent[]; current: Agent }) {
+export function AgentMenu({ agents, current, base }: { agents: Agent[]; current: Agent; base: AgentBase }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -38,7 +39,7 @@ export function AgentMenu({ agents, current }: { agents: Agent[]; current: Agent
             <Link
               key={agent.id}
               role="menuitem"
-              to={`/agents/${agent.id}`}
+              to={`${base}/${agent.id}`}
               className={cx(s.menuItem, agent.id === current.id && s.menuCurrent)}
               onClick={() => setOpen(false)}
             >
@@ -48,7 +49,7 @@ export function AgentMenu({ agents, current }: { agents: Agent[]; current: Agent
             </Link>
           ))}
           <span className={s.menuRule} aria-hidden="true" />
-          <Link role="menuitem" to="/agents" className={s.menuAll} onClick={() => setOpen(false)}>
+          <Link role="menuitem" to={base} className={s.menuAll} onClick={() => setOpen(false)}>
             See all agents
           </Link>
         </div>

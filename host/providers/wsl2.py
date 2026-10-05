@@ -563,6 +563,10 @@ class Wsl2Provider:
     def image(self):
         return WSL_IMAGES[self._arch]
 
+    def ssh_shortcut(self):
+        """None: the distro runs no sshd, so there is no host to name."""
+        return None
+
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs
         turned on is `remediable` above, not a download."""

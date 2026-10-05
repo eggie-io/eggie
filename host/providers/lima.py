@@ -20,7 +20,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import lima_install
+from . import lima_install, ssh_alias
 from ..core.provider import Access, AccessField, Completed, Diagnosis, CheckResult, Runtime
 
 LOOPBACK = "127.0.0.1"
@@ -166,13 +166,17 @@ class LimaProvider:
     def __init__(self, name="omelet-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
-                 mac_ver=None, machine=None, login_items=None):
+                 mac_ver=None, machine=None, login_items=None,
+                 ssh_dir: Path | None = None):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
         self._run = runner
         self.lima_home = Path(lima_home) if lima_home else Path.home() / ".lima"
         self.data_root = Path(data_root) if data_root else default_data_root()
+        # The user's own ~/.ssh, where setup adds the `omelet` host. Injectable
+        # so no test can edit the real one.
+        self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
         # Injectable for the same reason Wsl2Provider's `facts` is: platform.mac_ver()
         # returns ('', ..., ...) on the Windows host this suite mostly runs on, so a
         # test exercising preflight()/is_supported() needs a real version to check
@@ -290,6 +294,10 @@ class LimaProvider:
     def destroy(self) -> None:
         self._require(self._cmd(["delete", self.name]),
                       f"the virtual machine '{self.name}' could not be removed")
+        try:
+            ssh_alias.remove(self._alias_file(), self.ssh_dir / "config")
+        except OSError:
+            pass    # a stale `omelet` host is harmless; the VM is what mattered
 
     def recover(self, *, everything: bool = False) -> None:
         # Nothing outside this instance to restart, so `everything` is the same
@@ -314,6 +322,26 @@ class LimaProvider:
 
     def _ssh_config(self) -> Path:
         return self.lima_home / self.name / "ssh.config"
+
+    def _alias_file(self) -> Path:
+        return self.data_root / "ssh_config"
+
+    def ssh_shortcut(self):
+        """The setup step that adds `Host omelet` to ~/.ssh/config -- see
+        ssh_alias.py for why its host-key checking is off. Rewritten on every
+        run: the values come from the ssh.config Lima writes on each start."""
+        def write() -> str:
+            user_config = self.ssh_dir / "config"
+            try:
+                found = parse_ssh_config(self._ssh_config().read_text())
+                ssh_alias.install(self._alias_file(), user_config, found)
+            except (OSError, ValueError) as e:
+                # Never fails setup: the VM works without it, and the status
+                # screen still shows the full `ssh -F` command.
+                return f"Could not add the '{ssh_alias.ALIAS}' host to {user_config}: {e}"
+            return f"Connect with: ssh {ssh_alias.ALIAS}"
+
+        return write
 
     def _control(self, verb: str, guest_port: int, host_port: int) -> Completed:
         return self._spawn(["ssh", "-F", str(self._ssh_config()),
@@ -376,13 +404,18 @@ class LimaProvider:
             AccessField("Identity file", found.get(
                 "Identity file", str(self.lima_home / "_config" / "user"))),
         )
+        if ssh_alias.installed(self._alias_file(), self.ssh_dir / "config"):
+            command = f"ssh {ssh_alias.ALIAS}"
+            remote = f"choose the '{ssh_alias.ALIAS}' host in an editor's Remote-SSH"
+        else:
+            command = f"ssh -F {config} lima-{self.name}"
+            remote = "point an editor's Remote-SSH at these values"
         return Access(
             headline="Connect a coding agent",
             summary=("Your coding agent runs inside the virtual machine, where "
                      "Docker and the omelet command already are. Open a shell "
-                     "there with the command below, or point an editor's "
-                     "Remote-SSH at these values."),
-            command=f"ssh -F {config} lima-{self.name}",
+                     f"there with the command below, or {remote}."),
+            command=command,
             fields=fields,
             note=note)
 

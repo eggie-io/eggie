@@ -17,6 +17,7 @@ class FakeProvider:
     terminal = "PowerShell"
     remediable = True
     runtime_value = None
+    ssh_value = None
 
     def __init__(self, *, exists=True, reboot=False):
         self.rootfs = None
@@ -33,6 +34,7 @@ class FakeProvider:
     def image(self): return IMAGE
     def exists(self): return self._exists
     def runtime(self): return self.runtime_value
+    def ssh_shortcut(self): return self.ssh_value
 
     def create(self):
         if self.rootfs is None:

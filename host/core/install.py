@@ -482,8 +482,14 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
     # minutes later.
     if image is not None:
         steps.append(step("fetch_image", fetch_image, always_run=True, progress=True))
+    steps.append(
+        step("create_vm", lambda: _ensure_vm_running(provider), always_run=True))
+    # Only where the VM is reached over SSH. Placed after create_vm because it
+    # reads the connection details the VM platform writes when it starts.
+    shortcut = provider.ssh_shortcut()
+    if shortcut is not None:
+        steps.append(step("ssh_alias", shortcut, always_run=True))
     steps += [
-        step("create_vm", lambda: _ensure_vm_running(provider), always_run=True),
         step("bootstrap", lambda: _bootstrap(provider), always_run=True),
         # Before verify: a mismatched or refusing API is one sentence here,
         # not a 404 or 401 minutes into the smoke test.

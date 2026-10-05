@@ -32,6 +32,7 @@ class StubProvider:
     def set_autostart(self, on, exe): self.autostart_off = (on is False)
     def image(self): return Image("http://example.invalid/img.wsl", "0" * 64)
     def runtime(self): return None
+    def ssh_shortcut(self): return None
     def access(self): return Access(headline="Connect", summary="", command="wsl")
 
 

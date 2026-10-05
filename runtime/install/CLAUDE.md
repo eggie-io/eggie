@@ -82,5 +82,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - Login accounts are never the API's uid 1000: WSL2 has only root, and Lima's user carries the macOS
   uid. The API writes into projects through the docker group, so anything it creates there needs
   `umask 002` (see `clone_argv`), and `/etc/gitconfig` trusts `safe.directory '*'`.
+- Every console status poll starts `omelet-agents.service`, so journald shows a Started/Finished
+  pair every 3 s while an agents screen is open; and `systemctl start omelet-agents.service` in
+  `install.sh` step 12c blocks while a requested setup runs.
 - Use `/usr/bin/docker` by absolute path: Docker Desktop's WSL integration can put its own `docker`
   on `PATH`, which talks to Desktop's engine instead of this VM's.

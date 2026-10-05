@@ -47,13 +47,14 @@ class AgentStatus:
         return {"requested": True}
 
     def _has_setup(self, agent_id: str) -> bool:
-        if not _ID.match(agent_id):
+        if not _ID.fullmatch(agent_id):
             return False
         try:
             manifest = json.loads((self._agents_dir / agent_id / "agent.json").read_text())
         except (OSError, ValueError):
             return False
-        return isinstance(manifest, dict) and isinstance(manifest.get("setup"), dict)
+        setup = manifest.get("setup") if isinstance(manifest, dict) else None
+        return isinstance(setup, dict) and isinstance(setup.get("run"), str) and bool(setup["run"].strip())
 
     def _read(self) -> dict:
         try:
@@ -64,9 +65,9 @@ class AgentStatus:
         if not isinstance(agents, dict):
             return {}
         return {agent_id: {"connected": entry.get("connected") is True,
-                           "setup": entry.get("setup") if entry.get("setup") in _STATES else None}
+                           "setup": entry["setup"] if isinstance(entry.get("setup"), str) and entry["setup"] in _STATES else None}
                 for agent_id, entry in agents.items()
-                if isinstance(agent_id, str) and _ID.match(agent_id) and isinstance(entry, dict)}
+                if isinstance(agent_id, str) and _ID.fullmatch(agent_id) and isinstance(entry, dict)}
 
     def _bump(self, path: Path) -> None:
         with self._lock:

@@ -165,7 +165,7 @@ def run_pass(agents: list[Agent], accounts: list[tuple[str, str]], status_dir: P
     out: dict[str, dict] = {}
     for agent in agents:
         before = previous.get(agent.id) if isinstance(previous.get(agent.id), dict) else {}
-        setup = before.get("setup") if before.get("setup") in STATES else None
+        setup = before.get("setup") if isinstance(before.get("setup"), str) and before.get("setup") in STATES else None
         # Passes are serialized, so an "installing" left behind was interrupted.
         if setup == "installing":
             setup = "failed"

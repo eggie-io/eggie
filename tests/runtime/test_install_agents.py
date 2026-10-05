@@ -54,6 +54,14 @@ def test_the_block_is_replaced_and_the_users_own_text_kept(tmp_path):
     assert "You are working inside an Omelet VM" not in text
 
 
+def test_missing_parent_dirs_of_a_target_are_created(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    source = _source(tmp_path, {"x": {"home": ".config/x", "instructions": ["~/.config/x/AGENTS.md"]}})
+    _install(home, source)
+    assert "<!-- omelet:begin -->" in (home / ".config" / "x" / "AGENTS.md").read_text()
+
+
 def test_every_per_account_target_gets_the_block_and_system_ones_are_left_to_install(tmp_path):
     home = tmp_path / "home"
     home.mkdir()

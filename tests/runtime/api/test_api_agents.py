@@ -29,8 +29,12 @@ def test_a_missing_or_garbled_status_reads_as_no_agents(env):
     assert env.client.get("/agents/status").json() == {"agents": {}}
     (env.config.agent_status_dir / "status.json").write_text('{"agents": {"codex": ')
     assert env.client.get("/agents/status").json() == {"agents": {}}
-    runner_status(env, {"codex": "yes", "cursor": {"connected": "maybe", "setup": "exploded"}})
-    assert env.client.get("/agents/status").json() == {"agents": {"cursor": {"connected": False, "setup": None}}}
+    runner_status(env, {"codex": "yes", "cursor": {"connected": "maybe", "setup": "exploded"},
+                         "a": {"setup": ["x"]}, "b": {"setup": {}}})
+    assert env.client.get("/agents/status").json() == {"agents": {
+        "cursor": {"connected": False, "setup": None},
+        "a": {"connected": False, "setup": None},
+        "b": {"connected": False, "setup": None}}}
 
 
 def test_setup_needs_an_agent_that_has_one(env):

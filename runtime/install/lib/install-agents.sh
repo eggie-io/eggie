@@ -21,14 +21,23 @@ targets="$(python3 "$LIB/agents.py" --agents-dir "$SRC/agents" instructions --ho
 # markers is ours to replace.
 while IFS= read -r file; do
   [[ -n "$file" ]] || continue
+  # Only directories created here are chowned: mkdir -p as root would leave
+  # missing parents (e.g. ~/.config) root-owned, and existing ones stay as they are.
+  created=()
+  dir="$(dirname "$file")"
+  while [[ "$dir" != "$HOME_DIR" && "$dir" == "$HOME_DIR"/* && ! -e "$dir" ]]; do
+    created+=("$dir")
+    dir="$(dirname "$dir")"
+  done
   mkdir -p "$(dirname "$file")"
+  for dir in ${created[@]+"${created[@]}"}; do chown "$OWNER" "$dir"; done
   touch "$file"
   sed -i "\|^$BEGIN\$|,\|^$END\$|d" "$file"
   if [[ -s "$file" && -n "$(tail -c1 "$file")" ]]; then
     echo >> "$file"
   fi
   { echo "$BEGIN"; cat "$SRC/instructions/omelet.md"; echo "$END"; } >> "$file"
-  chown "$OWNER" "$file" "$(dirname "$file")"
+  chown "$OWNER" "$file"
 done <<< "$targets"
 
 if [[ ! -e "$HOME_DIR/projects" && ! -L "$HOME_DIR/projects" ]]; then

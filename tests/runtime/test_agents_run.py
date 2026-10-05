@@ -123,6 +123,14 @@ def test_a_setup_left_installing_by_an_interrupted_pass_becomes_failed(tmp_path)
     assert setups_run(t) == []
 
 
+def test_a_garbled_setup_value_in_the_previous_status_does_not_wedge_the_runner(tmp_path):
+    t = make(tmp_path)
+    for garbled in (["x"], {}):
+        (t.status / "status.json").write_text(json.dumps({"generation": 0, "agents": {
+            "codex": {"connected": False, "setup": garbled}}}))
+        assert run(t)["codex"]["setup"] is None
+
+
 def test_the_setup_log_is_readable_by_root_only(tmp_path):
     t = make(tmp_path)
     request(t, "codex", 1)

@@ -14,6 +14,8 @@ COPY --from=fixtures slugify-cases.json /tests/fixtures/
 # build with `--build-context agents=runtime/agents`.
 COPY --from=agents . /runtime/agents/
 RUN npm run typecheck && npm test && npm run build && npm run check-offline
+# Maintainer notes for this folder, not a guide.
+RUN rm -f /runtime/agents/CLAUDE.md
 
 FROM nginxinc/nginx-unprivileged:stable-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

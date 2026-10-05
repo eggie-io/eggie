@@ -21,15 +21,15 @@ export function useAgents() {
 
 const POLL_MS = 3000;
 
-// Polls only while a guide is open for an agent that hasn't connected; an API
-// without these routes errors once and the console just shows no status.
+// Polls while the screen is mounted; with `watch` it stops once that agent is
+// connected. Errors don't stop it, so a briefly unreachable API recovers.
 export function useAgentStatus(watch?: string) {
   return useQuery({
     queryKey: ["agent-status"],
     queryFn: () => api.get<AgentStatuses>("/api/agents/status"),
-    retry: false,
+    retry: 1,
     refetchInterval: (query) =>
-      watch && !query.state.error && !query.state.data?.agents[watch]?.connected ? POLL_MS : false,
+      watch && query.state.data?.agents[watch]?.connected ? false : POLL_MS,
   });
 }
 

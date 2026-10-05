@@ -63,8 +63,10 @@ The three manifests:
 | id | `home` | `instructions` | `skills` | `detect.ignore` | `setup` |
 |---|---|---|---|---|---|
 | claude-code | `.claude` | `/etc/claude-code/CLAUDE.md` | `claude-code` | `skills` | — |
-| codex | `.codex` | `~/.codex/AGENTS.md` | `codex` | `AGENTS.md` | the Codex CLI install |
+| codex | `.codex` | `~/.codex/AGENTS.md` | `codex` | `AGENTS.md`, `packages` | `curl -fsSL https://chatgpt.com/codex/install.sh \| CODEX_NON_INTERACTIVE=1 sh` |
 | cursor | `.cursor` | `~/.cursor/AGENTS.md` | `cursor` | `AGENTS.md`, `skills` | — |
+
+Codex ignores `packages` and runs its installer with `CODEX_NON_INTERACTIVE=1` because the installer writes under `~/.codex/packages` and reads prompts from stdin without a tty.
 
 **To verify on a VM before merge:** that Cursor's CLI reads a global `~/.cursor/AGENTS.md`, that
 `skills` accepts `-a cursor` and where it writes, and the exact entries the skills CLI creates under

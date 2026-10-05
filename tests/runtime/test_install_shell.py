@@ -394,3 +394,16 @@ def test_install_ships_the_shell_start_directory_snippet():
                       INSTALL.read_text())
     assert match, "install.sh does not install /etc/profile.d/omelet-cwd.sh"
     assert (INSTALL.parent / match.group(1)).is_file()
+
+
+def test_install_keeps_ssh_host_keys_across_reboots():
+    # Lima declares a new cloud-init instance on every boot, and cloud-init
+    # then regenerates the host keys unless told not to.
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /etc/cloud/cloud\.cfg\.d/',
+                      INSTALL.read_text())
+    assert match, "install.sh does not install the cloud-init drop-in"
+    drop_in = INSTALL.parent / match.group(1)
+    assert "ssh_deletekeys: false" in drop_in.read_text().splitlines()
+    # Never on a cloud VM: a disk cloned from it must get keys of its own.
+    guard = INSTALL.read_text()[:match.start()].rsplit("\n", 2)[-2]
+    assert "/mnt/lima-cidata" in guard

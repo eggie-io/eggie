@@ -219,11 +219,18 @@ if ! node_ok; then
   node_ok || { echo "Node.js $NODE_MIN or newer did not install" >&2; exit 1; }
 fi
 
-# 9. the in-VM omelet command, the instructions every session loads, and the shell's start directory.
+# 9. the in-VM omelet command, the instructions every session loads, the shell's start
+#    directory, and SSH host keys that outlive a reboot.
 install -m 755 "$RUNTIME_DIR/cli/omelet.py" /usr/local/bin/omelet
 install -d /etc/claude-code
 install -m 644 "$RUNTIME_DIR/instructions/omelet.md" /etc/claude-code/CLAUDE.md
 install -m 644 "$INSTALL_DIR/profile/omelet-cwd.sh" /etc/profile.d/omelet-cwd.sh
+# SSH host keys that survive a reboot (see the file). Lima only, detected the
+# same way as step 13: on a cloud VM, a disk image cloned from this one must
+# still get keys of its own, which is what cloud-init's default is for.
+if [[ -d /mnt/lima-cidata && -d /etc/cloud/cloud.cfg.d ]]; then
+    install -m 644 "$INSTALL_DIR/cloud/99-omelet-keep-ssh-host-keys.cfg" /etc/cloud/cloud.cfg.d/
+fi
 
 # 10. copies earlier provisioning made, which npx now owns or nothing reads.
 # The last three are what an engine-v* install left behind: engine.version

@@ -2,7 +2,7 @@
   "name": "Codex",
   "icon": "icon.webp",
   "home": ".codex",
-  "instructions": ["~/.codex/AGENTS.md"],
+  "instructions": ["~/.codex/AGENTS.md", "/opt/eggie/projects/AGENTS.md"],
   "skills": "codex",
   "detect": {"ignore": ["AGENTS.md", "packages"]},
   "setup": {"run": "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"},

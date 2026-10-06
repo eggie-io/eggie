@@ -175,6 +175,14 @@ if ! dpkg -s git >/dev/null 2>&1; then
     exit 1
   fi
 fi
+# Codex sandboxes every shell command with bwrap. The codex that the Windows
+# app installs into WSL ships without its bundled copy, so it needs this one.
+if ! dpkg -s bubblewrap >/dev/null 2>&1; then
+  if ! { apt-get update && apt-get install -y bubblewrap; }; then
+    echo "could not install bubblewrap: the Ubuntu package mirrors may be unreachable" >&2
+    exit 1
+  fi
+fi
 # Ubuntu 24.04 packages no gh, so this is GitHub's own repo. Its keyring ships
 # dearmored, unlike NodeSource's, so no gpg and no gnupg dependency here.
 # Guarded on the package rather than `command -v gh`: a gh reaching this VM from

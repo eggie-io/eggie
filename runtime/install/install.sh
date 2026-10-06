@@ -50,6 +50,14 @@ https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
   fi
 fi
 
+# setfacl, for steps 4 and 11. Lima's Ubuntu image ships without it.
+if ! dpkg -s acl >/dev/null 2>&1; then
+  if ! { apt-get update && apt-get install -y acl; }; then
+    echo "could not install acl: the Ubuntu package mirrors may be unreachable" >&2
+    exit 1
+  fi
+fi
+
 # Absolute path throughout: if Docker Desktop's CLI is on PATH it would
 # talk to Desktop's engine instead of this VM's dockerd.
 test -x /usr/bin/docker || { echo 'docker-ce did not install /usr/bin/docker' >&2; exit 1; }
@@ -72,6 +80,10 @@ mkdir -p /opt/eggie/projects
 chgrp -R docker /opt/eggie
 chmod -R g+rwX /opt/eggie
 find /opt/eggie -type d -exec chmod g+s {} +
+# The API runs under umask 022, so what it creates in a project would come out
+# 2755 and shut the login accounts out. A default ACL replaces the umask for
+# new entries, whoever makes them: the API, a container, a coding agent.
+find /opt/eggie/projects -type d -exec setfacl -d -m g::rwx {} +
 
 # The GitHub token is the API's alone: the sweep above just widened it, so
 # its modes are put back every run.
@@ -266,6 +278,12 @@ accounts() {
 while IFS=: read -r name uid gid home; do
   if [[ "$name" != root ]]; then
     usermod -aG docker "$name"
+    # And by uid: a session open before this line keeps its old group list --
+    # on Lima that is every session, multiplexed over the ssh control master
+    # opened at boot. -P: a project's symlinks are not followed out of it.
+    setfacl -R -P -m "u:$name:rwX" /opt/eggie/projects
+    find /opt/eggie/projects -type d -exec setfacl -d -m "u:$name:rwx" {} +
+    setfacl -m "u:$name:r" /opt/eggie/api.token
   fi
   bash "$INSTALL_DIR/lib/install-agents.sh" "$RUNTIME_DIR" "$home" "$uid:$gid"
   # stdin is the account list this loop is reading.

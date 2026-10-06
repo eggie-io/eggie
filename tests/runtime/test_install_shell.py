@@ -135,6 +135,35 @@ def test_install_makes_opt_eggie_writable_before_the_api_starts():
     assert _index_of("mkdir -p " + constants.GUEST_PROJECTS) < _index_of("chgrp")
 
 
+def test_install_guards_acl_on_the_package_before_using_setfacl():
+    # Lima's Ubuntu image ships without the acl package.
+    assert _index_of("dpkg -s acl") < _index_of("setfacl")
+    assert any("apt-get install -y acl" in l for l in _commands())
+
+
+def test_projects_get_a_default_group_acl_after_the_sweep_and_before_the_api():
+    # The API runs under umask 022: without a default ACL, which replaces the
+    # umask for new entries, every folder it creates comes out 2755.
+    default = _index_of("setfacl -d -m g::rwx")
+    assert "-type d" in _commands()[default], "only directories take a default ACL"
+    assert _index_of("g+rwX") < default < _index_of(" up -d")
+
+
+def test_each_login_account_gets_access_by_uid_not_only_by_group():
+    # Lima's ssh control master opens before install adds the docker group,
+    # and every session it multiplexes keeps the old group list.
+    commands = _commands()
+    recursive = _index_of('setfacl -R -P -m "u:$name:rwX" ' + constants.GUEST_PROJECTS)
+    default = _index_of('setfacl -d -m "u:$name:rwx"')
+    token = _index_of(f'setfacl -m "u:$name:r" {constants.GUEST_TOKEN}')
+    loop = _index_of('usermod -aG docker "$name"')
+    assert all(loop < i < _index_of("done < <(accounts)")
+               for i in (recursive, default, token))
+    assert "-type d" in commands[default]
+    # After the last chmod of the token: chmod rewrites the ACL mask.
+    assert _index_of(f"chmod 640 {constants.GUEST_TOKEN}") < token
+
+
 def test_install_writes_the_marker_last():
     commands = _commands()
     marker = _index_of(f"> {constants.RUNTIME_MARKER}")

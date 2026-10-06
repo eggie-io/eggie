@@ -443,3 +443,9 @@ def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
     assert "systemctl enable --now eggie-agents.path" in text
     assert "install -d -m 2770 -o root -g docker /opt/eggie/agent-status" in text
     assert text.index("systemctl start eggie-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
+
+
+def test_the_agent_instructions_check_for_the_vm_by_the_marker_install_writes():
+    # An agent outside the VM must stop; the check is only as good as its path.
+    text = (ROOT / "runtime" / "instructions" / "eggie.md").read_text()
+    assert f"test -f {constants.RUNTIME_MARKER}" in text

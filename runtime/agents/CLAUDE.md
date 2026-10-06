@@ -38,3 +38,6 @@ one line in `index.json` — no code changes. Two readers, each validating only 
   connected right after install. Check on a fresh VM with `ls -A ~/<home>`.
 - This folder is copied into the web image (`--build-context agents=…`) and read from
   `/opt/eggie/runtime/agents` on the VM by both the runner and the API.
+- An agent running outside the VM never sees its `~/` instructions. Codex on Windows reads
+  `AGENTS.md` from the folder it opened, the reason for `/opt/eggie/projects/AGENTS.md`: there
+  the stop-if-not-in-the-VM check still reaches it.

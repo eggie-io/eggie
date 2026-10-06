@@ -6,10 +6,10 @@ const PLATFORMS: Platform[] = ["windows", "mac"];
 export interface Media { kind: "image" | "video"; src: string }
 // `media` is empty for a step that shows a placeholder; more than one makes a slider.
 export interface Step { title: string; body: Rich[]; media: Media[]; alt: string }
-// One line of the SSH card: a label and a template over the API's SSH facts.
-export interface SshField { label: string; value: string }
-// `ssh` is null for a guide that does not connect over SSH (WSL).
-export interface Guide { ssh: SshField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
+// One line of the card: a label and a template over the API's SSH facts.
+export interface CardField { label: string; value: string }
+// `card` is null for a guide with nothing to copy.
+export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
 export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
   vm: "wsl" | "lima" | "other";
@@ -57,7 +57,7 @@ function parseStep(value: unknown, folder: string): Step | null {
   return { title: value.title, body, alt: value.alt, media: media as Media[] };
 }
 
-function parseSshField(value: unknown): SshField | null {
+function parseCardField(value: unknown): CardField | null {
   if (!isObject(value) || !text(value.label) || !text(value.value)) return null;
   const names = [...value.value.matchAll(PLACEHOLDER)].map((match) => match[1]);
   if (!names.every((name) => (SSH_FACTS as readonly string[]).includes(name))) return null;
@@ -66,12 +66,12 @@ function parseSshField(value: unknown): SshField | null {
 
 function parseGuide(value: unknown, folder: string): Guide | null {
   if (!isObject(value) || !text(value.tagline) || !Array.isArray(value.steps)) return null;
-  let ssh: SshField[] | null = null;
-  if (value.ssh !== undefined) {
-    if (!Array.isArray(value.ssh)) return null;
-    const fields = value.ssh.map(parseSshField);
+  let card: CardField[] | null = null;
+  if (value.card !== undefined) {
+    if (!Array.isArray(value.card)) return null;
+    const fields = value.card.map(parseCardField);
     if (fields.length === 0 || fields.some((field) => field === null)) return null;
-    ssh = fields as SshField[];
+    card = fields as CardField[];
   }
   let warning: Rich[] | null = null;
   if (value.warning !== undefined) {
@@ -80,7 +80,7 @@ function parseGuide(value: unknown, folder: string): Guide | null {
   }
   const steps = value.steps.map((step) => parseStep(step, folder));
   if (steps.length === 0 || steps.some((step) => step === null)) return null;
-  return { ssh, tagline: value.tagline, warning, steps: steps as Step[] };
+  return { card, tagline: value.tagline, warning, steps: steps as Step[] };
 }
 
 export function parseAgent(id: string, value: unknown, base: string): Agent | null {

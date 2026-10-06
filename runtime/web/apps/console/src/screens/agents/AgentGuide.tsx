@@ -115,7 +115,7 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
                 {row.copy && <CopyButton className={s.copy} text={row.value} />}
               </div>
             ))}
-            <p className={s.keyNote}>{agent.name} asks for these once. If it can't connect on this port, ask us for help.</p>
+            <p className={s.keyNote}>{agent.name} asks for these once. If it can't connect, ask us for help.</p>
           </section>
         )}
       </div>

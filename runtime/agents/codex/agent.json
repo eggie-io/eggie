@@ -9,7 +9,7 @@
   "platforms": {
     "mac": {
       "tagline": "SSH connection",
-      "ssh": [
+      "card": [
         {"label": "Hostname", "value": "{host}"},
         {"label": "SSH port", "value": "{port}"},
         {"label": "Identity file path", "value": "{key_file}"}
@@ -23,13 +23,16 @@
       ]
     },
     "windows": {
+      "card": [
+        {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects"}
+      ],
       "tagline": "Inside WSL",
-      "warning": "<p><strong>Codex only works in your default WSL machine.</strong> Before you start, open <b>PowerShell</b>, run <code>wsl --set-default eggie-vm</code>, then restart Codex.</p><p>If you already use another Linux machine in WSL, a plain <code>wsl</code> will open your kitchen from now on.</p>",
+      "warning": "<p>Because of a limitation in <b>Codex</b> on Windows, it takes a few more steps to set up than the other agents: <b>eggie-vm</b> has to become your default WSL distro.</p><p>If you don't know what WSL is, or you don't use any other WSL distro, you can safely ignore this.</p>",
       "steps": [
-        {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
-        {"title": "Run it in WSL", "body": "In Codex's <b>Settings</b>, switch the agent from Windows native to <b>WSL</b>, then restart Codex.", "alt": "Screenshot · Codex settings with WSL"},
-        {"title": "Open the projects folder", "body": "Click <b>Add new project</b>, type <code>\\\\wsl$\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.", "alt": "Screenshot · Adding the projects folder from eggie-vm"},
-        {"title": "Start prompting", "body": "Say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
+        {"title": "Make eggie-vm the default", "body": "<ol><li>Search for <b>Windows PowerShell</b> in the Start menu and open it.</li><li>Run <code>wsl --set-default eggie-vm</code>.</li><li>If Codex is already open, restart it.</li></ol>", "alt": "Screenshot · PowerShell running wsl --set-default eggie-vm", "media": ["media/win-chatgpt-0.png"]},
+        {"title": "Run Codex in WSL", "body": "<ol><li>Open the Codex app and sign in.</li><li>Open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
+        {"title": "Open the projects folder", "body": "<ol><li>Click <b>Add new project</b>.</li><li>Paste the projects folder path from the card below into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
       ]
     }
   }

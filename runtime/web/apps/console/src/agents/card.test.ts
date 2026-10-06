@@ -3,7 +3,7 @@ import type { Guide } from "./catalog";
 import { cardRows } from "./card";
 
 const fourFields: Guide = {
-  ssh: [
+  card: [
     { label: "Host", value: "{host}" },
     { label: "Port", value: "{port}" },
     { label: "User", value: "{user}" },
@@ -13,12 +13,12 @@ const fourFields: Guide = {
   warning: null,
   steps: [],
 };
-const userAtHost: Guide = { ssh: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [] };
-const wsl: Guide = { ssh: null, tagline: "", warning: null, steps: [] };
+const userAtHost: Guide = { card: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [] };
+const wsl: Guide = { card: null, tagline: "", warning: null, steps: [] };
 const lima = { vm: "lima" as const, ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/k" } };
 
 describe("cardRows", () => {
-  it("shows no card for a guide that does not go over SSH", () => {
+  it("shows no card for a guide without one", () => {
     expect(cardRows(wsl, lima)).toBeNull();
   });
 

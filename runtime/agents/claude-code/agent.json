@@ -8,7 +8,7 @@
   "platforms": {
     "mac": {
       "tagline": "SSH connection",
-      "ssh": [
+      "card": [
         {"label": "SSH host", "value": "{user}@{host}"},
         {"label": "SSH port", "value": "{port}"},
         {"label": "SSH key", "value": "{key_file}"}
@@ -24,10 +24,9 @@
     "windows": {
       "tagline": "Inside WSL",
       "steps": [
-        {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen"},
-        {"title": "Switch to WSL", "body": "Open the environment menu next to the prompt box and pick WSL.", "alt": "Screenshot · environment menu with WSL"},
-        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine from the list.", "alt": "Screenshot · WSL machine list with eggie-vm"},
-        {"title": "Start prompting", "body": "Pick the projects folder and tell it what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen"}
+        {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen", "media": ["media/win-claude-code-0.png"]},
+        {"title": "Switch to WSL", "body": "<ol><li>Open the environment menu next to the prompt box.</li><li>Select <b>WSL</b>.</li><li>Choose <b>eggie-vm</b> from the list.</li></ol>", "alt": "Screenshot · environment menu with WSL", "media": ["media/win-claude-code-1.png"]},
+        {"title": "Start prompting", "body": "Tell Claude Code what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen", "media": ["media/win-claude-code-2.png"]}
       ]
     }
   }

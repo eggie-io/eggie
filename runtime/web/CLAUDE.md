@@ -42,7 +42,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.
   - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab). All content is in
     `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
-    `<id>/agent.json` with `windows` and `mac` blocks, an optional `ssh` card, steps with an HTML
+    `<id>/agent.json` with `windows` and `mac` blocks, an optional `card` of fields to copy, steps with an HTML
     `body` and a `media` list (screenshots and videos; more than one makes a slider).
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
     names a missing media file. `src/agents/rich.ts` parses the body into a tree of allowed

@@ -3,7 +3,7 @@ import { loadCatalog, parseAgent, parseIndex, platformFor } from "./catalog";
 
 const guide = (over = {}) => ({
   tagline: "SSH connection",
-  ssh: [{ label: "Host", value: "{user}@{host}" }],
+  card: [{ label: "Host", value: "{user}@{host}" }],
   steps: [{ title: "Open it", body: "Sign in.", media: ["mac/1.png"], alt: "Start screen" }],
   ...over,
 });
@@ -53,16 +53,16 @@ describe("parseAgent", () => {
     for (const bad of ["", "<a href=x>x</a>", 42]) expect(agent(bad)).toBeNull();
   });
 
-  it("reads the SSH card's fields, and no card means no SSH", () => {
-    const agent = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide(), windows: guide({ ssh: undefined }) } }, "/a");
-    expect(agent?.platforms.mac?.ssh).toEqual([{ label: "Host", value: "{user}@{host}" }]);
-    expect(agent?.platforms.windows?.ssh).toBeNull();
+  it("reads the card's fields, and a guide may have no card", () => {
+    const agent = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide(), windows: guide({ card: undefined }) } }, "/a");
+    expect(agent?.platforms.mac?.card).toEqual([{ label: "Host", value: "{user}@{host}" }]);
+    expect(agent?.platforms.windows?.card).toBeNull();
   });
 
-  it("drops a guide whose SSH card names a fact the API does not give", () => {
-    const ssh = [{ label: "Host", value: "{username}@{host}" }];
-    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ ssh }) } }, "/a")).toBeNull();
-    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ ssh: [] }) } }, "/a")).toBeNull();
+  it("drops a guide whose card names a fact the API does not give", () => {
+    const card = [{ label: "Host", value: "{username}@{host}" }];
+    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ card }) } }, "/a")).toBeNull();
+    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ card: [] }) } }, "/a")).toBeNull();
   });
 
   it("drops an agent that is not an object, such as the SPA's index.html", () => {

@@ -12,12 +12,12 @@ const UNKNOWN_USER = "your Mac user name";
 // Each agent's form asks for the same facts in its own shape (Claude Code
 // wants "user@host" in one box), so the manifest's template decides the row.
 export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] | null {
-  if (!guide.ssh) return null;
+  if (!guide.card) return null;
   const ssh = connect?.ssh;
   const facts: Record<Fact, string | null> = ssh
     ? { host: ssh.host, port: String(ssh.port), user: ssh.user, key_file: ssh.key_file }
     : FALLBACK;
-  return guide.ssh.map(({ label, value }) => {
+  return guide.card.map(({ label, value }) => {
     let known = true;
     const filled = value.replace(/\{([^}]*)\}/g, (_, name: Fact) => {
       const fact = facts[name];

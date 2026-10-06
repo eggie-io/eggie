@@ -19,10 +19,10 @@
     "windows": {
       "tagline": "Inside WSL",
       "steps": [
-        {"title": "Open Cursor", "body": "Open the Cursor app and sign in.", "alt": "Screenshot · Cursor start screen"},
-        {"title": "Run it in WSL", "body": "In Cursor's settings, choose to run the agent in WSL.", "alt": "Screenshot · Cursor settings with WSL"},
-        {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine.", "alt": "Screenshot · WSL machine list with eggie-vm"},
-        {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
+        {"title": "Open Cursor", "body": "Open the Cursor app and sign in.", "alt": "Screenshot · Cursor start screen", "media": ["media/win-cursor-1.png"]},
+        {"title": "Run it in WSL", "body": "<ol><li>Open the environment menu next to the prompt box.</li><li>Select <b>Remote Machines</b>.</li><li>Select <b>Connect…</b></li><li>Select <b>WSL</b>.</li></ol>", "alt": "Screenshot · environment menu with Remote Machines and WSL", "media": ["media/win-cursor-2.png"]},
+        {"title": "Pick eggie-vm", "body": "<ol><li>Choose <b>eggie-vm</b>.</li><li>Select the <b>projects</b> folder.</li><li>Click <b>Open</b>.</li></ol>", "alt": "Screenshot · WSL machine list with eggie-vm", "media": ["media/win-cursor-3.png", "media/win-cursor-4.png", "media/win-cursor-5.png"]},
+        {"title": "Start prompting", "body": "Tell Cursor what to build. It cooks inside the kitchen.", "alt": "Screenshot · Cursor chat, connected to the kitchen", "media": ["media/win-cursor-6.png"]}
       ]
     }
   }

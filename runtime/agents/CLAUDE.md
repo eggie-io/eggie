@@ -25,9 +25,9 @@ one line in `index.json` — no code changes. Two readers, each validating only 
   (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.
 - `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything
   else (a link, a class, an unclosed tag) drops the agent, and `content.test.ts` fails on it.
-- `ssh` (only for a guide that connects over SSH; its absence means WSL): the card of fields to
-  copy, in the order and shape the agent's own form asks for. Each is `{label, value}`, where
-  `value` is a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
+- `card` (optional): fields to copy, in the order and shape the agent's own form asks for — SSH
+  details on Mac, a fixed path on Windows. Each is `{label, value}`, where `value` is plain text
+  or a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
   `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent.
 
 ## Things that will bite you

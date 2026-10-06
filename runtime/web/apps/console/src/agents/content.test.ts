@@ -16,9 +16,9 @@ describe("shipped agent content", () => {
     const agent = parseAgent(id, read(`${id}/agent.json`), "");
     expect(agent).not.toBeNull();
     expect(Object.keys(agent!.platforms).sort()).toEqual(["mac", "windows"]);
-    expect(agent!.platforms.mac!.viaSsh).toBe(true);
-    expect(agent!.platforms.windows!.viaSsh).toBe(false);
-    const files = [agent!.icon, ...Object.values(agent!.platforms).flatMap((g) => g!.steps.map((s) => s.screenshot))];
+    // A mac guide may have no card: Cursor picks the "eggie" host from the SSH config.
+    expect(agent!.platforms.windows!.ssh).toBeNull();
+    const files = [agent!.icon, ...Object.values(agent!.platforms).flatMap((g) => g!.steps.flatMap((s) => s.media.map((m) => m.src)))];
     for (const file of files) if (file) expect(existsSync(join(ROOT, file)), file).toBe(true);
   });
 });

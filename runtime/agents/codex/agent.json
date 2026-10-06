@@ -8,17 +8,21 @@
   "setup": {"run": "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"},
   "platforms": {
     "mac": {
-      "via_ssh": true,
       "tagline": "SSH connection",
+      "ssh": [
+        {"label": "Hostname", "value": "{host}"},
+        {"label": "SSH port", "value": "{port}"},
+        {"label": "Identity file path", "value": "{key_file}"}
+      ],
       "steps": [
-        {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
-        {"title": "Add a remote connection", "body": "Open the environment picker and choose to connect over SSH.", "alt": "Screenshot · Codex environment picker with SSH"},
-        {"title": "Enter the details", "body": "Host, port, user and key file. All four are in the card below — copy them one by one.", "alt": "Screenshot · Codex SSH form, filled in"},
-        {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
+        {"title": "Open Codex", "body": "Open the ChatGPT app and switch to Codex.", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
+        {"title": "Add a remote connection", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Name the project, open the <b>Add a folder on this computer</b> menu and select <b>Add remote</b>.</li></ol>", "alt": "Screenshot · Create project dialog with Add remote", "media": ["media/mac-chatgpt-1.png", "media/mac-chatgpt-2.png"]},
+        {"title": "Enter the details", "body": "<ol><li>Name the connection <b>Eggie</b>, select <b>Identity</b>, then copy the hostname, SSH port and identity file path from the card below.</li><li>Click <b>Save</b>, and sign in with ChatGPT if asked.</li></ol>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-chatgpt-3.png", "media/mac-chatgpt-4.png"]},
+        {"title": "Create a project", "body": "<ol><li>Create a new project.</li><li>Enter the project's name.</li><li>Select <b>Eggie</b> as the remote device.</li><li>Select the <b>projects</b> folder and save.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Video · creating a project on the Eggie remote", "media": ["media/mac-chatgpt-5.mp4"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
       ]
     },
     "windows": {
-      "via_ssh": false,
       "tagline": "Inside WSL",
       "steps": [
         {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},

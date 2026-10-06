@@ -7,6 +7,8 @@ import react from "@vitejs/plugin-react";
 const AGENTS = fileURLToPath(new URL("../../../agents", import.meta.url));
 const TYPES: Record<string, string> = {
   ".json": "application/json", ".svg": "image/svg+xml", ".webp": "image/webp", ".png": "image/png",
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".avif": "image/avif",
+  ".mp4": "video/mp4", ".webm": "video/webm",
 };
 
 // Dev only: production gets the same folder from the Dockerfile.

@@ -103,6 +103,18 @@ def test_a_failing_installer_raises_with_the_guests_own_error():
     assert "docker-ce" in str(excinfo.value)
 
 
+def test_terminal_escapes_in_the_guests_error_are_stripped():
+    # npx's spinner and colours reach stderr; the wizard's log box and a
+    # pasted bug report would otherwise carry them as literal noise.
+    stderr = ("\x1b[?25l\u2502\n\u25d2  Cloning\x1b[1G\x1b[J\u25a0  Failed to clone\n"
+              "\x1b[38;5;250mAuthentication failed\x1b[0m\n\x1b[?25h")
+    with pytest.raises(BootstrapError) as excinfo:
+        bootstrap(FakeProvider(fail=True, stderr=stderr))
+    message = str(excinfo.value)
+    assert "\x1b" not in message
+    assert "Authentication failed" in message
+
+
 def test_an_installer_that_exits_zero_without_the_marker_is_a_failure():
     with pytest.raises(BootstrapError, match="runtime.version"):
         bootstrap(FakeProvider(writes_marker=False))

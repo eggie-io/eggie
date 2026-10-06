@@ -50,26 +50,33 @@
 @media (min-width: 760px) { .guide { grid-template-columns: 318px minmax(0, 1fr); } }
 .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
-.step {
-  width: 100%; display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 14px;
-  border: 0; text-align: left; background: transparent; cursor: pointer; transition: background 220ms cubic-bezier(.2,.8,.2,1);
-}
+.step { border-radius: 14px; transition: background 220ms cubic-bezier(.2,.8,.2,1); }
 .step:hover { background: var(--surface-2); }
-.step:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 2px; }
 .stepActive, .stepActive:hover { background: var(--surface); }
+.stepHead {
+  width: 100%; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px;
+  border: 0; text-align: left; background: transparent; cursor: pointer;
+}
+.stepHead:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 2px; }
 .stepDot {
   flex: none; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   background: var(--surface-2); color: var(--ink-2); font: 700 13.5px var(--font-body);
 }
 .stepDotOn { background: var(--yolk); color: #2B1E14; }
-.stepText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stepTitle { font: 700 15.5px var(--font-body); color: var(--ink); }
-.stepBody { font: 400 13.5px/1.4 var(--font-body); color: var(--ink-2); text-wrap: pretty; }
+/* 50px lines the body up under the title: 12px padding, 26px dot, 12px gap. */
+.stepBody { margin-top: -6px; padding: 0 12px 12px 50px; font: 400 13.5px/1.45 var(--font-body); color: var(--ink-2); text-wrap: pretty; }
+.stepBody p, .stepBody ul, .stepBody ol { margin: 0; }
+.stepBody > * + * { margin-top: 6px; }
+.stepBody ul, .stepBody ol { padding-left: 18px; }
+.stepBody li + li { margin-top: 2px; }
+.stepBody strong, .stepBody b { font-weight: 700; color: var(--ink); }
+.stepBody code, .stepBody kbd { font: 500 12.5px var(--font-mono); padding: 1px 5px; border-radius: 6px; background: var(--surface-2); color: var(--ink); }
 
 .key { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
 .keyLabel { margin: 0; padding: 0 2px 4px; font: 600 12px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 .keyRow { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; border-radius: 10px; background: var(--surface-2); }
-.keyName { width: 66px; flex: none; font: 600 12.5px var(--font-body); color: var(--ink-3); }
+.keyName { width: 86px; flex: none; font: 600 12.5px var(--font-body); color: var(--ink-3); }
 .keyValue { flex: 1; min-width: 0; font: 500 13.5px var(--font-mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .keyUnknown { font-family: var(--font-body); font-style: italic; color: var(--ink-3); padding: 6px 0; }
 .key .copy { flex: none; min-height: 0; padding: 5px 10px; border-radius: 8px; font-size: 12px; }
@@ -78,6 +85,24 @@
 .main { display: flex; flex-direction: column; gap: 12px; min-height: 320px; }
 .frame { flex: 1; min-height: 0; position: relative; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); padding: 10px; }
 .shot { position: absolute; inset: 10px; width: calc(100% - 20px); height: calc(100% - 20px); object-fit: contain; border-radius: 12px; }
+.slider { position: absolute; inset: 10px; }
+.slider .shot { inset: 0; width: 100%; height: 100%; }
+.slideArrow {
+  position: absolute; top: 50%; translate: 0 -50%; width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line-2); color: var(--ink);
+  box-shadow: 0 8px 20px -10px var(--shadow); transition: background 120ms;
+}
+.slideArrow:hover { background: var(--surface-2); }
+.slideArrow:focus-visible, .slideDot:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 2px; }
+.slidePrev { left: 8px; }
+.slideNext { right: 8px; }
+.slideDots {
+  position: absolute; left: 50%; bottom: 10px; translate: -50% 0; display: flex; gap: 6px; padding: 6px 8px;
+  border-radius: 999px; background: var(--surface); border: 1px solid var(--line);
+}
+.slideDot { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: var(--line-2); transition: background 120ms, width 120ms; }
+.slideDotOn { width: 20px; border-radius: 999px; background: var(--yolk); }
 .placeholder {
   position: absolute; inset: 10px; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center;
   border: 1.5px dashed var(--line-2); border-radius: 12px; font-size: 14px; color: var(--ink-3);

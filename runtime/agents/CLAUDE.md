@@ -15,6 +15,19 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 | `detect.ignore` | Top-level names under `home` that Eggie's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |
 | `setup.run` | Shell command run once per account when the user opens the agent's guide. |
 
+## The guide (`platforms.<mac|windows>`)
+
+- `tagline`, and `steps`: each `{title, body, alt}` plus an optional `media` list of files in this
+  folder, e.g. `["mac/3a.png", "mac/3b.png", "mac/3.mp4"]`. The kind comes from the extension
+  (png jpg jpeg webp gif svg avif / mp4 webm; a video plays muted on a loop). More than one makes a
+  slider; none gives a placeholder showing `alt`, which is also each image's alt text.
+- `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything
+  else (a link, a class, an unclosed tag) drops the agent, and `content.test.ts` fails on it.
+- `ssh` (only for a guide that connects over SSH; its absence means WSL): the card of fields to
+  copy, in the order and shape the agent's own form asks for. Each is `{label, value}`, where
+  `value` is a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
+  `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent.
+
 ## Things that will bite you
 
 - `setup.run` runs as root and as every login user. A manifest is as trusted as `install.sh`:

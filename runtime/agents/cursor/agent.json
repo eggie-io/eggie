@@ -7,21 +7,20 @@
   "detect": {"ignore": ["AGENTS.md", "skills"]},
   "platforms": {
     "mac": {
-      "via_ssh": true,
       "tagline": "SSH connection",
       "steps": [
-        {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
-        {"title": "Add a remote connection", "body": "Open the environment picker and choose to connect over SSH.", "alt": "Screenshot · Codex environment picker with SSH"},
-        {"title": "Enter the details", "body": "Host, port, user and key file. All four are in the card below — copy them one by one.", "alt": "Screenshot · Codex SSH form, filled in"},
-        {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
+        {"title": "Open Cursor", "body": "Open the Cursor app and sign in.", "alt": "Screenshot · Cursor start screen", "media": ["media/mac-cursor-1.png"]},
+        {"title": "Add a remote connection", "body": "<ol><li>Click <b>This Mac</b> above the prompt box.</li><li>Select <b>Remote Machine</b>.</li><li>Click <b>Connect via SSH</b>.</li></ol>", "alt": "Screenshot · Run on menu with Remote Machine and Connect via SSH", "media": ["media/mac-cursor-2.png"]},
+        {"title": "Connect to eggie", "body": "Type <b>eggie</b> in the search box, select the <b>eggie</b> connection and click <b>Connect</b>.", "alt": "Screenshot · Connect via SSH dialog with the eggie connection", "media": ["media/mac-cursor-3.png"]},
+        {"title": "Open the projects folder", "body": "Wait while Cursor installs what it needs. Then select the <b>projects</b> folder and click <b>Open</b>.", "alt": "Screenshot · Select Folder dialog with the projects folder", "media": ["media/mac-cursor-4.png", "media/mac-cursor-5.png"]},
+        {"title": "Start prompting", "body": "Tell Cursor what to build.", "alt": "Screenshot · Cursor prompt, connected to eggie in ~/projects", "media": ["media/mac-cursor-6.png"]}
       ]
     },
     "windows": {
-      "via_ssh": false,
       "tagline": "Inside WSL",
       "steps": [
-        {"title": "Open Codex", "body": "Open the Codex app and sign in.", "alt": "Screenshot · Codex start screen"},
-        {"title": "Run it in WSL", "body": "In Codex's settings, choose to run the agent in WSL.", "alt": "Screenshot · Codex settings with WSL"},
+        {"title": "Open Cursor", "body": "Open the Cursor app and sign in.", "alt": "Screenshot · Cursor start screen"},
+        {"title": "Run it in WSL", "body": "In Cursor's settings, choose to run the agent in WSL.", "alt": "Screenshot · Cursor settings with WSL"},
         {"title": "Pick eggie-vm", "body": "Choose the eggie-vm machine.", "alt": "Screenshot · WSL machine list with eggie-vm"},
         {"title": "Start prompting", "body": "Open the projects folder and say what you want. It cooks inside the kitchen.", "alt": "Screenshot · Codex chat, connected to the kitchen"}
       ]

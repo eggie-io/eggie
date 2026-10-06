@@ -94,7 +94,7 @@ In the WSL sandbox `/tmp/pytest-of-$USER` is root-owned, which breaks `tmp_path`
 ## Docs
 
 - `docs/README.md` indexes the human how-tos: `development.md`, `building.md`, `releasing.md`,
-  `vm.md`, `release-testing.md`, `macos-status.md`. Keep them in step when a command or path they
+  `vm.md`, `security.md`, `release-testing.md`, `macos-status.md`. Keep them in step when a command or path they
   name changes.
 - `docs/superpowers/` — the original blueprint plus every design spec and plan (dated filenames).
   `.superpowers/sdd/` (gitignored) is the per-task execution ledger.

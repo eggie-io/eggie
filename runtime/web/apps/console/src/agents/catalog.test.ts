@@ -46,6 +46,13 @@ describe("parseAgent", () => {
     expect(bad).toBeNull();
   });
 
+  it("parses a guide's warning as HTML, and drops the guide when it isn't allowed", () => {
+    const agent = (warning: unknown) => parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { windows: guide({ warning }) } }, "/a");
+    expect(agent("Run <code>wsl</code> first.")?.platforms.windows?.warning).toEqual(["Run ", { tag: "code", children: ["wsl"] }, " first."]);
+    expect(agent(undefined)?.platforms.windows?.warning).toBeNull();
+    for (const bad of ["", "<a href=x>x</a>", 42]) expect(agent(bad)).toBeNull();
+  });
+
   it("reads the SSH card's fields, and no card means no SSH", () => {
     const agent = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide(), windows: guide({ ssh: undefined }) } }, "/a");
     expect(agent?.platforms.mac?.ssh).toEqual([{ label: "Host", value: "{user}@{host}" }]);

@@ -21,6 +21,8 @@ one line in `index.json` — no code changes. Two readers, each validating only 
   folder, e.g. `["mac/3a.png", "mac/3b.png", "mac/3.mp4"]`. The kind comes from the extension
   (png jpg jpeg webp gif svg avif / mp4 webm; a video plays muted on a loop). More than one makes a
   slider; none gives a placeholder showing `alt`, which is also each image's alt text.
+- `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1
+  (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.
 - `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything
   else (a link, a class, an unclosed tag) drops the agent, and `content.test.ts` fails on it.
 - `ssh` (only for a guide that connects over SSH; its absence means WSL): the card of fields to

@@ -73,6 +73,13 @@
 .stepBody strong, .stepBody b { font-weight: 700; color: var(--ink); }
 .stepBody code, .stepBody kbd { font: 500 12.5px var(--font-mono); padding: 1px 5px; border-radius: 6px; background: var(--surface-2); color: var(--ink); }
 
+.warning { padding: 12px 14px; border-radius: 14px; background: var(--yolk-soft); border: 1px solid var(--line-2); font: 400 13.5px/1.45 var(--font-body); color: var(--ink); text-wrap: pretty; }
+.warning p, .warning ul, .warning ol { margin: 0; }
+.warning > * + * { margin-top: 6px; }
+.warning ul, .warning ol { padding-left: 18px; }
+.warning strong, .warning b { font-weight: 700; }
+.warning code, .warning kbd { font: 500 12.5px var(--font-mono); padding: 1px 5px; border-radius: 6px; background: var(--surface); }
+
 .key { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
 .keyLabel { margin: 0; padding: 0 2px 4px; font: 600 12px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 .keyRow { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; border-radius: 10px; background: var(--surface-2); }

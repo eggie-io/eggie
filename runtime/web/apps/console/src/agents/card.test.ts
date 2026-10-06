@@ -10,10 +10,11 @@ const fourFields: Guide = {
     { label: "Key file", value: "{key_file}" },
   ],
   tagline: "",
+  warning: null,
   steps: [],
 };
-const userAtHost: Guide = { ssh: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", steps: [] };
-const wsl: Guide = { ssh: null, tagline: "", steps: [] };
+const userAtHost: Guide = { ssh: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [] };
+const wsl: Guide = { ssh: null, tagline: "", warning: null, steps: [] };
 const lima = { vm: "lima" as const, ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/k" } };
 
 describe("cardRows", () => {

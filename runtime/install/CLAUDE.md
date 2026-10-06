@@ -48,7 +48,7 @@ the network comes up after the unit starts, then runs it with `EGGIE_RUNTIME_UPD
 Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
-(always pulls; recreates the api on a new token or repair) → Node ≥ 22.20 from NodeSource →
+(always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 22.20 from NodeSource →
 `/usr/local/bin/eggie` → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`

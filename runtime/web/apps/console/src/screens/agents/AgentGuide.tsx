@@ -9,6 +9,8 @@ import { useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
+import { MediaSlider } from "./MediaSlider";
+import { RichText } from "./RichText";
 import s from "./Agents.module.css";
 
 export function AgentGuide({ base }: { base: AgentBase }) {
@@ -82,19 +84,18 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
       <div className={s.side}>
         <ol className={s.steps}>
           {guide.steps.map((item, index) => (
-            <li key={index}>
+            <li key={index} className={cx(s.step, index === active && s.stepActive)}>
               <button
                 type="button"
-                className={cx(s.step, index === active && s.stepActive)}
+                className={s.stepHead}
                 aria-current={index === active ? "step" : undefined}
                 onClick={() => setActive(index)}
               >
                 <span className={cx(s.stepDot, index <= active && s.stepDotOn)}>{index + 1}</span>
-                <span className={s.stepText}>
-                  <span className={s.stepTitle}>{item.title}</span>
-                  {index === active && <span className={s.stepBody}>{item.body}</span>}
-                </span>
+                <span className={s.stepTitle}>{item.title}</span>
               </button>
+              {/* Outside the button: a list is not allowed inside one. */}
+              {index === active && <div className={s.stepBody}><RichText nodes={item.body} /></div>}
             </li>
           ))}
         </ol>
@@ -115,11 +116,7 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
       </div>
       <div className={s.main}>
         <div className={s.frame}>
-          {step.screenshot ? (
-            <img className={s.shot} src={step.screenshot} alt={step.alt} />
-          ) : (
-            <div className={s.placeholder}>{step.alt}</div>
-          )}
+          <MediaSlider key={active} media={step.media} alt={step.alt} />
         </div>
         <div className={s.nav}>
           {/* Mounted before it has text, so screen readers announce the message. */}

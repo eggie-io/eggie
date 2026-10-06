@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { loadCatalog, parseAgent, parseIndex, platformFor } from "./catalog";
 
 const guide = (over = {}) => ({
-  via_ssh: true,
   tagline: "SSH connection",
-  steps: [{ title: "Open it", body: "Sign in.", screenshot: "mac/1.png", alt: "Start screen" }],
+  ssh: [{ label: "Host", value: "{user}@{host}" }],
+  steps: [{ title: "Open it", body: "Sign in.", media: ["mac/1.png"], alt: "Start screen" }],
   ...over,
 });
 
@@ -12,14 +12,50 @@ describe("parseAgent", () => {
   it("resolves icon and screenshots against the agent's folder", () => {
     const agent = parseAgent("claude-code", { name: "Claude Code", icon: "icon.svg", platforms: { mac: guide() } }, "/agents");
     expect(agent?.icon).toBe("/agents/claude-code/icon.svg");
-    expect(agent?.platforms.mac?.steps[0].screenshot).toBe("/agents/claude-code/mac/1.png");
-    expect(agent?.platforms.mac?.viaSsh).toBe(true);
+    expect(agent?.platforms.mac?.steps[0].media).toEqual([{ kind: "image", src: "/agents/claude-code/mac/1.png" }]);
   });
 
-  it("keeps a step without a screenshot as a placeholder", () => {
+  it("takes several screenshots and videos for one step, in order", () => {
+    const steps = [{ title: "Open it", body: "Sign in.", media: ["mac/1.png", "mac/2.webp", "mac/3.mp4"], alt: "Start screen" }];
+    const agent = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ steps }) } }, "/agents");
+    expect(agent?.platforms.mac?.steps[0].media).toEqual([
+      { kind: "image", src: "/agents/codex/mac/1.png" },
+      { kind: "image", src: "/agents/codex/mac/2.webp" },
+      { kind: "video", src: "/agents/codex/mac/3.mp4" },
+    ]);
+  });
+
+  it("drops a step whose media is not a list, or names a file it can't show", () => {
+    const step = (media: unknown) => ({ title: "Open it", body: "Sign in.", media, alt: "Start screen" });
+    for (const media of ["mac/1.png", ["mac/1.pdf"], ["../x.png"]]) {
+      expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ steps: [step(media)] }) } }, "/a")).toBeNull();
+    }
+  });
+
+  it("keeps a step without media as a placeholder", () => {
     const steps = [{ title: "Open it", body: "Sign in.", alt: "Start screen" }];
     const agent = parseAgent("codex", { name: "Codex", icon: "icon.svg", platforms: { windows: guide({ steps }) } }, "/agents");
-    expect(agent?.platforms.windows?.steps[0].screenshot).toBeNull();
+    expect(agent?.platforms.windows?.steps[0].media).toEqual([]);
+  });
+
+  it("parses the body as HTML and drops a step whose HTML it doesn't allow", () => {
+    const step = (body: string) => ({ title: "Open it", body, alt: "Start screen" });
+    const ok = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ steps: [step("<ul><li>Host</li></ul>")] }) } }, "/a");
+    expect(ok?.platforms.mac?.steps[0].body).toEqual([{ tag: "ul", children: [{ tag: "li", children: ["Host"] }] }]);
+    const bad = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ steps: [step("<img src=x>")] }) } }, "/a");
+    expect(bad).toBeNull();
+  });
+
+  it("reads the SSH card's fields, and no card means no SSH", () => {
+    const agent = parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide(), windows: guide({ ssh: undefined }) } }, "/a");
+    expect(agent?.platforms.mac?.ssh).toEqual([{ label: "Host", value: "{user}@{host}" }]);
+    expect(agent?.platforms.windows?.ssh).toBeNull();
+  });
+
+  it("drops a guide whose SSH card names a fact the API does not give", () => {
+    const ssh = [{ label: "Host", value: "{username}@{host}" }];
+    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ ssh }) } }, "/a")).toBeNull();
+    expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ ssh: [] }) } }, "/a")).toBeNull();
   });
 
   it("drops an agent that is not an object, such as the SPA's index.html", () => {

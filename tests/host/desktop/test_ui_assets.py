@@ -159,6 +159,16 @@ def test_every_install_state_has_a_template():
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
+def test_the_install_failed_screen_shows_the_error_it_points_to():
+    # Every install action says "open the log"; the screen must have one,
+    # bound to the event's message (the guest's own text).
+    markup = (UI / "index.html").read_text()
+    start = markup.index('data-screen="install:failed"')
+    screen = markup[start:markup.index("</template>", start)]
+    assert re.search(r'<details class="log"[^>]*data-when="message"', screen)
+    assert 'data-field="message"' in screen
+
+
 def test_the_install_panel_has_no_hard_coded_step_count():
     # "Step 4 of 7" is a macOS fact. Windows runs nine.
     markup = (UI / "index.html").read_text()

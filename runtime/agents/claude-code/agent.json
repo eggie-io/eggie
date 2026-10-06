@@ -7,17 +7,21 @@
   "detect": {"ignore": ["skills"]},
   "platforms": {
     "mac": {
-      "via_ssh": true,
       "tagline": "SSH connection",
+      "ssh": [
+        {"label": "SSH host", "value": "{user}@{host}"},
+        {"label": "SSH port", "value": "{port}"},
+        {"label": "SSH key", "value": "{key_file}"}
+      ],
       "steps": [
-        {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen"},
-        {"title": "Add an SSH connection", "body": "Open the environment menu next to the prompt box and pick “Add SSH connection”.", "alt": "Screenshot · environment menu with Add SSH connection"},
-        {"title": "Enter the details", "body": "Host, port, user and key file. All four are in the card below — copy them one by one.", "alt": "Screenshot · SSH connection form, filled in"},
-        {"title": "Start prompting", "body": "Pick the projects folder and tell it what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen"}
+        {"title": "Open Claude Code", "body": "Open the Claude desktop app and switch to Claude Code.", "alt": "Screenshot · Claude Code start screen", "media": ["media/mac-claude-code-0.png"]},
+        {"title": "Add an SSH connection", "body": "<ol><li>Click <b>Local</b> under the prompt box.</li><li>Select <b>SSH</b>.</li><li>Select <b>Add SSH connection…</b></li></ol>", "alt": "Screenshot · environment menu with SSH and Add SSH connection", "media": ["media/mac-claude-code-1.png"]},
+        {"title": "Enter the details", "body": "<p>Name it <b>Eggie</b>, then copy each value from the card below:</p><ul><li><b>SSH host</b></li><li><b>SSH port</b></li><li><b>SSH key</b></li></ul>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-claude-code-2.png", "media/mac-claude-code-3.png"]},
+        {"title": "Save the connection", "body": "<p>Click <b>Test connection</b> and wait while Claude Code installs what it needs. When it says the host is ready, click <b>Add SSH connection</b>.</p>", "alt": "Screenshot · Test connection succeeded, Add SSH connection button", "media": ["media/mac-claude-code-5.png"]},
+        {"title": "Start prompting", "body": "Pick the projects folder and tell Claude Code what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen", "media": ["media/mac-claude-code-4.png"]}
       ]
     },
     "windows": {
-      "via_ssh": false,
       "tagline": "Inside WSL",
       "steps": [
         {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen"},

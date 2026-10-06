@@ -28,6 +28,10 @@ _STUB_PATH = "/tmp/eggie-bootstrap.sh"
 # ssh, where a space or quote would be parsed again.
 _SHELL_SAFE = re.compile(r"[A-Za-z0-9._:/@+=-]+")
 
+# CSI (colours, cursor moves) and OSC sequences. The installer's npx/apt
+# output is written for a terminal; the wizard shows it in a <pre>.
+_TERMINAL_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+
 
 def _shell_safe(value: str, name: str) -> str:
     if not _SHELL_SAFE.fullmatch(value):
@@ -39,7 +43,7 @@ def _shell_safe(value: str, name: str) -> str:
 def _run(provider, argv, *, step: str):
     result = provider.exec(argv, root=True)
     if not result.ok:
-        detail = (result.stderr or result.stdout).strip()
+        detail = _TERMINAL_ESCAPE.sub("", result.stderr or result.stdout).strip()
         raise BootstrapError(
             f"{step} failed inside the VM (exit {result.returncode})"
             + (f":\n{detail}" if detail else "."))

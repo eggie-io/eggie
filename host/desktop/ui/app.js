@@ -232,7 +232,13 @@ window.eggie.handlers.install = (event) => {
   // would leave the screen spinning forever with no way out but quitting.
   // Unlike dead_end, a crash may well succeed on retry, so the button stays.
   if (event.type === 'failed' || event.type === 'dead_end' || event.type === 'crashed') {
-    swap('install:failed', { action: event.action || event.message });
+    swap('install:failed', { action: event.action || event.message, message: event.message });
+    // The cause is at the end of the guest's output, after pages of pulls.
+    const log = document.querySelector('.install-failed details.log');
+    log?.addEventListener('toggle', () => {
+      const pre = log.querySelector('pre');
+      pre.scrollTop = pre.scrollHeight;
+    });
     // DeadEnd means no code can fix it; a retry button there loops forever.
     if (event.type === 'dead_end') {
       document.querySelector('[data-retry]')?.remove();

@@ -9,7 +9,7 @@ export interface Step { title: string; body: Rich[]; media: Media[]; alt: string
 // One line of the SSH card: a label and a template over the API's SSH facts.
 export interface SshField { label: string; value: string }
 // `ssh` is null for a guide that does not connect over SSH (WSL).
-export interface Guide { ssh: SshField[] | null; tagline: string; steps: Step[] }
+export interface Guide { ssh: SshField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
 export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
   vm: "wsl" | "lima" | "other";
@@ -73,9 +73,14 @@ function parseGuide(value: unknown, folder: string): Guide | null {
     if (fields.length === 0 || fields.some((field) => field === null)) return null;
     ssh = fields as SshField[];
   }
+  let warning: Rich[] | null = null;
+  if (value.warning !== undefined) {
+    warning = text(value.warning) ? parseRich(value.warning) : null;
+    if (warning === null) return null;
+  }
   const steps = value.steps.map((step) => parseStep(step, folder));
   if (steps.length === 0 || steps.some((step) => step === null)) return null;
-  return { ssh, tagline: value.tagline, steps: steps as Step[] };
+  return { ssh, tagline: value.tagline, warning, steps: steps as Step[] };
 }
 
 export function parseAgent(id: string, value: unknown, base: string): Agent | null {

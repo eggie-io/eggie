@@ -82,6 +82,11 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
   return (
     <div className={s.guide}>
       <div className={s.side}>
+        {guide.warning && (
+          <aside className={s.warning} aria-label="Before you start">
+            <RichText nodes={guide.warning} />
+          </aside>
+        )}
         <ol className={s.steps}>
           {guide.steps.map((item, index) => (
             <li key={index} className={cx(s.step, index === active && s.stepActive)}>

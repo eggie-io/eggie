@@ -2,8 +2,8 @@
 This is an isolated Linux VM. Projects live in ~/projects, one folder each,
 and run in Docker behind Eggie's router.
 
-**Before anything else, check where your commands run:** `test -f /opt/eggie/runtime.version`.
-If that file is missing, or the command cannot run at all (a Windows shell), your commands
+**Before anything else, check where your commands run:** `test -d /opt/eggie/projects`.
+If that folder is missing, or the command cannot run at all (a Windows shell), your commands
 are not running inside the Eggie VM. Stop at once: create, install and run nothing, and
 tell the user that their coding agent is not connected to Eggie and they should follow
 its setup guide in Eggie again.

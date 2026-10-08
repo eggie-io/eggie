@@ -1,35 +1,48 @@
 # Project secrets (local) — design
 
-Issue: eggie-io/eggie-resources#13. Status: approved in brainstorm 2026-10-08.
+Issue: eggie-io/eggie-resources#13. Status: Revision 3, agreed with the user 2026-10-08.
+
+Revision 3 replaces the earlier `.env.example`-driven model (defaults, missing detection, `.env`
+import). That model fought frameworks that require a real `.env` (Laravel, WordPress/Bedrock,
+Symfony), guessed at template names (`.env.example`, `.env.sample`, `.env.dist`, …) and could not
+stop a secret landing in a file anyway. Git history has the earlier text.
 
 ## Goal
 
-Every project gets a place for secrets (API keys, passwords, tokens) that keeps them out of
-project files, git, exports, synced metadata and coding-agent chat. Secrets reach the app as
-ordinary environment variables; the user's compose file is never modified.
+A project keeps working exactly as it would on a developer's laptop: its own `.env`, edited by the
+coding agent for ordinary settings. On top of that, Eggie offers one simple, optional place for
+**third-party credentials** (API keys, payment keys, passwords to outside services). A value put
+there never lands in the project folder, git or an export, reaches the app as an ordinary
+environment variable, and wins over the same name in `.env`.
+
+This is a safe default, not enforcement. Nothing stops a user or agent from writing a key into a
+file or hard-coding it; Eggie's terms (outside this repo) say Eggie is not responsible for that.
 
 Out of scope: encryption at rest, per-service scoping (every service gets every secret), cloud
-deploy / transfer between environments, any host-side change, an `API_VERSION` bump (all routes are
-additive and the host calls none of them).
+deploy / transfer between environments, scanning the project for leaked keys (a later security
+skill), any host-side change, an `API_VERSION` bump (all routes are additive and the host calls
+none of them).
 
 Known limitation: a coding agent inside the VM can still read values from running containers
-(`docker inspect`, `/proc/<pid>/environ`). This protects against leaks into git, files and chat,
-not against the agent.
+(`docker exec … env`, `docker inspect`).
 
-## Decisions taken
+## Decisions
 
 | # | Question | Decision |
 |---|----------|----------|
-| D1 | Delivery mechanism | Names in `.eggie/overlay.yml`, values via the environment of `docker compose up` |
-| D2 | Imported `.env` | VM-side offer on the project, whatever brought the file in; no host change |
-| D3 | Project delete | Secrets removed only on purge (they live as long as the folder) |
-| D4 | Agent instructions | `runtime/instructions/eggie.md` here **and** a separate PR in `eggie-skills` |
-| D5 | "Missing" rule | Keys of `.env.example` + `${VAR}` refs with no default, minus existing secrets |
-| D6 | CLI value input | Hidden prompt on a TTY, stdin otherwise; never argv |
+| D1 | Delivery | Names in `.eggie/overlay.yml`, values only in the environment of compose calls |
+| D2 | `.env` | Belongs to the project. Eggie never reads, parses, imports or empties it |
+| D3 | What is a secret | Third-party credentials. Internal keys the app generates (Laravel `APP_KEY`, the local DB password) stay in `.env` as usual |
+| D4 | Compose literal vs secret | A value a service hard-codes in its own `environment:` wins; the agent fixes that case |
+| D5 | Telling the user what's needed | `eggie secret request NAME "where to get it"` puts an empty field with that hint on the Secrets page |
+| D6 | Project delete | Secrets and requests removed only on purge |
+| D7 | CLI value input | Hidden prompt on a TTY, stdin otherwise; never argv |
+| D8 | Visibility | Value visible while typing (eye toggle), write-only once saved |
+| D9 | Leak notice | The project page tells the user to keep keys in Secrets, not in project files |
 
 ## 1. Storage
 
-Migration v6 in `core/migrate.py`:
+Migration v6 in `core/migrate.py` (not yet released, so v6 is edited in place):
 
 ```sql
 CREATE TABLE IF NOT EXISTS secrets (
@@ -39,251 +52,129 @@ CREATE TABLE IF NOT EXISTS secrets (
   updated_at REAL NOT NULL,
   PRIMARY KEY (project_id, name)
 );
+CREATE TABLE IF NOT EXISTS secret_requests (
+  project_id TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  hint       TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  PRIMARY KEY (project_id, name)
+);
 ```
 
 plus `_add_column(projects, "secrets_changed_at", "REAL")`.
 
 `state.db` already holds the cloud and GitHub tokens, sits outside every project folder, and is
-never synced. `core/state.py` gains `secret_names`, `secret_values`, `set_secrets`,
-`delete_secret`, `drop_secrets` (all under the existing RLock); `set_secrets`/`delete_secret` also
-stamp `projects.secrets_changed_at`.
-
-Lifetime: `DELETE /projects/{id}?purge=1` drops the project's secrets. A plain delete keeps them
-(the folder stays too); re-adding the same id brings them back.
+never synced. `core/state.py`: `secret_names`, `secret_values`, `set_secrets` (also deletes a
+request of the same name), `delete_secret`, `secret_requests`, `request_secret`, `delete_request`,
+`drop_secrets` (both tables). Value writes stamp `projects.secrets_changed_at` inside the lock;
+requests never do.
 
 ## 2. Validation (`core/secrets.py`, pure)
 
-- Name: `^[A-Za-z_][A-Za-z0-9_]*$`; reject prefixes `COMPOSE_` and `DOCKER_` (compose and the
-  docker CLI read those from their own environment — a secret would hijack the run).
-- Value: no NUL byte; at most 64 KiB. Project total (sum of `len(name)+len(value)+2`) at most
-  512 KiB — well below Linux's per-string (128 KiB) and total (~2 MiB) exec limits, so the failure
-  is a clear `400` on set, not an exec error at start.
-- Errors use the API's existing `{"error": {code, message}}` shape:
-  `secret_name_invalid`, `secret_name_reserved`, `secret_too_large`, `secrets_too_large`.
+- Name: `^[A-Za-z_][A-Za-z0-9_]*$`. Reserved (case-insensitive): prefixes `COMPOSE_`, `DOCKER_`,
+  `LD_`, names `PATH`, `HOME` — compose and the docker CLI read these from their own environment.
+- Value: not empty, no NUL, no lone surrogate, at most 64 KiB. Project total (sum of
+  `len(name)+len(value)+2`) at most 512 KiB, below Linux's exec limits.
+- Hint: plain text, 1–500 characters, no NUL; shown as text, never as HTML.
+- Errors in the API's `{"error": {code, message}}` shape: `secret_name_invalid`,
+  `secret_name_reserved`, `secret_invalid_value`, `secret_too_large`, `secrets_too_large`,
+  `secret_hint_invalid`.
+
+`core/secrets.py` keeps `declared(compose)`: per service, the names it sets to a literal (a value
+with no `$`) in its own `environment:`. Every `.env`/`.env.example` parser and compose `${VAR}`
+scanner from the earlier revisions is removed.
 
 ## 3. Delivery
 
-- `build_overlay(project_id, webs, domain, services, secret_names)`: when `secret_names` is
-  non-empty, **every** compose service gets `environment: [NAME, …]` (bare names, no values).
-  Web services keep their networks/labels; non-web services get only `environment`.
-- Every compose command that loads the user's file gets `env={name: value}`: `up`, `ps`, `down`,
-  `logs` (buffered and follow) and `container_id` (`ps -q`). Compose interpolates the whole file
-  for each of them, so a `${KEY:?}` that only `up` could resolve would break the rest. Plain
-  `docker` calls (`ps -a --filter`, `inspect`, `rm`, `exec`) get no env.
-- Bare `- NAME` in compose resolves from the compose process environment, and so does `${NAME}`
-  interpolation in the user's compose file. Secrets are merged over the API's inherited
-  environment, so they win over it.
-- The overlay is the later `-f` file, so a secret overrides a hard-coded `environment:` value of
-  the same name in the user's compose.
-- Restart (down + up) and `resume_projects()` go through `compose_up`, so both apply secrets.
-- Values never appear in argv, the overlay, logs or job output.
+- `build_overlay(..., services, secret_names, declared)`: every compose service gets
+  `environment: [NAME, …]` (bare names), minus the names that service declares as a literal (D4).
+- Every compose call that loads the user's file (`up`, `ps`, `down`, `logs`, `ps -q`/diagnose) gets
+  `env={name: value}` merged over the API's environment. Plain `docker` calls get none.
+- Why the secret wins over `.env`, for every way an app can read it:
+  - compose `${NAME}` interpolation takes the process environment before the project's `.env`;
+  - an overlay `environment:` entry beats `env_file: .env`;
+  - framework loaders (phpdotenv, Symfony Dotenv, Node `dotenv`/`--env-file`, Next.js, Vite,
+    python-dotenv, django-environ, Rails dotenv, godotenv `Load`) keep a variable that already
+    exists in the environment.
+  Exceptions the agent instructions name: loaders in override mode, config cached into an image,
+  build-time values (`build.args`, `NEXT_PUBLIC_*`).
+- Restart and `resume_projects()` go through `compose_up`, so both apply secrets. Values never
+  appear in argv, the overlay, logs or job output.
 
-## 4. Expected and missing variables (`core/secrets.py`)
+## 4. Routes
 
-- `.env.example` in the project root: one key per `KEY=…` line; blank lines and `#` comments
-  skipped; leading `export ` allowed; the value is ignored (placeholders).
-- `docker-compose.yml` raw text: `${VAR}`, `${VAR:?err}`, `${VAR?err}` and `$VAR` count;
-  `${VAR:-x}`, `${VAR-x}`, `${VAR:+x}`, `${VAR+x}` do not; `$$` is an escape, not a reference.
-- `missing = sorted(expected - secret_names)`; `COMPOSE_*`/`DOCKER_*` names never count as
-  expected, since they can never be set.
-- Only the main `docker-compose.yml` is read: services pulled in through compose `include:` get no
-  secret names in the overlay and their refs are not listed.
-
-The current stack skills write `${X_API_KEY:-}`; the eggie-skills PR makes them also list such
-keys in `.env.example`, which is how they become "missing".
-
-## 5. Routes
-
-Mounted on both the console's `/api` and the token API (the in-VM CLI uses them). No response of
-any secrets route contains a value.
+Mounted on both `/api` (console) and the token API (in-VM CLI). No response contains a value.
 
 | Method | Path | Result |
 |--------|------|--------|
-| GET | `/projects/{id}/secrets` | `{secrets: [{name, updated_at}], missing: [name], dotenv: {names: [name], error: str \| null} \| null, restart_needed: bool}` |
-| PUT | `/projects/{id}/secrets/{name}` | body `{value}`; create or replace; `204` |
-| DELETE | `/projects/{id}/secrets/{name}` | `204`; `404 secret_not_found` if absent |
-| POST | `/projects/{id}/secrets/import-dotenv` | parse root `.env`, store every key (file values overwrite), empty the file; returns `{imported: [name]}` |
+| GET | `/projects/{id}/secrets` | `{secrets: [{name, updated_at}], requested: [{name, hint}], restart_needed}` |
+| PUT | `/projects/{id}/secrets/{name}` | body `{value}`; create or replace; clears a request of that name; `204` |
+| DELETE | `/projects/{id}/secrets/{name}` | removes the value and any request of that name; `204`; `404 secret_not_found` if neither existed |
+| PUT | `/projects/{id}/secret-requests/{name}` | body `{hint}`; create or replace the request; `204` |
 
-Unknown project → existing `404`. PUT/DELETE take no project lock (one sqlite statement each); `start_work` stamps the start time before reading values, so a change during a start still reports `restart_needed`. import-dotenv takes the project lock because it writes a file.
+`requested` lists only names with no stored value. Unknown project → existing `404`. PUT/DELETE take
+no project lock; `start_work` stamps the start before reading values, so a change during a start
+still reports `restart_needed`.
 
-import-dotenv errors: a `.env` line with an invalid name fails with `dotenv_invalid` and a message naming only the line number (never the key text, which may be part of a secret); a reserved-prefix name fails with `secret_name_reserved`; a `.env` with no values is `404 dotenv_missing`; a `.env` that is a symlink is never read (`400 dotenv_invalid`, and GET reports it as `dotenv.error`); a file that cannot be emptied is `409 dotenv_not_removed` after the values are saved.
+`restart_needed` = status `started_ok` or `crash_looping` and `secrets_changed_at >
+last_started_at`; a start ending in either status stamps `last_started_at`. Also in the project
+payload (`GET /projects/{id}` and the list), with `secrets_requested: <count>` for the tile.
 
-`restart_needed` = project status is `started_ok` or `crash_looping` and
-`secrets_changed_at > last_started_at` (a service exiting for lack of a key is the usual crash
-loop). A start that ends in either status stamps `last_started_at`.
-It is also added to the project payload (`GET /projects/{id}` and the list) so the project page can
-show the notice.
+## 5. Console (`runtime/web/apps/console`)
 
-### `.env` parsing for import
-
-`KEY=value` lines; `export ` prefix; `#` comments and blank lines skipped; single-quoted values
-literal; double-quoted values support `\n`, `\"`, `\\` and may span lines; unquoted values end at
-` #` and are trimmed, and one that starts with `#` (`KEY= # note`) is empty. Invalid names or
-reserved prefixes fail the whole import (nothing stored, file kept): `dotenv_invalid` naming only
-the line number, or `secret_name_reserved`.
-
-The file is emptied, not deleted: a service with `env_file: .env` fails to start without it.
-Emptying falls back to a root container (`truncate`, same image as the tree-removal fallback) when
-the API cannot write the file.
-
-The `.env` offer stays visible while the file has values (an emptied file is `dotenv: null`);
-there is no dismissed state.
-
-## 6. Console (`runtime/web/apps/console`)
-
-- New tile **Secrets** in `screens/project/Tiles.tsx` → route `/p/:id/secrets` (like Files).
+- **Secrets** tile on the project page → `/p/:id/secrets`. Its line reads "Keep API keys and
+  passwords here, not in project files." When requests are open it shows "N requested".
 - Secrets page:
-  - `.env` notice when `dotenv` is non-null: "This project has a .env file with N values. Move them
-    into secrets?" → import-dotenv.
-  - Missing rows: name + empty password field + Save.
-  - Existing rows: `NAME  ••••••••` + Edit (new value, old never shown) + Delete.
-  - Add form: name + password-type value.
-  - "Secrets changed — restart to apply" notice with the existing Restart action when
-    `restart_needed`.
-- Project page shows the same restart notice when the project payload's `restart_needed` is true.
-- `api/client.ts` gains `put`. Wording in `projects/copy.ts`. MSW handler + scenario for secrets.
+  - Short intro: values saved here reach the app when it starts, override the same name in `.env`,
+    and never land in the project folder or git.
+  - **Requested** — name, hint, value field, Save; Dismiss (DELETE).
+  - **Your secrets** — `NAME ••••••••`, Replace (new value, old never shown), Delete.
+  - Add form: name + value.
+  - Value fields: text with an eye toggle, visible by default, `autocomplete="off"`; cleared after
+    Save.
+  - "Secrets changed — restart to apply" with a Restart action that goes to the project page, which
+    follows the job.
+- Project page shows the same restart notice when `restart_needed`.
+- MSW handlers and the `?scenario=secrets` mock follow the new shape.
 
-## 7. In-VM CLI (`runtime/cli/eggie.py`)
+## 6. In-VM CLI (`runtime/cli/eggie.py`)
 
-- `eggie secret set NAME` — TTY: `getpass` prompt (no echo); otherwise read stdin to EOF, strip one
-  trailing newline. Never accepts the value as an argument.
-- `eggie secret list` — names, then a `missing:` section; prints a "restart to apply" hint when
+- `eggie secret set NAME` — TTY: `getpass`; otherwise stdin to EOF, one trailing newline stripped.
+  Never takes the value as an argument.
+- `eggie secret request NAME "hint"` — adds or replaces a request.
+- `eggie secret list` — names, then `Requested:` lines with hints, then the restart hint when
   `restart_needed`.
-- `eggie secret rm NAME`.
-- Project resolved from the cwd like `up` (`_require_project`).
+- `eggie secret rm NAME` — removes a value or a request.
+- Project resolved from the cwd like `up`.
 
-## 8. Coding-agent instructions
+## 7. Coding-agent instructions
 
-`runtime/instructions/eggie.md` gains: never write secret values into any file, compose file or
-chat; never create `.env`; for a new key add `NAME=` to `.env.example`, read it from the
-environment (or `${NAME}` in compose), and ask the user to fill it on the project's **Secrets**
-page in Eggie (or `eggie secret set NAME` in a terminal).
+`runtime/instructions/eggie.md`, and a matching rework of eggie-skills PR #1:
 
-Separate PR in `eggie-io/eggie-skills`: `omelet-stack/references/*` stop telling agents to put
-keys in `.env`, list `${KEY:-}`-style keys in `.env.example`, and point at the Secrets page;
-`omelet-rules` mentions the same rule.
+- Use the project's `.env` as on any laptop: create it from whatever template the project has,
+  edit it for settings, let framework commands write their own keys (`php artisan key:generate`).
+- For a third-party credential: explain to the owner where to get it, run
+  `eggie secret request NAME "where to get it"`, and tell them to fill it on the project's
+  **Secrets** page. Leave the name empty or absent in `.env`; Eggie's value wins.
+- Never write a secret value into any file, compose file or commit. If the owner insists on putting
+  it in `.env`, do it, but say once that it then lives in the project folder and can reach git.
+- A service that hard-codes a name in its own `environment:` beats Eggie: replace the literal with
+  `${NAME}` when the owner moves that value to Secrets.
+- After a secret changes, the app needs a restart. One-off commands go through
+  `docker exec <container> …`; a `docker compose run` the agent starts gets no Eggie values.
+- Override-mode `.env` loaders, cached config and build-time variables don't see Eggie's values.
 
-## 9. Testing
+## 8. Testing
 
 Only where a wrong result is plausible:
 
-- Validation: name pattern, reserved prefixes, value and project size caps, NUL.
-- Missing detection: `.env.example` comments/`export`/quotes; `${VAR}` vs defaults; `$$`.
-- `.env` import parsing: quotes, multi-line, `export`, inline comments; invalid key fails whole import.
-- Overlay: every service gets the names; no values in the overlay text.
-- Compose calls: values reach the exec `env` of every compose command, never argv; plain docker
-  calls get none.
-- Routes: no secrets-route response contains a stored value; `restart_needed` transitions; purge
-  drops secrets, plain delete keeps them; import-dotenv empties the file; a `.env` symlink is
-  never read.
-- CLI: `set` reads stdin, refuses an extra positional value; `list` shows missing.
-- Vitest only for pure console logic if any appears; no component tests.
+- Validation: name pattern, reserved names, empty/NUL/surrogate values, size caps, hint limits.
+- `declared`: literal vs `${…}` vs bare name, list and map forms.
+- Overlay: every service gets the names minus its literals; no values in the overlay text.
+- Compose calls: values reach the env of every compose call, never argv; plain docker calls get none.
+- State/routes: no response contains a value; PUT clears the request; DELETE removes either;
+  `requested` hides set names; `restart_needed` transitions; purge drops both tables.
+- CLI: `set` reads stdin and refuses a value argument; `request` and `list` output.
 
-Left untested: the console page rendering (no component-test setup exists); real compose
-behaviour with bare `environment` names (covered by the live-VM acceptance run).
-
----
-
-## Revision 2 — defaults, precedence and review fixes (2026-10-08)
-
-Decided with the user after the independent reviews of eggie#55 and eggie-skills#1. Where this
-section disagrees with sections 1–9 above, this section wins.
-
-| # | Question | Decision |
-|---|----------|----------|
-| D7 | Compose literal vs secret | A value a service sets in its own `environment:` wins; Eggie never adds that name to that service |
-| D8 | Generated internal keys | Agents may generate random internal keys straight into Eggie: `openssl rand -hex 32 \| eggie secret set NAME` |
-| D9 | `.env.example` | Every key counts. Empty value → **needs a value**. Non-empty value → **default**, delivered to the app and editable |
-| D10 | Non-secret settings | Live as defaults in `.env.example`; the owner edits them on the same page. No per-framework workaround — no `.env` anywhere |
-| D11 | Visibility | Visible while typing (eye toggle), write-only once saved; repo defaults always shown in clear |
-| D12 | `.env` import | Store only values that differ from the default; drop empty values |
-
-### R1. Four sources, one environment
-
-For each start, the effective variables are, highest precedence first:
-
-1. **Compose literal** — any name a service sets to a literal value in its own `environment:`
-   (a value with no `$`). Eggie does not list that name in the overlay for that service. A service
-   entry `NAME: ${NAME}` or a bare `NAME` is not a literal: it resolves from Eggie's environment.
-2. **Your values** — stored in `state.db` (`secrets` table), write-only, entered by the owner or set
-   by an agent with `eggie secret set`.
-3. **The project's `.env`, until it is imported** — while a regular file (not a symlink) `.env`
-   exists in the project root, every name it sets (any value, empty included) is dropped from the
-   defaults, so compose (`${...}`, `env_file: .env`) and frameworks keep reading `.env` as before.
-   Eggie does not deliver these values itself. A `.env` that doesn't parse strictly is re-read
-   leniently for this purpose; it never stops a start.
-4. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the
-   file at every compose call. Parsed with the `.env` rules (§5); a line that doesn't parse is skipped,
-   never fatal. A symlinked `.env.example` counts as absent (no defaults, nothing missing from it).
-   Changes apply at the next start; `restart_needed` doesn't track them. A name the compose file
-   references anywhere with its own default (`${X:-y}`, `${X-y}`, `${X:+y}`, `${X+y}`) is dropped
-   from the defaults like a `.env`-set name, so compose's own default wins (D7); a stored value still wins.
-
-Values of 2 and 4 (yours win) are passed as the environment of every compose call that loads the
-user's file; their names go into the overlay for every service except where rule 1 applies. No `.env`
-file is needed by any framework: phpdotenv (Laravel), Next.js, Django, Rails and Node all prefer real
-environment variables over a `.env`.
-
-Reserved names are never listed, stored or delivered: prefixes `COMPOSE_`, `DOCKER_`, `LD_`, and the
-exact names `PATH`, `HOME` (compose and the docker CLI read these from their own environment).
-
-### R2. Needs a value
-
-`missing` = (`.env.example` keys with an empty value ∪ compose `${VAR}` refs with no default)
-− your values − defaults − names a compose service declares itself − reserved names.
-
-### R3. Routes (changes)
-
-`GET /projects/{id}/secrets` →
-
-```json
-{"secrets":  [{"name": "STRIPE_KEY", "updated_at": 1.0, "overrides_default": false}],
- "missing":  ["OPENAI_API_KEY"],
- "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false, "shadowed": false,
-               "compose_default": false}],
- "dotenv":   null,
- "restart_needed": false}
-```
-
-Default values come from the repo file and are returned in clear; stored values never are.
-`shadowed` is true when the current `.env` sets that name (R1 rule 3); the console then shows the
-default with a "set by .env" tag instead of Edit. `compose_default` is true when the compose file
-gives that name its own default (R1 rule 4); the console tags it "compose default" and keeps Edit.
-"Reset to default" is `DELETE /projects/{id}/secrets/{name}`. `PUT` refuses an empty value
-(`secret_invalid_value`), like the CLI and console already do.
-
-### R4. Import
-
-`POST …/secrets/import-dotenv`: parse `.env` (UTF-8 with or without BOM); skip empty values; skip
-keys whose value equals the `.env.example` default; skip reserved keys and **keep those lines** in
-`.env` (the file is rewritten with only them, or emptied when there are none); store the rest.
-The offer (`dotenv`) is shown only when at least one key would be stored.
-
-### R5. Console
-
-The Secrets page has three sections: **Needs a value**, **Your values** (masked, Edit, Delete — on
-an overridden default the action reads *Reset to default*), and **Defaults** (collapsed, value in
-clear, Edit pre-filled with the default). Every value field is a text field with an eye toggle,
-visible by default, `autocomplete="off"`; after Save the field clears and the row shows `••••••••`.
-
-### R6. CLI
-
-`eggie secret list` prints your values, then *Needs a value*, then the number of defaults from
-`.env.example` ("1 default", "N defaults"). Unchanged otherwise.
-
-### R7. Coding-agent instructions
-
-`.env.example` at the project root is the project's list of variables: a secret is `NAME=` (empty),
-a non-secret setting is `NAME=default`. Never create `.env`; if a scaffolding tool writes one, move
-its non-secret keys into `.env.example` as defaults, generate random internal keys with
-`openssl rand -hex 32 | eggie secret set NAME` (Laravel's APP_KEY:
-`echo "base64:$(openssl rand -base64 32)" | eggie secret set APP_KEY`), ask the owner for outside
-credentials on the Secrets page, then delete the `.env`. After changing a default, restart. Run
-one-off commands inside the running container with `docker exec <container> …` (found with
-`docker ps`); a `docker compose run`/`exec` the agent starts re-reads the compose file without
-Eggie's variables.
-
-### R8. Review fixes folded in
-
-A lone UTF-16 surrogate in a value is `secret_invalid_value`, not a 500; the change stamp is taken
-inside the state lock; value fields carry `autocomplete="off"`.
+Left untested: page rendering (no component-test setup); real compose and framework precedence
+(live-VM acceptance run).

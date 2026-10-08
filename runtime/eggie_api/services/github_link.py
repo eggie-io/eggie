@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 
+from ..errors import Conflict
 from ..infra.github import GitHubError, GitHubUnavailable, identity_from
 
 SETUP_TIMEOUT = 30.0
@@ -17,8 +18,9 @@ _REFUSED = {"access_denied", "expired_token"}
 log = logging.getLogger("eggie.github")
 
 
-class NotConnected(Exception):
-    pass
+class NotConnected(Conflict):
+    def __init__(self):
+        super().__init__("github_not_connected", "Connect GitHub first.")
 
 
 def _daemon(fn) -> None:

@@ -11,18 +11,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..errors import BadRequest, Conflict, DiskFull, NotFound
 from .disk import is_disk_full
 
 CHUNK_SIZE = 8 * 1024 * 1024
 RESERVE = 1024 ** 3
 MAX_AGE = 7 * 24 * 3600
 _ID = re.compile(r"^[0-9a-f]{32}$")
-
-
-class UploadError(Exception):
-    def __init__(self, code: str, message: str, status: int, **extra):
-        super().__init__(message)
-        self.code, self.message, self.status, self.extra = code, message, status, extra
 
 
 @dataclass(frozen=True)
@@ -58,10 +53,10 @@ class UploadStore:
 
     def _dir(self, upload_id: str) -> Path:
         if not _ID.match(upload_id or ""):
-            raise UploadError("upload_not_found", "no such upload", 404)
+            raise NotFound("upload_not_found", "no such upload")
         folder = self._root / upload_id
         if not (folder / "meta.json").is_file():
-            raise UploadError("upload_not_found", "no such upload", 404)
+            raise NotFound("upload_not_found", "no such upload")
         return folder
 
     def _load(self, folder: Path) -> Upload:
@@ -73,11 +68,11 @@ class UploadStore:
     def _load_checked(self, folder: Path) -> Upload:
         # A meta.json with a stray or missing key is as unreadable as a
         # missing upload -- every public method should only ever raise
-        # UploadError for a bad upload, never a raw parsing exception.
+        # NotFound for a bad upload, never a raw parsing exception.
         try:
             return self._load(folder)
         except (OSError, ValueError, TypeError, KeyError) as e:
-            raise UploadError("upload_not_found", "no such upload", 404) from e
+            raise NotFound("upload_not_found", "no such upload") from e
 
     def _lock_for(self, upload_id: str) -> threading.Lock:
         with self._locks_guard:
@@ -95,9 +90,9 @@ class UploadStore:
               replace: bool) -> Upload:
         free = self._free_bytes()
         if size + RESERVE > free:
-            raise UploadError("not_enough_space",
-                              "this file is bigger than the room Eggie has left",
-                              507, free_bytes=free)
+            raise DiskFull("not_enough_space",
+                           "this file is bigger than the room Eggie has left",
+                           extra={"free_bytes": free})
         upload_id = secrets.token_hex(16)
         folder = self._root / upload_id
         folder.mkdir(parents=True)
@@ -115,11 +110,11 @@ class UploadStore:
         with self._lock_for(upload_id):
             up = self._load_checked(folder)
             if offset != up.offset:
-                raise UploadError("offset_mismatch", "the upload is at a "
-                                  "different offset", 409, offset=up.offset)
+                raise Conflict("offset_mismatch", "the upload is at a "
+                               "different offset", extra={"offset": up.offset})
             if up.offset + len(data) > up.size:
-                raise UploadError("too_much_data", "more bytes than the upload "
-                                  "declared", 400)
+                raise BadRequest("too_much_data", "more bytes than the upload "
+                                 "declared")
             target = folder / "data"
             try:
                 with self._open(target, "r+b") as f:
@@ -142,8 +137,8 @@ class UploadStore:
                     except OSError:
                         real_offset = offset
                 if is_disk_full(e):
-                    raise UploadError("disk_full", "Eggie ran out of room", 507,
-                                      offset=real_offset) from e
+                    raise DiskFull("disk_full", "Eggie ran out of room",
+                                   extra={"offset": real_offset}) from e
                 raise
             return self._load(folder)
 
@@ -152,8 +147,8 @@ class UploadStore:
         with self._lock_for(upload_id):
             up = self._load_checked(folder)
             if up.offset != up.size:
-                raise UploadError("incomplete", "the upload is not complete yet",
-                                  409, offset=up.offset)
+                raise Conflict("incomplete", "the upload is not complete yet",
+                               extra={"offset": up.offset})
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(folder / "data", target)
             shutil.rmtree(folder, ignore_errors=True)

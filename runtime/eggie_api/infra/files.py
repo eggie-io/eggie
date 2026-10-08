@@ -5,6 +5,8 @@ import posixpath
 import tarfile
 from pathlib import Path, PurePosixPath
 
+from ..errors import BadRequest
+
 # No size cap here on an uploaded archive or a single file: removing the old
 # ~24 KB command-line ceiling is this module's entire purpose. The runaway/
 # abuse cap lives where the bytes are streamed in, eggie_api/routes/app.py's
@@ -12,13 +14,19 @@ from pathlib import Path, PurePosixPath
 # fact.
 
 
-class PathTraversalError(Exception):
+class PathTraversalError(BadRequest):
     """An archive entry, or a requested file path, resolves outside the
     project directory."""
 
+    def __init__(self, message: str):
+        super().__init__("path_traversal", message)
 
-class BadArchiveError(Exception):
+
+class BadArchiveError(BadRequest):
     """The body handed to `POST /files` is not a readable tar.gz."""
+
+    def __init__(self, message: str):
+        super().__init__("bad_archive", message)
 
 
 def extract_archive(archive_path: Path, dest_dir: Path) -> None:

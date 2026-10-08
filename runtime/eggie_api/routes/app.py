@@ -29,7 +29,8 @@ from ..domain.detect import AmbiguousError
 from ..domain.overlay import host_for
 from ..domain.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
                               load_project)
-from ..domain.secrets import SecretError
+from ..errors import (BadRequest, Conflict, DiskFull, EggieError, Forbidden, Invalid,
+                      NotFound, TooLarge, Unauthorized, Unavailable, Upstream)
 from ..infra import connect, disk, files
 from ..infra import docker as lifecycle
 from ..infra.cloud import Cloud, CloudError, CloudUnavailable
@@ -40,12 +41,12 @@ from ..infra.health import answers, default_probe, diagnose
 from ..infra.runner import LocalRunner
 from ..infra.state import State
 from ..infra.tunnel import TunnelClient
-from ..infra.uploads import CHUNK_SIZE, UploadError, UploadStore
+from ..infra.uploads import CHUNK_SIZE, UploadStore
 from ..services.account import Account
-from ..services.agents import AgentStatus, UnknownAgent
+from ..services.agents import AgentStatus
 from ..services.github_link import GitHubLink, NotConnected
 from ..services.jobs import JobFailed, JobRegistry
-from ..services.public import Public, PublicBusy, Unavailable
+from ..services.public import Public
 from ..infra.reconcile import discover, examine
 from ..services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
 from ..services.sync import SyncLoop, run_pass
@@ -57,25 +58,28 @@ RUNNING = (STARTED_OK, CRASH_LOOPING)
 log = logging.getLogger("eggie.api")
 
 
-class ApiError(Exception):
-    """The only way this API reports a failure. One handler turns it into the
-    single error body the host client parses."""
-
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status = status
+STATUS: dict[type[EggieError], int] = {
+    NotFound: 404, Conflict: 409, Invalid: 422, BadRequest: 400,
+    Unauthorized: 401, Forbidden: 403, TooLarge: 413, DiskFull: 507,
+    Upstream: 502, Unavailable: 503,
+}
 
 
-def _busy(project_id: str) -> "ApiError":
-    return ApiError("project_busy",
-                    f"another operation on '{project_id}' is still running", 409)
+def _status_of(exc: EggieError) -> int:
+    for cls in type(exc).__mro__:
+        if cls in STATUS:
+            return STATUS[cls]
+    return 500
 
 
-def _disk_full() -> ApiError:
-    return ApiError("disk_full", "Eggie's disk is full. Free up space in "
-                    "the desktop app, then try again.", 507)
+def _busy(project_id: str) -> Conflict:
+    return Conflict("project_busy",
+                    f"another operation on '{project_id}' is still running")
+
+
+def _disk_full() -> DiskFull:
+    return DiskFull("disk_full", "Eggie's disk is full. Free up space in "
+                    "the desktop app, then try again.")
 
 
 class ProjectLocks:
@@ -150,14 +154,14 @@ def _epoch(iso: str | None) -> float | None:
     return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
 
 
-def _github_down() -> "ApiError":
-    return ApiError("github_unavailable", "GitHub can't be reached. Check the "
-                    "internet connection and try again.", 503)
+def _github_down() -> Unavailable:
+    return Unavailable("github_unavailable", "GitHub can't be reached. Check the "
+                       "internet connection and try again.")
 
 
-def _reconnect() -> "ApiError":
-    return ApiError("github_reconnect", "GitHub stopped accepting Eggie's "
-                    "access. Reconnect GitHub and try again.", 409)
+def _reconnect() -> Conflict:
+    return Conflict("github_reconnect", "GitHub stopped accepting Eggie's "
+                    "access. Reconnect GitHub and try again.")
 
 
 def _body(code: str, message: str, status: int) -> JSONResponse:
@@ -215,7 +219,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             return []
         try:
             project = load(project_id)
-        except ApiError:
+        except EggieError:
             return []
         hosts = [host_for(project.id, web, row["domain"]) for web in project.webs]
         return [{"service": web.service, "hostname": host,
@@ -260,22 +264,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     # decision, never the guest token's (CLI, coding agents).
     console_router = APIRouter()
 
-    @app.exception_handler(ApiError)
-    async def _api_error(_request, exc: ApiError):
-        return _body(exc.code, exc.message, exc.status)
+    @app.exception_handler(EggieError)
+    async def _eggie_error(_request, exc: EggieError):
+        return JSONResponse({"error": {"code": exc.code, "message": exc.message,
+                                       **exc.extra}}, status_code=_status_of(exc))
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_request, exc: RequestValidationError):
         return _body("invalid_request", _validation_message(exc), 422)
-
-    @app.exception_handler(UploadError)
-    async def _upload_error(_request, exc: UploadError):
-        return JSONResponse({"error": {"code": exc.code, "message": exc.message,
-                                       **exc.extra}}, status_code=exc.status)
-
-    @app.exception_handler(SecretError)
-    async def _secret_error(_request, exc: SecretError):
-        return _body(exc.code, exc.message, 400)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_request, exc: StarletteHTTPException):
@@ -372,14 +368,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def require_row(project_id: str) -> dict:
         row = state.get_project(project_id)
         if row is None:
-            raise ApiError("project_not_found",
-                           f"no project with id '{project_id}'", 404)
+            raise NotFound("project_not_found",
+                           f"no project with id '{project_id}'")
         return row
 
     def require_job(job_id: str):
         job = jobs.get(job_id)
         if job is None:
-            raise ApiError("job_not_found", f"no job with id '{job_id}'", 404)
+            raise NotFound("job_not_found", f"no job with id '{job_id}'")
         return job
 
     def parse_yaml(path: Path) -> dict:
@@ -387,31 +383,30 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             data = yaml.safe_load(path.read_text()) or {}
         except yaml.YAMLError as e:
             # The parser already says where the mistake is; keep it on one line.
-            raise ApiError("invalid_compose",
-                           f"{path.name} is not valid YAML: {' '.join(str(e).split())}",
-                           422) from e
+            raise Invalid("invalid_compose",
+                          f"{path.name} is not valid YAML: {' '.join(str(e).split())}") from e
         if not isinstance(data, dict):
-            raise ApiError("invalid_compose",
-                           f"{path.name} must be a mapping, not a "
-                           f"{type(data).__name__}", 422)
+            raise Invalid("invalid_compose",
+                          f"{path.name} must be a mapping, not a "
+                          f"{type(data).__name__}")
         return data
 
     def load(project_id: str) -> Project:
         d = project_dir(project_id)
         compose_path = d / constants.COMPOSE_FILE
         if not compose_path.exists():
-            raise ApiError("compose_missing",
-                           f"project '{project_id}' has no {constants.COMPOSE_FILE}", 400)
+            raise BadRequest("compose_missing",
+                           f"project '{project_id}' has no {constants.COMPOSE_FILE}")
         project_yml = d / ".eggie" / "project.yml"
         overrides = parse_yaml(project_yml) if project_yml.exists() else None
         try:
             return load_project(parse_yaml(compose_path), overrides, project_id)
         except AmbiguousError as e:
             # The detector's message is already written for a human.
-            raise ApiError("invalid_project", str(e), 422) from e
+            raise Invalid("invalid_project", str(e)) from e
         except (AttributeError, KeyError, TypeError, ValueError) as e:
-            raise ApiError("invalid_project",
-                           f"the project definition cannot be read: {e}", 422) from e
+            raise Invalid("invalid_project",
+                          f"the project definition cannot be read: {e}") from e
 
     def urls_for(project: Project, domain: str) -> list[str]:
         return [f"http://{host_for(project.id, web, domain)}:{config.edge_port}"
@@ -443,7 +438,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 urls = urls_for(project, row["domain"])
                 web = [{"url": url, "service": spec.service, "primary": index == 0}
                        for index, (url, spec) in enumerate(zip(urls, project.webs))]
-            except ApiError as e:
+            except EggieError as e:
                 problem = {"code": e.code, "message": e.message}
         if problem is None and row.get("problem_code"):
             # A file that will not parse outranks a routing fault: it is why
@@ -522,13 +517,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
 
     @router.post("/agents/{agent_id}/setup")
     def agent_setup(agent_id: str) -> dict:
-        try:
-            return agent_status.ensure_setup(agent_id)
-        except UnknownAgent:
-            raise ApiError("agent_not_found", "Eggie has nothing to set up for that agent.", 404) from None
-        except OSError:
-            raise ApiError("agent_setup_unavailable", "This VM can't set up agents yet. "
-                           "Restart Eggie and try again.", 503) from None
+        return agent_status.ensure_setup(agent_id)
 
     @router.get("/account")
     def account_status() -> dict:
@@ -539,12 +528,12 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         try:
             return account.start_sign_in()
         except CloudUnavailable:
-            raise ApiError("cloud_unavailable",
+            raise Unavailable("cloud_unavailable",
                            "The Eggie service can't be reached. Check the "
-                           "internet connection and try again.", 503) from None
+                           "internet connection and try again.") from None
         except CloudError as e:
-            raise ApiError("cloud_error", "The Eggie service would not start "
-                           f"a sign-in: {e.message}", 502) from None
+            raise Upstream("cloud_error", "The Eggie service would not start "
+                           f"a sign-in: {e.message}") from None
 
     @router.post("/account/sign-out")
     def account_sign_out() -> dict:
@@ -560,8 +549,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         except NotConnected:
             if github_link.status()["state"] == "needs_reconnect":
                 raise _reconnect() from None
-            raise ApiError("github_not_connected",
-                           "Connect GitHub first.", 409) from None
+            raise
 
     @router.get("/github")
     def github_status() -> dict:
@@ -575,8 +563,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         except GitHubUnavailable:
             raise _github_down() from None
         except GitHubError as e:
-            raise ApiError("github_error", "GitHub would not start a sign-in: "
-                           f"{e.message or e.code}", 502) from None
+            raise Upstream("github_error", "GitHub would not start a sign-in: "
+                           f"{e.message or e.code}") from None
 
     @router.post("/github/disconnect")
     def github_disconnect() -> dict:
@@ -586,13 +574,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def github_reapply() -> dict:
         try:
             return github_link.reapply()
-        except NotConnected:
-            raise ApiError("github_not_connected", "Connect GitHub first.", 409) from None
         except GitHubUnavailable:
             raise _github_down() from None
         except GitHubError as e:
-            raise ApiError("github_error", "GitHub would not confirm the "
-                           f"connection: {e.message or e.code}", 502) from None
+            raise Upstream("github_error", "GitHub would not confirm the "
+                           f"connection: {e.message or e.code}") from None
 
     @router.get("/github/repos")
     def github_repos(page: int = 1) -> dict:
@@ -605,8 +591,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             if e.code == "bad_credentials":
                 github_link.mark_bad_if_current(token)
                 raise _reconnect() from None
-            raise ApiError("github_error", f"GitHub refused the repository list: "
-                           f"{e.message or e.code}", 502) from None
+            raise Upstream("github_error", f"GitHub refused the repository list: "
+                           f"{e.message or e.code}") from None
         return {"has_more": more, "repos": [
             {"full_name": r["full_name"], "private": bool(r.get("private")),
              "description": r.get("description"),
@@ -615,16 +601,16 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.post("/github/clone", status_code=202)
     def github_clone(body: CloneRepo) -> dict:
         if not valid_repo(body.repo):
-            raise ApiError("invalid_repo",
-                           f"'{body.repo}' is not an owner/name repository", 422)
+            raise Invalid("invalid_repo",
+                          f"'{body.repo}' is not an owner/name repository")
         project_id = _slug(body.id or body.repo.split("/")[1])
         if not project_id:
-            raise ApiError("invalid_project",
-                           f"'{body.repo}' has no usable project name", 422)
+            raise Invalid("invalid_project",
+                          f"'{body.repo}' has no usable project name")
         directory = project_dir(project_id)
         if state.get_project(project_id) is not None or directory.exists():
-            raise ApiError("project_exists",
-                           f"project '{project_id}' already exists", 409)
+            raise Conflict("project_exists",
+                           f"project '{project_id}' already exists")
         token = require_github_token()
         if not locks.acquire(project_id):
             raise _busy(project_id)
@@ -663,7 +649,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     return {"id": project_id, "status": "stopped"}
                 try:
                     up = start_work(project_id, stop_first=False)
-                except ApiError as e:
+                except EggieError as e:
                     write(f"{e.message}\n")
                     return {"id": project_id, "status": "stopped"}
                 # start_work's job releases the lock in its own finally.
@@ -686,11 +672,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         # survives the round trip host -> API -> compose project name.
         project_id = _slug(body.id)
         if not project_id:
-            raise ApiError("invalid_project",
-                           f"'{body.id}' is not a usable project id", 422)
+            raise Invalid("invalid_project",
+                          f"'{body.id}' is not a usable project id")
         if state.get_project(project_id) is not None:
-            raise ApiError("project_exists",
-                           f"project '{project_id}' already exists", 409)
+            raise Conflict("project_exists",
+                           f"project '{project_id}' already exists")
 
         d = project_dir(project_id)
         d.mkdir(parents=True, exist_ok=True)
@@ -706,16 +692,16 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.post("/projects/{project_id}/adopt", status_code=201)
     def adopt_project(project_id: str) -> dict:
         if state.get_project(project_id) is not None:
-            raise ApiError("project_exists",
-                           f"project '{project_id}' already exists", 409)
+            raise Conflict("project_exists",
+                           f"project '{project_id}' already exists")
         folder = project_dir(project_id)
         if not folder.is_dir():
-            raise ApiError("folder_not_found",
-                           f"no folder '{project_id}' in the projects folder", 404)
+            raise NotFound("folder_not_found",
+                           f"no folder '{project_id}' in the projects folder")
         found = examine(folder)
         if not found.adoptable:
-            raise ApiError("not_adoptable",
-                           f"'{project_id}' cannot be adopted: {found.reason}", 409)
+            raise Conflict("not_adoptable",
+                           f"'{project_id}' cannot be adopted: {found.reason}")
         state.add_project(project_id, str(folder), config.domain)
         sync.wake()
         return payload(state.get_project(project_id))
@@ -744,26 +730,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @console_router.post("/projects/{project_id}/public", status_code=202)
     def public_on(project_id: str) -> dict:
         require_row(project_id)
-        try:
-            return public.enable(project_id)
-        except PublicBusy:
-            raise _busy(project_id) from None
-        except Unavailable as e:
-            raise ApiError(e.code, e.message, 409) from None
+        return public.enable(project_id)
 
     @console_router.delete("/projects/{project_id}/public")
     def public_off(project_id: str) -> dict:
         require_row(project_id)
-        try:
-            return public.disable(project_id)
-        except PublicBusy:
-            raise _busy(project_id) from None
+        return public.disable(project_id)
 
     def resolve_path(project_id: str, rel_path: str) -> Path:
-        try:
-            return files.resolve_within(project_dir(project_id), rel_path)
-        except files.PathTraversalError as e:
-            raise ApiError("path_traversal", str(e), 400) from e
+        return files.resolve_within(project_dir(project_id), rel_path)
 
     def finish_upload(upload_id: str) -> dict:
         up = uploads.get(upload_id)
@@ -774,15 +749,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         with locks.held(up.project_id):
             if state.get_project(up.project_id) is None:
                 uploads.cancel(upload_id)
-                raise ApiError("project_not_found",
-                               f"no project with id '{up.project_id}'", 404)
+                raise NotFound("project_not_found",
+                               f"no project with id '{up.project_id}'")
             try:
                 uploads.finish(upload_id, resolve_path(up.project_id, up.path))
             except PermissionError as e:
-                raise ApiError("permission_denied",
+                raise Conflict("permission_denied",
                                "Eggie can't write into that folder; a program "
-                               "in the project owns it. Pick another folder.",
-                               409) from e
+                               "in the project owns it. Pick another folder.") from e
         return {"upload_id": upload_id, "offset": up.size, "size": up.size,
                 "done": True}
 
@@ -793,11 +767,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         if target.is_dir():
             # `replace` means "overwrite this file", never "delete this
             # folder and put a file where it was" -- that has no undo.
-            raise ApiError("path_is_folder",
-                           f"'{body.path}' is a folder in the project", 409)
+            raise Conflict("path_is_folder",
+                           f"'{body.path}' is a folder in the project")
         if target.exists() and not body.replace:
-            raise ApiError("file_exists",
-                           f"'{body.path}' is already in the project", 409)
+            raise Conflict("file_exists",
+                           f"'{body.path}' is already in the project")
         up = uploads.start(project_id, body.path, body.size, body.fingerprint,
                            body.replace)
         if up.size == 0:
@@ -820,14 +794,13 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         try:
             offset = int(request.headers.get("upload-offset", ""))
         except ValueError:
-            raise ApiError("invalid_request", "Upload-Offset must be a number",
-                           400) from None
+            raise BadRequest("invalid_request", "Upload-Offset must be a number") from None
         body = bytearray()
         async for piece in request.stream():
             body += piece
             if len(body) > 2 * CHUNK_SIZE:
-                raise ApiError("payload_too_large", "send chunks of at most "
-                               f"{CHUNK_SIZE} bytes", 413)
+                raise TooLarge("payload_too_large", "send chunks of at most "
+                               f"{CHUNK_SIZE} bytes")
         # Both append() and finish() do blocking file I/O; run them off the
         # event loop so one slow upload can't stall every other request.
         up = await run_in_threadpool(uploads.append, upload_id, offset, bytes(body))
@@ -855,13 +828,13 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     # Checked before writing: the moment the limit is passed,
                     # not after the whole body has already landed on disk.
                     if written > config.max_upload_bytes:
-                        raise ApiError(
+                        raise TooLarge(
                             "payload_too_large",
                             "This project is larger than the "
                             f"{_size_words(config.max_upload_bytes)} an upload "
                             "may be. Remove the large files or folders from it "
                             "-- build output, videos and database files are the "
-                            "usual cause -- and try again.", 413)
+                            "usual cause -- and try again.")
                     try:
                         f.write(chunk)
                     except OSError as e:
@@ -889,10 +862,6 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             try:
                 try:
                     files.extract_archive(tmp, d)
-                except files.PathTraversalError as e:
-                    raise ApiError("path_traversal", str(e), 400) from e
-                except files.BadArchiveError as e:
-                    raise ApiError("bad_archive", str(e), 400) from e
                 except OSError as e:
                     if disk.is_disk_full(e):
                         raise _disk_full() from e
@@ -909,16 +878,13 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         try:
             return {"dir": dir,
                     "entries": files.list_dir(project_dir(project_id), dir)}
-        except files.PathTraversalError as e:
-            raise ApiError("path_traversal", str(e), 400) from e
         except FileNotFoundError:
-            raise ApiError("folder_not_found",
-                           f"no folder '{dir}' in project '{project_id}'",
-                           404) from None
+            raise NotFound("folder_not_found",
+                           f"no folder '{dir}' in project '{project_id}'") from None
         except PermissionError as e:
-            raise ApiError("permission_denied",
+            raise Conflict("permission_denied",
                            "Eggie can't look inside that folder; a program "
-                           "in the project owns it.", 409) from e
+                           "in the project owns it.") from e
 
     @router.put("/projects/{project_id}/files/{file_path:path}")
     async def write_file(project_id: str, file_path: str, request: Request) -> dict:
@@ -941,8 +907,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         target = resolve_path(project_id, file_path)
         if not target.is_file():
-            raise ApiError("file_not_found",
-                           f"no file '{file_path}' in project '{project_id}'", 404)
+            raise NotFound("file_not_found",
+                           f"no file '{file_path}' in project '{project_id}'")
         # Starlette streams this from disk; the file is never read whole.
         return FileResponse(target, filename=target.name)
 
@@ -951,8 +917,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         target = resolve_path(project_id, file_path)
         if not target.is_file():
-            raise ApiError("file_not_found",
-                           f"no file '{file_path}' in project '{project_id}'", 404)
+            raise NotFound("file_not_found",
+                           f"no file '{file_path}' in project '{project_id}'")
         with locks.held(project_id):
             target.unlink()
         return {"path": file_path, "deleted": True}
@@ -970,8 +936,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
         require_row(project_id)
         if body.value == "":
-            raise SecretError("secret_invalid_value",
-                              "a value can't be empty; delete the secret instead")
+            raise secret_rules.SecretError("secret_invalid_value",
+                                          "a value can't be empty; delete the secret instead")
         secret_rules.check_name(name)
         secret_rules.check_value(body.value)
         secret_rules.check_total({**state.secret_values(project_id),
@@ -993,8 +959,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         removed = state.delete_secret(project_id, name)
         dismissed = state.delete_request(project_id, name)
         if not (removed or dismissed):
-            raise ApiError("secret_not_found",
-                           f"project '{project_id}' has no secret '{name}'", 404)
+            raise NotFound("secret_not_found",
+                           f"project '{project_id}' has no secret '{name}'")
         return Response(status_code=204)
 
     def compose_name_for(row: dict) -> str:
@@ -1148,7 +1114,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             try:
                 job_ids.append(submit_locked(
                     row["id"], start_work(row["id"], stop_first=False), "up"))
-            except ApiError as e:
+            except EggieError as e:
                 log.warning("not resuming %s: %s", row["id"], e.message)
         return job_ids
 
@@ -1162,9 +1128,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             result = lifecycle.project_logs(runner, project_dir(project_id),
                                             service, env=project_env(project_id))
             if not result.ok:
-                raise ApiError("logs_unavailable",
+                raise Conflict("logs_unavailable",
                                (result.stderr or result.stdout).strip()
-                               or "docker compose logs failed", 409)
+                               or "docker compose logs failed")
             return PlainTextResponse(result.stdout, media_type=TEXT)
         argv = lifecycle.logs_argv(project_dir(project_id), service, follow=True)
         return StreamingResponse(
@@ -1196,9 +1162,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def start_session(body: Handoff, response: Response) -> dict:
         session_id = sessions.redeem(body.code)
         if session_id is None:
-            raise ApiError("handoff_invalid", "that sign-in link has already "
+            raise Unauthorized("handoff_invalid", "that sign-in link has already "
                            "been used or has run out; open Eggie from the "
-                           "desktop app again", 401)
+                           "desktop app again")
         response.set_cookie(COOKIE, session_id, max_age=SESSION_TTL,
                             httponly=True, samesite="strict", path="/api")
         return {"signed_in": True}

@@ -8,15 +8,13 @@ import tempfile
 import threading
 from pathlib import Path
 
+from ..errors import NotFound, Unavailable
+
 log = logging.getLogger("eggie.api")
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _STATES = {"installing", "ready", "failed"}
 _SETTLED = {"installing", "ready"}
-
-
-class UnknownAgent(Exception):
-    pass
 
 
 class AgentStatus:
@@ -38,12 +36,18 @@ class AgentStatus:
 
     def ensure_setup(self, agent_id: str) -> dict:
         if not self._has_setup(agent_id):
-            raise UnknownAgent(agent_id)
+            raise NotFound("agent_not_found",
+                           "Eggie has nothing to set up for that agent.")
         entry = self._read().get(agent_id, {})
         if entry.get("connected") or entry.get("setup") in _SETTLED:
             return {"requested": False}
-        self._bump(self._dir / "setup" / agent_id)
-        self._bump(self._dir / "check")
+        try:
+            self._bump(self._dir / "setup" / agent_id)
+            self._bump(self._dir / "check")
+        except OSError:
+            raise Unavailable("agent_setup_unavailable",
+                              "This VM can't set up agents yet. "
+                              "Restart Eggie and try again.") from None
         return {"requested": True}
 
     def _has_setup(self, agent_id: str) -> bool:

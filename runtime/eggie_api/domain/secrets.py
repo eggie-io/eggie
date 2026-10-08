@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import re
 
+from ..errors import BadRequest
+
 NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # Compose, the docker CLI and the dynamic loader read these from their own
 # environment, and secrets are that environment.
@@ -14,11 +16,9 @@ MAX_PROJECT_BYTES = 512 * 1024
 MAX_HINT_CHARS = 500
 
 
-class SecretError(ValueError):
+class SecretError(BadRequest):
     def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code = code
-        self.message = message
+        super().__init__(code, message)
 
 
 def is_reserved(name: str) -> bool:

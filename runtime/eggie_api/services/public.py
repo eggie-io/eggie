@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from .account import NotSignedIn
+from ..errors import Conflict
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.tunnel import TunnelClient, remove_token, write_token
 
@@ -37,15 +38,15 @@ MESSAGES = {
 }
 
 
-class PublicBusy(Exception):
-    pass
+class PublicBusy(Conflict):
+    def __init__(self, local_id: str):
+        super().__init__("project_busy",
+                         f"another operation on '{local_id}' is still running")
 
 
-class Unavailable(Exception):
+class PublicUnavailable(Conflict):
     def __init__(self, code: str):
-        super().__init__(MESSAGES[code])
-        self.code = code
-        self.message = MESSAGES[code]
+        super().__init__(code, MESSAGES[code])
 
 
 def _daemon(fn) -> None:
@@ -156,7 +157,7 @@ class Public:
             return self.status(local_id)
         blocked = self._blocked(local_id)
         if blocked:
-            raise Unavailable(blocked)
+            raise PublicUnavailable(blocked)
         cloud_id = self._state.cloud_mapping()[local_id]["cloud_id"]
         attempt = _Attempt(cloud_id)
         with self._lock:

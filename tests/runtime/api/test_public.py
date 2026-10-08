@@ -7,7 +7,7 @@ from eggie_api.services.account import Account
 from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.runner import Completed
 from eggie_api.services.public import (MESSAGES, Public, PublicBusy, TunnelClient,
-                                    Unavailable, write_token)
+                                    PublicUnavailable, write_token)
 from eggie_api.infra.state import State
 from tests.runtime.api.fake_cloud import FakeCloud
 
@@ -97,7 +97,7 @@ def test_turning_on_writes_a_narrow_token_starts_the_client_and_shows_the_urls(t
 def test_turning_on_is_refused_with_a_plain_reason(tmp_path, kwargs, code):
     public, _, _, _ = make(tmp_path, FakeCloud(), **kwargs)
 
-    with pytest.raises(Unavailable) as raised:
+    with pytest.raises(PublicUnavailable) as raised:
         public.enable("blog")
 
     assert (raised.value.code, raised.value.message) == (code, MESSAGES[code])

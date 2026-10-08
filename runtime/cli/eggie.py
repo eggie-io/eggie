@@ -434,7 +434,8 @@ def cmd_secret_list(env: Env) -> None:
         print("Needs a value: " + ", ".join(missing), file=env.out)
     count = len(data.get("defaults") or [])
     if count:
-        print(f"{count} defaults from .env.example; change them on the "
+        noun, them = ("default", "it") if count == 1 else ("defaults", "them")
+        print(f"{count} {noun} from .env.example; change {them} on the "
               "project's Secrets page in Eggie.", file=env.out)
     if not names and not missing and not count:
         print(f"{project_id} has no secrets.", file=env.out)

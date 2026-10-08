@@ -105,3 +105,10 @@ def test_secret_list_counts_defaults_and_never_prints_their_values(guest):
     assert "2 defaults from .env.example" in out
     assert "Blog" not in out
     assert "API_KEY" in out
+
+
+def test_secret_list_says_one_default_in_the_singular(guest):
+    folder = _project(guest)
+    (folder / ".env.example").write_text("APP_NAME=Blog\n")
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    assert "1 default from .env.example;" in out

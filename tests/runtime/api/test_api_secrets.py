@@ -40,13 +40,6 @@ def test_a_set_secret_is_listed_by_name_and_its_value_never_comes_back(env):
     assert SECRET not in _every_response_text(env, "blog")
 
 
-def test_missing_lists_expected_names_that_have_no_secret(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("API_KEY=\nSMTP_PASSWORD=\n")
-    env.client.put("/projects/blog/secrets/SMTP_PASSWORD", json={"value": "x"})
-    assert env.client.get("/projects/blog/secrets").json()["missing"] == ["API_KEY"]
-
-
 def test_an_invalid_or_reserved_name_is_a_400_with_its_code(env):
     _project(env)
     bad = env.client.put("/projects/blog/secrets/1BAD", json={"value": "x"})
@@ -136,91 +129,6 @@ def test_a_secret_set_during_a_start_still_needs_a_restart(env):
     assert env.client.get("/projects/blog").json()["restart_needed"] is True
 
 
-def test_import_moves_dotenv_values_into_secrets_and_empties_the_file(env):
-    # Emptied, not deleted: a service with `env_file: .env` fails to start
-    # when the file is gone.
-    folder = _project(env)
-    (folder / ".env").write_text('API_KEY=from-file\nexport PEM="a\\nb"\n')
-    listed = env.client.get("/projects/blog/secrets").json()
-    assert listed["dotenv"] == {"names": ["API_KEY", "PEM"], "error": None}
-    env.client.put("/projects/blog/secrets/API_KEY", json={"value": "old"})
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert resp.json() == {"imported": ["API_KEY", "PEM"]}
-    assert (folder / ".env").read_bytes() == b""
-    assert env.state.secret_values("blog") == {"API_KEY": "from-file", "PEM": "a\nb"}
-    assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
-
-
-def test_import_of_an_invalid_dotenv_stores_nothing_and_keeps_the_file(env):
-    folder = _project(env)
-    (folder / ".env").write_text("GOOD=1\nnot a pair\n")
-    listed = env.client.get("/projects/blog/secrets").json()
-    assert listed["dotenv"]["names"] == []
-    assert "line 2" in listed["dotenv"]["error"]
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert (resp.status_code, resp.json()["error"]["code"]) == (400, "dotenv_invalid")
-    assert (folder / ".env").exists()
-    assert env.state.secret_values("blog") == {}
-
-
-def test_a_dotenv_without_values_is_not_offered_and_cannot_be_imported(env):
-    folder = _project(env)
-    (folder / ".env").write_text("# nothing here\n\n")
-    assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert (resp.status_code, resp.json()["error"]["code"]) == (404, "dotenv_missing")
-
-
-def test_a_dotenv_eggie_cannot_write_is_emptied_as_root(env):
-    folder = _project(env)
-    dotenv = folder / ".env"
-    dotenv.write_text("API_KEY=v\n")
-    dotenv.chmod(0o444)
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert resp.status_code == 200
-    run = env.runner.argv_containing("run")[-1]
-    assert ["--user", "0"] == run[run.index("--user"):run.index("--user") + 2]
-    assert run[-1] == str(dotenv)
-
-
-def test_a_dotenv_that_cannot_be_emptied_keeps_the_values_and_says_so(env):
-    folder = _project(env)
-    (folder / ".env").write_text("API_KEY=v\n")
-    (folder / ".env").chmod(0o444)
-    real = env.runner.exec
-
-    def failing_run(argv, **kw):
-        if argv[1:2] == ["run"]:
-            env.runner.calls.append(argv)
-            return Completed(1, "", "denied")
-        return real(argv, **kw)
-
-    env.runner.exec = failing_run
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert (resp.status_code, resp.json()["error"]["code"]) == (409, "dotenv_not_removed")
-    assert env.state.secret_values("blog") == {"API_KEY": "v"}
-
-
-def test_a_dotenv_symlink_is_never_followed(env):
-    folder = _project(env)
-    outside = folder.parent / "outside.env"
-    outside.write_text("STOLEN=value\n")
-    (folder / ".env").symlink_to(outside)
-    listed = env.client.get("/projects/blog/secrets").json()
-    assert listed["dotenv"]["names"] == []
-    assert "link" in listed["dotenv"]["error"]
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert (resp.status_code, resp.json()["error"]["code"]) == (400, "dotenv_invalid")
-    assert env.state.secret_values("blog") == {}
-    assert outside.read_text() == "STOLEN=value\n"
-
-
-def test_a_reserved_name_is_never_reported_missing(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("DOCKER_HOST=\nAPI_KEY=\n")
-    assert env.client.get("/projects/blog/secrets").json()["missing"] == ["API_KEY"]
-
-
 def test_a_crash_looping_project_needs_a_restart_after_a_secret_change(env):
     # A service exiting for lack of a key is the usual crash loop, and the
     # fix is exactly a secret set followed by a restart.
@@ -234,42 +142,13 @@ def test_a_crash_looping_project_needs_a_restart_after_a_secret_change(env):
     assert env.client.get("/projects/blog").json()["restart_needed"] is False
 
 
-def test_import_without_a_dotenv_is_a_404(env):
-    _project(env)
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert resp.json()["error"]["code"] == "dotenv_missing"
-
-
-def test_purge_drops_secrets_and_plain_delete_keeps_them(env):
-    _project(env, "kept")
-    env.client.put("/projects/kept/secrets/A", json={"value": "1"})
-    env.client.delete("/projects/kept")
-    assert env.state.secret_values("kept") == {"A": "1"}
-
-    _project(env, "gone")
-    env.client.put("/projects/gone/secrets/A", json={"value": "1"})
-    env.client.delete("/projects/gone?purge=true")
-    assert env.state.secret_values("gone") == {}
-
-
 def test_secrets_routes_are_served_to_both_the_cli_and_the_console(env):
     from tests.runtime.api.route_sweep import every_route
     paths = {getattr(r, "path", None) for r in every_route(env.app)}
     for path in ("/projects/{project_id}/secrets",
                  "/projects/{project_id}/secrets/{name}",
-                 "/projects/{project_id}/secrets/import-dotenv"):
+                 "/projects/{project_id}/secret-requests/{name}"):
         assert path in paths and "/api" + path in paths, path
-
-
-def test_a_malformed_dotenv_line_never_leaks_its_text_into_responses(env):
-    folder = _project(env)
-    (folder / ".env").write_text("abc+/SECRETPART=x\n")
-    listed = env.client.get("/projects/blog/secrets")
-    imported = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert "SECRETPART" not in listed.text
-    assert "SECRETPART" not in imported.text
-    assert imported.json()["error"]["code"] == "dotenv_invalid"
-    assert (folder / ".env").exists()
 
 
 COMPOSE_DECLARES = """
@@ -291,35 +170,9 @@ def _overlay_names(env, folder):
 
 def test_a_service_that_declares_a_name_keeps_its_own_value(env):
     folder = _project(env, compose=COMPOSE_DECLARES)
-    (folder / ".env.example").write_text("DATABASE_URL=postgres://localhost/app\n")
     env.client.put("/projects/blog/secrets/DATABASE_URL", json={"value": "x"})
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert "environment" not in _overlay_names(env, folder).get("web", {})
-
-
-def test_defaults_reach_compose_and_stored_values_override_them(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
-    env.client.put("/projects/blog/secrets/MODE", json={"value": "prod"})
-    _run_to_completion(env, env.client.post("/projects/blog/up"))
-    ups = [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-2:] == ["up", "-d"]]
-    assert ups == [{"APP_NAME": "Blog", "MODE": "prod"}]
-    assert _overlay_names(env, folder)["worker"]["environment"] == ["APP_NAME", "MODE"]
-
-
-def test_the_listing_shows_defaults_in_clear_and_values_never(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
-    env.client.put("/projects/blog/secrets/MODE", json={"value": SECRET})
-    body = env.client.get("/projects/blog/secrets").json()
-    assert body["defaults"] == [{"name": "APP_NAME", "value": "Blog", "overridden": False,
-                                 "shadowed": False, "compose_default": False},
-                                {"name": "MODE", "value": "dev", "overridden": True,
-                                 "shadowed": False, "compose_default": True}]
-    assert body["secrets"] == [{"name": "MODE", "updated_at": body["secrets"][0]["updated_at"],
-                                "overrides_default": True}]
-    assert body["missing"] == ["API_KEY"]
-    assert SECRET not in env.client.get("/projects/blog/secrets").text
 
 
 def test_an_empty_value_is_refused(env):
@@ -328,107 +181,58 @@ def test_an_empty_value_is_refused(env):
     assert (resp.status_code, resp.json()["error"]["code"]) == (400, "secret_invalid_value")
 
 
-def test_a_dotenv_copied_from_the_example_is_not_offered(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("APP_NAME=Blog\nAPI_KEY=\n")
-    (folder / ".env").write_text("APP_NAME=Blog\nAPI_KEY=\n")
-    assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
-    resp = env.client.post("/projects/blog/secrets/import-dotenv")
-    assert resp.json()["error"]["code"] == "dotenv_missing"
-    assert env.state.secret_values("blog") == {}
-
-
-def test_import_stores_only_values_that_differ_from_defaults(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("APP_NAME=Blog\nAPP_ENV=local\nAPI_KEY=\n")
-    (folder / ".env").write_text("APP_NAME=Blog\nAPP_ENV=production\nAPI_KEY=k\nEMPTY=\n")
-    assert env.client.get("/projects/blog/secrets").json()["dotenv"]["names"] == ["API_KEY", "APP_ENV"]
-    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {
-        "imported": ["API_KEY", "APP_ENV"]}
-    assert env.state.secret_values("blog") == {"API_KEY": "k", "APP_ENV": "production"}
-    assert (folder / ".env").read_text() == ""
-
-
-def test_import_keeps_reserved_lines_in_dotenv(env):
-    folder = _project(env)
-    (folder / ".env").write_text("COMPOSE_PROJECT_NAME=shop\nAPI_KEY=k\n")
-    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
-    from eggie_api.core.secrets import parse_dotenv
-    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_PROJECT_NAME": "shop"}
-
-
-def test_import_rewrites_a_reserved_value_with_quotes_and_backslashes_intact(env):
-    folder = _project(env)
-    (folder / ".env").write_text('COMPOSE_X="a\\"b\\\\c"\nAPI_KEY=k\n')
-    from eggie_api.core.secrets import parse_dotenv
-    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_X": 'a"b\\c', "API_KEY": "k"}
-    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
-    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_X": 'a"b\\c'}
-    assert env.state.secret_values("blog") == {"API_KEY": "k"}
-
-
-def _up_envs(env):
-    return [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-2:] == ["up", "-d"]]
-
-
-def test_a_dotenv_not_yet_imported_beats_the_defaults_it_sets(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("X=b\nY=c\n")
-    (folder / ".env").write_text("X=a\n")
-    _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env) == [{"Y": "c"}]
-    assert _overlay_names(env, folder)["worker"]["environment"] == ["Y"]
-    defaults = env.client.get("/projects/blog/secrets").json()["defaults"]
-    assert [(d["name"], d["shadowed"]) for d in defaults] == [("X", True), ("Y", False)]
-
-
-def test_a_stored_value_still_beats_the_dotenv(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("X=b\nY=c\n")
-    (folder / ".env").write_text("X=a\n")
-    env.client.put("/projects/blog/secrets/X", json={"value": "stored"})
-    _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env) == [{"X": "stored", "Y": "c"}]
-
-
-def test_an_unparseable_dotenv_still_shadows_and_never_stops_a_start(env):
-    folder = _project(env)
-    (folder / ".env.example").write_text("X=b\nY=c\n")
-    (folder / ".env").write_text("X=\nnot a line\n")
-    _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env) == [{"Y": "c"}]
-
-
-def test_a_dotenv_example_symlink_is_treated_as_absent(env):
-    folder = _project(env)
-    outside = folder.parent / "outside.example"
-    outside.write_text("LEAKED=value\nAPI_KEY=\n")
-    (folder / ".env.example").symlink_to(outside)
+def test_a_request_is_listed_with_its_hint_until_a_value_is_saved(env):
+    _project(env)
+    r = env.client.put("/projects/blog/secret-requests/STRIPE_KEY",
+                       json={"hint": "Stripe → Developers → API keys"})
+    assert r.status_code == 204
     body = env.client.get("/projects/blog/secrets").json()
-    assert body["defaults"] == []
-    assert "LEAKED" not in env.client.get("/projects/blog/secrets").text
+    assert body["requested"] == [{"name": "STRIPE_KEY", "hint": "Stripe → Developers → API keys"}]
+    assert env.client.get("/projects/blog").json()["secrets_requested"] == 1
+    env.client.put("/projects/blog/secrets/STRIPE_KEY", json={"value": SECRET})
+    assert env.client.get("/projects/blog/secrets").json()["requested"] == []
+
+
+def test_a_request_with_a_bad_hint_or_name_is_a_400(env):
+    _project(env)
+    assert env.client.put("/projects/blog/secret-requests/STRIPE_KEY",
+                          json={"hint": "a\x00b"}).json()["error"]["code"] == "secret_hint_invalid"
+    assert env.client.put("/projects/blog/secret-requests/DOCKER_HOST",
+                          json={"hint": "x"}).json()["error"]["code"] == "secret_name_reserved"
+
+
+def test_dismissing_a_request_does_not_need_a_restart(env):
+    _project(env)
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env) == [None]
+    env.client.put("/projects/blog/secret-requests/STRIPE_KEY", json={"hint": "x"})
+    assert env.client.delete("/projects/blog/secrets/STRIPE_KEY").status_code == 204
+    body = env.client.get("/projects/blog/secrets").json()
+    assert body["requested"] == [] and body["restart_needed"] is False
 
 
-COMPOSE_DEFAULTS_X = """
-services:
-  web:
-    image: nginx
-    ports: ["8080:80"]
-    environment:
-      X: ${X:-c}
-"""
-
-
-def test_the_compose_files_own_default_beats_the_example_and_a_stored_value_beats_both(env):
-    folder = _project(env, compose=COMPOSE_DEFAULTS_X)
-    (folder / ".env.example").write_text("X=a\nY=b\n")
+def test_the_projects_env_files_are_neither_read_nor_touched(env):
+    folder = _project(env)
+    (folder / ".env").write_text("API_KEY=from-dotenv\nMODE=prod\n")
+    (folder / ".env.example").write_text("API_KEY=\nEXTRA=1\n")
+    env.client.put("/projects/blog/secrets/API_KEY", json={"value": SECRET})
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env) == [{"Y": "b"}]
-    assert _overlay_names(env, folder)["web"]["environment"] == ["Y"]
-    defaults = env.client.get("/projects/blog/secrets").json()["defaults"]
-    assert [(d["name"], d["compose_default"]) for d in defaults] == [("X", True), ("Y", False)]
-    env.client.put("/projects/blog/secrets/X", json={"value": "stored"})
-    _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert _up_envs(env)[-1] == {"X": "stored", "Y": "b"}
+    compose = [e for a, e in zip(env.runner.calls, env.runner.envs) if a[1:2] == ["compose"]]
+    assert compose and all(e == {"API_KEY": SECRET} for e in compose)
+    assert (folder / ".env").read_text() == "API_KEY=from-dotenv\nMODE=prod\n"
+    assert (folder / ".env.example").read_text() == "API_KEY=\nEXTRA=1\n"
+
+
+def test_purge_drops_secrets_and_requests_and_plain_delete_keeps_them(env):
+    _project(env, "kept")
+    env.client.put("/projects/kept/secrets/A", json={"value": "1"})
+    env.client.put("/projects/kept/secret-requests/B", json={"hint": "x"})
+    env.client.delete("/projects/kept")
+    assert env.state.secret_values("kept") == {"A": "1"}
+    assert env.state.secret_requests("kept") == [{"name": "B", "hint": "x"}]
+
+    _project(env, "gone")
+    env.client.put("/projects/gone/secrets/A", json={"value": "1"})
+    env.client.put("/projects/gone/secret-requests/B", json={"hint": "x"})
+    env.client.delete("/projects/gone?purge=true")
+    assert env.state.secret_values("gone") == {}
+    assert env.state.secret_requests("gone") == []

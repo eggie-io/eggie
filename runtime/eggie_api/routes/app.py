@@ -65,10 +65,6 @@ class ApiError(Exception):
         self.status = status
 
 
-def _dq(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-
-
 def _busy(project_id: str) -> "ApiError":
     return ApiError("project_busy",
                     f"another operation on '{project_id}' is still running", 409)
@@ -134,6 +130,10 @@ class Handoff(BaseModel):
 
 class SecretValue(BaseModel):
     value: str
+
+
+class SecretHint(BaseModel):
+    hint: str
 
 
 class CloneRepo(BaseModel):
@@ -420,47 +420,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return (row["status"] in RUNNING and changed is not None
                 and (started is None or changed > started))
 
-    def read_dotenv(path: Path) -> str | None:
-        # A link can point at any file the API can read, outside the project.
-        if path.is_symlink():
-            raise SecretError("dotenv_invalid",
-                              ".env is a link; Eggie only reads a regular file")
-        return read_text(path)
-
-    def example_of(project_id: str) -> dict[str, str]:
-        path = project_dir(project_id) / ".env.example"
-        if path.is_symlink():
-            return {}
-        return secret_rules.parse_example(read_text(path))
-
-    def dotenv_names(project_id: str) -> set[str]:
-        """Names the project's own `.env` sets, empty ones included: compose
-        and frameworks read that file, so a default must not override it."""
-        try:
-            text = read_dotenv(project_dir(project_id) / ".env")
-        except SecretError:
-            return set()
-        if text is None:
-            return set()
-        try:
-            return set(secret_rules.parse_dotenv(text))
-        except SecretError:
-            return set(secret_rules.parse_example(text))
-
     def project_env(project_id: str) -> dict[str, str] | None:
-        # The compose file's own `${X:-y}` is its explicit choice and must
-        # not lose to an `.env.example` default.
-        shadowed = dotenv_names(project_id) | secret_rules.compose_defaulted(
-            read_text(project_dir(project_id) / constants.COMPOSE_FILE))
-        base = {k: v for k, v in secret_rules.defaults(example_of(project_id)).items()
-                if k not in shadowed}
-        return {**base, **state.secret_values(project_id)} or None
-
-    def read_text(path: Path) -> str | None:
-        try:
-            return path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
-            return None
+        return state.secret_values(project_id) or None
 
     def payload(row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -510,6 +471,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 "public": public_status,
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": restart_needed(row),
+                "secrets_requested": len(state.secret_requests(row["id"])),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
@@ -995,39 +957,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.get("/projects/{project_id}/secrets")
     def list_secrets(project_id: str) -> dict:
         row = require_row(project_id)
-        d = project_dir(project_id)
-        example = example_of(project_id)
-        base = secret_rules.defaults(example)
-        stored = state.secret_names(project_id)
-        have = {s["name"] for s in stored}
-        shadowed = dotenv_names(project_id)
-        compose_text = read_text(d / constants.COMPOSE_FILE)
-        compose_defaulted = secret_rules.compose_defaulted(compose_text)
-        try:
-            compose = yaml.safe_load(compose_text or "") or {}
-        except yaml.YAMLError:
-            compose = {}
-        _services, declared_by = secret_rules.declared(
-            compose if isinstance(compose, dict) else {})
-        declared_names = set().union(*declared_by.values()) if declared_by else set()
-        # An import leaves an empty .env behind, which has nothing to offer.
-        dotenv = None
-        try:
-            text = read_dotenv(d / ".env")
-            if text is not None:
-                offer = secret_rules.importable(secret_rules.parse_dotenv(text), base)
-                if offer:
-                    dotenv = {"names": sorted(offer), "error": None}
-        except SecretError as e:
-            dotenv = {"names": [], "error": e.message}
-        return {"secrets": [{**s, "overrides_default": s["name"] in base} for s in stored],
-                "missing": secret_rules.missing(example, compose_text, have=have,
-                                                declared_names=declared_names),
-                "defaults": [{"name": k, "value": v, "overridden": k in have,
-                              "shadowed": k in shadowed,
-                              "compose_default": k in compose_defaulted}
-                             for k, v in sorted(base.items())],
-                "dotenv": dotenv,
+        return {"secrets": state.secret_names(project_id),
+                "requested": state.secret_requests(project_id),
                 "restart_needed": restart_needed(row)}
 
     # No project lock: one sqlite statement, and a start in flight is caught
@@ -1045,51 +976,23 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         state.set_secrets(project_id, {name: body.value})
         return Response(status_code=204)
 
+    @router.put("/projects/{project_id}/secret-requests/{name}", status_code=204)
+    def request_secret(project_id: str, name: str, body: SecretHint) -> Response:
+        require_row(project_id)
+        secret_rules.check_name(name)
+        secret_rules.check_hint(body.hint)
+        state.request_secret(project_id, name, body.hint)
+        return Response(status_code=204)
+
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
     def delete_secret(project_id: str, name: str) -> Response:
         require_row(project_id)
-        if not state.delete_secret(project_id, name):
+        removed = state.delete_secret(project_id, name)
+        dismissed = state.delete_request(project_id, name)
+        if not (removed or dismissed):
             raise ApiError("secret_not_found",
                            f"project '{project_id}' has no secret '{name}'", 404)
         return Response(status_code=204)
-
-    @router.post("/projects/{project_id}/secrets/import-dotenv")
-    def import_dotenv(project_id: str) -> dict:
-        require_row(project_id)
-        path = project_dir(project_id) / ".env"
-        with locks.held(project_id):
-            text = read_dotenv(path)
-            values = secret_rules.parse_dotenv(text) if text is not None else {}
-            store = secret_rules.importable(
-                values, secret_rules.defaults(example_of(project_id)))
-            if not store:
-                raise ApiError("dotenv_missing",
-                               f"project '{project_id}' has no .env with values "
-                               "that aren't already a default", 404)
-            secret_rules.check_total({**state.secret_values(project_id), **store})
-            state.set_secrets(project_id, store)
-            # Compose reads reserved names from .env itself, so those lines
-            # stay. Emptied, not deleted: `env_file: .env` fails on a missing file.
-            kept = {k: v for k, v in values.items() if secret_rules.is_reserved(k)}
-            content = "".join(f'{k}="{_dq(v)}"\n' for k, v in kept.items())
-            try:
-                fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
-                try:
-                    os.write(fd, content.encode("utf-8"))
-                finally:
-                    os.close(fd)
-                emptied = True
-            except PermissionError:
-                emptied = (not content
-                           and lifecycle.empty_file_as_root(runner, path).ok)
-            except OSError:
-                emptied = False
-            if not emptied:
-                raise ApiError("dotenv_not_removed",
-                               "the values are saved as secrets, but the .env "
-                               "file could not be emptied; empty it from the "
-                               "Files page", 409)
-        return {"imported": sorted(store)}
 
     def compose_name_for(row: dict) -> str:
         return row.get("compose_name") or row["id"]

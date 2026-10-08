@@ -12,7 +12,7 @@ the guest is always Linux (`tests/test_no_platform_leak.py`).
 - `core/` — all logic, no FastAPI: compose parsing (`compose.py`), web-service detection
   (`detect.py`), Traefik overlay generation (`overlay.py`), project identity/slug (`project.py`),
   failure classification and guest lifecycle (`lifecycle.py`), sqlite state + migrations
-  (`state.py`, `migrate.py`), sessions, disk, health.
+  (`db.py`, `repos/`, `migrate.py`), sessions, disk, health.
 - `core/exec.py` — `LocalRunner`, the in-VM twin of the host's `VmProvider.exec`: same `Completed`
   contract, never raises. Inject a fake runner in tests.
 - `core/config.py` — `ApiConfig`, the **only** place the domain and edge port may come from.

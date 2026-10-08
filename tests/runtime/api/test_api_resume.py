@@ -17,8 +17,8 @@ def test_resume_starts_only_projects_left_running(env):
     for pid in ("blog", "shop"):
         _create(env, pid)
         _write_compose(env, pid)
-    env.state.set_status("blog", STARTED_OK)
-    env.state.set_status("shop", "stopped")
+    env.repos.projects.set_status("blog", STARTED_OK)
+    env.repos.projects.set_status("shop", "stopped")
 
     _resume_and_wait(env)
 
@@ -30,7 +30,7 @@ def test_resume_starts_only_projects_left_running(env):
 def test_one_unreadable_project_does_not_stop_the_others_resuming(env):
     for pid in ("broken", "blog"):
         _create(env, pid)
-        env.state.set_status(pid, STARTED_OK)
+        env.repos.projects.set_status(pid, STARTED_OK)
     _write_compose(env, "broken", COMPOSE_MALFORMED)
     _write_compose(env, "blog")
 

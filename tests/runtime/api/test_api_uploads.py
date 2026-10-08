@@ -109,7 +109,7 @@ def test_finish_upload_holds_the_project_lock_across_the_existence_check(blog):
     uid = _start(blog).json()["upload_id"]
     checking = threading.Event()
     release = threading.Event()
-    real_get_project = blog.state.get_project
+    real_get_project = blog.repos.projects.get
     calls = {"n": 0}
 
     def blocking_get_project(project_id):
@@ -123,7 +123,7 @@ def test_finish_upload_holds_the_project_lock_across_the_existence_check(blog):
             assert release.wait(5), "finish_upload's check never resumed"
         return result
 
-    blog.state.get_project = blocking_get_project
+    blog.repos.projects.get = blocking_get_project
     outcome = {}
 
     def do_finish():

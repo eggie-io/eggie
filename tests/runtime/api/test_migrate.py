@@ -3,7 +3,8 @@ import sqlite3
 import pytest
 
 from eggie_api.infra import migrate
-from eggie_api.infra.state import State
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 
 # The shape state.py created before this module existed: no schema_version
 # table, and no columns for a project's problem.
@@ -89,7 +90,7 @@ def test_a_database_written_before_migrations_existed_keeps_its_rows(tmp_path):
 
 def test_state_refuses_a_future_database_instead_of_opening_it(tmp_path):
     db = tmp_path / "state.db"
-    State(db).close()
+    Database(db).close()
     conn = sqlite3.connect(db)
     conn.execute("UPDATE schema_version SET version=?",
                  (migrate.SCHEMA_VERSION + 1,))
@@ -97,7 +98,7 @@ def test_state_refuses_a_future_database_instead_of_opening_it(tmp_path):
     conn.close()
 
     with pytest.raises(migrate.SchemaTooNew):
-        State(db)
+        Database(db)
 
 
 def test_state_adopts_a_pre_migration_database_without_losing_projects(tmp_path):
@@ -109,10 +110,10 @@ def test_state_adopts_a_pre_migration_database_without_losing_projects(tmp_path)
     conn.commit()
     conn.close()
 
-    state = State(db)
-    assert state.get_project("blog")["status"] == "started_ok"
-    state.set_problem("blog", "bound_to_loopback", "listen on 0.0.0.0")
-    assert state.get_project("blog")["problem_code"] == "bound_to_loopback"
+    repos = Repos.open(Database(db))
+    assert repos.projects.get("blog")["status"] == "started_ok"
+    repos.projects.set_problem("blog", "bound_to_loopback", "listen on 0.0.0.0")
+    assert repos.projects.get("blog")["problem_code"] == "bound_to_loopback"
 
 
 def _v3_database(path):
@@ -131,12 +132,12 @@ def test_a_v3_database_gains_an_account_and_keeps_its_projects(tmp_path):
     db = tmp_path / "state.db"
     _v3_database(db)
 
-    state = State(db)
-    assert state.get_project("blog")["status"] == "started_ok"
-    account = state.get_account()
+    repos = Repos.open(Database(db))
+    assert repos.projects.get("blog")["status"] == "started_ok"
+    account = repos.account.get()
     assert account["device_id"], "a device id is minted once, by the migration"
     assert account["access_token"] is None
-    assert state.cloud_mapping() == {}
+    assert repos.cloud_projects.mapping() == {}
 
 
 def test_v6_adds_the_secrets_table_and_change_stamp(tmp_path):

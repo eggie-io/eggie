@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 
 from eggie_api.services.account import Account
 from eggie_api.services.public import Public, TunnelClient
-from eggie_api.infra.state import State
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, BROWSER, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
@@ -21,28 +22,28 @@ def console(app, client) -> TestClient:
 
 
 def build(env, cloud, *, tunnel_runner=None):
-    state = State(env.config.state_db.with_name("public.db"))
-    state.update_account(access_token="at", refresh_token="rt",
+    repos = Repos.open(Database(env.config.state_db.with_name("public.db")))
+    repos.account.update(access_token="at", refresh_token="rt",
                          access_expires_at=10**12, org_id="org-1")
-    account = Account(state, cloud, spawn=lambda fn: None)
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
     tunnel_runner = tunnel_runner or TunnelRunner()
     # A fixed clock, not the real one: ON's expires_at is a hardcoded
     # timestamp, and the real wall clock outruns it before this test always
     # runs (flaky-by-time-of-day otherwise).
-    public = Public(state=state, account=account, cloud=cloud,
+    public = Public(projects=repos.projects, cloud_projects=repos.cloud_projects, account=account, cloud=cloud,
                     client=TunnelClient(tunnel_runner, env.config.stack_file),
                     token_path=env.config.projects_root.parent / "tunnel.token",
                     origin="http://traefik:41080",
                     hosts_for=lambda pid: [{"service": "web", "hostname": f"{pid}.test.local",
                                             "local_url": f"http://{pid}.test.local:41080"}],
                     clock=Clock(), spawn=lambda fn: fn())
-    app = create_app(config=env.config, runner=FakeRunner(), state=state,
+    app = create_app(config=env.config, runner=FakeRunner(), repos=repos,
                      account=account, cloud=cloud, public=public)
     client = TestClient(app, headers=AUTH)
     client.post("/projects", json={"id": "blog"})
-    state.map_cloud_project("blog", "c-blog", "org-1")
+    repos.cloud_projects.map("blog", "c-blog", "org-1")
     (env.config.projects_root / "blog" / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
-    return client, console(app, client), state, tunnel_runner
+    return client, console(app, client), repos, tunnel_runner
 
 
 def test_turning_on_answers_202_and_the_project_shows_the_public_url(env):
@@ -53,8 +54,8 @@ def test_turning_on_answers_202_and_the_project_shows_the_public_url(env):
 
 
 def test_turning_on_an_unregistered_project_is_a_409_with_the_reason(env):
-    _, browser, state, _ = build(env, FakeCloud())
-    state.unmap_cloud_project("blog")
+    _, browser, repos, _ = build(env, FakeCloud())
+    repos.cloud_projects.unmap("blog")
 
     resp = browser.post("/api/projects/blog/public")
 
@@ -64,7 +65,7 @@ def test_turning_on_an_unregistered_project_is_a_409_with_the_reason(env):
 
 def test_deleting_a_project_releases_its_public_url(env):
     cloud = FakeCloud(create_public_url=[ON], release_public_url=[None])
-    client, browser, state, tunnel = build(env, cloud)
+    client, browser, repos, tunnel = build(env, cloud)
     browser.post("/api/projects/blog/public")
 
     client.delete("/projects/blog")
@@ -75,7 +76,7 @@ def test_deleting_a_project_releases_its_public_url(env):
 
 def test_signing_out_releases_the_public_url(env):
     cloud = FakeCloud(create_public_url=[ON], release_public_url=[None], logout=[None])
-    client, browser, state, tunnel = build(env, cloud)
+    client, browser, repos, tunnel = build(env, cloud)
     browser.post("/api/projects/blog/public")
 
     client.post("/account/sign-out")
@@ -97,18 +98,18 @@ def test_the_default_public_wiring_reaches_the_service_with_real_hosts_and_origi
                              "url": "https://k3x9.example.dev"}],
              "expires_at": "2099-01-01T00:00:00Z"}
     cloud = FakeCloud(create_public_url=[reply])
-    state = State(env.config.state_db.with_name("wiring.db"))
-    state.update_account(access_token="at", refresh_token="rt",
+    repos = Repos.open(Database(env.config.state_db.with_name("wiring.db")))
+    repos.account.update(access_token="at", refresh_token="rt",
                          access_expires_at=10**12, org_id="org-1")
-    account = Account(state, cloud, spawn=lambda fn: None)
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
     # The default Public's own spawn is a daemon thread; FakeRunner answers
     # both the project lifecycle argv and TunnelClient's compose calls (it
     # returns ok for anything it doesn't specifically recognize).
-    app = create_app(config=env.config, runner=FakeRunner(), state=state,
+    app = create_app(config=env.config, runner=FakeRunner(), repos=repos,
                      account=account, cloud=cloud)
     client = TestClient(app, headers=AUTH)
     client.post("/projects", json={"id": "blog"})
-    state.map_cloud_project("blog", "c-blog", "org-1")
+    repos.cloud_projects.map("blog", "c-blog", "org-1")
     (env.config.projects_root / "blog" / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
 
     assert console(app, client).post("/api/projects/blog/public").status_code == 202
@@ -129,7 +130,7 @@ def test_the_default_public_wiring_reaches_the_service_with_real_hosts_and_origi
 
 def test_the_guest_token_cannot_turn_a_public_url_on_or_off(env):
     cloud = FakeCloud()
-    client, _, state, tunnel = build(env, cloud)
+    client, _, repos, tunnel = build(env, cloud)
 
     assert client.post("/projects/blog/public").status_code in (404, 405)
     assert client.delete("/projects/blog/public").status_code in (404, 405)
@@ -146,13 +147,13 @@ def test_a_failing_public_reconcile_does_not_stop_the_account_sync(env):
             pass
 
     cloud = FakeCloud()
-    state = State(env.config.state_db.with_name("broken.db"))
-    state.update_account(access_token="at", refresh_token="rt",
+    repos = Repos.open(Database(env.config.state_db.with_name("broken.db")))
+    repos.account.update(access_token="at", refresh_token="rt",
                          access_expires_at=10**12, org_id="org-1")
-    account = Account(state, cloud, spawn=lambda fn: None)
-    app = create_app(config=env.config, runner=FakeRunner(), state=state,
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
+    app = create_app(config=env.config, runner=FakeRunner(), repos=repos,
                      account=account, cloud=cloud, public=Broken())
 
     app.state.sync._run()
 
-    assert state.get_account()["sync_ok_at"] is not None
+    assert repos.account.get()["sync_ok_at"] is not None

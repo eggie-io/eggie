@@ -8,7 +8,8 @@ from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.runner import Completed
 from eggie_api.services.public import (MESSAGES, Public, PublicBusy, TunnelClient,
                                     PublicUnavailable, write_token)
-from eggie_api.infra.state import State
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from tests.runtime.api.fake_cloud import FakeCloud
 
 HOSTS = [{"service": "web", "hostname": "blog.d.io", "local_url": "http://blog.d.io:39080"}]
@@ -51,23 +52,23 @@ class TunnelRunner:
 
 def make(tmp_path, cloud, *, hosts=HOSTS, start_ok=True, projects=("blog",),
          signed_in=True, mapped=("blog",)):
-    state = State(tmp_path / "state.db")
+    repos = Repos.open(Database(tmp_path / "state.db"))
     for pid in projects:
-        state.add_project(pid, f"/p/{pid}", "d.io")
+        repos.projects.add(pid, f"/p/{pid}", "d.io")
     if signed_in:
-        state.update_account(access_token="at", refresh_token="rt",
+        repos.account.update(access_token="at", refresh_token="rt",
                              access_expires_at=10**12, org_id="org-1")
     for pid in mapped:
-        state.map_cloud_project(pid, f"c-{pid}", "org-1")
-    account = Account(state, cloud, spawn=lambda fn: None)
+        repos.cloud_projects.map(pid, f"c-{pid}", "org-1")
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
     runner = TunnelRunner(start_ok)
     clock = Clock()
-    public = Public(state=state, account=account, cloud=cloud,
+    public = Public(projects=repos.projects, cloud_projects=repos.cloud_projects, account=account, cloud=cloud,
                     client=TunnelClient(runner, tmp_path / "stack.yml"),
                     token_path=tmp_path / "tunnel.token", origin="http://traefik:39080",
                     hosts_for=lambda pid: list(hosts), clock=clock,
                     spawn=lambda fn: fn())
-    return public, state, runner, clock
+    return public, repos, runner, clock
 
 
 def test_turning_on_writes_a_narrow_token_starts_the_client_and_shows_the_urls(tmp_path):

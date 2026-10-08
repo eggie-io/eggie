@@ -3,7 +3,7 @@ import threading
 from fastapi import FastAPI
 
 from eggie_api.infra.runner import Completed
-from eggie_api.infra.state import State
+from eggie_api.infra.db import Database
 from tests.runtime.api.conftest import (COMPOSE_AMBIGUOUS, COMPOSE_MALFORMED,
                                   PS_RESTARTING, _create, _run_to_completion,
                                   _write_compose)
@@ -14,7 +14,7 @@ def test_importing_the_app_module_builds_nothing(env):
     # drag the whole suite onto the real filesystem.
     import eggie_api.routes.app as module
     assert not [name for name, value in vars(module).items()
-                if isinstance(value, (FastAPI, State))]
+                if isinstance(value, (FastAPI, Database))]
 
 
 def test_missing_project_returns_a_structured_404(env):
@@ -341,11 +341,11 @@ def test_a_stored_problem_clears_when_the_project_answers_on_a_re_read(env):
     _write_compose(env, "blog")
     env.probe.status = 502
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert env.state.get_project("blog")["problem_code"] == "bound_to_loopback"
+    assert env.repos.projects.get("blog")["problem_code"] == "bound_to_loopback"
 
     env.probe.status = 200
     assert env.client.get("/projects/blog").json()["problem"] is None
-    assert env.state.get_project("blog")["problem_code"] is None, \
+    assert env.repos.projects.get("blog")["problem_code"] is None, \
         "the stale row must be cleared, not just hidden from one response"
 
 
@@ -386,5 +386,5 @@ def test_a_stale_problem_clears_in_the_listing_too(env):
 
     env.probe.status = 200
     assert env.client.get("/projects").json()["projects"][0]["problem"] is None
-    assert env.state.get_project("blog")["problem_code"] is None, \
+    assert env.repos.projects.get("blog")["problem_code"] is None, \
         "the stale row must be cleared, not just hidden from one response"

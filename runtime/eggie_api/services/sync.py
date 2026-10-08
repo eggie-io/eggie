@@ -8,22 +8,23 @@ from .account import NotSignedIn
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..constants import VERIFY_PROJECT_ID
 from ..domain.sync import Create, Delete, Forget, client_ref, plan
+from ..infra.repos import Repos
 
 log = logging.getLogger("eggie.sync")
 
 
-def apply(actions, *, account, cloud, state, org_id: str) -> list[str]:
+def apply(actions, *, account, cloud, repos: Repos, org_id: str) -> list[str]:
     errors: list[str] = []
     device_id = account.device_id
     for action in actions:
         try:
             if isinstance(action, Forget):
-                state.unmap_cloud_project(action.local_id)
+                repos.cloud_projects.unmap(action.local_id)
             elif isinstance(action, Create):
                 ref = client_ref(device_id, action.local_id)
                 out = account.authed(lambda token, a=action, r=ref:
                                      cloud.create_project(token, a.local_id, r))
-                state.map_cloud_project(action.local_id, out["id"], org_id)
+                repos.cloud_projects.map(action.local_id, out["id"], org_id)
             else:
                 try:
                     account.authed(lambda token, a=action:
@@ -31,7 +32,7 @@ def apply(actions, *, account, cloud, state, org_id: str) -> list[str]:
                 except CloudError as e:
                     if e.status != 404:
                         raise
-                state.unmap_cloud_project(action.local_id)
+                repos.cloud_projects.unmap(action.local_id)
         except NotSignedIn:
             raise
         except Exception as e:
@@ -40,14 +41,14 @@ def apply(actions, *, account, cloud, state, org_id: str) -> list[str]:
     return errors
 
 
-def run_pass(account, cloud, state, clock=time.time) -> None:
+def run_pass(account, cloud, repos: Repos, clock=time.time) -> None:
     if not account.signed_in:
         return
     try:
         org_id = account.load_identity()
-        local_ids = {row["id"] for row in state.list_projects()} - {VERIFY_PROJECT_ID}
-        actions = plan(local_ids, state.cloud_mapping(), org_id)
-        errors = apply(actions, account=account, cloud=cloud, state=state,
+        local_ids = {row["id"] for row in repos.projects.list()} - {VERIFY_PROJECT_ID}
+        actions = plan(local_ids, repos.cloud_projects.mapping(), org_id)
+        errors = apply(actions, account=account, cloud=cloud, repos=repos,
                        org_id=org_id)
     except NotSignedIn:
         return

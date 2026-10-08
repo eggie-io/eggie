@@ -39,7 +39,8 @@ from ..infra.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
 # Imported by name: the /health route below shadows a module named `health`.
 from ..infra.health import answers, default_probe, diagnose
 from ..infra.runner import LocalRunner
-from ..infra.state import State
+from ..infra.db import Database
+from ..infra.repos import Repos
 from ..infra.tunnel import TunnelClient
 from ..infra.uploads import CHUNK_SIZE, UploadStore
 from ..services.account import Account
@@ -193,7 +194,7 @@ def _read_token(path: Path) -> str:
         return ""
 
 
-def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
+def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                jobs: JobRegistry | None = None, http_probe=None,
                sessions: Sessions | None = None, cloud=None,
                account: Account | None = None,
@@ -202,19 +203,19 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     config = config or ApiConfig.from_env()
     runner = runner or LocalRunner()
     http_probe = http_probe or default_probe
-    state = state if state is not None else State(config.state_db)
+    repos = repos if repos is not None else Repos.open(Database(config.state_db))
     jobs = jobs or JobRegistry()
     locks = ProjectLocks()
-    sessions = sessions if sessions is not None else Sessions(state)
+    sessions = sessions if sessions is not None else Sessions(repos.sessions)
     uploads = UploadStore(config.uploads_root,
                           free_bytes=lambda: disk.usage(
                               Path(config.projects_root))["free_bytes"])
     uploads.sweep()
     cloud = cloud or Cloud(config.cloud_url)
-    account = account or Account(state, cloud)
+    account = account or Account(repos.account, repos.cloud_projects, cloud)
 
     def public_hosts(project_id: str) -> list[dict]:
-        row = state.get_project(project_id)
+        row = repos.projects.get(project_id)
         if row is None:
             return []
         try:
@@ -227,7 +228,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 for web, host in zip(project.webs, hosts)]
 
     public = public or Public(
-        state=state, account=account, cloud=cloud,
+        projects=repos.projects, cloud_projects=repos.cloud_projects,
+        account=account, cloud=cloud,
         client=TunnelClient(runner, config.stack_file),
         token_path=config.tunnel_token_path,
         origin=f"http://{config.traefik_host}:{config.edge_port}",
@@ -239,20 +241,20 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             public.reconcile()
         except Exception:
             log.exception("reconciling public URLs failed")
-        run_pass(account, cloud, state)
+        run_pass(account, cloud, repos)
 
     sync = SyncLoop(sync_pass)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
     github_link = github_link or GitHubLink(
-        state, github, client_id=config.github_client_id,
+        repos.github, github, client_id=config.github_client_id,
         directory=config.github_dir)
     agent_status = AgentStatus(config.agent_status_dir, config.agents_dir)
 
     app = FastAPI(title="eggie-api", version=config.version)
     app.state.config = config
     app.state.runner = runner
-    app.state.state = state
+    app.state.repos = repos
     app.state.jobs = jobs
     app.state.sessions = sessions
     app.state.account = account
@@ -366,7 +368,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return Path(config.projects_root) / project_id
 
     def require_row(project_id: str) -> dict:
-        row = state.get_project(project_id)
+        row = repos.projects.get(project_id)
         if row is None:
             raise NotFound("project_not_found",
                            f"no project with id '{project_id}'")
@@ -419,7 +421,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 and (started is None or changed > started))
 
     def project_env(project_id: str) -> dict[str, str] | None:
-        return state.secret_values(project_id) or None
+        return repos.secrets.values(project_id) or None
 
     def payload(row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -452,7 +454,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     traefik_host=config.traefik_host, http_probe=http_probe):
                 # An entrypoint slower than the readiness window stores a
                 # diagnosis that is true for a minute and false forever after.
-                state.set_problem(row["id"])
+                repos.projects.set_problem(row["id"])
                 problem = None
         active = jobs.active_for(row["id"])
         try:
@@ -469,7 +471,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 "public": public_status,
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": restart_needed(row),
-                "secrets_requested": len(state.secret_requests(row["id"])),
+                "secrets_requested": len(repos.secrets.requests(row["id"])),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
@@ -608,7 +610,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             raise Invalid("invalid_project",
                           f"'{body.repo}' has no usable project name")
         directory = project_dir(project_id)
-        if state.get_project(project_id) is not None or directory.exists():
+        if repos.projects.get(project_id) is not None or directory.exists():
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
         token = require_github_token()
@@ -637,12 +639,12 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     if auth_failed(output):
                         github_link.confirm_bad(token)
                     raise JobFailed(output or "git clone failed")
-                if directory.exists() or state.get_project(project_id) is not None:
+                if directory.exists() or repos.projects.get(project_id) is not None:
                     shutil.rmtree(staging, ignore_errors=True)
                     raise JobFailed(f"a project called '{project_id}' appeared "
                                     "while downloading; nothing was changed")
                 os.rename(staging, directory)
-                state.add_project(project_id, str(directory), config.domain)
+                repos.projects.add(project_id, str(directory), config.domain)
                 sync.wake()
                 if not (directory / constants.COMPOSE_FILE).exists():
                     write(f"no {constants.COMPOSE_FILE} yet; left stopped\n")
@@ -674,7 +676,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         if not project_id:
             raise Invalid("invalid_project",
                           f"'{body.id}' is not a usable project id")
-        if state.get_project(project_id) is not None:
+        if repos.projects.get(project_id) is not None:
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
 
@@ -685,13 +687,13 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             (d / ".eggie" / "project.yml").write_text(yaml.safe_dump(
                 {"id": project_id, "web": [w.model_dump() for w in body.web]},
                 sort_keys=False))
-        state.add_project(project_id, str(d), body.domain or config.domain)
+        repos.projects.add(project_id, str(d), body.domain or config.domain)
         sync.wake()
-        return payload(state.get_project(project_id))
+        return payload(repos.projects.get(project_id))
 
     @router.post("/projects/{project_id}/adopt", status_code=201)
     def adopt_project(project_id: str) -> dict:
-        if state.get_project(project_id) is not None:
+        if repos.projects.get(project_id) is not None:
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
         folder = project_dir(project_id)
@@ -702,9 +704,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         if not found.adoptable:
             raise Conflict("not_adoptable",
                            f"'{project_id}' cannot be adopted: {found.reason}")
-        state.add_project(project_id, str(folder), config.domain)
+        repos.projects.add(project_id, str(folder), config.domain)
         sync.wake()
-        return payload(state.get_project(project_id))
+        return payload(repos.projects.get(project_id))
 
     @router.get("/projects")
     def list_projects() -> dict:
@@ -712,7 +714,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         # diagnosis has to clear here too. payload() only probes a row that
         # carries a stored problem -- normally none -- so an ordinary listing
         # still pays no round trips at all.
-        rows = state.list_projects()
+        rows = repos.projects.list()
         known = {row["id"] for row in rows}
         return {"projects": [payload(row, recheck=True) for row in rows],
                 "discovered": [asdict(d) for d in
@@ -747,7 +749,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         # the gap between the two and this would resurrect the folder it
         # just removed.
         with locks.held(up.project_id):
-            if state.get_project(up.project_id) is None:
+            if repos.projects.get(up.project_id) is None:
                 uploads.cancel(upload_id)
                 raise NotFound("project_not_found",
                                f"no project with id '{up.project_id}'")
@@ -926,8 +928,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.get("/projects/{project_id}/secrets")
     def list_secrets(project_id: str) -> dict:
         row = require_row(project_id)
-        return {"secrets": state.secret_names(project_id),
-                "requested": state.secret_requests(project_id),
+        return {"secrets": repos.secrets.names(project_id),
+                "requested": repos.secrets.requests(project_id),
                 "restart_needed": restart_needed(row)}
 
     # No project lock: one sqlite statement, and a start in flight is caught
@@ -940,9 +942,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                                           "a value can't be empty; delete the secret instead")
         secret_rules.check_name(name)
         secret_rules.check_value(body.value)
-        secret_rules.check_total({**state.secret_values(project_id),
+        secret_rules.check_total({**repos.secrets.values(project_id),
                                   name: body.value})
-        state.set_secrets(project_id, {name: body.value})
+        repos.secrets.set(project_id, {name: body.value})
         return Response(status_code=204)
 
     @router.put("/projects/{project_id}/secret-requests/{name}", status_code=204)
@@ -950,14 +952,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         secret_rules.check_name(name)
         secret_rules.check_hint(body.hint)
-        state.request_secret(project_id, name, body.hint)
+        repos.secrets.request(project_id, name, body.hint)
         return Response(status_code=204)
 
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
     def delete_secret(project_id: str, name: str) -> Response:
         require_row(project_id)
-        removed = state.delete_secret(project_id, name)
-        dismissed = state.delete_request(project_id, name)
+        removed = repos.secrets.delete(project_id, name)
+        dismissed = repos.secrets.delete_request(project_id, name)
         if not (removed or dismissed):
             raise NotFound("secret_not_found",
                            f"project '{project_id}' has no secret '{name}'")
@@ -990,14 +992,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 runner, resolve_compose_name(project_id, row), volumes=purge)
             if purge:
                 uploads.drop_project(project_id)
-                state.drop_secrets(project_id)
+                repos.secrets.drop(project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
                 if folder.exists():
                     removed = lifecycle.remove_tree_as_root(runner, folder)
                     if not removed.ok and result.ok:
                         result = removed
-            state.remove_project(project_id)
+            repos.projects.remove(project_id)
             sync.wake()
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}
@@ -1026,7 +1028,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 # Recorded before compose runs, not after a successful start:
                 # delete must be able to find these containers by name even
                 # when `up` never reaches STARTED_OK.
-                state.set_compose_name(project_id, name)
+                repos.projects.set_compose_name(project_id, name)
                 write(f"compose up {project_id}\n")
                 # Stamped before the values are read, so a secret changed while
                 # compose runs still shows as needing a restart.
@@ -1038,7 +1040,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 diagnosis = None
                 if status in RUNNING:
                     # A crash-looping stack still got these values.
-                    state.mark_started(project_id, began)
+                    repos.projects.mark_started(project_id, began)
                 if status == STARTED_OK:
                     write.phase("checking")
                     write("waiting for the project to answer through Traefik\n")
@@ -1048,11 +1050,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                         edge_port=config.edge_port,
                         traefik_host=config.traefik_host, http_probe=http_probe,
                         timeout=config.ready_timeout)
-                state.set_status(project_id, status)
+                repos.projects.set_status(project_id, status)
                 if diagnosis is None:
-                    state.set_problem(project_id)
+                    repos.projects.set_problem(project_id)
                 else:
-                    state.set_problem(project_id, diagnosis.code,
+                    repos.projects.set_problem(project_id, diagnosis.code,
                                       diagnosis.message)
                 result = {"status": status, "urls": urls_for(project, domain),
                           "problem": diagnosis.as_dict() if diagnosis else None}
@@ -1097,7 +1099,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
-                state.set_status(project_id, "stopped")
+                repos.projects.set_status(project_id, "stopped")
                 return {"status": "stopped"}
             finally:
                 locks.release(project_id)
@@ -1108,7 +1110,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         """Projects carry no restart policy, so a VM reboot leaves them stopped
         while state.db still says started and Traefik answers 404."""
         job_ids = []
-        for row in state.list_projects():
+        for row in repos.projects.list():
             if row["status"] != STARTED_OK:
                 continue
             try:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..errors import Conflict
 from ..infra.github import GitHubError, GitHubUnavailable, identity_from
+from ..infra.repos.github import GitHubRepo
 
 SETUP_TIMEOUT = 30.0
 CHECK_EVERY = 300.0
@@ -59,9 +60,9 @@ def setup_state(row: dict, applied: dict | None, now: float) -> tuple[str, str |
 
 
 class GitHubLink:
-    def __init__(self, state, github, *, client_id: str, directory: Path,
+    def __init__(self, github_repo: GitHubRepo, github, *, client_id: str, directory: Path,
                  clock=time.time, sleep=time.sleep, spawn=_daemon):
-        self._state = state
+        self._repo = github_repo
         self._github = github
         self._client_id = client_id
         self._dir = Path(directory)
@@ -81,7 +82,7 @@ class GitHubLink:
 
     def token(self) -> str:
         with self._lock:
-            row = self._state.get_github()
+            row = self._repo.get()
             if not row["login"] or row["needs_reconnect"]:
                 raise NotConnected()
             try:
@@ -95,7 +96,7 @@ class GitHubLink:
                 return {"state": "pending", "user_code": self._pending["user_code"],
                         "url": self._pending["url"],
                         "expires_at": self._pending["expires_at"]}
-            row = self._state.get_github()
+            row = self._repo.get()
             if row["needs_reconnect"]:
                 return {"state": "needs_reconnect", "login": row["login"]}
             if row["login"] and self._token_path.exists():
@@ -118,7 +119,7 @@ class GitHubLink:
                              "url": out["verification_uri"],
                              "expires_at": self._clock() + out["expires_in"],
                              "interval": float(out.get("interval") or 5)}
-            self._state.update_github(last_error=None)
+            self._repo.update(last_error=None)
         self._ensure_poller()
         return self.status()
 
@@ -187,7 +188,7 @@ class GitHubLink:
             self._pending = None
             self._dir.mkdir(parents=True, exist_ok=True)
             _write(self._token_path, token, 0o600)
-            self._state.update_github(needs_reconnect=0, last_error=None,
+            self._repo.update(needs_reconnect=0, last_error=None,
                                       checked_at=self._clock(), **identity)
             self._write_desired("connected")
         return None
@@ -195,10 +196,10 @@ class GitHubLink:
     def _end(self, pending: dict, error: str) -> None:
         if self._pending is pending:
             self._pending = None
-            self._state.update_github(last_error=error)
+            self._repo.update(last_error=error)
 
     def _write_desired(self, state: str) -> None:
-        row = self._state.get_github()
+        row = self._repo.get()
         applied = read_applied(self._dir) or {}
         applied_gen = applied.get("generation")
         # A lost state.db restarts at 0; the next generation must still pass
@@ -210,13 +211,13 @@ class GitHubLink:
             doc.update(login=row["login"], name=row["name"], email=row["email"])
         self._dir.mkdir(parents=True, exist_ok=True)
         _write(self._dir / "desired.json", json.dumps(doc), 0o640)
-        self._state.update_github(generation=generation, desired_at=self._clock())
+        self._repo.update(generation=generation, desired_at=self._clock())
 
     def disconnect(self) -> dict:
         with self._lock:
             self._pending = None
             self._token_path.unlink(missing_ok=True)
-            self._state.update_github(login=None, gh_id=None, name=None, email=None,
+            self._repo.update(login=None, gh_id=None, name=None, email=None,
                                       needs_reconnect=0, last_error=None,
                                       checked_at=None)
             self._write_desired("disconnected")
@@ -241,12 +242,12 @@ class GitHubLink:
                     self.mark_bad_credentials()
                     raise NotConnected() from None
                 raise error
-            self._state.update_github(**identity)
+            self._repo.update(**identity)
             self._write_desired("connected")
             return self.status()
 
     def _is_current(self, token: str) -> bool:
-        row = self._state.get_github()
+        row = self._repo.get()
         if not row["login"] or row["needs_reconnect"]:
             return False
         try:
@@ -259,15 +260,15 @@ class GitHubLink:
         # reconnects or disconnects, and either writes a fresh desired state.
         with self._lock:
             self._token_path.unlink(missing_ok=True)
-            self._state.update_github(needs_reconnect=1)
+            self._repo.update(needs_reconnect=1)
 
     def check_token(self) -> None:
         with self._lock:
-            row = self._state.get_github()
+            row = self._repo.get()
             if (self.status()["state"] != "connected"
                     or self._clock() - (row["checked_at"] or 0) < CHECK_EVERY):
                 return
-            self._state.update_github(checked_at=self._clock())
+            self._repo.update(checked_at=self._clock())
             token = self._token_path.read_text().strip()
         self.confirm_bad(token)
 

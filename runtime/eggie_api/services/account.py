@@ -5,6 +5,8 @@ import threading
 import time
 
 from ..infra.cloud import CloudError, CloudUnavailable
+from ..infra.repos.account import AccountRepo
+from ..infra.repos.cloud_projects import CloudProjectRepo
 
 CLIENT_NAME = "Eggie"
 REFRESH_MARGIN = 60.0
@@ -26,9 +28,10 @@ def _daemon(fn) -> None:
 
 
 class Account:
-    def __init__(self, state, cloud, *, clock=time.time, sleep=time.sleep,
+    def __init__(self, account: AccountRepo, cloud_projects: CloudProjectRepo, cloud, *, clock=time.time, sleep=time.sleep,
                  spawn=_daemon):
-        self._state = state
+        self._account = account
+        self._cloud_projects = cloud_projects
         self._cloud = cloud
         self._clock = clock
         self._sleep = sleep
@@ -44,14 +47,14 @@ class Account:
 
     @property
     def signed_in(self) -> bool:
-        return bool(self._state.get_account()["access_token"])
+        return bool(self._account.get()["access_token"])
 
     @property
     def device_id(self) -> str:
-        return self._state.get_account()["device_id"]
+        return self._account.get()["device_id"]
 
     def status(self) -> dict:
-        row = self._state.get_account()
+        row = self._account.get()
         if row["access_token"]:
             return {"state": "signed_in", "email": row["email"],
                     "sync": {"last_ok_at": row["sync_ok_at"],
@@ -63,7 +66,7 @@ class Account:
         return {"state": "signed_out", "error": row["last_error"]}
 
     def start_sign_in(self) -> dict:
-        row = self._state.get_account()
+        row = self._account.get()
         if row["access_token"]:
             return self.status()
         if not (row["device_code"] and row["code_expires_at"] > self._clock()):
@@ -71,9 +74,9 @@ class Account:
             with self._write_lock:
                 # A sign-in may have landed while the service call was in
                 # flight; a fresh code must not overwrite a signed-in row.
-                if self._state.get_account()["access_token"]:
+                if self._account.get()["access_token"]:
                     return self.status()
-                self._state.update_account(
+                self._account.update(
                     device_code=out["device_code"], user_code=out["user_code"],
                     verification_url=out["verification_uri_complete"],
                     code_expires_at=self._clock() + out["expires_in"],
@@ -82,7 +85,7 @@ class Account:
         return self.status()
 
     def resume(self) -> None:
-        if self._state.get_account()["device_code"]:
+        if self._account.get()["device_code"]:
             self._ensure_poller()
 
     def _ensure_poller(self) -> None:
@@ -105,19 +108,19 @@ class Account:
             # Checked under the lock start_sign_in's spawn takes: a new code
             # stored after the last poll must not be left with no poller.
             with self._poll_lock:
-                if not self._state.get_account()["device_code"]:
+                if not self._account.get()["device_code"]:
                     self._polling = False
                     return
 
     def poll_once(self) -> float | None:
         with self._write_lock:
-            row = self._state.get_account()
+            row = self._account.get()
             if not row["device_code"]:
                 return None
             polled_code = row["device_code"]
             interval = row["poll_interval"] or DEFAULT_INTERVAL
             if self._clock() >= row["code_expires_at"]:
-                self._state.update_account(**_CLEARED_CODE, last_error="expired_token")
+                self._account.update(**_CLEARED_CODE, last_error="expired_token")
                 return None
 
         try:
@@ -129,7 +132,7 @@ class Account:
             tokens, error = None, e
 
         with self._write_lock:
-            row = self._state.get_account()
+            row = self._account.get()
             if row["device_code"] != polled_code:
                 # A sign-out or a fresh start_sign_in moved past this code
                 # while the service call was in flight: this reply belongs to
@@ -139,13 +142,13 @@ class Account:
             if error is not None:
                 if error.code == "slow_down":
                     interval += SLOW_DOWN_STEP
-                    self._state.update_account(poll_interval=interval)
+                    self._account.update(poll_interval=interval)
                     return interval
                 if error.code in _REFUSED:
-                    self._state.update_account(**_CLEARED_CODE, last_error=error.code)
+                    self._account.update(**_CLEARED_CODE, last_error=error.code)
                     return None
                 return interval
-            self._state.update_account(
+            self._account.update(
                 **_CLEARED_CODE, last_error=None, email=None, org_id=None,
                 access_token=tokens["access_token"],
                 refresh_token=tokens["refresh_token"],
@@ -161,7 +164,7 @@ class Account:
         return None
 
     def load_identity(self) -> str:
-        row = self._state.get_account()
+        row = self._account.get()
         if row["org_id"]:
             return row["org_id"]
         used: list[str] = []
@@ -174,14 +177,14 @@ class Account:
         with self._write_lock:
             # A sign-out (or a sign-in as someone else) during the call means
             # this reply belongs to a session that is no longer the stored one.
-            if self._state.get_account()["access_token"] != used[-1]:
+            if self._account.get()["access_token"] != used[-1]:
                 raise NotSignedIn()
-            self._state.update_account(email=me["user"]["email"],
+            self._account.update(email=me["user"]["email"],
                                        org_id=me["current_org_id"])
         return me["current_org_id"]
 
     def authed(self, fn):
-        row = self._state.get_account()
+        row = self._account.get()
         token = row["access_token"]
         if not token:
             raise NotSignedIn()
@@ -197,7 +200,7 @@ class Account:
     def _refresh(self, stale: str) -> str:
         with self._refresh_lock:
             with self._write_lock:
-                row = self._state.get_account()
+                row = self._account.get()
                 if not row["access_token"]:
                     raise NotSignedIn()
                 # Another thread refreshed while this one waited; refreshing
@@ -214,7 +217,7 @@ class Account:
                 out, error = None, e
 
             with self._write_lock:
-                row = self._state.get_account()
+                row = self._account.get()
                 if not row["access_token"]:
                     raise NotSignedIn()
                 if row["access_token"] != stale:
@@ -226,7 +229,7 @@ class Account:
                         self._forget("revoked")
                         raise NotSignedIn() from None
                     raise error
-                self._state.update_account(
+                self._account.update(
                     access_token=out["access_token"],
                     refresh_token=out["refresh_token"],
                     access_expires_at=self._clock() + out["expires_in"])
@@ -234,15 +237,15 @@ class Account:
 
     def record_sync(self, *, ok_at: float | None = None, error: str | None = None) -> None:
         with self._write_lock:
-            if not self._state.get_account()["access_token"]:
+            if not self._account.get()["access_token"]:
                 return
             fields = {"sync_error": error}
             if ok_at is not None:
                 fields["sync_ok_at"] = ok_at
-            self._state.update_account(**fields)
+            self._account.update(**fields)
 
     def sign_out(self) -> dict:
-        token = self._state.get_account()["access_token"]
+        token = self._account.get()["access_token"]
         if token:
             try:
                 self._cloud.logout(token)
@@ -253,11 +256,11 @@ class Account:
 
     def _forget(self, error: str | None) -> None:
         with self._write_lock:
-            self._state.update_account(
+            self._account.update(
                 **_CLEARED_CODE, email=None, org_id=None, access_token=None,
                 refresh_token=None, access_expires_at=None, last_error=error,
                 sync_ok_at=None, sync_error=None)
-            self._state.clear_cloud_projects()
+            self._cloud_projects.clear()
         try:
             self.on_forget()
         except Exception:

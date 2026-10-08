@@ -5,6 +5,8 @@ import secrets
 import threading
 import time
 
+from ..infra.repos.sessions import SessionRepo
+
 COOKIE = "eggie_session"
 SESSION_TTL = 7 * 24 * 3600
 HANDOFF_TTL = 60
@@ -33,8 +35,8 @@ class Sessions:
     """Browser sign-in. Handoff codes live in memory only: one that outlives an
     API restart would be a bearer credential sitting in the database."""
 
-    def __init__(self, state, *, clock=time.time):
-        self._state = state
+    def __init__(self, sessions: SessionRepo, *, clock=time.time):
+        self._sessions = sessions
         self._clock = clock
         self._codes: dict[str, float] = {}
         self._lock = threading.Lock()
@@ -53,25 +55,25 @@ class Sessions:
         if expires is None or expires <= self._clock():
             return None
         session_id = secrets.token_urlsafe(32)
-        self._state.add_session(_hash(session_id), self._clock() + SESSION_TTL)
+        self._sessions.add(_hash(session_id), self._clock() + SESSION_TTL)
         return session_id
 
     def check(self, session_id: str | None) -> Verdict:
         if not session_id:
             return Verdict("missing")
         key = _hash(session_id)
-        row = self._state.get_session(key)
+        row = self._sessions.get(key)
         if row is None:
             return Verdict("missing")
         now = self._clock()
         if row["expires_at"] <= now:
-            self._state.remove_session(key)
+            self._sessions.remove(key)
             return Verdict("expired")
         if row["expires_at"] - now < SLIDE_WINDOW:
-            self._state.set_session_expiry(key, now + SESSION_TTL)
+            self._sessions.set_expiry(key, now + SESSION_TTL)
             return Verdict("ok", extended=True)
         return Verdict("ok")
 
     def end(self, session_id: str | None) -> None:
         if session_id:
-            self._state.remove_session(_hash(session_id))
+            self._sessions.remove(_hash(session_id))

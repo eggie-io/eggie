@@ -10,6 +10,8 @@ from typing import Callable
 from .account import NotSignedIn
 from ..errors import Conflict
 from ..infra.cloud import CloudError, CloudUnavailable
+from ..infra.repos.cloud_projects import CloudProjectRepo
+from ..infra.repos.projects import ProjectRepo
 from ..infra.tunnel import TunnelClient, remove_token, write_token
 
 log = logging.getLogger("eggie.public")
@@ -83,11 +85,13 @@ class Public:
     restart may lose: the last record seen per project, an in-flight turn-on,
     a failure or an ended note to show, and releases still to retry."""
 
-    def __init__(self, *, state, account, cloud, client: TunnelClient,
+    def __init__(self, *, projects: ProjectRepo,
+                 cloud_projects: CloudProjectRepo, account, cloud, client: TunnelClient,
                  token_path: Path, origin: str,
                  hosts_for: Callable[[str], list[dict]],
                  clock=time.time, spawn=_daemon):
-        self._state = state
+        self._projects = projects
+        self._cloud_projects = cloud_projects
         self._account = account
         self._cloud = cloud
         self._client = client
@@ -110,7 +114,7 @@ class Public:
     def _blocked(self, local_id: str) -> str | None:
         if not self._account.signed_in:
             return "signed_out"
-        if local_id not in self._state.cloud_mapping():
+        if local_id not in self._cloud_projects.mapping():
             return "not_registered"
         if not self._hosts_for(local_id):
             return "no_web"
@@ -158,7 +162,7 @@ class Public:
         blocked = self._blocked(local_id)
         if blocked:
             raise PublicUnavailable(blocked)
-        cloud_id = self._state.cloud_mapping()[local_id]["cloud_id"]
+        cloud_id = self._cloud_projects.mapping()[local_id]["cloud_id"]
         attempt = _Attempt(cloud_id)
         with self._lock:
             if local_id in self._enabling:
@@ -350,9 +354,9 @@ class Public:
             out = None
         except (CloudUnavailable, NotSignedIn):
             return False
-        projects = {row["id"] for row in self._state.list_projects()}
+        projects = {row["id"] for row in self._projects.list()}
         by_cloud = {m["cloud_id"]: local_id
-                    for local_id, m in self._state.cloud_mapping().items()}
+                    for local_id, m in self._cloud_projects.mapping().items()}
         # Another device's URL, or one being released here, is not this VM's.
         active = by_cloud.get(out["project_id"]) if out else None
         with self._lock:

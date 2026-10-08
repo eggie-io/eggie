@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from eggie_api.infra.runner import Completed
 from eggie_api.infra.github import GitHubUnavailable
 from eggie_api.services.github_link import GitHubLink
-from eggie_api.infra.state import State
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
@@ -17,15 +18,15 @@ REPO = {"full_name": "octo/app", "private": True, "description": "An app",
 
 
 def make(env, github, *, connect=True):
-    state = State(env.config.state_db.with_name("gh.db"))
-    link = GitHubLink(state, github, client_id="cid",
+    repos = Repos.open(Database(env.config.state_db.with_name("gh.db")))
+    link = GitHubLink(repos.github, github, client_id="cid",
                       directory=env.config.state_db.with_name("github"),
                       spawn=lambda fn: None)
     if connect:
         link.connect()
         link.poll_once()
     runner = FakeRunner()
-    app = create_app(config=env.config, runner=runner, state=state,
+    app = create_app(config=env.config, runner=runner, repos=repos,
                      http_probe=FakeProbe(), github=github, github_link=link)
     return TestClient(app, headers=AUTH), runner, app, link
 

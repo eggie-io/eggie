@@ -19,19 +19,19 @@ always give them the project's URL.
   `uvicorn` and the like, not even for a quick check. Eggie cannot see, stop or remove
   such a process. Put it in the project's compose file and run `eggie up`.
 - Never edit `.eggie/overlay.yml`; it is generated.
-- Settings and secrets: `.env.example` at the project root lists every variable the project
-  needs — a secret as `NAME=` (empty), a non-secret setting as `NAME=default`. Eggie hands all of
-  them to every service as environment variables; the user fills secrets and can change defaults
-  on the project's **Secrets** page. Never write a secret value into any file, the compose file
-  or a commit, and never create `.env`; if a tool writes one, move its non-secret keys into
-  `.env.example`, then delete it. A random internal key (app secret, JWT/cookie secret):
-  generate it straight into Eggie with `openssl rand -hex 32 | eggie secret set NAME`. Laravel's
-  APP_KEY: `echo "base64:$(openssl rand -base64 32)" | eggie secret set APP_KEY`. A key
-  from an outside service (Stripe, OpenAI, mail): add `NAME=` and ask the user to fill it on the
-  Secrets page, then restart. After changing a default in `.env.example`, restart too.
-  `eggie secret list` shows what is set and what still needs a value. Run one-off commands inside
-  the running container with `docker exec <container> …` (find it with `docker ps`); a
-  `docker compose run` or `exec` you start re-reads the compose file without Eggie's variables.
+- Settings and secrets: use the project's `.env` as on any laptop — create it from the project's
+  template, edit it for settings, and let framework commands write their own keys (Laravel's
+  `php artisan key:generate`). A key or password from an outside service (Stripe, OpenAI, mail)
+  is a secret: tell the user where to get it, run `eggie secret request NAME "where to get it"`,
+  and ask them to fill it on the project's **Secrets** page in Eggie. Leave the name empty or out
+  of `.env`; Eggie hands the value to every service as an environment variable, and it wins over
+  `.env`. Never write a secret value into a file, the compose file or a commit. If the user insists
+  on putting it in `.env`, do it, but tell them once that it then lives in the project folder. A
+  service that sets the name to a literal in its own `environment:` beats Eggie: change it to
+  `${NAME}`. A secret change needs a restart. `.env` loaders in override mode, config cached into an
+  image and build-time variables don't see Eggie's values. `eggie secret list` shows what is set and
+  requested. Run one-off commands with `docker exec <container> …` (find it with `docker ps`); a
+  `docker compose run` you start gets none of Eggie's values.
 - Something broken? `eggie logs`.
 - An idea for an app, or a change to a project: start with the `eggie-brainstorm` skill.
 - Something to set up, import or run — a repo URL, an archive, a folder: the `eggie-setup`

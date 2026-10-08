@@ -42,25 +42,16 @@ and a host release. Prefer additive changes.
 
 ## Feature areas
 
-- **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets` table, v6),
-  outside every project folder and never synced. A service gets a name from three sources:
-  compose literal (a value without `$` the service sets itself) > stored value > the project's
-  `.env` until it is imported > `.env.example` default. Every name a regular-file `.env` sets
-  (empty included; leniently re-read if it doesn't parse) is dropped from the defaults, since
-  compose and frameworks read that file themselves. So is every name the compose file references
-  with its own default (`${X:-y}` etc., `compose_defaulted`): compose's default wins. Defaults are read at every compose call by
-  the lenient `parse_example`; a symlinked `.env.example` counts as absent. `.env.example` changes
-  apply at the next start; `restart_needed` doesn't track them. `compose_up` lists the bare names under
-  `environment:` for every service in `.eggie/overlay.yml` and passes the effective env only to
-  compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) --
-  compose interpolates the file for each, so `${KEY:?}` breaks any that lacks them; no route, log
-  or file carries a value. `restart_needed` = `started_ok` or `crash_looping` and
-  `secrets_changed_at > last_started_at`; a start is stamped before it reads values. Reserved
-  names (`COMPOSE_`/`DOCKER_`/`LD_` prefixes, `PATH`, `HOME`) are refused and never listed as
-  missing. import-dotenv stores only non-empty values that differ from defaults, keeps reserved
-  lines in `.env`, **empties** the rest (never deletes: `env_file: .env` needs the file) and never
-  reads a symlinked one. Services pulled in through compose `include:` get no names. Purge drops
-  stored values; a plain delete keeps them with the folder.
+- **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
+  every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
+  for one and vanish once it has a value. The project's `.env` is never read or written. A service
+  gets a name unless it sets that name to a literal in its own `environment:` (`declared`).
+  `compose_up` lists bare names in `.eggie/overlay.yml`; values go only into the environment of
+  compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) — compose
+  interpolates the file for each, so `${KEY:?}` breaks any that lacks them. `restart_needed` =
+  `started_ok` or `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped
+  before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`, `PATH`, `HOME`) are refused.
+  Services pulled in through compose `include:` get no names. Purge drops values and requests.
 - **Files** (`core/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
   `extract_archive` **merges** an uploaded tar.gz into the project dir and rejects absolute paths,

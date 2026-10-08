@@ -55,7 +55,7 @@ function StoredRow({ id, name, resets }: { id: string; name: string; resets: boo
   );
 }
 
-function DefaultRow({ id, name, base, overridden }: { id: string; name: string; base: string; overridden: boolean }) {
+function DefaultRow({ id, name, base, overridden, shadowed }: { id: string; name: string; base: string; overridden: boolean; shadowed: boolean }) {
   const save = useSetSecret(id);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(base);
@@ -73,8 +73,10 @@ function DefaultRow({ id, name, base, overridden }: { id: string; name: string; 
         </>
       ) : (
         <>
-          <span className={`${s.plain} ${s.grow} ${overridden ? s.struck : ""}`}>{base}</span>
-          {overridden ? <span className={s.tag}>overridden</span> : <Button onClick={() => setEditing(true)}>Edit</Button>}
+          <span className={`${s.plain} ${s.grow} ${overridden || shadowed ? s.struck : ""}`}>{base}</span>
+          {overridden ? <span className={s.tag}>overridden</span>
+            : shadowed ? <span className={s.tag}>set by .env</span>
+            : <Button onClick={() => setEditing(true)}>Edit</Button>}
         </>
       )}
       {save.error && <Notice>{actionError(save.error)}</Notice>}
@@ -152,7 +154,7 @@ export function SecretsPage() {
       {data.defaults.length > 0 && (
         <Collapsible summary={`Defaults from .env.example (${data.defaults.length})`}>
           <div className={s.rows}>
-            {data.defaults.map((d) => <DefaultRow key={d.name} id={id} name={d.name} base={d.value} overridden={d.overridden} />)}
+            {data.defaults.map((d) => <DefaultRow key={d.name} id={id} name={d.name} base={d.value} overridden={d.overridden} shadowed={d.shadowed} />)}
           </div>
         </Collapsible>
       )}

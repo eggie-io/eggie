@@ -428,12 +428,30 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return read_text(path)
 
     def example_of(project_id: str) -> dict[str, str]:
-        return secret_rules.parse_example(read_text(project_dir(project_id) / ".env.example"))
+        path = project_dir(project_id) / ".env.example"
+        if path.is_symlink():
+            return {}
+        return secret_rules.parse_example(read_text(path))
+
+    def dotenv_names(project_id: str) -> set[str]:
+        """Names the project's own `.env` sets, empty ones included: compose
+        and frameworks read that file, so a default must not override it."""
+        try:
+            text = read_dotenv(project_dir(project_id) / ".env")
+        except SecretError:
+            return set()
+        if text is None:
+            return set()
+        try:
+            return set(secret_rules.parse_dotenv(text))
+        except SecretError:
+            return set(secret_rules.parse_example(text))
 
     def project_env(project_id: str) -> dict[str, str] | None:
-        # Stored values win over the repo's defaults.
-        return {**secret_rules.defaults(example_of(project_id)),
-                **state.secret_values(project_id)} or None
+        shadowed = dotenv_names(project_id)
+        base = {k: v for k, v in secret_rules.defaults(example_of(project_id)).items()
+                if k not in shadowed}
+        return {**base, **state.secret_values(project_id)} or None
 
     def read_text(path: Path) -> str | None:
         try:
@@ -979,6 +997,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         base = secret_rules.defaults(example)
         stored = state.secret_names(project_id)
         have = {s["name"] for s in stored}
+        shadowed = dotenv_names(project_id)
         compose_text = read_text(d / constants.COMPOSE_FILE)
         try:
             compose = yaml.safe_load(compose_text or "") or {}
@@ -1000,7 +1019,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return {"secrets": [{**s, "overrides_default": s["name"] in base} for s in stored],
                 "missing": secret_rules.missing(example, compose_text, have=have,
                                                 declared_names=declared_names),
-                "defaults": [{"name": k, "value": v, "overridden": k in have}
+                "defaults": [{"name": k, "value": v, "overridden": k in have,
+                              "shadowed": k in shadowed}
                              for k, v in sorted(base.items())],
                 "dotenv": dotenv,
                 "restart_needed": restart_needed(row)}

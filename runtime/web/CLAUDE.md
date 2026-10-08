@@ -27,7 +27,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   `host/desktop/ui`). Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
 - `apps/console` — the app.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
-    name rule. Sections: Needs a value, Your values (write-only, typed values visible), Defaults (collapsed, from `.env.example`). Mock: `?scenario=secrets`.
+    name rule. Sections: Needs a value, Your values (write-only, typed values visible), Defaults (collapsed, from `.env.example`; one the current `.env` sets is tagged "set by .env"). Mock: `?scenario=secrets`.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.

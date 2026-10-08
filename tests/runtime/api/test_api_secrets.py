@@ -312,8 +312,10 @@ def test_the_listing_shows_defaults_in_clear_and_values_never(env):
     (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
     env.client.put("/projects/blog/secrets/MODE", json={"value": SECRET})
     body = env.client.get("/projects/blog/secrets").json()
-    assert body["defaults"] == [{"name": "APP_NAME", "value": "Blog", "overridden": False},
-                                {"name": "MODE", "value": "dev", "overridden": True}]
+    assert body["defaults"] == [{"name": "APP_NAME", "value": "Blog", "overridden": False,
+                                 "shadowed": False},
+                                {"name": "MODE", "value": "dev", "overridden": True,
+                                 "shadowed": False}]
     assert body["secrets"] == [{"name": "MODE", "updated_at": body["secrets"][0]["updated_at"],
                                 "overrides_default": True}]
     assert body["missing"] == ["API_KEY"]
@@ -363,3 +365,47 @@ def test_import_rewrites_a_reserved_value_with_quotes_and_backslashes_intact(env
     assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
     assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_X": 'a"b\\c'}
     assert env.state.secret_values("blog") == {"API_KEY": "k"}
+
+
+def _up_envs(env):
+    return [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-2:] == ["up", "-d"]]
+
+
+def test_a_dotenv_not_yet_imported_beats_the_defaults_it_sets(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("X=b\nY=c\n")
+    (folder / ".env").write_text("X=a\n")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env) == [{"Y": "c"}]
+    assert _overlay_names(env, folder)["worker"]["environment"] == ["Y"]
+    defaults = env.client.get("/projects/blog/secrets").json()["defaults"]
+    assert [(d["name"], d["shadowed"]) for d in defaults] == [("X", True), ("Y", False)]
+
+
+def test_a_stored_value_still_beats_the_dotenv(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("X=b\nY=c\n")
+    (folder / ".env").write_text("X=a\n")
+    env.client.put("/projects/blog/secrets/X", json={"value": "stored"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env) == [{"X": "stored", "Y": "c"}]
+
+
+def test_an_unparseable_dotenv_still_shadows_and_never_stops_a_start(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("X=b\nY=c\n")
+    (folder / ".env").write_text("X=\nnot a line\n")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env) == [{"Y": "c"}]
+
+
+def test_a_dotenv_example_symlink_is_treated_as_absent(env):
+    folder = _project(env)
+    outside = folder.parent / "outside.example"
+    outside.write_text("LEAKED=value\nAPI_KEY=\n")
+    (folder / ".env.example").symlink_to(outside)
+    body = env.client.get("/projects/blog/secrets").json()
+    assert body["defaults"] == []
+    assert "LEAKED" not in env.client.get("/projects/blog/secrets").text
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env) == [None]

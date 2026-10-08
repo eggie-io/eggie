@@ -123,7 +123,7 @@ export function handlersFor(scenario: Scenario) {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"]]), dotenv: ["SMTP_PASSWORD", "SMTP_USER"] }
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"]]), dotenv: ["LOG_LEVEL", "SMTP_PASSWORD", "SMTP_USER"] }
         : { names: new Map(), missing: [], defaults: new Map(), dotenv: null };
       secrets.set(id, entry);
     }
@@ -447,7 +447,7 @@ export function handlersFor(scenario: Scenario) {
       const entry = secretsOf(target.id);
       return HttpResponse.json({
         secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, overrides_default: entry.defaults.has(name) })),
-        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name) })),
+        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name), shadowed: entry.dotenv?.includes(name) ?? false })),
         missing: entry.missing.filter((n) => !entry.names.has(n)),
         dotenv: entry.dotenv && { names: entry.dotenv, error: null },
         restart_needed: target.restart_needed,

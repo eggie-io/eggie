@@ -19,6 +19,13 @@ always give them the project's URL.
   `uvicorn` and the like, not even for a quick check. Eggie cannot see, stop or remove
   such a process. Put it in the project's compose file and run `eggie up`.
 - Never edit `.eggie/overlay.yml`; it is generated.
+- Secrets (API keys, passwords, tokens): never write a value into any file, the compose
+  file or a commit, and never create `.env`. Add the name to `.env.example` as `NAME=`,
+  read it from the environment in the code (or `${NAME}` in docker-compose.yml), and ask the
+  user to fill it in on the project's **Secrets** page in Eggie, then restart. Eggie gives
+  every secret to every service as an environment variable. If the user pastes a value into
+  the chat anyway, save it with `eggie secret set NAME` (value on stdin), never into a file.
+  `eggie secret list` shows which names are set and which are still missing.
 - Something broken? `eggie logs`.
 - An idea for an app, or a change to a project: start with the `eggie-brainstorm` skill.
 - Something to set up, import or run — a repo URL, an archive, a folder: the `eggie-setup`

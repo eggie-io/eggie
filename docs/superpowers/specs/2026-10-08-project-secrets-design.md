@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS secrets (
   project_id TEXT NOT NULL,
   name       TEXT NOT NULL,
   value      TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
+  updated_at REAL NOT NULL,
   PRIMARY KEY (project_id, name)
 );
 ```
@@ -94,13 +94,14 @@ any secrets route contains a value.
 
 | Method | Path | Result |
 |--------|------|--------|
-| GET | `/projects/{id}/secrets` | `{secrets: [{name, updated_at}], missing: [name], dotenv: {names: [name]} \| null, restart_needed: bool}` |
+| GET | `/projects/{id}/secrets` | `{secrets: [{name, updated_at}], missing: [name], dotenv: {names: [name], error: str \| null} \| null, restart_needed: bool}` |
 | PUT | `/projects/{id}/secrets/{name}` | body `{value}`; create or replace; `204` |
 | DELETE | `/projects/{id}/secrets/{name}` | `204`; `404 secret_not_found` if absent |
 | POST | `/projects/{id}/secrets/import-dotenv` | parse root `.env`, store every key (file values overwrite), delete the file; returns `{imported: [name]}` |
 
-Unknown project → existing `404`. Writes take the project lock (`submit_locked` pattern is for
-jobs; secrets writes are synchronous and use the same per-project lock directly).
+Unknown project → existing `404`. PUT/DELETE take no project lock (one sqlite statement each); `start_work` stamps the start time before reading values, so a change during a start still reports `restart_needed`. import-dotenv takes the project lock because it deletes a file.
+
+import-dotenv errors: a `.env` line with an invalid name fails with `dotenv_invalid` and a message naming only the line number (never the key text, which may be part of a secret); a reserved-prefix name fails with `secret_name_reserved`.
 
 `restart_needed` = project status is `started_ok` and `secrets_changed_at > last_started_at`.
 It is also added to the project payload (`GET /projects/{id}` and the list) so the project page can

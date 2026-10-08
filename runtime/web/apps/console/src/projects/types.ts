@@ -49,7 +49,8 @@ export interface Project {
 }
 
 export interface SecretsView {
-  secrets: { name: string; updated_at: number }[];
+  secrets: { name: string; updated_at: number; overrides_default: boolean }[];
+  defaults: { name: string; value: string; overridden: boolean }[];
   missing: string[];
   dotenv: { names: string[]; error: string | null } | null;
   restart_needed: boolean;

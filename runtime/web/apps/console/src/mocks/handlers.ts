@@ -118,13 +118,13 @@ export function handlersFor(scenario: Scenario) {
   const projects = new Map<string, Project>();
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; dotenv: string[] | null }>();
+  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; defaults: Map<string, string>; dotenv: string[] | null }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], dotenv: ["SMTP_PASSWORD", "SMTP_USER"] }
-        : { names: new Map(), missing: [], dotenv: null };
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"]]), dotenv: ["SMTP_PASSWORD", "SMTP_USER"] }
+        : { names: new Map(), missing: [], defaults: new Map(), dotenv: null };
       secrets.set(id, entry);
     }
     return entry;
@@ -446,17 +446,20 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       return HttpResponse.json({
-        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at })),
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, overrides_default: entry.defaults.has(name) })),
+        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name) })),
         missing: entry.missing.filter((n) => !entry.names.has(n)),
         dotenv: entry.dotenv && { names: entry.dotenv, error: null },
         restart_needed: target.restart_needed,
       });
     }),
-    http.put("/api/projects/:id/secrets/:name", ({ params }) => {
+    http.put("/api/projects/:id/secrets/:name", async ({ params, request }) => {
       const target = projects.get(String(params.id));
       if (!target) return notFound(String(params.id));
       const name = String(params.name);
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse("secret_name_invalid", `'${name}' can't be a secret name`, 400);
+      const body = (await request.json().catch(() => ({}))) as { value?: unknown };
+      if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
       secretsOf(target.id).names.set(name, nowSec());
       touched(target);
       return new HttpResponse(null, { status: 204 });

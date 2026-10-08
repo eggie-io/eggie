@@ -1,5 +1,14 @@
 .field { display: flex; flex-direction: column; gap: 7px; }
 .label { font: 600 13.5px var(--font-body); color: var(--ink-2); }
+.wrap { position: relative; display: flex; }
+.wrap .input { flex: 1; min-width: 0; }
+.withEye { padding-right: 44px; }
+.eye {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center;
+  width: 36px; height: 36px; border: 0; border-radius: 9px; background: none; color: var(--ink-3); cursor: pointer;
+}
+.eye:hover { color: var(--ink); }
+.eye:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 1px; }
 .input {
   padding: 12px 14px; border-radius: 13px; border: 1px solid var(--line-2); background: var(--surface);
   font: 500 16px var(--font-body); color: var(--ink);

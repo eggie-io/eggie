@@ -1,4 +1,7 @@
+import base64
 import threading
+
+import yaml
 
 from eggie_api.core.exec import Completed
 from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
@@ -161,18 +164,17 @@ services:
 """
 
 
-def _overlay_names(env, folder):
-    import base64, yaml
+def _overlay_names(env):
     write = [a for a in env.runner.calls if a[0] == "bash" and "overlay.yml" in a[-1]][-1]
     text = base64.b64decode(write[-1].split("echo ", 1)[1].split(" ", 1)[0]).decode()
     return yaml.safe_load(text)["services"]
 
 
 def test_a_service_that_declares_a_name_keeps_its_own_value(env):
-    folder = _project(env, compose=COMPOSE_DECLARES)
+    _project(env, compose=COMPOSE_DECLARES)
     env.client.put("/projects/blog/secrets/DATABASE_URL", json={"value": "x"})
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert "environment" not in _overlay_names(env, folder).get("web", {})
+    assert "environment" not in _overlay_names(env).get("web", {})
 
 
 def test_an_empty_value_is_refused(env):

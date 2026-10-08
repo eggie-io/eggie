@@ -33,7 +33,7 @@ Known limitation: a coding agent inside the VM can still read values from runnin
 | D1 | Delivery | Names in `.eggie/overlay.yml`, values only in the environment of compose calls |
 | D2 | `.env` | Belongs to the project. Eggie never reads, parses, imports or empties it |
 | D3 | What is a secret | Third-party credentials. Internal keys the app generates (Laravel `APP_KEY`, the local DB password) stay in `.env` as usual |
-| D4 | Compose literal vs secret | A value a service hard-codes in its own `environment:` wins; the agent fixes that case |
+| D4 | Compose literal vs secret | A non-empty value a service hard-codes in its own `environment:` wins; the agent fixes that case |
 | D5 | Telling the user what's needed | `eggie secret request NAME "where to get it"` puts an empty field with that hint on the Secrets page |
 | D6 | Project delete | Secrets and requests removed only on purge |
 | D7 | CLI value input | Hidden prompt on a TTY, stdin otherwise; never argv |
@@ -80,8 +80,8 @@ requests never do.
   `secret_name_reserved`, `secret_invalid_value`, `secret_too_large`, `secrets_too_large`,
   `secret_hint_invalid`.
 
-`core/secrets.py` keeps `declared(compose)`: per service, the names it sets to a literal (a value
-with no `$`) in its own `environment:`. Every `.env`/`.env.example` parser and compose `${VAR}`
+`core/secrets.py` keeps `declared(compose)`: per service, the names it sets to a non-empty literal (a value
+with no `$`; an empty one is a placeholder) in its own `environment:`. Every `.env`/`.env.example` parser and compose `${VAR}`
 scanner from the earlier revisions is removed.
 
 ## 3. Delivery
@@ -158,7 +158,7 @@ payload (`GET /projects/{id}` and the list), with `secrets_requested: <count>` f
   **Secrets** page. Leave the name empty or absent in `.env`; Eggie's value wins.
 - Never write a secret value into any file, compose file or commit. If the owner insists on putting
   it in `.env`, do it, but say once that it then lives in the project folder and can reach git.
-- A service that hard-codes a name in its own `environment:` beats Eggie: replace the literal with
+- A service that hard-codes a non-empty value for a name in its own `environment:` beats Eggie: replace the literal with
   `${NAME}` when the owner moves that value to Secrets.
 - After a secret changes, the app needs a restart. One-off commands go through
   `docker exec <container> …`; a `docker compose run` the agent starts gets no Eggie values.

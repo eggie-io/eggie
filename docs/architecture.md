@@ -108,7 +108,7 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    with a `Host(<project-id>.127-0-0-1.sslip.io)` rule, then runs `docker compose up` with the
    project's file plus the overlay. The project's own files are never edited. Secrets
    reach containers as environment variables through the compose process environment and win over
-   the project's own `.env`; a literal a service sets in the compose file wins over them; the
+   the project's own `.env`; a non-empty literal a service sets in the compose file wins over them; the
    overlay lists names only.
 4. `*.127-0-0-1.sslip.io` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.

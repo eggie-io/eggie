@@ -1,4 +1,5 @@
 import { delay, http, HttpResponse } from "msw";
+import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
 import { baseName, joinPath, parentOf } from "../uploads/paths";
@@ -462,6 +463,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const name = String(params.name);
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse("secret_name_invalid", `'${name}' can't be a secret name`, 400);
+      if (RESERVED.test(name)) return refuse("secret_name_reserved", `'${name}' is reserved`, 400);
       const body = (await request.json().catch(() => ({}))) as { value?: unknown };
       if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
       const entry = secretsOf(target.id);

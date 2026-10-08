@@ -45,7 +45,7 @@ and a host release. Prefer additive changes.
 - **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service
-  gets a name unless it sets that name to a literal in its own `environment:` (`declared`).
+  gets a name unless it sets that name to a non-empty literal in its own `environment:` (`declared`).
   `compose_up` lists bare names in `.eggie/overlay.yml`; values go only into the environment of
   compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) — compose
   interpolates the file for each, so `${KEY:?}` breaks any that lacks them. `restart_needed` =

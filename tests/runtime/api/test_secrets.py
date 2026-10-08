@@ -65,8 +65,8 @@ def test_an_unpaired_surrogate_is_an_invalid_value_not_a_crash():
 def test_declared_reads_mapping_and_list_environments():
     compose = {"services": {
         "web": {"environment": {"DATABASE_URL": "postgres://db/app", "X": None,
-                                "Y": "${Y}", "PORT": 8080}},
-        "worker": {"environment": ["A=1", "B", "C=${C:-d}"]},
+                                "Y": "${Y}", "PORT": 8080, "E": ""}},
+        "worker": {"environment": ["A=1", "B", "C=${C:-d}", "D="]},
         "db": {"image": "postgres"},
     }}
     services, names = declared(compose)

@@ -77,6 +77,7 @@ export function ProjectPage() {
     />
   );
   const failed = lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>;
+  const restartNotice = project.restart_needed && <Notice>Secrets changed — press Restart to apply them.</Notice>;
   const head = (sub?: string) => (
     <header className={s.head}>
       <Egg size={44} tone={view.badge === "running" || view.badge === "starting" ? "yolk" : "cold"} />
@@ -105,6 +106,7 @@ export function ProjectPage() {
       body = (
         <>
           <WrongBody project={project} cause={view.cause} detail={view.detail} />
+          {restartNotice}
           {tiles}
         </>
       );
@@ -124,7 +126,7 @@ export function ProjectPage() {
             <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Restart</Button>
           </div>
           {failed}
-          {project.restart_needed && <Notice>Secrets changed — press Restart to apply them.</Notice>}
+          {restartNotice}
           <AddressRows web={project.web} live publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
           {tiles}
         </>

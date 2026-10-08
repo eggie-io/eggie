@@ -60,8 +60,19 @@ def test_secret_set_refuses_an_empty_value(guest):
 
 def test_secret_set_never_takes_the_value_as_an_argument(guest):
     folder = _project(guest)
-    with pytest.raises(SystemExit):
-        guest.run("secret", "set", "API_KEY", "leaked", cwd=folder)
+    code, out, err = guest.run("secret", "set", "API_KEY", "leaked", cwd=folder)
+    assert code == 1
+    assert "leaked" not in out + err
+    assert _values(guest) == {}
+
+
+def test_secret_request_for_a_name_with_a_value_does_not_open_a_request(guest):
+    folder = _project(guest)
+    guest.run("secret", "set", "API_KEY", cwd=folder, stdin="v")
+    code, out, _ = guest.run("secret", "request", "API_KEY", "hint", cwd=folder)
+    assert code == 0 and "already has a value" in out
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    assert "Requested:" not in out
 
 
 def test_secret_set_reports_the_apis_validation_message(guest):
@@ -97,8 +108,9 @@ def test_secret_request_lists_the_name_and_hint_until_it_is_set(guest):
 def test_secret_rm_dismisses_a_request(guest):
     folder = _project(guest)
     guest.run("secret", "request", "STRIPE_KEY", "hint", cwd=folder)
-    code, _, _ = guest.run("secret", "rm", "STRIPE_KEY", cwd=folder)
+    code, out, _ = guest.run("secret", "rm", "STRIPE_KEY", cwd=folder)
     assert code == 0
+    assert "Dismissed the request" in out
     _, out, _ = guest.run("secret", "list", cwd=folder)
     assert "STRIPE_KEY" not in out
 

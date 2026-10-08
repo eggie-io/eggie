@@ -27,7 +27,7 @@ always give them the project's URL.
   of `.env`; Eggie hands the value to every service as an environment variable, and it wins over
   `.env`. Never write a secret value into a file, the compose file or a commit. If the user insists
   on putting it in `.env`, do it, but tell them once that it then lives in the project folder. A
-  service that sets the name to a literal in its own `environment:` beats Eggie: change it to
+  service that sets the name to a non-empty literal in its own `environment:` beats Eggie: change it to
   `${NAME}`. A secret change needs a restart. `.env` loaders in override mode, config cached into an
   image and build-time variables don't see Eggie's values. `eggie secret list` shows what is set and
   requested. Run one-off commands with `docker exec <container> …` (find it with `docker ps`); a

@@ -45,6 +45,7 @@ Each of these is root-equivalent in the VM:
 | GitHub token | `/opt/eggie/github/token` (0600) | Login accounts reading it directly | Root, the Docker socket, the API |
 | Cloud account tokens | `/opt/eggie/state.db` | Nothing beyond `/opt/eggie`'s group permissions | Anything in the `docker` group |
 | Tunnel token | `/opt/eggie/tunnel/token` (0640 root:docker; present only while a public URL is on) | Login accounts outside the `docker` group | Anything in the `docker` group |
+| Project secrets | `/opt/eggie/state.db`, outside project folders; never synced | Leaking into project files, git and chat | Anything root-equivalent in the VM; anyone who can `docker inspect` or `docker exec ... env`, coding agents included. They are not protected from the agent |
 
 **The API token is not authentication.** It tells the host apart from a stray container and
 nothing more. Never treat holding it as proof of who is calling, never send it off the machine, and

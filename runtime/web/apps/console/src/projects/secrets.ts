@@ -1,6 +1,6 @@
 // Mirrors the API's check_name so a bad name is caught before the round trip.
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const RESERVED = /^(COMPOSE_|DOCKER_|LD_)|^(PATH|HOME)$/i;
+export const RESERVED = /^(COMPOSE_|DOCKER_|LD_)|^(PATH|HOME)$/i;
 
 export function nameProblem(raw: string, taken: string[]): string | null {
   const name = raw.trim();

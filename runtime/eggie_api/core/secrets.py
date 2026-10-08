@@ -75,10 +75,10 @@ def declared(compose: dict) -> tuple[list[str], dict[str, set[str]]]:
                      (str(e).partition("=") for e in env) if sep]
         else:
             pairs = []
-        # `X: ${X}` or a bare `X` takes its value from Eggie's environment;
-        # only a literal is the project's own choice.
+        # `X: ${X}`, a bare `X` or an empty `X: ""` is a placeholder that
+        # takes Eggie's value; only a non-empty literal is the project's own.
         names[service] = {k for k, v in pairs
-                          if v is not None and "$" not in str(v)}
+                          if v is not None and str(v) != "" and "$" not in str(v)}
     return list(services), names
 
 

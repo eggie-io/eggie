@@ -411,7 +411,11 @@ def cmd_down(env: Env) -> None:
 _APPLY_HINT = "Run `eggie up` to apply it."
 
 
-def cmd_secret_set(env: Env, name: str) -> None:
+def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
+    if extra:
+        # Raised here, not by argparse, which would echo the value back.
+        raise EggieError("eggie secret set takes no value argument; "
+                         "pipe it in or type it at the prompt")
     project_id = _require_project(env)
     # Never from argv: that ends up in shell history and `ps`.
     if env.stdin.isatty():
@@ -429,7 +433,12 @@ def cmd_secret_set(env: Env, name: str) -> None:
 
 def cmd_secret_request(env: Env, name: str, hint: str) -> None:
     project_id = _require_project(env)
-    env.client().request_secret(project_id, name, hint)
+    client = env.client()
+    if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
+        print(f"{name} already has a value; ask the owner to Replace it on "
+              f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
+        return
+    client.request_secret(project_id, name, hint)
     print(f"Requested {name}. Ask the owner to fill it on {project_id}'s Secrets "
           "page in Eggie.", file=env.out)
 
@@ -453,8 +462,13 @@ def cmd_secret_list(env: Env) -> None:
 
 def cmd_secret_rm(env: Env, name: str) -> None:
     project_id = _require_project(env)
-    env.client().delete_secret(project_id, name)
-    print(f"Removed {name} from {project_id}.", file=env.out)
+    client = env.client()
+    had_value = any(s["name"] == name for s in client.secrets(project_id).get("secrets", []))
+    client.delete_secret(project_id, name)
+    if had_value:
+        print(f"Removed {name} from {project_id}.", file=env.out)
+    else:
+        print(f"Dismissed the request for {name}.", file=env.out)
 
 
 def repo_name(url: str) -> str:
@@ -534,6 +548,7 @@ def _parser() -> argparse.ArgumentParser:
     secret_set = secret_sub.add_parser(
         "set", help="save a secret; the value is read from the terminal or stdin")
     secret_set.add_argument("name")
+    secret_set.add_argument("extra", nargs="*", help=argparse.SUPPRESS)
     secret_request = secret_sub.add_parser(
         "request", help="ask the owner for a secret; shows on the project's Secrets page")
     secret_request.add_argument("name")
@@ -555,7 +570,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "new": lambda: cmd_new(env, args.name),
         "clone": lambda: cmd_clone(env, args.url, args.name),
         "secret": lambda: {
-            "set": lambda: cmd_secret_set(env, args.name),
+            "set": lambda: cmd_secret_set(env, args.name, args.extra),
             "request": lambda: cmd_secret_request(env, args.name, args.hint),
             "list": lambda: cmd_secret_list(env),
             "rm": lambda: cmd_secret_rm(env, args.name),

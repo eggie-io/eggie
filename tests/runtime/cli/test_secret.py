@@ -78,7 +78,7 @@ def test_secret_list_shows_names_and_missing_but_no_values(guest):
     code, out, _ = guest.run("secret", "list", cwd=folder)
     assert code == 0
     assert "API_KEY" in out
-    assert "OTHER" in out and "missing" in out.lower()
+    assert "OTHER" in out and "Needs a value" in out
     assert "hidden-value" not in out
 
 
@@ -95,3 +95,13 @@ def test_secret_rm_removes_it_and_an_unknown_name_fails(guest):
     assert _values(guest) == {}
     code, _, err = guest.run("secret", "rm", "API_KEY", cwd=folder)
     assert code == 1 and "API_KEY" in err
+
+
+def test_secret_list_counts_defaults_and_never_prints_their_values(guest):
+    folder = _project(guest)
+    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
+    code, out, _ = guest.run("secret", "list", cwd=folder)
+    assert code == 0
+    assert "2 defaults from .env.example" in out
+    assert "Blog" not in out
+    assert "API_KEY" in out

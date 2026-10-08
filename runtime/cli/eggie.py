@@ -431,8 +431,12 @@ def cmd_secret_list(env: Env) -> None:
         print(name, file=env.out)
     missing = data.get("missing") or []
     if missing:
-        print("Missing (no value yet): " + ", ".join(missing), file=env.out)
-    if not names and not missing:
+        print("Needs a value: " + ", ".join(missing), file=env.out)
+    count = len(data.get("defaults") or [])
+    if count:
+        print(f"{count} defaults from .env.example; change them on the "
+              "project's Secrets page in Eggie.", file=env.out)
+    if not names and not missing and not count:
         print(f"{project_id} has no secrets.", file=env.out)
     if data.get("dotenv"):
         print("This project has a .env file; move it into secrets on the "

@@ -29,7 +29,7 @@ included. Skills live in `eggie-skills` and are re-installed by every runtime in
 
 Only when a route the host calls changes incompatibly:
 
-1. Bump `API_VERSION` in `runtime/eggie_api/core/constants.py` and `runtime/release.json`.
+1. Bump `API_VERSION` in `runtime/eggie_api/constants.py` and `runtime/release.json`.
 2. Release a desktop app whose `SUPPORTED_API` includes the new number **before** tagging the runtime,
    or no VM will install it.
 

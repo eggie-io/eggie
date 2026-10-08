@@ -89,7 +89,7 @@ never looks installed. Everything runs under `flock /opt/eggie/update.lock`.
 
 ### The API
 
-The API keeps the logic in `core/` (no FastAPI imports) and the routes in `routes/`. Every route
+The API keeps the logic in `domain/`, `services/` and `infra/` (no FastAPI imports) and the routes in `rest/`. Every route
 is mounted twice:
 
 - at `/` behind the bearer token, for the host and the in-VM `eggie` CLI;
@@ -103,8 +103,8 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
 1. A project is a folder under `/opt/eggie/projects/` with a compose file. It gets there by
    upload, `git clone`, `eggie new`, or a coding agent creating it (the console offers to adopt
    folders the API doesn't know).
-2. The API parses the compose file and detects the web service and its port (`core/detect.py`).
-3. It writes a Traefik overlay (`core/overlay.py`) that joins that service to the `edge` network
+2. The API parses the compose file and detects the web service and its port (`domain/detect.py`).
+3. It writes a Traefik overlay (`domain/overlay.py`) that joins that service to the `edge` network
    with a `Host(<project-id>.127-0-0-1.sslip.io)` rule, then runs `docker compose up` with the
    project's file plus the overlay. The project's own files are never edited. Secrets
    reach containers as environment variables through the compose process environment and win over
@@ -112,7 +112,7 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    overlay lists names only.
 4. `*.127-0-0-1.sslip.io` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
-5. After a VM reboot, `resume_projects()` restarts the projects that were running.
+5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.
 
 ### Root-side helpers
 

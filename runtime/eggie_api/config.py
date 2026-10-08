@@ -36,7 +36,7 @@ class ApiConfig:
     state_db: Path = Path(f"{constants.GUEST_ROOT}/state.db")
     # The shared secret the runtime installer generates in the guest. Phase 3
     # replaces it with a service-issued device token; see
-    # eggie_api/routes/app.py's auth check.
+    # eggie_api/rest/auth.py's auth check.
     token_path: Path = Path(constants.GUEST_TOKEN)
     connect_path: Path = Path(constants.CONNECT_FILE)
     # Partial uploads, outside projects_root so neither a listing, the

@@ -1,5 +1,7 @@
 # Project secrets — Revision 2 Implementation Plan
 
+> **Superseded** by Revision 3 — see `docs/superpowers/specs/2026-10-08-project-secrets-design.md` and `2026-10-08-project-secrets-revision-3.md`. Do not execute.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `.env.example` defaults (delivered to the app, editable), let a compose literal win over Eggie's variables, and fold in the review fixes — on the existing `feature/13-project-secrets` branch (PR eggie-io/eggie#55).

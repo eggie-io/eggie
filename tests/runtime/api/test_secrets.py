@@ -43,7 +43,7 @@ def test_the_project_total_is_capped():
 
 
 @pytest.mark.parametrize("name", ["COMPOSE_FILE", "docker_host", "LD_PRELOAD",
-                                  "PATH", "home"])
+                                  "PATH", "home", "BUILDX_BUILDER", "buildkit_host"])
 def test_names_the_runtime_reads_itself_are_reserved(name):
     assert is_reserved(name)
     with pytest.raises(SecretError) as e:
@@ -78,7 +78,7 @@ def test_declared_tolerates_a_compose_without_services():
     assert declared({}) == ([], {})
 
 
-@pytest.mark.parametrize("hint", ["", "x" * 501, "a\x00b", "bad \ud800"])
+@pytest.mark.parametrize("hint", ["", "x" * 501, "a\x00b", "bad \ud800", "a\nb", "\x1b[31m"])
 def test_a_bad_hint_is_refused_with_its_code(hint):
     with pytest.raises(SecretError) as e:
         check_hint(hint)

@@ -14,7 +14,7 @@ describe("nameProblem", () => {
   it.each(["COMPOSE_FILE", "docker_host"])("refuses the reserved %s", (name) => {
     expect(nameProblem(name, [])).toMatch(/reserved/);
   });
-  it.each(["ld_preload", "PATH", "home"])("refuses the reserved %s", (name) => {
+  it.each(["ld_preload", "PATH", "home", "BUILDX_BUILDER", "buildkit_host"])("refuses the reserved %s", (name) => {
     expect(nameProblem(name, [])).toMatch(/reserved/);
   });
   it("allows a name that only starts like PATH", () => {

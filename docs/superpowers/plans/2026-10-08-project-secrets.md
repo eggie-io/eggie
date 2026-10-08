@@ -1,5 +1,7 @@
 # Project secrets Implementation Plan
 
+> **Superseded** by Revision 3 — see `docs/superpowers/specs/2026-10-08-project-secrets-design.md` and `2026-10-08-project-secrets-revision-3.md`. Do not execute.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Per-project secrets stored in the VM's `state.db`, handed to every compose service as environment variables on start, managed write-only from the console, the in-VM CLI and the API.

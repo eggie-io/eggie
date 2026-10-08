@@ -72,10 +72,10 @@ requests never do.
 ## 2. Validation (`core/secrets.py`, pure)
 
 - Name: `^[A-Za-z_][A-Za-z0-9_]*$`. Reserved (case-insensitive): prefixes `COMPOSE_`, `DOCKER_`,
-  `LD_`, names `PATH`, `HOME` — compose and the docker CLI read these from their own environment.
+  `LD_`, `BUILDX_`, `BUILDKIT_`, names `PATH`, `HOME` — compose and the docker CLI read these from their own environment.
 - Value: not empty, no NUL, no lone surrogate, at most 64 KiB. Project total (sum of
   `len(name)+len(value)+2`) at most 512 KiB, below Linux's exec limits.
-- Hint: plain text, 1–500 characters, no NUL; shown as text, never as HTML.
+- Hint: plain text, 1–500 characters, no control characters except tab; shown as text, never as HTML.
 - Errors in the API's `{"error": {code, message}}` shape: `secret_name_invalid`,
   `secret_name_reserved`, `secret_invalid_value`, `secret_too_large`, `secrets_too_large`,
   `secret_hint_invalid`.

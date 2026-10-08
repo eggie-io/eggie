@@ -77,7 +77,7 @@ export function ProjectPage() {
     />
   );
   const failed = lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>;
-  const restartNotice = project.restart_needed && <Notice>Secrets changed — press Restart to apply them.</Notice>;
+  const restartNotice = project.restart_needed && <Notice>Secrets changed — restart the project to apply them.</Notice>;
   const head = (sub?: string) => (
     <header className={s.head}>
       <Egg size={44} tone={view.badge === "running" || view.badge === "starting" ? "yolk" : "cold"} />

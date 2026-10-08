@@ -7,6 +7,9 @@ import { nameProblem } from "../../projects/secrets";
 import page from "../project/ProjectPage.module.css";
 import s from "./SecretsPage.module.css";
 
+// Pasted keys often carry a stray space or tab at the ends; newlines belong to PEM bodies.
+const trimValue = (v: string) => v.replace(/^[ \t]+|[ \t]+$/g, "");
+
 function RequestedRow({ id, name, hint }: { id: string; name: string; hint: string }) {
   const save = useSetSecret(id);
   const dismiss = useDeleteSecret(id);
@@ -18,7 +21,7 @@ function RequestedRow({ id, name, hint }: { id: string; name: string; hint: stri
         <p className={page.muted}>{hint}</p>
         <TextField label="Value" secret value={value} onChange={setValue} />
       </div>
-      <Button variant="primary" disabled={value === "" || save.isPending} onClick={() => save.mutate({ name, value }, { onSuccess: () => setValue("") })}>Save</Button>
+      <Button variant="primary" disabled={trimValue(value) === "" || save.isPending} onClick={() => save.mutate({ name, value: trimValue(value) }, { onSuccess: () => setValue("") })}>Save</Button>
       <Button disabled={dismiss.isPending} onClick={() => dismiss.mutate(name)}>Dismiss</Button>
       {(save.error || dismiss.error) && <Notice>{actionError(save.error ?? dismiss.error)}</Notice>}
     </div>
@@ -39,7 +42,7 @@ function StoredRow({ id, name }: { id: string; name: string }) {
           <div className={s.grow}>
             <TextField label="New value" secret autoFocus value={value} onChange={setValue} />
           </div>
-          <Button variant="primary" disabled={value === "" || save.isPending} onClick={() => save.mutate({ name, value }, { onSuccess: close })}>Save</Button>
+          <Button variant="primary" disabled={trimValue(value) === "" || save.isPending} onClick={() => save.mutate({ name, value: trimValue(value) }, { onSuccess: close })}>Save</Button>
           <Button onClick={close}>Cancel</Button>
         </>
       ) : (
@@ -95,6 +98,7 @@ export function SecretsPage() {
           </Button>
         </Notice>
       )}
+      {lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>}
       {data.requested.length > 0 && (
         <>
           <h2 className={page.big}>Requested</h2>
@@ -121,11 +125,11 @@ export function SecretsPage() {
         </div>
         <Button
           variant="primary"
-          disabled={add.isPending || value === ""}
+          disabled={add.isPending || trimValue(value) === ""}
           onClick={() => {
             setTried(true);
             if (problem) return;
-            add.mutate({ name: name.trim(), value }, { onSuccess: () => { setName(""); setValue(""); setTried(false); } });
+            add.mutate({ name: name.trim(), value: trimValue(value) }, { onSuccess: () => { setName(""); setValue(""); setTried(false); } });
           }}
         >
           Add

@@ -6,7 +6,7 @@ import re
 NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # Compose, the docker CLI and the dynamic loader read these from their own
 # environment, and secrets are that environment.
-RESERVED_PREFIXES = ("COMPOSE_", "DOCKER_", "LD_")
+RESERVED_PREFIXES = ("COMPOSE_", "DOCKER_", "LD_", "BUILDX_", "BUILDKIT_")
 RESERVED_NAMES = frozenset({"PATH", "HOME"})
 MAX_VALUE_BYTES = 64 * 1024
 MAX_PROJECT_BYTES = 512 * 1024
@@ -29,11 +29,11 @@ def is_reserved(name: str) -> bool:
 def check_name(name: str) -> None:
     if not NAME.fullmatch(name):
         raise SecretError("secret_name_invalid",
-                          f"'{name}' can't be a secret name: use letters, digits "
-                          "and underscores, not starting with a digit")
+                          "a secret's name can use letters, digits and underscores, "
+                          "and can't start with a digit")
     if is_reserved(name):
         raise SecretError("secret_name_reserved",
-                          f"'{name}' is reserved: Eggie and Docker read it "
+                          "that name is reserved: Eggie and Docker read it "
                           "from their own environment")
 
 
@@ -83,7 +83,8 @@ def declared(compose: dict) -> tuple[list[str], dict[str, set[str]]]:
 
 
 def check_hint(hint: str) -> None:
-    ok = 0 < len(hint) <= MAX_HINT_CHARS and "\x00" not in hint
+    ok = (0 < len(hint) <= MAX_HINT_CHARS
+          and not any(c != "\t" and (c < " " or c == "\x7f") for c in hint))
     try:
         hint.encode("utf-8")
     except UnicodeEncodeError:

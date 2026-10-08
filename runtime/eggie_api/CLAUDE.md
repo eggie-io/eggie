@@ -50,7 +50,7 @@ and a host release. Prefer additive changes.
   compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) — compose
   interpolates the file for each, so `${KEY:?}` breaks any that lacks them. `restart_needed` =
   `started_ok` or `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped
-  before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`, `PATH`, `HOME`) are refused.
+  before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`/`BUILDX_`/`BUILDKIT_`, `PATH`, `HOME`) are refused.
   Services pulled in through compose `include:` get no names. Purge drops values and requests.
 - **Files** (`core/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.

@@ -71,15 +71,36 @@ def test_secret_set_reports_the_apis_validation_message(guest):
     assert "reserved" in err
 
 
-def test_secret_list_shows_names_and_missing_but_no_values(guest):
+def test_secret_list_shows_names_and_requests_but_no_values(guest):
     folder = _project(guest)
-    (folder / ".env.example").write_text("API_KEY=\nOTHER=\n")
     guest.run("secret", "set", "API_KEY", cwd=folder, stdin="hidden-value")
+    guest.run("secret", "request", "OTHER", "from the vendor", cwd=folder)
     code, out, _ = guest.run("secret", "list", cwd=folder)
     assert code == 0
     assert "API_KEY" in out
-    assert "OTHER" in out and "Needs a value" in out
+    assert "Requested:" in out and "OTHER — from the vendor" in out
     assert "hidden-value" not in out
+
+
+def test_secret_request_lists_the_name_and_hint_until_it_is_set(guest):
+    folder = _project(guest)
+    code, out, err = guest.run("secret", "request", "STRIPE_KEY",
+                               "Stripe → Developers → API keys", cwd=folder)
+    assert (code, err) == (0, "")
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    assert "Requested:" in out and "STRIPE_KEY — Stripe → Developers → API keys" in out
+    guest.run("secret", "set", "STRIPE_KEY", cwd=folder, stdin="sk\n")
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    assert "Requested:" not in out and "sk" not in out.split()
+
+
+def test_secret_rm_dismisses_a_request(guest):
+    folder = _project(guest)
+    guest.run("secret", "request", "STRIPE_KEY", "hint", cwd=folder)
+    code, _, _ = guest.run("secret", "rm", "STRIPE_KEY", cwd=folder)
+    assert code == 0
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    assert "STRIPE_KEY" not in out
 
 
 def test_secret_set_on_a_running_project_says_how_to_apply_it(guest):
@@ -95,20 +116,3 @@ def test_secret_rm_removes_it_and_an_unknown_name_fails(guest):
     assert _values(guest) == {}
     code, _, err = guest.run("secret", "rm", "API_KEY", cwd=folder)
     assert code == 1 and "API_KEY" in err
-
-
-def test_secret_list_counts_defaults_and_never_prints_their_values(guest):
-    folder = _project(guest)
-    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
-    code, out, _ = guest.run("secret", "list", cwd=folder)
-    assert code == 0
-    assert "2 defaults from .env.example" in out
-    assert "Blog" not in out
-    assert "API_KEY" in out
-
-
-def test_secret_list_says_one_default_in_the_singular(guest):
-    folder = _project(guest)
-    (folder / ".env.example").write_text("APP_NAME=Blog\n")
-    _, out, _ = guest.run("secret", "list", cwd=folder)
-    assert "1 default from .env.example;" in out

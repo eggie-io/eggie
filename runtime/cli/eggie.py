@@ -272,6 +272,10 @@ class ApiClient:
         self._call("DELETE", f"/projects/{project_id}/secrets/"
                              f"{urllib.parse.quote(name, safe='')}")
 
+    def request_secret(self, project_id: str, name: str, hint: str) -> None:
+        self._call("PUT", f"/projects/{project_id}/secret-requests/"
+                          f"{urllib.parse.quote(name, safe='')}", {"hint": hint})
+
 
 def _default_client() -> ApiClient:
     return ApiClient(read_token(Path(GUEST_TOKEN)))
@@ -423,25 +427,26 @@ def cmd_secret_set(env: Env, name: str) -> None:
         print(_APPLY_HINT, file=env.out)
 
 
+def cmd_secret_request(env: Env, name: str, hint: str) -> None:
+    project_id = _require_project(env)
+    env.client().request_secret(project_id, name, hint)
+    print(f"Requested {name}. Ask the owner to fill it on {project_id}'s Secrets "
+          "page in Eggie.", file=env.out)
+
+
 def cmd_secret_list(env: Env) -> None:
     project_id = _require_project(env)
     data = env.client().secrets(project_id)
     names = [s["name"] for s in data.get("secrets", [])]
     for name in names:
         print(name, file=env.out)
-    missing = data.get("missing") or []
-    if missing:
-        print("Needs a value: " + ", ".join(missing), file=env.out)
-    count = len(data.get("defaults") or [])
-    if count:
-        noun, them = ("default", "it") if count == 1 else ("defaults", "them")
-        print(f"{count} {noun} from .env.example; change {them} on the "
-              "project's Secrets page in Eggie.", file=env.out)
-    if not names and not missing and not count:
+    requested = data.get("requested") or []
+    if requested:
+        print("Requested:", file=env.out)
+        for r in requested:
+            print(f"  {r['name']} — {r['hint']}", file=env.out)
+    if not names and not requested:
         print(f"{project_id} has no secrets.", file=env.out)
-    if data.get("dotenv"):
-        print("This project has a .env file; move it into secrets on the "
-              "project's Secrets page in Eggie.", file=env.out)
     if data.get("restart_needed"):
         print("Run `eggie up` to apply the changes.", file=env.out)
 
@@ -529,8 +534,12 @@ def _parser() -> argparse.ArgumentParser:
     secret_set = secret_sub.add_parser(
         "set", help="save a secret; the value is read from the terminal or stdin")
     secret_set.add_argument("name")
-    secret_sub.add_parser("list", help="show secret names and the ones still missing")
-    secret_rm = secret_sub.add_parser("rm", help="remove a secret")
+    secret_request = secret_sub.add_parser(
+        "request", help="ask the owner for a secret; shows on the project's Secrets page")
+    secret_request.add_argument("name")
+    secret_request.add_argument("hint")
+    secret_sub.add_parser("list", help="show secret names and open requests")
+    secret_rm = secret_sub.add_parser("rm", help="remove a secret or a request")
     secret_rm.add_argument("name")
     return parser
 
@@ -547,6 +556,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "clone": lambda: cmd_clone(env, args.url, args.name),
         "secret": lambda: {
             "set": lambda: cmd_secret_set(env, args.name),
+            "request": lambda: cmd_secret_request(env, args.name, args.hint),
             "list": lambda: cmd_secret_list(env),
             "rm": lambda: cmd_secret_rm(env, args.name),
         }[args.secret_command](),

@@ -26,8 +26,9 @@ def status_of(exc: EggieError) -> int:
     return 500
 
 
-def error_body(code: str, message: str, status: int, **extra) -> JSONResponse:
-    return JSONResponse({"error": {"code": code, "message": message, **extra}},
+def error_body(code: str, message: str, status: int,
+               extra: dict | None = None) -> JSONResponse:
+    return JSONResponse({"error": {"code": code, "message": message, **(extra or {})}},
                         status_code=status)
 
 
@@ -40,7 +41,7 @@ def _validation_message(exc: RequestValidationError) -> str:
 def install(app: FastAPI) -> None:
     @app.exception_handler(EggieError)
     async def _eggie_error(_request, exc: EggieError):
-        return error_body(exc.code, exc.message, status_of(exc), **exc.extra)
+        return error_body(exc.code, exc.message, status_of(exc), exc.extra)
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_request, exc: RequestValidationError):

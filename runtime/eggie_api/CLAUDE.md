@@ -12,7 +12,7 @@ the guest is always Linux (`tests/test_no_platform_leak.py`).
 One dependency edge: `rest → services → domain | infra`. `tests/runtime/api/test_layering.py`
 fails on anything else.
 
-- `domain/` — pure logic, no I/O: compose parsing (`compose.py`), web-service detection
+- `domain/` — pure logic, no I/O: compose port helpers (`compose.py`), web-service detection
   (`detect.py`), Traefik overlay generation (`overlay.py`), project identity/slug and failure
   classification (`project.py`), secret rules (`secrets.py`), the sync plan (`sync.py`).
 - `infra/` — I/O adapters, no business rules: `runner.py` (`LocalRunner`, the in-VM twin of the
@@ -33,7 +33,8 @@ fails on anything else.
   per feature. A router parses the request, calls one service method and shapes the response:
   no `try/except`, no locks, no business branching.
 - `wiring.py` — `build(config, **fakes) -> Services`, the composition root; `__main__.py` is the
-  uvicorn entrypoint (`python -m eggie_api`) and the only place background threads start.
+  uvicorn entrypoint (`python -m eggie_api`) and the only place the long-running loops start (sync, project resume);
+  services start their own short-lived pollers on demand.
 - `errors.py` — `EggieError(code, message)` and its subclasses (`NotFound`, `Conflict`,
   `Invalid`, …). Anything below `rest/` that wants the caller to act raises one with the wire
   code; the status comes from the class. Transport exceptions (`CloudError`, `GitHubError`,

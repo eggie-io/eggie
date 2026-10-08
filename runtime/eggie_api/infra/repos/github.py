@@ -6,6 +6,7 @@ GITHUB_FIELDS = frozenset({
     "generation", "desired_at", "login", "gh_id", "name", "email",
     "needs_reconnect", "last_error", "checked_at"})
 
+
 class GitHubRepo:
     def __init__(self, db: Database):
         self._db = db

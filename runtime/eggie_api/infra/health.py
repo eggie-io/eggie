@@ -13,9 +13,9 @@ from dataclasses import dataclass
 
 from .. import constants
 from ..domain.detect import WebSpec
-from .docker import DOCKER, container_id
 from ..domain.overlay import host_for
 from ..domain.project import Project
+from .docker import DOCKER, container_id
 
 # Traefik publishes a router a beat after the container starts, so the first
 # requests answer 404 on a stack that is perfectly healthy. Same window the

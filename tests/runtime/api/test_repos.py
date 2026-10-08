@@ -166,3 +166,14 @@ def test_drop_secrets_clears_values_and_requests(tmp_path):
     s.secrets.request("a", "B", "hint")
     s.secrets.drop("a")
     assert s.secrets.values("a") == {} and s.secrets.requests("a") == []
+
+
+def test_tx_rolls_back_a_failed_transaction_so_the_next_commit_is_clean(tmp_path):
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    repos.projects.add("a", "/g/a", "a.d.io")
+    with pytest.raises(RuntimeError):
+        with repos.db.tx() as conn:
+            conn.execute("UPDATE projects SET status='half' WHERE id='a'")
+            raise RuntimeError("boom")
+    repos.projects.add("b", "/g/b", "b.d.io")
+    assert repos.projects.get("a")["status"] == "stopped"

@@ -5,11 +5,11 @@ import threading
 import time
 from typing import Callable
 
-from .account import NotSignedIn
-from ..infra.cloud import CloudError, CloudUnavailable
 from ..constants import VERIFY_PROJECT_ID
 from ..domain.sync import Create, Delete, Forget, client_ref, plan
+from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.repos import Repos
+from .account import NotSignedIn
 
 log = logging.getLogger("eggie.sync")
 

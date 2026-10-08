@@ -4,7 +4,7 @@
   "configurations": [
     {
       // Start here. The suite runs every module against fakes -- no VM, no
-      // containers -- so a breakpoint in eggie_api/core or host/ is reached
+      // containers -- so a breakpoint in eggie_api/ or host/ is reached
       // in about a second.
       "name": "Tests: whole suite",
       "type": "debugpy",
@@ -45,7 +45,7 @@
       "name": "API: run locally (no container)",
       "type": "debugpy",
       "request": "launch",
-      "module": "eggie_api.routes",
+      "module": "eggie_api",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": false,

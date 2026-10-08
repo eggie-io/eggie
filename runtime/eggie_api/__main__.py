@@ -3,8 +3,8 @@ from __future__ import annotations
 import uvicorn
 
 from .config import ApiConfig
-from .rest.app import create_app
 from .infra.migrate import SchemaTooNew
+from .rest.app import create_app
 from .wiring import build
 
 

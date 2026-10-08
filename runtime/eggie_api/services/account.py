@@ -29,8 +29,8 @@ def _daemon(fn) -> None:
 
 
 class Account:
-    def __init__(self, account: AccountRepo, cloud_projects: CloudProjectRepo, cloud, *, clock=time.time, sleep=time.sleep,
-                 spawn=_daemon):
+    def __init__(self, account: AccountRepo, cloud_projects: CloudProjectRepo, cloud,
+                 *, clock=time.time, sleep=time.sleep, spawn=_daemon):
         self._account = account
         self._cloud_projects = cloud_projects
         self._cloud = cloud

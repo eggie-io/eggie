@@ -38,7 +38,11 @@ class Database:
     @contextmanager
     def tx(self):
         with self._lock:
-            yield self._conn
+            try:
+                yield self._conn
+            except BaseException:
+                self._conn.rollback()
+                raise
             self._conn.commit()
 
     def close(self) -> None:

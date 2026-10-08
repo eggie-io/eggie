@@ -65,6 +65,10 @@ class ApiError(Exception):
         self.status = status
 
 
+def _dq(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def _busy(project_id: str) -> "ApiError":
     return ApiError("project_busy",
                     f"another operation on '{project_id}' is still running", 409)
@@ -423,12 +427,17 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                               ".env is a link; Eggie only reads a regular file")
         return read_text(path)
 
-    def secret_env(project_id: str) -> dict | None:
-        return state.secret_values(project_id) or None
+    def example_of(project_id: str) -> dict[str, str]:
+        return secret_rules.parse_example(read_text(project_dir(project_id) / ".env.example"))
+
+    def project_env(project_id: str) -> dict[str, str] | None:
+        # Stored values win over the repo's defaults.
+        return {**secret_rules.defaults(example_of(project_id)),
+                **state.secret_values(project_id)} or None
 
     def read_text(path: Path) -> str | None:
         try:
-            return path.read_text()
+            return path.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             return None
 
@@ -966,19 +975,33 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def list_secrets(project_id: str) -> dict:
         row = require_row(project_id)
         d = project_dir(project_id)
-        names = state.secret_names(project_id)
-        missing = secret_rules.expected(read_text(d / ".env.example"),
-                                        read_text(d / constants.COMPOSE_FILE))
+        example = example_of(project_id)
+        base = secret_rules.defaults(example)
+        stored = state.secret_names(project_id)
+        have = {s["name"] for s in stored}
+        compose_text = read_text(d / constants.COMPOSE_FILE)
+        try:
+            compose = yaml.safe_load(compose_text or "") or {}
+        except yaml.YAMLError:
+            compose = {}
+        _services, declared_by = secret_rules.declared(
+            compose if isinstance(compose, dict) else {})
+        declared_names = set().union(*declared_by.values()) if declared_by else set()
         # An import leaves an empty .env behind, which has nothing to offer.
         dotenv = None
         try:
             text = read_dotenv(d / ".env")
-            if text is not None and (found := secret_rules.parse_dotenv(text)):
-                dotenv = {"names": sorted(found), "error": None}
+            if text is not None:
+                offer = secret_rules.importable(secret_rules.parse_dotenv(text), base)
+                if offer:
+                    dotenv = {"names": sorted(offer), "error": None}
         except SecretError as e:
             dotenv = {"names": [], "error": e.message}
-        return {"secrets": names,
-                "missing": sorted(missing - {s["name"] for s in names}),
+        return {"secrets": [{**s, "overrides_default": s["name"] in base} for s in stored],
+                "missing": secret_rules.missing(example, compose_text, have=have,
+                                                declared_names=declared_names),
+                "defaults": [{"name": k, "value": v, "overridden": k in have}
+                             for k, v in sorted(base.items())],
                 "dotenv": dotenv,
                 "restart_needed": restart_needed(row)}
 
@@ -987,17 +1010,20 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     @router.put("/projects/{project_id}/secrets/{name}", status_code=204)
     def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
         require_row(project_id)
+        if body.value == "":
+            raise SecretError("secret_invalid_value",
+                              "a value can't be empty; delete the secret instead")
         secret_rules.check_name(name)
         secret_rules.check_value(body.value)
         secret_rules.check_total({**state.secret_values(project_id),
                                   name: body.value})
-        state.set_secrets(project_id, {name: body.value}, time.time())
+        state.set_secrets(project_id, {name: body.value})
         return Response(status_code=204)
 
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
     def delete_secret(project_id: str, name: str) -> Response:
         require_row(project_id)
-        if not state.delete_secret(project_id, name, time.time()):
+        if not state.delete_secret(project_id, name):
             raise ApiError("secret_not_found",
                            f"project '{project_id}' has no secret '{name}'", 404)
         return Response(status_code=204)
@@ -1009,18 +1035,28 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         with locks.held(project_id):
             text = read_dotenv(path)
             values = secret_rules.parse_dotenv(text) if text is not None else {}
-            if not values:
+            store = secret_rules.importable(
+                values, secret_rules.defaults(example_of(project_id)))
+            if not store:
                 raise ApiError("dotenv_missing",
-                               f"project '{project_id}' has no .env file with "
-                               "values to move", 404)
-            secret_rules.check_total({**state.secret_values(project_id), **values})
-            state.set_secrets(project_id, values, time.time())
-            # Emptied, not deleted: `env_file: .env` fails on a missing file.
+                               f"project '{project_id}' has no .env with values "
+                               "that aren't already a default", 404)
+            secret_rules.check_total({**state.secret_values(project_id), **store})
+            state.set_secrets(project_id, store)
+            # Compose reads reserved names from .env itself, so those lines
+            # stay. Emptied, not deleted: `env_file: .env` fails on a missing file.
+            kept = {k: v for k, v in values.items() if secret_rules.is_reserved(k)}
+            content = "".join(f'{k}="{_dq(v)}"\n' for k, v in kept.items())
             try:
-                os.close(os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW))
+                fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+                try:
+                    os.write(fd, content.encode("utf-8"))
+                finally:
+                    os.close(fd)
                 emptied = True
             except PermissionError:
-                emptied = lifecycle.empty_file_as_root(runner, path).ok
+                emptied = (not content
+                           and lifecycle.empty_file_as_root(runner, path).ok)
             except OSError:
                 emptied = False
             if not emptied:
@@ -1028,7 +1064,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                                "the values are saved as secrets, but the .env "
                                "file could not be emptied; empty it from the "
                                "Files page", 409)
-        return {"imported": sorted(values)}
+        return {"imported": sorted(store)}
 
     def compose_name_for(row: dict) -> str:
         return row.get("compose_name") or row["id"]
@@ -1069,18 +1105,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}
 
-    def compose_name_of(project_id: str) -> str:
-        data = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE)
-        return str(data.get("name") or project_id)
-
     def start_work(project_id: str, *, stop_first: bool):
         row = require_row(project_id)
         # Parsing happens here, not in the job, so a broken compose file comes
         # back as an error code the caller can read instead of a failed job.
         project = load(project_id)
-        name = compose_name_of(project_id)
-        services = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE).get("services")
-        services = list(services) if isinstance(services, dict) else []
+        compose = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE)
+        services, declared_by = secret_rules.declared(compose)
+        name = str(compose.get("name") or project_id)
         domain = row["domain"]
         directory = project_dir(project_id)
 
@@ -1089,7 +1121,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 if stop_first:
                     write(f"compose down {project_id}\n")
                     down_result = lifecycle.compose_down(
-                        runner, directory, env=secret_env(project_id))
+                        runner, directory, env=project_env(project_id))
                     if not down_result.ok:
                         raise JobFailed(
                             (down_result.stderr or down_result.stdout).strip()
@@ -1102,10 +1134,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 # Stamped before the values are read, so a secret changed while
                 # compose runs still shows as needing a restart.
                 began = time.time()
-                values = state.secret_values(project_id)
+                values = project_env(project_id) or {}
                 status, detail = lifecycle.compose_up(
                     runner, project, directory, domain, on_phase=write.phase,
-                    services=services, secrets=values)
+                    services=services, secrets=values, declared=declared_by)
                 diagnosis = None
                 if status in RUNNING:
                     # A crash-looping stack still got these values.
@@ -1164,7 +1196,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 write(f"compose down {project_id}\n")
                 result = lifecycle.compose_down(runner,
                                                 project_dir(project_id),
-                                                env=secret_env(project_id))
+                                                env=project_env(project_id))
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
@@ -1197,7 +1229,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         if not follow:
             result = lifecycle.project_logs(runner, project_dir(project_id),
-                                            service, env=secret_env(project_id))
+                                            service, env=project_env(project_id))
             if not result.ok:
                 raise ApiError("logs_unavailable",
                                (result.stderr or result.stdout).strip()
@@ -1205,7 +1237,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             return PlainTextResponse(result.stdout, media_type=TEXT)
         argv = lifecycle.logs_argv(project_dir(project_id), service, follow=True)
         return StreamingResponse(
-            runner.stream(argv, root=True, env=secret_env(project_id)),
+            runner.stream(argv, root=True, env=project_env(project_id)),
             media_type=TEXT)
 
     @router.get("/jobs/{job_id}")

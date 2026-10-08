@@ -42,7 +42,7 @@ def test_a_set_secret_is_listed_by_name_and_its_value_never_comes_back(env):
 
 def test_missing_lists_expected_names_that_have_no_secret(env):
     folder = _project(env)
-    (folder / ".env.example").write_text("API_KEY=\nSMTP_PASSWORD=changeme\n")
+    (folder / ".env.example").write_text("API_KEY=\nSMTP_PASSWORD=\n")
     env.client.put("/projects/blog/secrets/SMTP_PASSWORD", json={"value": "x"})
     assert env.client.get("/projects/blog/secrets").json()["missing"] == ["API_KEY"]
 
@@ -270,3 +270,86 @@ def test_a_malformed_dotenv_line_never_leaks_its_text_into_responses(env):
     assert "SECRETPART" not in imported.text
     assert imported.json()["error"]["code"] == "dotenv_invalid"
     assert (folder / ".env").exists()
+
+
+COMPOSE_DECLARES = """
+services:
+  web:
+    image: nginx
+    ports: ["8080:80"]
+    environment:
+      DATABASE_URL: postgres://db/app
+"""
+
+
+def _overlay_names(env, folder):
+    import base64, yaml
+    write = [a for a in env.runner.calls if a[0] == "bash" and "overlay.yml" in a[-1]][-1]
+    text = base64.b64decode(write[-1].split("echo ", 1)[1].split(" ", 1)[0]).decode()
+    return yaml.safe_load(text)["services"]
+
+
+def test_a_service_that_declares_a_name_keeps_its_own_value(env):
+    folder = _project(env, compose=COMPOSE_DECLARES)
+    (folder / ".env.example").write_text("DATABASE_URL=postgres://localhost/app\n")
+    env.client.put("/projects/blog/secrets/DATABASE_URL", json={"value": "x"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert "environment" not in _overlay_names(env, folder).get("web", {})
+
+
+def test_defaults_reach_compose_and_stored_values_override_them(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
+    env.client.put("/projects/blog/secrets/MODE", json={"value": "prod"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    ups = [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-2:] == ["up", "-d"]]
+    assert ups == [{"APP_NAME": "Blog", "MODE": "prod"}]
+    assert _overlay_names(env, folder)["worker"]["environment"] == ["APP_NAME", "MODE"]
+
+
+def test_the_listing_shows_defaults_in_clear_and_values_never(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("APP_NAME=Blog\nMODE=dev\nAPI_KEY=\n")
+    env.client.put("/projects/blog/secrets/MODE", json={"value": SECRET})
+    body = env.client.get("/projects/blog/secrets").json()
+    assert body["defaults"] == [{"name": "APP_NAME", "value": "Blog", "overridden": False},
+                                {"name": "MODE", "value": "dev", "overridden": True}]
+    assert body["secrets"] == [{"name": "MODE", "updated_at": body["secrets"][0]["updated_at"],
+                                "overrides_default": True}]
+    assert body["missing"] == ["API_KEY"]
+    assert SECRET not in env.client.get("/projects/blog/secrets").text
+
+
+def test_an_empty_value_is_refused(env):
+    _project(env)
+    resp = env.client.put("/projects/blog/secrets/API_KEY", json={"value": ""})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (400, "secret_invalid_value")
+
+
+def test_a_dotenv_copied_from_the_example_is_not_offered(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("APP_NAME=Blog\nAPI_KEY=\n")
+    (folder / ".env").write_text("APP_NAME=Blog\nAPI_KEY=\n")
+    assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
+    resp = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert resp.json()["error"]["code"] == "dotenv_missing"
+    assert env.state.secret_values("blog") == {}
+
+
+def test_import_stores_only_values_that_differ_from_defaults(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("APP_NAME=Blog\nAPP_ENV=local\nAPI_KEY=\n")
+    (folder / ".env").write_text("APP_NAME=Blog\nAPP_ENV=production\nAPI_KEY=k\nEMPTY=\n")
+    assert env.client.get("/projects/blog/secrets").json()["dotenv"]["names"] == ["API_KEY", "APP_ENV"]
+    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {
+        "imported": ["API_KEY", "APP_ENV"]}
+    assert env.state.secret_values("blog") == {"API_KEY": "k", "APP_ENV": "production"}
+    assert (folder / ".env").read_text() == ""
+
+
+def test_import_keeps_reserved_lines_in_dotenv(env):
+    folder = _project(env)
+    (folder / ".env").write_text("COMPOSE_PROJECT_NAME=shop\nAPI_KEY=k\n")
+    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
+    from eggie_api.core.secrets import parse_dotenv
+    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_PROJECT_NAME": "shop"}

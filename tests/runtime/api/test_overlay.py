@@ -54,3 +54,17 @@ def test_no_secrets_leaves_the_overlay_as_before():
     ov = build_overlay("p", [WebSpec("web", 80)], "d.io", services=["web", "db"])
     assert "environment" not in ov["services"]["web"]
     assert "db" not in ov["services"]
+
+
+def test_a_name_a_service_declares_is_not_listed_for_that_service():
+    ov = build_overlay("p", [WebSpec("web", 80)], "d.io", services=["web", "worker"],
+                       secret_names=["DATABASE_URL", "KEY"],
+                       declared={"web": {"DATABASE_URL"}, "worker": set()})
+    assert ov["services"]["web"]["environment"] == ["KEY"]
+    assert ov["services"]["worker"]["environment"] == ["DATABASE_URL", "KEY"]
+
+
+def test_a_service_that_declares_every_name_gets_no_environment_entry():
+    ov = build_overlay("p", [], "d.io", services=["db"], secret_names=["A"],
+                       declared={"db": {"A"}})
+    assert "db" not in ov["services"]

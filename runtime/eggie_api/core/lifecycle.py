@@ -28,9 +28,9 @@ def _compose_argv(directory) -> list[str]:
 
 
 def _write_overlay(provider, project: Project, directory, domain: str, *,
-                   services=(), secret_names=()):
+                   services=(), secret_names=(), declared=None):
     text = overlay_yaml(project, domain, services=services,
-                        secret_names=secret_names)
+                        secret_names=secret_names, declared=declared)
     encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
     return provider.exec(["bash", "-lc",
                           f"mkdir -p {directory}/.eggie && echo {encoded} | "
@@ -40,7 +40,7 @@ def _write_overlay(provider, project: Project, directory, domain: str, *,
 
 def compose_up(provider, project: Project, directory, domain: str, *,
               on_phase=None, services=(),
-              secrets: dict[str, str] | None = None):
+              secrets: dict[str, str] | None = None, declared=None):
     """Returns (status, detail). `detail` carries the guest's own output when
     the stack did not start, so callers never have to report a bare status code
     that no one can act on. URLs are the API layer's job -- it is the only place
@@ -55,7 +55,8 @@ def compose_up(provider, project: Project, directory, domain: str, *,
     them."""
     written = _write_overlay(provider, project, directory, domain,
                              services=services,
-                             secret_names=list(secrets or {}))
+                             secret_names=list(secrets or {}),
+                             declared=declared)
     if not written.ok:
         # exec() never raises. Starting the stack anyway would produce a project
         # with no Traefik labels: no route, and no error naming the cause.

@@ -169,6 +169,46 @@ class State:
             self._conn.execute("DELETE FROM cloud_projects")
             self._conn.commit()
 
+    def secret_names(self, project_id) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(
+                "SELECT name, updated_at FROM secrets WHERE project_id=? "
+                "ORDER BY name", (project_id,))]
+
+    def secret_values(self, project_id) -> dict[str, str]:
+        with self._lock:
+            return {r["name"]: r["value"] for r in self._conn.execute(
+                "SELECT name, value FROM secrets WHERE project_id=?",
+                (project_id,))}
+
+    def set_secrets(self, project_id, values: dict[str, str], at: float) -> None:
+        with self._lock:
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO secrets(project_id, name, value, updated_at) "
+                "VALUES (?,?,?,?)",
+                [(project_id, name, value, at) for name, value in values.items()])
+            self._conn.execute("UPDATE projects SET secrets_changed_at=? WHERE id=?",
+                               (at, project_id))
+            self._conn.commit()
+
+    def delete_secret(self, project_id, name, at: float) -> bool:
+        with self._lock:
+            gone = self._conn.execute(
+                "DELETE FROM secrets WHERE project_id=? AND name=?",
+                (project_id, name)).rowcount > 0
+            if gone:
+                self._conn.execute(
+                    "UPDATE projects SET secrets_changed_at=? WHERE id=?",
+                    (at, project_id))
+            self._conn.commit()
+            return gone
+
+    def drop_secrets(self, project_id) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM secrets WHERE project_id=?",
+                               (project_id,))
+            self._conn.commit()
+
     def close(self):
         with self._lock:
             self._conn.close()

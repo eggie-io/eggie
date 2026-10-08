@@ -102,6 +102,18 @@ def _v5_github(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT OR IGNORE INTO github(id) VALUES (1)")
 
 
+def _v6_secrets(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS secrets (
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            value TEXT NOT NULL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (project_id, name)
+        )""")
+    _add_column(conn, "projects", "secrets_changed_at", "REAL")
+
+
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -110,6 +122,7 @@ MIGRATIONS = [
     _v3_web_ui,
     _v4_account,
     _v5_github,
+    _v6_secrets,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

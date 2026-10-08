@@ -27,8 +27,10 @@ def _compose_argv(directory) -> list[str]:
             "up", "-d"]
 
 
-def _write_overlay(provider, project: Project, directory, domain: str):
-    text = overlay_yaml(project, domain)
+def _write_overlay(provider, project: Project, directory, domain: str, *,
+                   services=(), secret_names=()):
+    text = overlay_yaml(project, domain, services=services,
+                        secret_names=secret_names)
     encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
     return provider.exec(["bash", "-lc",
                           f"mkdir -p {directory}/.eggie && echo {encoded} | "
@@ -37,7 +39,8 @@ def _write_overlay(provider, project: Project, directory, domain: str):
 
 
 def compose_up(provider, project: Project, directory, domain: str, *,
-              on_phase=None):
+              on_phase=None, services=(),
+              secrets: dict[str, str] | None = None):
     """Returns (status, detail). `detail` carries the guest's own output when
     the stack did not start, so callers never have to report a bare status code
     that no one can act on. URLs are the API layer's job -- it is the only place
@@ -46,8 +49,13 @@ def compose_up(provider, project: Project, directory, domain: str, *,
     `on_phase`, when given, is called with "starting" once the overlay is
     written and before `docker compose up` itself -- the caller's phase
     report has to follow the overlay write, not precede it, or a failed
-    write would be reported as "starting" a stack that never did."""
-    written = _write_overlay(provider, project, directory, domain)
+    write would be reported as "starting" a stack that never did.
+
+    `secrets` reach compose only through the environment of `up`; the
+    overlay names them."""
+    written = _write_overlay(provider, project, directory, domain,
+                             services=services,
+                             secret_names=list(secrets or {}))
     if not written.ok:
         # exec() never raises. Starting the stack anyway would produce a project
         # with no Traefik labels: no route, and no error naming the cause.
@@ -56,7 +64,8 @@ def compose_up(provider, project: Project, directory, domain: str, *,
                 or "could not write the Traefik overlay inside the VM")
     if on_phase:
         on_phase("starting")
-    up = provider.exec(_compose_argv(directory), root=True)
+    up = provider.exec(_compose_argv(directory), root=True,
+                       env=dict(secrets) if secrets else None)
     ps = provider.exec([DOCKER, "compose", "-f",
                         f"{directory}/{COMPOSE_FILE}",
                         "ps", "--format", "json"], root=True)

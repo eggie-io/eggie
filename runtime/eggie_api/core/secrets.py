@@ -1,5 +1,4 @@
-"""Project secrets: what a name and value may be, which names a project
-expects, and reading a `.env` file. No storage, no FastAPI."""
+"""Project secrets: what a name, value and request hint may be, and which names a compose service sets itself. No storage, no FastAPI."""
 from __future__ import annotations
 
 import re
@@ -12,10 +11,7 @@ RESERVED_NAMES = frozenset({"PATH", "HOME"})
 MAX_VALUE_BYTES = 64 * 1024
 MAX_PROJECT_BYTES = 512 * 1024
 
-_DEFAULTED = {"-", ":-", "+", ":+"}
-_BRACED = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-+?])?[^}]*\}")
-_BARE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
-_ESCAPES = {"n": "\n", '"': '"', "\\": "\\"}
+MAX_HINT_CHARS = 500
 
 
 class SecretError(ValueError):
@@ -65,119 +61,6 @@ def check_total(values: dict[str, str]) -> None:
                           f"{MAX_PROJECT_BYTES // 1024} KB")
 
 
-def _scan_refs(text: str) -> tuple[set[str], set[str]]:
-    """(names referenced without a default, names referenced with one)."""
-    plain, defaulted = set(), set()
-    for line in text.splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        # `$$` is compose's escape for a literal dollar sign.
-        line = line.replace("$$", "")
-        for match in _BRACED.finditer(line):
-            (defaulted if match.group(2) in _DEFAULTED else plain).add(match.group(1))
-        for match in _BARE.finditer(_BRACED.sub("", line)):
-            plain.add(match.group(1))
-    return plain, defaulted
-
-
-def _compose_refs(text: str) -> set[str]:
-    return _scan_refs(text)[0]
-
-
-def compose_defaulted(compose_text: str | None) -> set[str]:
-    return _scan_refs(compose_text)[1] if compose_text else set()
-
-
-def _closing(body: str, quote: str) -> int:
-    i = 0
-    while i < len(body):
-        if quote == '"' and body[i] == "\\":
-            i += 2
-            continue
-        if body[i] == quote:
-            return i
-        i += 1
-    return -1
-
-
-def _unescape(body: str) -> str:
-    return re.sub(r"\\(.)", lambda m: _ESCAPES.get(m.group(1), m.group(0)), body,
-                  flags=re.DOTALL)
-
-
-def _entries(text: str):
-    """Yield (line number, (key, value)) or (line number, SecretError) per
-    entry; stops after an unclosed quote."""
-    lines = text.removeprefix("\ufeff").splitlines()
-    i = 0
-    while i < len(lines):
-        number = i + 1
-        line = lines[i].strip()
-        i += 1
-        if not line or line.startswith("#"):
-            continue
-        line = line.removeprefix("export ").lstrip()
-        key, sep, rest = line.partition("=")
-        key = key.strip()
-        if not sep:
-            yield number, SecretError("dotenv_invalid",
-                                      f".env line {number} isn't NAME=value")
-            continue
-        # An invalid key is often a piece of an unquoted secret, so its
-        # text must not reach the error message.
-        if not NAME.fullmatch(key):
-            yield number, SecretError("dotenv_invalid",
-                                      f".env line {number} has an invalid name")
-            continue
-        rest = rest.lstrip()
-        if rest[:1] in ("'", '"'):
-            quote, body = rest[0], rest[1:]
-            end = _closing(body, quote)
-            while end == -1:
-                if i >= len(lines):
-                    yield number, SecretError(
-                        "dotenv_invalid",
-                        f".env line {number} opens a quote that is never closed")
-                    return
-                body += "\n" + lines[i]
-                i += 1
-                end = _closing(body, quote)
-            value = _unescape(body[:end]) if quote == '"' else body[:end]
-        elif rest.startswith("#"):
-            value = ""
-        else:
-            value = re.split(r"\s+#", rest, maxsplit=1)[0].strip()
-        yield number, (key, value)
-
-
-def parse_dotenv(text: str) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for _number, entry in _entries(text):
-        if isinstance(entry, SecretError):
-            raise entry
-        key, value = entry
-        check_value(value)
-        values[key] = value
-    return values
-
-
-def parse_example(text: str | None) -> dict[str, str]:
-    """`.env.example` lists a project's variables; a line that doesn't parse
-    must never stop a start, so it is skipped."""
-    values: dict[str, str] = {}
-    for _number, entry in _entries(text or ""):
-        if isinstance(entry, SecretError):
-            continue
-        key, value = entry
-        try:
-            check_value(value)
-        except SecretError:
-            continue
-        if not is_reserved(key):
-            values[key] = value
-    return values
-
-
 def declared(compose: dict) -> tuple[list[str], dict[str, set[str]]]:
     services = compose.get("services")
     if not isinstance(services, dict):
@@ -199,18 +82,12 @@ def declared(compose: dict) -> tuple[list[str], dict[str, set[str]]]:
     return list(services), names
 
 
-def defaults(example: dict[str, str]) -> dict[str, str]:
-    return {k: v for k, v in example.items() if v != "" and not is_reserved(k)}
-
-
-def missing(example: dict[str, str], compose_text: str | None, *,
-            have: set[str], declared_names: set[str]) -> list[str]:
-    wanted = ({k for k, v in example.items() if v == ""}
-              | (_compose_refs(compose_text) if compose_text else set()))
-    taken = have | set(defaults(example)) | declared_names
-    return sorted(n for n in wanted - taken if not is_reserved(n))
-
-
-def importable(values: dict[str, str], defaults_: dict[str, str]) -> dict[str, str]:
-    return {k: v for k, v in values.items()
-            if v != "" and not is_reserved(k) and v != defaults_.get(k)}
+def check_hint(hint: str) -> None:
+    ok = 0 < len(hint) <= MAX_HINT_CHARS and "\x00" not in hint
+    try:
+        hint.encode("utf-8")
+    except UnicodeEncodeError:
+        ok = False
+    if not ok:
+        raise SecretError("secret_hint_invalid",
+                          f"a hint is 1 to {MAX_HINT_CHARS} characters of plain text")

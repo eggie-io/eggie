@@ -138,10 +138,10 @@ def remove_by_label(runner, name: str, *, volumes: bool) -> Completed:
     return failure or Completed(0, "", "")
 
 
-def _as_root(runner, path, command: list[str]) -> Completed:
+def remove_tree_as_root(runner, path) -> Completed:
     """The API runs as uid 1000, and containers write root-owned files into
-    bind-mounted project folders. Runs `command` on `path` in a throwaway
-    container of this API's own image (already on the VM, so no pull) as root."""
+    bind-mounted project folders. Removes `path` from a throwaway container of
+    this API's own image (already on the VM, so no pull) running as root."""
     me = os.environ.get("HOSTNAME", "")
     image = runner.exec([DOCKER, "inspect", "--format", "{{.Config.Image}}", me],
                         root=True)
@@ -150,15 +150,7 @@ def _as_root(runner, path, command: list[str]) -> Completed:
     parent = str(os.path.dirname(str(path)))
     return runner.exec([DOCKER, "run", "--rm", "--user", "0",
                         "-v", f"{parent}:{parent}", "--entrypoint", "",
-                        image.stdout.strip(), *command, str(path)], root=True)
-
-
-def remove_tree_as_root(runner, path) -> Completed:
-    return _as_root(runner, path, ["rm", "-rf"])
-
-
-def empty_file_as_root(runner, path) -> Completed:
-    return _as_root(runner, path, ["truncate", "--no-create", "--size", "0"])
+                        image.stdout.strip(), "rm", "-rf", str(path)], root=True)
 
 
 def container_id(provider, directory, service: str, *,

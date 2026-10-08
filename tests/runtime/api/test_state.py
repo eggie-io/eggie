@@ -123,3 +123,45 @@ def test_without_an_explicit_time_the_change_is_stamped_at_write(tmp_path):
     assert before <= stamped <= time.time()
     assert s.delete_secret("a", "KEY") is True
     assert s.get_project("a")["secrets_changed_at"] >= stamped
+
+
+def _state_with_project(tmp_path):
+    s = State(tmp_path / "state.db")
+    s.add_project("a", "/p/a", "d")
+    return s
+
+
+def test_a_request_shows_until_its_name_gets_a_value(tmp_path):
+    s = _state_with_project(tmp_path)
+    s.request_secret("a", "STRIPE_KEY", "Stripe dashboard")
+    assert s.secret_requests("a") == [{"name": "STRIPE_KEY", "hint": "Stripe dashboard"}]
+    s.set_secrets("a", {"STRIPE_KEY": "sk"})
+    assert s.secret_requests("a") == []
+
+
+def test_a_request_for_a_name_that_already_has_a_value_is_not_listed(tmp_path):
+    s = _state_with_project(tmp_path)
+    s.set_secrets("a", {"STRIPE_KEY": "sk"})
+    s.request_secret("a", "STRIPE_KEY", "again")
+    assert s.secret_requests("a") == []
+
+
+def test_a_request_never_marks_secrets_changed(tmp_path):
+    s = _state_with_project(tmp_path)
+    s.request_secret("a", "STRIPE_KEY", "hint")
+    assert s.get_project("a")["secrets_changed_at"] is None
+
+
+def test_deleting_a_request_reports_whether_it_existed(tmp_path):
+    s = _state_with_project(tmp_path)
+    s.request_secret("a", "K", "hint")
+    assert s.delete_request("a", "K") is True
+    assert s.delete_request("a", "K") is False
+
+
+def test_drop_secrets_clears_values_and_requests(tmp_path):
+    s = _state_with_project(tmp_path)
+    s.set_secrets("a", {"A": "1"})
+    s.request_secret("a", "B", "hint")
+    s.drop_secrets("a")
+    assert s.secret_values("a") == {} and s.secret_requests("a") == []

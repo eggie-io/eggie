@@ -111,6 +111,14 @@ def _v6_secrets(conn: sqlite3.Connection) -> None:
             updated_at REAL NOT NULL,
             PRIMARY KEY (project_id, name)
         )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS secret_requests (
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            hint TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            PRIMARY KEY (project_id, name)
+        )""")
     _add_column(conn, "projects", "secrets_changed_at", "REAL")
 
 

@@ -142,5 +142,5 @@ def test_a_v3_database_gains_an_account_and_keeps_its_projects(tmp_path):
 def test_v6_adds_the_secrets_table_and_change_stamp(tmp_path):
     conn = connect(tmp_path)
     migrate.migrate(conn)
-    assert "secrets" in tables(conn)
+    assert {"secrets", "secret_requests"} <= tables(conn)
     assert "secrets_changed_at" in columns(conn, "projects")

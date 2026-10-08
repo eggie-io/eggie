@@ -4,24 +4,34 @@ from pathlib import Path
 
 import yaml
 
-from tests.runtime.cli.loader import GUEST_CLI, load
+from tests.runtime.cli.loader import CLI_ROOT, GUEST_CLI, load
 
 STACK = Path(__file__).resolve().parents[3] / "runtime" / "stack.yml"
 
 
 def test_the_guest_cli_imports_only_the_standard_library():
-    # It is copied into a VM on its own: an import of host/, eggie_api/ or a
+    # It is built into a VM on its own: an import of host/, eggie_api/ or a
     # third-party package works in this checkout and fails only in the guest.
+    files = sorted(GUEST_CLI.rglob("*.py"))
+    assert len(files) > 1, f"scanned {len(files)} files under {GUEST_CLI}"
     imported = set()
-    for node in ast.walk(ast.parse(GUEST_CLI.read_text())):
-        if isinstance(node, ast.Import):
-            imported |= {alias.name.split(".")[0] for alias in node.names}
-        elif isinstance(node, ast.ImportFrom):
-            assert node.level == 0, f"relative import at line {node.lineno}"
-            imported.add((node.module or "").split(".")[0])
-    assert imported, f"scanned no imports in {GUEST_CLI}"
-    outside = sorted(imported - set(sys.stdlib_module_names))
+    for py in files:
+        for node in ast.walk(ast.parse(py.read_text())):
+            if isinstance(node, ast.Import):
+                imported |= {alias.name.split(".")[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                imported.add((node.module or "").split(".")[0])
+    assert imported, f"scanned no imports under {GUEST_CLI}"
+    outside = sorted(imported - set(sys.stdlib_module_names) - {"eggie_cli"})
     assert not outside, f"the guest CLI imports non-stdlib modules: {outside}"
+
+
+def test_the_cli_source_root_holds_only_the_package():
+    # runtime/cli is the zipapp root, first on sys.path inside the executable:
+    # a stray file there ships, and a name like json/ would shadow the stdlib.
+    entries = sorted(p.name for p in CLI_ROOT.iterdir() if p.name != "__pycache__")
+    assert entries == ["eggie_cli"], entries
+    assert "eggie_cli" not in sys.stdlib_module_names
 
 
 def test_start_stack_is_built_from_the_declared_stack_path():

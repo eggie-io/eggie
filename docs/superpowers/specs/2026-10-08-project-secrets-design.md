@@ -181,3 +181,94 @@ Only where a wrong result is plausible:
 
 Left untested: the console page rendering (no component-test setup exists); real compose
 behaviour with bare `environment` names (covered by the live-VM acceptance run).
+
+---
+
+## Revision 2 — defaults, precedence and review fixes (2026-10-08)
+
+Decided with the user after the independent reviews of eggie#55 and eggie-skills#1. Where this
+section disagrees with sections 1–9 above, this section wins.
+
+| # | Question | Decision |
+|---|----------|----------|
+| D7 | Compose literal vs secret | A value a service sets in its own `environment:` wins; Eggie never adds that name to that service |
+| D8 | Generated internal keys | Agents may generate random internal keys straight into Eggie: `openssl rand -hex 32 \| eggie secret set NAME` |
+| D9 | `.env.example` | Every key counts. Empty value → **needs a value**. Non-empty value → **default**, delivered to the app and editable |
+| D10 | Non-secret settings | Live as defaults in `.env.example`; the owner edits them on the same page. No per-framework workaround — no `.env` anywhere |
+| D11 | Visibility | Visible while typing (eye toggle), write-only once saved; repo defaults always shown in clear |
+| D12 | `.env` import | Store only values that differ from the default; drop empty values |
+
+### R1. Three sources, one environment
+
+For each start, the effective variables are, highest precedence first:
+
+1. **Compose literal** — any name a service declares in its own `environment:` (mapping key, or
+   `NAME`/`NAME=value` list entry). Eggie does not list that name in the overlay for that service.
+   A declared `${NAME}` still resolves, because compose interpolates from the process environment.
+2. **Your values** — stored in `state.db` (`secrets` table), write-only, entered by the owner or set
+   by an agent with `eggie secret set`.
+3. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the
+   file at every compose call. Parsed with the `.env` rules (§5); a line that doesn't parse is skipped,
+   never fatal.
+
+Values of 2 and 3 (yours win) are passed as the environment of every compose call that loads the
+user's file; their names go into the overlay for every service except where rule 1 applies. No `.env`
+file is needed by any framework: phpdotenv (Laravel), Next.js, Django, Rails and Node all prefer real
+environment variables over a `.env`.
+
+Reserved names are never listed, stored or delivered: prefixes `COMPOSE_`, `DOCKER_`, `LD_`, and the
+exact names `PATH`, `HOME` (compose and the docker CLI read these from their own environment).
+
+### R2. Needs a value
+
+`missing` = (`.env.example` keys with an empty value ∪ compose `${VAR}` refs with no default)
+− your values − defaults − names a compose service declares itself − reserved names.
+
+### R3. Routes (changes)
+
+`GET /projects/{id}/secrets` →
+
+```json
+{"secrets":  [{"name": "STRIPE_KEY", "updated_at": 1.0, "overrides_default": false}],
+ "missing":  ["OPENAI_API_KEY"],
+ "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false}],
+ "dotenv":   null,
+ "restart_needed": false}
+```
+
+Default values come from the repo file and are returned in clear; stored values never are.
+"Reset to default" is `DELETE /projects/{id}/secrets/{name}`. `PUT` refuses an empty value
+(`secret_invalid_value`), like the CLI and console already do.
+
+### R4. Import
+
+`POST …/secrets/import-dotenv`: parse `.env` (UTF-8 with or without BOM); skip empty values; skip
+keys whose value equals the `.env.example` default; skip reserved keys and **keep those lines** in
+`.env` (the file is rewritten with only them, or emptied when there are none); store the rest.
+The offer (`dotenv`) is shown only when at least one key would be stored.
+
+### R5. Console
+
+The Secrets page has three sections: **Needs a value**, **Your values** (masked, Edit, Delete — on
+an overridden default the action reads *Reset to default*), and **Defaults** (collapsed, value in
+clear, Edit pre-filled with the default). Every value field is a text field with an eye toggle,
+visible by default, `autocomplete="off"`; after Save the field clears and the row shows `••••••••`.
+
+### R6. CLI
+
+`eggie secret list` prints your values, then *Needs a value*, then the number of defaults from
+`.env.example`. Unchanged otherwise.
+
+### R7. Coding-agent instructions
+
+`.env.example` at the project root is the project's list of variables: a secret is `NAME=` (empty),
+a non-secret setting is `NAME=default`. Never create `.env`; if a scaffolding tool writes one, move
+its non-secret keys into `.env.example` as defaults, generate random internal keys with
+`openssl rand -hex 32 | eggie secret set NAME`, ask the owner for outside credentials on the
+Secrets page, then delete the `.env`. `docker compose run` started by the agent gets none of these
+variables; run one-off commands inside the running service with `docker compose exec`.
+
+### R8. Review fixes folded in
+
+A lone UTF-16 surrogate in a value is `secret_invalid_value`, not a 500; the change stamp is taken
+inside the state lock; value fields carry `autocomplete="off"`.

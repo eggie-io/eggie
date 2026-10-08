@@ -167,21 +167,17 @@ def test_remove_by_label_attempts_every_step_and_returns_the_first_failure():
     assert any(a[1:4] == ["volume", "rm", "-f"] for a in calls)
 
 
-def test_values_reach_compose_up_through_env_only(tmp_path):
+def test_values_reach_compose_through_env_only(tmp_path):
     (tmp_path / "docker-compose.yml").write_text("services: {}\n")
     proj = Project(id="p", webs=[WebSpec("web", 80)])
     p = FakeProvider()
     value = 'multi\nline "quoted" $dollar'
     compose_up(p, proj, tmp_path, "d.io", services=["web", "db"],
                secrets={"TOKEN": value})
-    ups = [(a, e) for a, e in zip(p.execs, p.envs) if a[-2:] == ["up", "-d"]]
-    assert len(ups) == 1
-    argv, env = ups[0]
-    assert env == {"TOKEN": value}
-    for other_argv, other_env in zip(p.execs, p.envs):
-        assert all(value not in word and "dollar" not in word for word in other_argv)
-        if other_argv is not argv:
-            assert other_env is None
+    assert len([a for a in p.execs if a[-2:] == ["up", "-d"]]) == 1
+    for argv, env in zip(p.execs, p.envs):
+        assert all(value not in word and "dollar" not in word for word in argv)
+        assert env == ({"TOKEN": value} if argv[1:2] == ["compose"] else None)
 
 
 def test_the_overlay_written_names_the_secrets_but_holds_no_value(tmp_path):

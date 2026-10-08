@@ -92,8 +92,9 @@ class FakeRunner:
             raise scripted
         return scripted
 
-    def stream(self, argv, *, root=False):
+    def stream(self, argv, *, root=False, env=None):
         self.calls.append(argv)
+        self.envs.append(env)
         return iter(list(self.stream_lines))
 
     def argv_containing(self, needle):

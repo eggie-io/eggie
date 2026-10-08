@@ -39,10 +39,12 @@ class LocalRunner:
             return Completed(127, "", str(e))
         return Completed(proc.returncode, proc.stdout, proc.stderr)
 
-    def stream(self, argv: list[str], *, root: bool = False) -> Iterator[str]:
+    def stream(self, argv: list[str], *, root: bool = False,
+               env: dict | None = None) -> Iterator[str]:
         """Line-by-line output for follow mode; the buffered `exec` above would
         never return on `docker compose logs --follow`."""
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                env=None if env is None else {**os.environ, **env},
                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
         try:
             yield from proc.stdout

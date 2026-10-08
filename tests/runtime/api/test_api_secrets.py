@@ -79,6 +79,33 @@ def test_start_hands_every_secret_to_compose_up_and_writes_no_value(env):
                                  for p in folder.rglob("*") if p.is_file())
 
 
+def test_every_compose_call_gets_the_secrets_and_no_other_call_does(env):
+    # compose interpolates the whole file for ps, down and logs too, so a
+    # `${KEY:?}` that only `up` can resolve breaks every other command.
+    _project(env)
+    env.client.put("/projects/blog/secrets/API_KEY", json={"value": SECRET})
+    env.probe.status = 502
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    _run_to_completion(env, env.client.post("/projects/blog/restart"))
+    _run_to_completion(env, env.client.post("/projects/blog/down"))
+    env.client.get("/projects/blog/logs")
+    env.client.get("/projects/blog/logs", params={"follow": True})
+    calls = list(zip(env.runner.calls, env.runner.envs))
+    compose = [(a, e) for a, e in calls if a[1:2] == ["compose"]]
+    verbs = {next(w for w in ("up", "-q", "ps", "down", "logs") if w in a)
+             for a, _ in compose}
+    assert verbs == {"up", "-q", "ps", "down", "logs"}
+    assert all(e == {"API_KEY": SECRET} for _, e in compose), compose
+    assert all(e is None for a, e in calls if a[1:2] != ["compose"])
+
+
+def test_compose_calls_of_a_project_without_secrets_get_no_env(env):
+    _project(env)
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    env.client.get("/projects/blog/logs")
+    assert all(e is None for e in env.runner.envs)
+
+
 def test_restart_needed_follows_changes_after_the_last_start(env):
     _project(env)
     _run_to_completion(env, env.client.post("/projects/blog/up"))

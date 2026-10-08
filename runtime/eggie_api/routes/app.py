@@ -412,6 +412,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return (row["status"] == STARTED_OK and changed is not None
                 and (started is None or changed > started))
 
+    def secret_env(project_id: str) -> dict | None:
+        return state.secret_values(project_id) or None
+
     def read_text(path: Path) -> str | None:
         try:
             return path.read_text()
@@ -1070,7 +1073,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             try:
                 if stop_first:
                     write(f"compose down {project_id}\n")
-                    down_result = lifecycle.compose_down(runner, directory)
+                    down_result = lifecycle.compose_down(
+                        runner, directory, env=secret_env(project_id))
                     if not down_result.ok:
                         raise JobFailed(
                             (down_result.stderr or down_result.stdout).strip()
@@ -1083,9 +1087,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 # Stamped before the values are read, so a secret changed while
                 # compose runs still shows as needing a restart.
                 began = time.time()
+                values = state.secret_values(project_id)
                 status, detail = lifecycle.compose_up(
                     runner, project, directory, domain, on_phase=write.phase,
-                    services=services, secrets=state.secret_values(project_id))
+                    services=services, secrets=values)
                 diagnosis = None
                 if status == STARTED_OK:
                     state.mark_started(project_id, began)
@@ -1093,6 +1098,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     write("waiting for the project to answer through Traefik\n")
                     diagnosis = diagnose(
                         runner, project, domain, directory=directory,
+                        env=values or None,
                         edge_port=config.edge_port,
                         traefik_host=config.traefik_host, http_probe=http_probe,
                         timeout=config.ready_timeout)
@@ -1140,7 +1146,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 write.phase("stopping")
                 write(f"compose down {project_id}\n")
                 result = lifecycle.compose_down(runner,
-                                                project_dir(project_id))
+                                                project_dir(project_id),
+                                                env=secret_env(project_id))
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
@@ -1173,14 +1180,16 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         if not follow:
             result = lifecycle.project_logs(runner, project_dir(project_id),
-                                            service)
+                                            service, env=secret_env(project_id))
             if not result.ok:
                 raise ApiError("logs_unavailable",
                                (result.stderr or result.stdout).strip()
                                or "docker compose logs failed", 409)
             return PlainTextResponse(result.stdout, media_type=TEXT)
         argv = lifecycle.logs_argv(project_dir(project_id), service, follow=True)
-        return StreamingResponse(runner.stream(argv, root=True), media_type=TEXT)
+        return StreamingResponse(
+            runner.stream(argv, root=True, env=secret_env(project_id)),
+            media_type=TEXT)
 
     @router.get("/jobs/{job_id}")
     def job_status(job_id: str) -> dict:

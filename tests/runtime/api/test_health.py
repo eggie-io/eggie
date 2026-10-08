@@ -77,7 +77,7 @@ class FakeRunner:
         self.proc_net = (proc_net if isinstance(proc_net, Completed)
                          else Completed(0, proc_net, ""))
 
-    def exec(self, argv, *, root=False):
+    def exec(self, argv, *, root=False, env=None):
         self.calls.append(argv)
         if "-q" in argv:
             return self.container_id

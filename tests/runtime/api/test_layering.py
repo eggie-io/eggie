@@ -18,9 +18,15 @@ def _imports(py: Path):
                 # Relative: resolve against the file's package so `..infra.db`
                 # from services/x.py reads as `eggie_api.infra.db`.
                 parts = py.relative_to(API).with_suffix("").parts[:-node.level]
-                yield "eggie_api." + ".".join((*parts, node.module or "")).strip(".")
+                base = "eggie_api." + ".".join((*parts, node.module or "")).strip(".")
             else:
-                yield node.module or ""
+                base = node.module or ""
+            yield base
+            # `from .. import services` / `from eggie_api import rest` name the
+            # layer only in the imported names.
+            if base.strip(".") == "eggie_api":
+                for alias in node.names:
+                    yield f"eggie_api.{alias.name}"
 
 
 def _layer(py: Path) -> str:
@@ -73,5 +79,6 @@ def test_no_package_directory_shadows_the_standard_library():
     import sys
     tops = {p.name for p in API.iterdir() if p.is_dir() and p.name != "__pycache__"}
     tops |= {p.stem for p in API.glob("*.py") if p.stem != "__init__"}
+    assert tops, f"found no modules under {API}"
     clashes = sorted(tops & set(sys.stdlib_module_names))
     assert not clashes, f"these shadow the stdlib from the image's working dir: {clashes}"

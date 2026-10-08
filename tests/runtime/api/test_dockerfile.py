@@ -14,7 +14,7 @@ def test_dockerfile_never_pins_latest():
 
 
 def test_dockerfile_puts_the_docker_cli_at_the_absolute_path_lifecycle_expects():
-    # core/lifecycle.py calls "/usr/bin/docker" literally; landing the binary
+    # infra/docker.py calls "/usr/bin/docker" literally; landing the binary
     # anywhere else makes every guest exec fail with "No such file".
     assert "/usr/local/bin/docker /usr/bin/docker" in _text()
 

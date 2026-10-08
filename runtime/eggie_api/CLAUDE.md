@@ -44,9 +44,12 @@ and a host release. Prefer additive changes.
 
 - **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets` table, v6),
   outside every project folder and never synced. A service gets a name from three sources:
-  compose literal (a value without `$` the service sets itself) > stored value > `.env.example`
-  default. Defaults are read fresh at every compose call by the lenient `parse_example`, so
-  editing the file needs no restart bookkeeping. `compose_up` lists the bare names under
+  compose literal (a value without `$` the service sets itself) > stored value > the project's
+  `.env` until it is imported > `.env.example` default. Every name a regular-file `.env` sets
+  (empty included; leniently re-read if it doesn't parse) is dropped from the defaults, since
+  compose and frameworks read that file themselves. Defaults are read at every compose call by
+  the lenient `parse_example`; a symlinked `.env.example` counts as absent. `.env.example` changes
+  apply at the next start; `restart_needed` doesn't track them. `compose_up` lists the bare names under
   `environment:` for every service in `.eggie/overlay.yml` and passes the effective env only to
   compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) --
   compose interpolates the file for each, so `${KEY:?}` breaks any that lacks them; no route, log

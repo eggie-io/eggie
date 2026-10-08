@@ -198,7 +198,7 @@ section disagrees with sections 1–9 above, this section wins.
 | D11 | Visibility | Visible while typing (eye toggle), write-only once saved; repo defaults always shown in clear |
 | D12 | `.env` import | Store only values that differ from the default; drop empty values |
 
-### R1. Three sources, one environment
+### R1. Four sources, one environment
 
 For each start, the effective variables are, highest precedence first:
 
@@ -207,11 +207,17 @@ For each start, the effective variables are, highest precedence first:
    entry `NAME: ${NAME}` or a bare `NAME` is not a literal: it resolves from Eggie's environment.
 2. **Your values** — stored in `state.db` (`secrets` table), write-only, entered by the owner or set
    by an agent with `eggie secret set`.
-3. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the
+3. **The project's `.env`, until it is imported** — while a regular file (not a symlink) `.env`
+   exists in the project root, every name it sets (any value, empty included) is dropped from the
+   defaults, so compose (`${...}`, `env_file: .env`) and frameworks keep reading `.env` as before.
+   Eggie does not deliver these values itself. A `.env` that doesn't parse strictly is re-read
+   leniently for this purpose; it never stops a start.
+4. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the
    file at every compose call. Parsed with the `.env` rules (§5); a line that doesn't parse is skipped,
-   never fatal.
+   never fatal. A symlinked `.env.example` counts as absent (no defaults, nothing missing from it).
+   Changes apply at the next start; `restart_needed` doesn't track them.
 
-Values of 2 and 3 (yours win) are passed as the environment of every compose call that loads the
+Values of 2 and 4 (yours win) are passed as the environment of every compose call that loads the
 user's file; their names go into the overlay for every service except where rule 1 applies. No `.env`
 file is needed by any framework: phpdotenv (Laravel), Next.js, Django, Rails and Node all prefer real
 environment variables over a `.env`.
@@ -231,12 +237,14 @@ exact names `PATH`, `HOME` (compose and the docker CLI read these from their own
 ```json
 {"secrets":  [{"name": "STRIPE_KEY", "updated_at": 1.0, "overrides_default": false}],
  "missing":  ["OPENAI_API_KEY"],
- "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false}],
+ "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false, "shadowed": false}],
  "dotenv":   null,
  "restart_needed": false}
 ```
 
 Default values come from the repo file and are returned in clear; stored values never are.
+`shadowed` is true when the current `.env` sets that name (R1 rule 3); the console then shows the
+default with a "set by .env" tag instead of Edit.
 "Reset to default" is `DELETE /projects/{id}/secrets/{name}`. `PUT` refuses an empty value
 (`secret_invalid_value`), like the CLI and console already do.
 
@@ -257,16 +265,19 @@ visible by default, `autocomplete="off"`; after Save the field clears and the ro
 ### R6. CLI
 
 `eggie secret list` prints your values, then *Needs a value*, then the number of defaults from
-`.env.example`. Unchanged otherwise.
+`.env.example` ("1 default", "N defaults"). Unchanged otherwise.
 
 ### R7. Coding-agent instructions
 
 `.env.example` at the project root is the project's list of variables: a secret is `NAME=` (empty),
 a non-secret setting is `NAME=default`. Never create `.env`; if a scaffolding tool writes one, move
 its non-secret keys into `.env.example` as defaults, generate random internal keys with
-`openssl rand -hex 32 | eggie secret set NAME`, ask the owner for outside credentials on the
-Secrets page, then delete the `.env`. `docker compose run` started by the agent gets none of these
-variables; run one-off commands inside the running service with `docker compose exec`.
+`openssl rand -hex 32 | eggie secret set NAME` (Laravel's APP_KEY:
+`echo "base64:$(openssl rand -base64 32)" | eggie secret set APP_KEY`), ask the owner for outside
+credentials on the Secrets page, then delete the `.env`. After changing a default, restart. Run
+one-off commands inside the running container with `docker exec <container> …` (found with
+`docker ps`); a `docker compose run`/`exec` the agent starts re-reads the compose file without
+Eggie's variables.
 
 ### R8. Review fixes folded in
 

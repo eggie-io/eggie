@@ -24,12 +24,14 @@ always give them the project's URL.
   them to every service as environment variables; the user fills secrets and can change defaults
   on the project's **Secrets** page. Never write a secret value into any file, the compose file
   or a commit, and never create `.env`; if a tool writes one, move its non-secret keys into
-  `.env.example`, then delete it. A random internal key (app secret, JWT/cookie secret, APP_KEY):
-  generate it straight into Eggie with `openssl rand -hex 32 | eggie secret set NAME`. A key
+  `.env.example`, then delete it. A random internal key (app secret, JWT/cookie secret):
+  generate it straight into Eggie with `openssl rand -hex 32 | eggie secret set NAME`. Laravel's
+  APP_KEY: `echo "base64:$(openssl rand -base64 32)" | eggie secret set APP_KEY`. A key
   from an outside service (Stripe, OpenAI, mail): add `NAME=` and ask the user to fill it on the
-  Secrets page, then restart. `eggie secret list` shows what is set and what still needs a value.
-  `docker compose run` started by you gets none of these variables — run one-off commands in the
-  running service with `docker compose exec`.
+  Secrets page, then restart. After changing a default in `.env.example`, restart too.
+  `eggie secret list` shows what is set and what still needs a value. Run one-off commands inside
+  the running container with `docker exec <container> …` (find it with `docker ps`); a
+  `docker compose run` or `exec` you start re-reads the compose file without Eggie's variables.
 - Something broken? `eggie logs`.
 - An idea for an app, or a change to a project: start with the `eggie-brainstorm` skill.
 - Something to set up, import or run — a repo URL, an archive, a folder: the `eggie-setup`

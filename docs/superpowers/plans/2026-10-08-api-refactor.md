@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Branch `feature/57-api-refactor` (already created from `main`; spec committed as `b6d9044`). Commit after every task; never commit on `main`.
-- Run tests with the repo venv: `cd /home/ihor/projects/local-environment-for-non-tech/poc && TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q` (create `/home/ihor/tmp` once with `mkdir -p`; `/tmp/pytest-of-$USER` is root-owned in this WSL). The full suite must be green at the end of every task.
+- Run tests with the repo venv: `cd /home/ihor/projects/local-environment-for-non-tech/poc && TMPDIR=/home/ihor/tmp python3 -m pytest -q` (`python3` here is 3.12.3 with the dependencies installed; there is no `.venv` in this checkout; `/tmp/pytest-of-$USER` is root-owned in this WSL). The full suite must be green at the end of every task.
 - Wire contract is frozen: every route path, method, status code, body, the `{"error": {"code", "message", ...}}` shape, the `/` + `/api` double mount, the console-only mount of public POST/DELETE, cookie names and TTLs. If a test asserting a status code or body fails, the refactor is wrong, not the test.
 - Existing tests change only in import paths, `State` construction and `env.state`/`app.state` access. Never rewrite an assertion to fit.
 - Moved code moves **verbatim**, including comments. Comments explain concurrency rules that are easy to break; keep every one next to the code it describes.
@@ -157,7 +157,7 @@ from ..services.sync import SyncLoop, run_pass
 
 `domain/compose.py`'s `load_compose(path)` reads a file, which `domain/` must not do. Its only caller is `tests/runtime/api/test_acceptance_detection.py`: delete the function (and the `Path`/`yaml` imports it needed) and have the test do `yaml.safe_load((FIX / name).read_text())` through a two-line local helper.
 
-Then: `cd runtime && python -c "import eggie_api.routes.app"` must succeed (use `../.venv/bin/python`). Fix any import the table missed by reading the traceback — every module in the package must import.
+Then: `cd runtime && python -c "import eggie_api.routes.app"` must succeed (use `python3`). Fix any import the table missed by reading the traceback — every module in the package must import.
 
 - [ ] **Step 5: Update packaging**
 
@@ -201,7 +201,7 @@ Also edit the one message string in `tests/test_constants_agree.py:30`: `eggie_a
 
 - [ ] **Step 7: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass (same count as on `main`: run it on `main` first if unsure — `git stash` is not needed, just `git log` the count from CI or run once before Step 1).
 
 - [ ] **Step 8: Commit**
@@ -251,7 +251,7 @@ def test_extra_fields_ride_along():
     assert e.extra == {"offset": 7}
 ```
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest tests/runtime/api/test_errors.py -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest tests/runtime/api/test_errors.py -q`
 Expected: FAIL, `ModuleNotFoundError: eggie_api.errors`.
 
 - [ ] **Step 2: Create `errors.py`**
@@ -422,7 +422,7 @@ If a test in `test_uploads.py` asserts `e.value.status`, change it to assert the
 
 - [ ] **Step 7: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass. A status-code mismatch means a wrong subclass was picked in Step 5 — match today's number, listed in spec §4.
 
 - [ ] **Step 8: Commit**
@@ -656,7 +656,7 @@ By hand:
 
 - [ ] **Step 6: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass. `grep -rn "State\b" runtime/eggie_api tests/runtime/api` must show no reference to the deleted class.
 
 - [ ] **Step 7: Commit**
@@ -952,7 +952,7 @@ In `app.py`: `account.before_sign_out = public.release_all` after `public` is bu
 
 - [ ] **Step 6: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass.
 
 - [ ] **Step 7: Commit**
@@ -1164,7 +1164,7 @@ In `app.py`: `uploads_svc = UploadService(uploads, loader, locks)` (the `UploadS
 
 - [ ] **Step 4: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
@@ -1450,7 +1450,7 @@ Tests: `conftest.py` `repos=app.state.repos` → `repos=app.state.services.repos
 
 - [ ] **Step 6: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q`
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q`
 Expected: all pass, including the two tests from Step 1. `wc -l runtime/eggie_api/routes/app.py` should be around 450 lines: wiring, auth middleware, handlers, schemas, routes.
 
 - [ ] **Step 7: Commit**
@@ -1746,7 +1746,7 @@ Tests: `sed -i 's/eggie_api\.routes\.app/eggie_api.http.app/g' tests/runtime/api
 
 - [ ] **Step 7: Run the whole suite and build the image**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q` → all pass.
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q` → all pass.
 Run: `cd runtime/eggie_api && docker build -q . && cd -` (skip with a note in the PR if Docker is not available in this shell).
 
 - [ ] **Step 8: Commit**
@@ -1900,7 +1900,7 @@ Update the remaining path mentions in that file (`core/secrets.py` → `domain/s
 
 - [ ] **Step 4: Run the whole suite**
 
-Run: `TMPDIR=/home/ihor/tmp .venv/bin/python -m pytest -q` → all pass.
+Run: `TMPDIR=/home/ihor/tmp python3 -m pytest -q` → all pass.
 
 - [ ] **Step 5: Commit, push, open the PR**
 

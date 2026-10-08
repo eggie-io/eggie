@@ -260,7 +260,8 @@ def test_clone_without_a_compose_file_finishes_stopped_without_starting_it(env):
 
 def test_clone_lock_is_released_when_start_work_refuses(env):
     # A clone that lands a repo whose compose file will not parse must not
-    # leave the project locked: the next `up` has to be able to run.
+    # leave the project locked. `down` is the probe: the lock is the first
+    # thing it needs, while `up` refuses on the compose file before reaching it.
     client, runner, app, _ = make(env, connected_github())
 
     def land(dest):
@@ -270,6 +271,5 @@ def test_clone_lock_is_released_when_start_work_refuses(env):
     runner.on_clone = land
     job = finish(app, client, client.post("/github/clone", json={"repo": "octo/app"}))
     assert job["state"] == "done", job
-    again = client.post("/projects/app/up")
-    assert again.status_code == 422
-    assert again.json()["error"]["code"] == "invalid_compose"
+    down = client.post("/projects/app/down")
+    assert down.status_code == 202, down.text

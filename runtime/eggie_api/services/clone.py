@@ -13,7 +13,7 @@ from ..errors import Conflict, EggieError, Invalid
 from ..infra.github import auth_failed, clone_argv, redact, valid_repo
 from ..infra.repos.projects import ProjectRepo
 from .github_link import GitHubLink
-from .jobs import JobFailed, JobRegistry
+from .jobs import JobFailed
 from .lifecycle import LifecycleService
 from .loader import ProjectLoader
 from .locks import ProjectLocks
@@ -21,7 +21,7 @@ from .locks import ProjectLocks
 
 class CloneService:
     def __init__(self, config: ApiConfig, runner, loader: ProjectLoader,
-                 projects: ProjectRepo, locks: ProjectLocks, jobs: JobRegistry,
+                 projects: ProjectRepo, locks: ProjectLocks,
                  github_link: GitHubLink, lifecycle: LifecycleService,
                  wake: Callable[[], None]):
         self._config = config
@@ -29,7 +29,6 @@ class CloneService:
         self._loader = loader
         self._projects = projects
         self._locks = locks
-        self._jobs = jobs
         self._github_link = github_link
         self._lifecycle = lifecycle
         self._wake = wake
@@ -47,7 +46,6 @@ class CloneService:
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
         token = self._github_link.require_token()
-        self._locks.acquire_or_raise(project_id)
 
         def work(write):
             handed_over = False
@@ -93,9 +91,5 @@ class CloneService:
                 if not handed_over:
                     self._locks.release(project_id)
 
-        try:
-            job_id = self._jobs.submit(work, kind="clone", project_id=project_id)
-        except BaseException:
-            self._locks.release(project_id)
-            raise
+        job_id = self._lifecycle.submit_locked(project_id, work, "clone")
         return {"job_id": job_id, "id": project_id}

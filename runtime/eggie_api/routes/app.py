@@ -181,7 +181,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
     agent_status = AgentStatus(config.agent_status_dir, config.agents_dir)
     lifecycle_svc = LifecycleService(config, runner, loader, repos.projects,
                                      secrets_svc, jobs, locks, http_probe)
-    clone_svc = CloneService(config, runner, loader, repos.projects, locks, jobs,
+    clone_svc = CloneService(config, runner, loader, repos.projects, locks,
                              github_link, lifecycle_svc, sync.wake)
     projects_svc = ProjectService(config, runner, loader, repos.projects, secrets_svc,
                                   jobs, locks, uploads_svc, public, http_probe,

@@ -9,6 +9,7 @@ again here and held equal by tests/test_constants_agree.py.
 from __future__ import annotations
 
 import argparse
+import getpass as _getpass
 import grp
 import json
 import os
@@ -260,6 +261,17 @@ class ApiClient:
             path += f"?service={urllib.parse.quote(service)}"
         return self._open("GET", path, timeout=LOGS_TIMEOUT)
 
+    def secrets(self, project_id: str) -> dict:
+        return self._call("GET", f"/projects/{project_id}/secrets")
+
+    def set_secret(self, project_id: str, name: str, value: str) -> None:
+        self._call("PUT", f"/projects/{project_id}/secrets/"
+                          f"{urllib.parse.quote(name, safe='')}", {"value": value})
+
+    def delete_secret(self, project_id: str, name: str) -> None:
+        self._call("DELETE", f"/projects/{project_id}/secrets/"
+                             f"{urllib.parse.quote(name, safe='')}")
+
 
 def _default_client() -> ApiClient:
     return ApiClient(read_token(Path(GUEST_TOKEN)))
@@ -280,6 +292,8 @@ class Env:
     git: Callable[[list[str], dict], subprocess.CompletedProcess] = _run_git
     out: TextIO = field(default_factory=lambda: sys.stdout)
     err: TextIO = field(default_factory=lambda: sys.stderr)
+    stdin: TextIO = field(default_factory=lambda: sys.stdin)
+    getpass: Callable[[str], str] = _getpass.getpass
 
 
 def _project_here(env: Env, directory: str | None) -> tuple[Path, str] | None:
@@ -390,6 +404,49 @@ def cmd_down(env: Env) -> None:
     print(f"{project_id} stopped.", file=env.out)
 
 
+_APPLY_HINT = "Run `eggie up` to apply it."
+
+
+def cmd_secret_set(env: Env, name: str) -> None:
+    project_id = _require_project(env)
+    # Never from argv: that ends up in shell history and `ps`.
+    if env.stdin.isatty():
+        value = env.getpass(f"Value for {name} (not shown): ")
+    else:
+        value = env.stdin.read().removesuffix("\n")
+    if value == "":
+        raise EggieError(f"No value given for {name}; nothing was saved.")
+    client = env.client()
+    client.set_secret(project_id, name, value)
+    print(f"Saved {name} for {project_id}.", file=env.out)
+    if client.secrets(project_id).get("restart_needed"):
+        print(_APPLY_HINT, file=env.out)
+
+
+def cmd_secret_list(env: Env) -> None:
+    project_id = _require_project(env)
+    data = env.client().secrets(project_id)
+    names = [s["name"] for s in data.get("secrets", [])]
+    for name in names:
+        print(name, file=env.out)
+    missing = data.get("missing") or []
+    if missing:
+        print("Missing (no value yet): " + ", ".join(missing), file=env.out)
+    if not names and not missing:
+        print(f"{project_id} has no secrets.", file=env.out)
+    if data.get("dotenv"):
+        print("This project has a .env file; move it into secrets on the "
+              "project's Secrets page in Eggie.", file=env.out)
+    if data.get("restart_needed"):
+        print("Run `eggie up` to apply the changes.", file=env.out)
+
+
+def cmd_secret_rm(env: Env, name: str) -> None:
+    project_id = _require_project(env)
+    env.client().delete_secret(project_id, name)
+    print(f"Removed {name} from {project_id}.", file=env.out)
+
+
 def repo_name(url: str) -> str:
     """The last path segment without `.git`, for https and scp-style URLs alike."""
     return re.split(r"[/:]", url.rstrip("/"))[-1].removesuffix(".git")
@@ -460,6 +517,16 @@ def _parser() -> argparse.ArgumentParser:
                                          "~/projects and start it")
     clone.add_argument("url")
     clone.add_argument("name", nargs="?")
+    secret = sub.add_parser("secret", help="keys and passwords this project's "
+                                           "containers get as environment variables")
+    secret_sub = secret.add_subparsers(dest="secret_command", required=True,
+                                       metavar="<action>")
+    secret_set = secret_sub.add_parser(
+        "set", help="save a secret; the value is read from the terminal or stdin")
+    secret_set.add_argument("name")
+    secret_sub.add_parser("list", help="show secret names and the ones still missing")
+    secret_rm = secret_sub.add_parser("rm", help="remove a secret")
+    secret_rm.add_argument("name")
     return parser
 
 
@@ -473,6 +540,11 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "down": lambda: cmd_down(env),
         "new": lambda: cmd_new(env, args.name),
         "clone": lambda: cmd_clone(env, args.url, args.name),
+        "secret": lambda: {
+            "set": lambda: cmd_secret_set(env, args.name),
+            "list": lambda: cmd_secret_list(env),
+            "rm": lambda: cmd_secret_rm(env, args.name),
+        }[args.secret_command](),
     }
     try:
         commands[args.command]()

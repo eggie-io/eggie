@@ -202,9 +202,9 @@ section disagrees with sections 1–9 above, this section wins.
 
 For each start, the effective variables are, highest precedence first:
 
-1. **Compose literal** — any name a service declares in its own `environment:` (mapping key, or
-   `NAME`/`NAME=value` list entry). Eggie does not list that name in the overlay for that service.
-   A declared `${NAME}` still resolves, because compose interpolates from the process environment.
+1. **Compose literal** — any name a service sets to a literal value in its own `environment:`
+   (a value with no `$`). Eggie does not list that name in the overlay for that service. A service
+   entry `NAME: ${NAME}` or a bare `NAME` is not a literal: it resolves from Eggie's environment.
 2. **Your values** — stored in `state.db` (`secrets` table), write-only, entered by the owner or set
    by an agent with `eggie secret set`.
 3. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the

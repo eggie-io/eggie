@@ -5,8 +5,9 @@ import threading
 
 import pytest
 
-from eggie_api.core import uploads as uploads_module
-from eggie_api.core.uploads import RESERVE, UploadError, UploadStore
+from eggie_api.infra import uploads as uploads_module
+from eggie_api.errors import EggieError
+from eggie_api.infra.uploads import RESERVE, UploadStore
 
 GIB = 1024 ** 3
 
@@ -44,7 +45,7 @@ class HalfWriter:
 
 def test_a_file_that_will_not_fit_is_refused_before_any_byte(tmp_path):
     store = _store(tmp_path, free=5 * GIB)
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         store.start("blog", "data/big.zip", 5 * GIB - RESERVE + 1, "fp", False)
     assert e.value.code == "not_enough_space"
     assert e.value.extra["free_bytes"] == 5 * GIB
@@ -64,7 +65,7 @@ def test_a_wrong_offset_is_refused_with_the_real_one(tmp_path):
     store = _store(tmp_path)
     up = store.start("blog", "a.bin", 6, "fp", False)
     store.append(up.id, 0, b"abc")
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         store.append(up.id, 0, b"abc")
     assert (e.value.code, e.value.extra["offset"]) == ("offset_mismatch", 3)
 
@@ -72,7 +73,7 @@ def test_a_wrong_offset_is_refused_with_the_real_one(tmp_path):
 def test_more_bytes_than_declared_are_refused(tmp_path):
     store = _store(tmp_path)
     up = store.start("blog", "a.bin", 2, "fp", False)
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         store.append(up.id, 0, b"abc")
     assert e.value.code == "too_much_data"
 
@@ -82,7 +83,7 @@ def test_a_disk_full_mid_chunk_rolls_back_to_the_chunk_start(tmp_path):
     up = store.start("blog", "a.bin", 10, "fp", False)
     store.append(up.id, 0, b"abcd")
     failing = _store(tmp_path, opener=lambda p, m: HalfWriter(open(p, m)))
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         failing.append(up.id, 4, b"efgh")
     assert (e.value.code, e.value.extra["offset"]) == ("disk_full", 4)
     assert store.get(up.id).offset == 4
@@ -104,7 +105,7 @@ def test_a_truncate_failure_after_disk_full_reports_the_bytes_actually_on_disk(
 
     monkeypatch.setattr(uploads_module.os, "truncate", bad_truncate)
 
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         failing.append(up.id, 4, b"efgh")
     assert e.value.code == "disk_full"
     assert e.value.extra["offset"] == store.get(up.id).offset
@@ -123,13 +124,13 @@ def test_finish_moves_the_file_into_place_and_forgets_the_upload(tmp_path):
 def test_an_unfinished_upload_cannot_be_finished(tmp_path):
     store = _store(tmp_path)
     up = store.start("blog", "a.bin", 3, "fp", False)
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         store.finish(up.id, tmp_path / "a.bin")
     assert e.value.code == "incomplete"
 
 
 def test_an_upload_id_cannot_name_a_path(tmp_path):
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         _store(tmp_path).get("../../etc")
     assert e.value.code == "upload_not_found"
 
@@ -141,7 +142,7 @@ def test_get_treats_unreadable_metadata_as_no_such_upload(tmp_path):
     meta = json.loads(meta_path.read_text())
     meta["surprise_field"] = "unexpected"
     meta_path.write_text(json.dumps(meta))
-    with pytest.raises(UploadError) as e:
+    with pytest.raises(EggieError) as e:
         store.get(up.id)
     assert e.value.code == "upload_not_found"
 
@@ -195,13 +196,13 @@ def test_two_concurrent_appends_at_the_same_offset_only_one_wins(tmp_path):
     def append_a():
         try:
             results["a"] = ("ok", store.append(up.id, 0, b"abc").offset)
-        except UploadError as e:
+        except EggieError as e:
             results["a"] = ("err", e.code, e.extra.get("offset"))
 
     def append_b():
         try:
             results["b"] = ("ok", store.append(up.id, 0, b"xyz").offset)
-        except UploadError as e:
+        except EggieError as e:
             results["b"] = ("err", e.code, e.extra.get("offset"))
 
     t_a = threading.Thread(target=append_a)

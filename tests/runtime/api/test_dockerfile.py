@@ -14,7 +14,7 @@ def test_dockerfile_never_pins_latest():
 
 
 def test_dockerfile_puts_the_docker_cli_at_the_absolute_path_lifecycle_expects():
-    # core/lifecycle.py calls "/usr/bin/docker" literally; landing the binary
+    # infra/docker.py calls "/usr/bin/docker" literally; landing the binary
     # anywhere else makes every guest exec fail with "No such file".
     assert "/usr/local/bin/docker /usr/bin/docker" in _text()
 
@@ -34,3 +34,7 @@ def test_dockerfile_never_touches_opt_eggie():
 
 def test_dockerfile_installs_git_for_the_github_clone_job():
     assert "apt-get install" in _text() and " git" in _text()
+
+
+def test_dockerfile_starts_the_package_entrypoint():
+    assert '"-m", "eggie_api"]' in _text()

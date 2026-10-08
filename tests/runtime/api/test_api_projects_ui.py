@@ -1,7 +1,7 @@
 import threading
 import time
 
-from eggie_api.core.exec import Completed
+from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import (COMPOSE_MALFORMED, _create,
                                   _run_to_completion, _write_compose)
 
@@ -82,7 +82,7 @@ def test_a_start_records_the_compose_project_name(env):
     _write_compose(env, "blog", "name: fancy\n" + (
         "services:\n  web:\n    image: nginx\n    ports: ['8080:80']\n"))
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    assert env.state.get_project("blog")["compose_name"] == "fancy"
+    assert env.repos.projects.get("blog")["compose_name"] == "fancy"
 
 
 def test_restart_stops_before_it_starts(env):
@@ -135,13 +135,13 @@ def test_purge_removes_folder_volumes_and_record(env):
     env.client.delete("/projects/blog", params={"purge": "true"})
     assert not (env.config.projects_root / "blog").exists()
     assert env.runner.argv_containing("volume")
-    assert env.state.get_project("blog") is None
+    assert env.repos.projects.get("blog") is None
 
 
 def test_delete_uses_the_recorded_compose_name(env):
     _create(env, "blog")
     _write_compose(env, "blog")
-    env.state.set_compose_name("blog", "fancy")
+    env.repos.projects.set_compose_name("blog", "fancy")
     env.client.delete("/projects/blog")
     assert any("label=com.docker.compose.project=fancy" in a
                for a in env.runner.calls)
@@ -152,7 +152,7 @@ def test_delete_prefers_the_name_running_containers_carry_over_the_stored_one(en
     # that was never started under it); the containers' own label wins.
     _create(env, "blog")
     _write_compose(env, "blog")
-    env.state.set_compose_name("blog", "stale")
+    env.repos.projects.set_compose_name("blog", "stale")
     env.runner.compose_name_lookup = Completed(0, "fancy\n", "")
     env.client.delete("/projects/blog")
     assert any("label=com.docker.compose.project=fancy" in a
@@ -168,7 +168,7 @@ def test_a_failed_up_still_records_the_compose_name(env):
         "services:\n  web:\n    image: nginx\n    ports: ['8080:80']\n"))
     env.runner.up = Completed(1, "", "boom")
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    row = env.state.get_project("blog")
+    row = env.repos.projects.get("blog")
     assert row["compose_name"] == "fancy"
     assert row["last_started_at"] is None
 
@@ -182,3 +182,11 @@ def test_delete_preview_counts_the_real_tree(env):
     compose_size = len((env.config.projects_root / "blog" /
                         "docker-compose.yml").read_bytes())
     assert (preview["files"], preview["bytes"]) == (2, 10 + compose_size)
+
+
+def test_listing_survives_a_public_status_crash(env):
+    _create(env, "blog")
+    env.app.state.services.public.status = lambda _id: 1 / 0
+    r = env.client.get("/projects")
+    assert r.status_code == 200
+    assert r.json()["projects"][0]["public"] == {"state": "off", "note": None}

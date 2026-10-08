@@ -3,7 +3,7 @@ sides read these cases so the preview can't promise an id the API won't make."""
 import json
 from pathlib import Path
 
-from eggie_api.core.project import _slug
+from eggie_api.domain.project import _slug
 
 CASES = Path(__file__).resolve().parents[2] / "fixtures" / "slugify-cases.json"
 

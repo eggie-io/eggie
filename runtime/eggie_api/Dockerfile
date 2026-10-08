@@ -21,11 +21,11 @@ ARG DOCKER_GID=999
 ENV EGGIE_SERVICE_VERSION=${SERVICE_VERSION} \
     PYTHONUNBUFFERED=1
 
-# Absolute /usr/bin/docker, not /usr/local/bin: core/lifecycle.py hardcodes
+# Absolute /usr/bin/docker, not /usr/local/bin: infra/docker.py hardcodes
 # this exact path, because a bare `docker` on a WSL2 host with Docker Desktop
 # integration on can resolve to Desktop's own engine instead of this VM's.
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
-# lifecycle.py calls `docker compose`, the plugin, not the standalone
+# infra/docker.py calls `docker compose`, the plugin, not the standalone
 # docker-compose binary. /usr/local/lib/docker/cli-plugins is one of the
 # CLI's fixed plugin search paths regardless of where the docker binary lives.
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose \
@@ -53,9 +53,11 @@ WORKDIR /app
 # Only the installable package. The stack manifest lives in runtime/ and the
 # verify fixture under host/provision/nginx-hello; neither ships inside the image.
 COPY pyproject.toml /app/
-COPY __init__.py /app/
-COPY core /app/core
-COPY routes /app/routes
+COPY __init__.py __main__.py config.py constants.py errors.py wiring.py /app/
+COPY domain /app/domain
+COPY infra /app/infra
+COPY services /app/services
+COPY rest /app/rest
 RUN pip install --no-cache-dir .
 
 USER api
@@ -68,4 +70,4 @@ EXPOSE 39099
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import os, urllib.request as u; u.urlopen('http://127.0.0.1:%s/health' % os.environ.get('EGGIE_API_PORT', '39099'), timeout=3)"
 
-CMD ["python", "-m", "eggie_api.routes"]
+CMD ["python", "-m", "eggie_api"]

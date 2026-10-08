@@ -3,7 +3,7 @@ import threading
 
 import yaml
 
-from eggie_api.core.exec import Completed
+from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
                                         _write_compose)
 
@@ -229,12 +229,12 @@ def test_purge_drops_secrets_and_requests_and_plain_delete_keeps_them(env):
     env.client.put("/projects/kept/secrets/A", json={"value": "1"})
     env.client.put("/projects/kept/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/kept")
-    assert env.state.secret_values("kept") == {"A": "1"}
-    assert env.state.secret_requests("kept") == [{"name": "B", "hint": "x"}]
+    assert env.repos.secrets.values("kept") == {"A": "1"}
+    assert env.repos.secrets.requests("kept") == [{"name": "B", "hint": "x"}]
 
     _project(env, "gone")
     env.client.put("/projects/gone/secrets/A", json={"value": "1"})
     env.client.put("/projects/gone/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/gone?purge=true")
-    assert env.state.secret_values("gone") == {}
-    assert env.state.secret_requests("gone") == []
+    assert env.repos.secrets.values("gone") == {}
+    assert env.repos.secrets.requests("gone") == []

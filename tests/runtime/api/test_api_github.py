@@ -4,12 +4,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from eggie_api.core.exec import Completed
-from eggie_api.core.github import GitHubUnavailable
-from eggie_api.core.github_link import GitHubLink
-from eggie_api.core.state import State
-from eggie_api.routes.app import create_app
-from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
+from eggie_api.infra.runner import Completed
+from eggie_api.infra.github import GitHubUnavailable
+from eggie_api.services.github_link import GitHubLink
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
+from eggie_api.rest.app import create_app
+from tests.runtime.api.conftest import (AUTH, COMPOSE_MALFORMED, COMPOSE_ONE_WEB,
+                                        FakeProbe, FakeRunner)
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
 REPO = {"full_name": "octo/app", "private": True, "description": "An app",
@@ -17,15 +19,15 @@ REPO = {"full_name": "octo/app", "private": True, "description": "An app",
 
 
 def make(env, github, *, connect=True):
-    state = State(env.config.state_db.with_name("gh.db"))
-    link = GitHubLink(state, github, client_id="cid",
+    repos = Repos.open(Database(env.config.state_db.with_name("gh.db")))
+    link = GitHubLink(repos.github, github, client_id="cid",
                       directory=env.config.state_db.with_name("github"),
                       spawn=lambda fn: None)
     if connect:
         link.connect()
         link.poll_once()
     runner = FakeRunner()
-    app = create_app(config=env.config, runner=runner, state=state,
+    app = create_app(config=env.config, runner=runner, repos=repos,
                      http_probe=FakeProbe(), github=github, github_link=link)
     return TestClient(app, headers=AUTH), runner, app, link
 
@@ -37,7 +39,7 @@ def connected_github(**scripts):
 
 def finish(app, client, resp):
     job_id = resp.json()["job_id"]
-    app.state.jobs.wait(job_id, timeout=5)
+    app.state.services.jobs.wait(job_id, timeout=5)
     return client.get(f"/jobs/{job_id}").json()
 
 
@@ -254,3 +256,20 @@ def test_clone_without_a_compose_file_finishes_stopped_without_starting_it(env):
     assert job["result"] == {"id": "app", "status": "stopped"}
     assert client.get("/projects/app").status_code == 200
     assert not runner.argv_containing("up")
+
+
+def test_clone_lock_is_released_when_start_work_refuses(env):
+    # A clone that lands a repo whose compose file will not parse must not
+    # leave the project locked. `down` is the probe: the lock is the first
+    # thing it needs, while `up` refuses on the compose file before reaching it.
+    client, runner, app, _ = make(env, connected_github())
+
+    def land(dest):
+        Path(dest).mkdir(parents=True)
+        (Path(dest) / "docker-compose.yml").write_text(COMPOSE_MALFORMED)
+
+    runner.on_clone = land
+    job = finish(app, client, client.post("/github/clone", json={"repo": "octo/app"}))
+    assert job["state"] == "done", job
+    down = client.post("/projects/app/down")
+    assert down.status_code == 202, down.text

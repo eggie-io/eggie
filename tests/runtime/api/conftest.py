@@ -4,10 +4,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from eggie_api.routes.app import create_app
-from eggie_api.core.config import ApiConfig
-from eggie_api.core.exec import Completed
-from eggie_api.core.state import State
+from eggie_api.rest.app import create_app
+from eggie_api.config import ApiConfig
+from eggie_api.infra.runner import Completed
 
 BROWSER = {"Host": "localhost:41080"}
 
@@ -147,7 +146,7 @@ def env(tmp_path):
         # raw_client returns the 500 a real caller would see instead of
         # re-raising the exception inside the test.
         yield SimpleNamespace(client=client, config=config, runner=runner,
-                              probe=probe, state=app.state.state, jobs=app.state.jobs,
+                              probe=probe, repos=app.state.services.repos, jobs=app.state.services.jobs,
                               raw_client=TestClient(app, raise_server_exceptions=False,
                                                     headers=AUTH),
                               app=app)

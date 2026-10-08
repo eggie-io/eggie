@@ -2,7 +2,7 @@ import errno
 import os
 from types import SimpleNamespace
 
-from eggie_api.core import disk
+from eggie_api.infra import disk
 
 
 def _fake_statvfs(_path):

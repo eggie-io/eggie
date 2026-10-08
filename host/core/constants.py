@@ -1,6 +1,6 @@
 """Host-side constants.
 
-Deliberately separate from `eggie_api/core/constants.py`: nothing under `host/`
+Deliberately separate from `eggie_api/constants.py`: nothing under `host/`
 may import `eggie_api/`. Names appearing in both modules are held equal by
 `tests/test_constants_agree.py` -- that test, not a shared import, is what stops
 the two copies drifting.

@@ -127,7 +127,7 @@ def _extract(archive: Path, into: Path) -> None:
         for member in tar.getmembers():
             # `filter="data"` below rejects a `..` escape and a link out of the
             # tree, but silently *normalizes* an absolute name rather than
-            # refusing it -- the same finding as eggie_api/core/files.py. Refusing
+            # refusing it -- the same finding as eggie_api/infra/files.py. Refusing
             # it here is the check that is actually missing.
             if member.name.startswith("/") or Path(member.name).is_absolute():
                 raise LimaInstallError(

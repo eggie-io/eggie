@@ -2,10 +2,11 @@ import hashlib
 
 from fastapi.testclient import TestClient
 
-from eggie_api.routes.app import create_app
-from eggie_api.core.config import ApiConfig
-from eggie_api.core.sessions import COOKIE, SESSION_TTL, Sessions
-from eggie_api.core.state import State
+from eggie_api.rest.app import create_app
+from eggie_api.config import ApiConfig
+from eggie_api.services.sessions import COOKIE, SESSION_TTL, Sessions
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from tests.runtime.api.conftest import AUTH, BROWSER
 
 ORIGIN = {"Origin": "http://localhost:41080"}
@@ -80,7 +81,7 @@ def test_the_bearer_mount_ignores_a_valid_session_cookie(env):
 
 def test_an_expired_code_is_refused(tmp_path):
     clock = Clock()
-    sessions = Sessions(State(tmp_path / "s.db"), clock=clock)
+    sessions = Sessions(Repos.open(Database(tmp_path / "s.db")).sessions, clock=clock)
     code = sessions.issue_handoff()
     clock.now += 61
     assert sessions.redeem(code) is None
@@ -90,7 +91,7 @@ def test_an_expired_session_reads_as_expired_not_missing(tmp_path):
     # The UI shows "we've lost track of you" for both, but only an expired one
     # may say "that happens after a while".
     clock = Clock()
-    sessions = Sessions(State(tmp_path / "s.db"), clock=clock)
+    sessions = Sessions(Repos.open(Database(tmp_path / "s.db")).sessions, clock=clock)
     sid = sessions.redeem(sessions.issue_handoff())
     clock.now += SESSION_TTL + 1
     assert sessions.check(sid) == "expired"
@@ -99,7 +100,7 @@ def test_an_expired_session_reads_as_expired_not_missing(tmp_path):
 
 def test_use_slides_the_expiry_forward(tmp_path):
     clock = Clock()
-    sessions = Sessions(State(tmp_path / "s.db"), clock=clock)
+    sessions = Sessions(Repos.open(Database(tmp_path / "s.db")).sessions, clock=clock)
     sid = sessions.redeem(sessions.issue_handoff())
     clock.now += SESSION_TTL - 10
     assert sessions.check(sid) == "ok"
@@ -110,7 +111,7 @@ def test_use_slides_the_expiry_forward(tmp_path):
 def test_a_session_survives_an_api_restart(env):
     browser = _signed_in(env)
     cookie = browser.cookies[COOKIE]
-    env.state.close()
+    env.repos.db.close()
     restarted = create_app(config=env.config, runner=env.runner,
                            http_probe=env.probe)
     again = TestClient(restarted, headers=BROWSER, cookies={COOKIE: cookie})
@@ -118,10 +119,10 @@ def test_a_session_survives_an_api_restart(env):
 
 
 def test_the_raw_session_id_is_never_stored(tmp_path):
-    state = State(tmp_path / "s.db")
-    sessions = Sessions(state)
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    sessions = Sessions(repos.sessions)
     sid = sessions.redeem(sessions.issue_handoff())
-    assert state.get_session(sid) is None
+    assert repos.sessions.get(sid) is None
 
 
 def test_an_expired_session_answers_session_expired_through_the_middleware(env):
@@ -131,7 +132,7 @@ def test_an_expired_session_answers_session_expired_through_the_middleware(env):
     # waiting out the real SESSION_TTL -- the app builds its own Sessions
     # with the real clock.
     id_hash = hashlib.sha256(cookie.encode()).hexdigest()
-    env.state.set_session_expiry(id_hash, 0)
+    env.repos.sessions.set_expiry(id_hash, 0)
     resp = browser.get("/api/session")
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "session_expired"
@@ -144,9 +145,9 @@ def test_the_cookie_is_not_reissued_right_after_sign_in(tmp_path):
     config = ApiConfig(projects_root=tmp_path / "projects",
                          state_db=tmp_path / "state.db", token_path=token_path,
                          edge_port=41080)
-    state = State(config.state_db)
-    sessions = Sessions(state, clock=clock)
-    app = create_app(config=config, state=state, sessions=sessions)
+    repos = Repos.open(Database(config.state_db))
+    sessions = Sessions(repos.sessions, clock=clock)
+    app = create_app(config=config, repos=repos, sessions=sessions)
     browser = TestClient(app, headers={**BROWSER, **ORIGIN})
     code = sessions.issue_handoff()
     browser.post("/api/session", json={"code": code})
@@ -163,9 +164,9 @@ def test_the_cookie_is_reissued_once_the_slide_window_is_crossed(tmp_path):
     config = ApiConfig(projects_root=tmp_path / "projects",
                          state_db=tmp_path / "state.db", token_path=token_path,
                          edge_port=41080)
-    state = State(config.state_db)
-    sessions = Sessions(state, clock=clock)
-    app = create_app(config=config, state=state, sessions=sessions)
+    repos = Repos.open(Database(config.state_db))
+    sessions = Sessions(repos.sessions, clock=clock)
+    app = create_app(config=config, repos=repos, sessions=sessions)
     browser = TestClient(app, headers={**BROWSER, **ORIGIN})
     code = sessions.issue_handoff()
     browser.post("/api/session", json={"code": code})

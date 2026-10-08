@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from eggie_api.core.config import ApiConfig
+from eggie_api.config import ApiConfig
 
 
 def test_from_env_reads_the_names_the_container_will_set():

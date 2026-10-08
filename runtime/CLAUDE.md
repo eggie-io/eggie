@@ -34,7 +34,7 @@ release — if it does, the logic is on the wrong side of the seam (see the root
   `EGGIE_VERSION=X.Y.Z` into `/opt/eggie/.env` (`install/lib/image-version.sh`), and `stack.yml`'s
   image tags read it. The `0.0.0` in `eggie_api/__init__.py`, `pyproject.toml` and the
   Dockerfile is a checkout placeholder — never bump it.
-- `API_VERSION` (`eggie_api/core/constants.py`) — the wire-protocol number the host checks against
+- `API_VERSION` (`eggie_api/constants.py`) — the wire-protocol number the host checks against
   its `SUPPORTED_API`. Bump only when a route the host calls changes incompatibly; that needs a host
   release too. The console's `SUPPORTED_API` (`web/apps/console/src/api/version.ts`) follows it.
 

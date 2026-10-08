@@ -1,8 +1,9 @@
 import pytest
 
-from eggie_api.core.account import Account, NotSignedIn
-from eggie_api.core.cloud import CloudError, CloudUnavailable
-from eggie_api.core.state import State
+from eggie_api.services.account import Account, NotSignedIn
+from eggie_api.infra.cloud import CloudError, CloudUnavailable
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from tests.runtime.api.fake_cloud import CODE, ME, TOKENS, FakeCloud
 
 
@@ -21,14 +22,15 @@ def err(code, status=400):
 def make(tmp_path, cloud):
     clock = Clock()
     spawned = []
-    account = Account(State(tmp_path / "state.db"), cloud, clock=clock,
+    r = Repos.open(Database(tmp_path / "state.db"))
+    account = Account(r.account, r.cloud_projects, cloud, clock=clock,
                       sleep=lambda s: None, spawn=spawned.append)
     return account, clock, spawned
 
 
 def signed_in(tmp_path, cloud, expires_in=900):
     account, clock, _ = make(tmp_path, cloud)
-    account._state.update_account(access_token="at-1", refresh_token="rt-1",
+    account._account.update(access_token="at-1", refresh_token="rt-1",
                                   access_expires_at=clock.now + expires_in,
                                   email="ada@example.com", org_id="org-1")
     return account, clock
@@ -121,13 +123,13 @@ def test_a_stale_identity_left_by_a_previous_account_does_not_survive_a_new_sign
         device_code=[CODE], device_token=[TOKENS], me=[ME]))
     # Leftover from a race predating today's fix: an old account's identity
     # sitting on an otherwise signed-out row.
-    account._state.update_account(email="old@example.com", org_id="org-old")
+    account._account.update(email="old@example.com", org_id="org-old")
     account.start_sign_in()
 
     assert account.poll_once() is None
     status = account.status()
     assert (status["state"], status["email"]) == ("signed_in", "ada@example.com")
-    assert account._state.get_account()["org_id"] == "org-1"
+    assert account._account.get()["org_id"] == "org-1"
 
 
 def test_resume_starts_a_poller_only_for_a_pending_code(tmp_path):
@@ -146,7 +148,7 @@ def test_a_token_about_to_expire_is_refreshed_before_the_call(tmp_path):
     account, _ = signed_in(tmp_path, cloud, expires_in=30)
 
     assert account.authed(lambda token: token) == "at-2"
-    assert account._state.get_account()["refresh_token"] == "rt-2"
+    assert account._account.get()["refresh_token"] == "rt-2"
 
 
 def test_an_invalid_token_is_refreshed_and_retried_once(tmp_path):
@@ -165,12 +167,12 @@ def test_an_invalid_token_is_refreshed_and_retried_once(tmp_path):
 
 def test_a_revoked_refresh_signs_out_with_revoked(tmp_path):
     account, _ = signed_in(tmp_path, FakeCloud(refresh=[err("invalid_grant")]), expires_in=0)
-    account._state.map_cloud_project("blog", "c-1", "org-1")
+    account._cloud_projects.map("blog", "c-1", "org-1")
 
     with pytest.raises(NotSignedIn):
         account.authed(lambda token: token)
     assert account.status() == {"state": "signed_out", "error": "revoked"}
-    assert account._state.cloud_mapping() == {}
+    assert account._cloud_projects.mapping() == {}
 
 
 def test_an_unreachable_service_during_refresh_keeps_the_account(tmp_path):
@@ -184,10 +186,10 @@ def test_an_unreachable_service_during_refresh_keeps_the_account(tmp_path):
 def test_sign_out_forgets_everything_but_the_device_even_if_logout_fails(tmp_path):
     account, _ = signed_in(tmp_path, FakeCloud(logout=[CloudUnavailable("down")]))
     device = account.device_id
-    account._state.map_cloud_project("blog", "c-1", "org-1")
+    account._cloud_projects.map("blog", "c-1", "org-1")
 
     assert account.sign_out() == {"state": "signed_out", "error": None}
-    assert account._state.cloud_mapping() == {}
+    assert account._cloud_projects.mapping() == {}
     assert account.device_id == device
 
 
@@ -227,12 +229,12 @@ def test_a_sign_out_during_load_identity_leaves_no_email_or_org_written(tmp_path
 
     cloud = Wrapped(me=[ME])
     account, _ = signed_in(tmp_path, cloud)
-    account._state.update_account(org_id=None)  # force load_identity to call out
+    account._account.update(org_id=None)  # force load_identity to call out
 
     with pytest.raises(NotSignedIn):
         account.load_identity()
 
-    row = account._state.get_account()
+    row = account._account.get()
     assert row["email"] is None
     assert row["org_id"] is None
     assert account.signed_in is False
@@ -242,7 +244,7 @@ def test_starting_sign_in_skips_the_write_if_already_signed_in_by_the_time_the_c
     class Wrapped(FakeCloud):
         def device_code(self, client_name):
             out = super().device_code(client_name)
-            account._state.update_account(access_token="at-1", refresh_token="rt-1",
+            account._account.update(access_token="at-1", refresh_token="rt-1",
                                           access_expires_at=10**12)
             return out
 
@@ -252,14 +254,14 @@ def test_starting_sign_in_skips_the_write_if_already_signed_in_by_the_time_the_c
     status = account.start_sign_in()
 
     assert status["state"] == "signed_in"
-    assert account._state.get_account()["device_code"] is None
+    assert account._account.get()["device_code"] is None
     assert spawned == []
 
 
 def test_a_refresh_finding_the_token_already_replaced_does_not_spend_it_again(tmp_path):
     cloud = FakeCloud()
     account, _ = signed_in(tmp_path, cloud)
-    account._state.update_account(access_token="at-new")
+    account._account.update(access_token="at-new")
 
     assert account._refresh("at-1") == "at-new"
     assert "refresh" not in cloud.names()

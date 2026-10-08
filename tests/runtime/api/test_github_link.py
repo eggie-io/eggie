@@ -3,10 +3,11 @@ import stat
 
 import pytest
 
-from eggie_api.core.github import GitHubUnavailable
-from eggie_api.core.github_link import (SETUP_TIMEOUT, GitHubLink,
+from eggie_api.infra.github import GitHubUnavailable
+from eggie_api.services.github_link import (SETUP_TIMEOUT, GitHubLink,
                                          NotConnected, setup_state)
-from eggie_api.core.state import State
+from eggie_api.infra.db import Database
+from eggie_api.infra.repos import Repos
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
 
@@ -20,7 +21,7 @@ class Clock:
 
 def make(tmp_path, github):
     clock, spawned = Clock(), []
-    link = GitHubLink(State(tmp_path / "state.db"), github, client_id="cid",
+    link = GitHubLink(Repos.open(Database(tmp_path / "state.db")).github, github, client_id="cid",
                       directory=tmp_path / "github", clock=clock,
                       sleep=lambda s: None, spawn=spawned.append)
     return link, clock, spawned

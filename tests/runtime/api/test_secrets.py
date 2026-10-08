@@ -116,3 +116,10 @@ def test_parse_dotenv_refuses_a_reserved_name():
     with pytest.raises(SecretError) as e:
         parse_dotenv("DOCKER_HOST=tcp://x\n")
     assert e.value.code == "secret_name_reserved"
+
+
+def test_parse_dotenv_never_echoes_an_invalid_key():
+    with pytest.raises(SecretError) as e:
+        parse_dotenv("abc+/SECRETPART=x\n")
+    assert e.value.code == "dotenv_invalid"
+    assert "SECRETPART" not in e.value.message

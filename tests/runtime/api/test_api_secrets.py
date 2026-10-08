@@ -157,3 +157,14 @@ def test_secrets_routes_are_served_to_both_the_cli_and_the_console(env):
                  "/projects/{project_id}/secrets/{name}",
                  "/projects/{project_id}/secrets/import-dotenv"):
         assert path in paths and "/api" + path in paths, path
+
+
+def test_a_malformed_dotenv_line_never_leaks_its_text_into_responses(env):
+    folder = _project(env)
+    (folder / ".env").write_text("abc+/SECRETPART=x\n")
+    listed = env.client.get("/projects/blog/secrets")
+    imported = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert "SECRETPART" not in listed.text
+    assert "SECRETPART" not in imported.text
+    assert imported.json()["error"]["code"] == "dotenv_invalid"
+    assert (folder / ".env").exists()

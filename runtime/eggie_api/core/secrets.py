@@ -119,6 +119,11 @@ def parse_dotenv(text: str) -> dict[str, str]:
         if not sep:
             raise SecretError("dotenv_invalid",
                               f".env line {number} isn't NAME=value")
+        # An invalid key is often a piece of an unquoted secret, so its
+        # text must not reach the error message.
+        if not NAME.fullmatch(key):
+            raise SecretError("dotenv_invalid",
+                              f".env line {number} has an invalid name")
         check_name(key)
         rest = rest.lstrip()
         if rest[:1] in ("'", '"'):

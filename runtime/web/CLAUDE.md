@@ -26,6 +26,8 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `packages/ui` — the kit: tokens, fonts, components, drawn from `docs/design/` (never from
   `host/desktop/ui`). Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
 - `apps/console` — the app.
+  - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
+    name rule. Sections: Requested (hint + value), Your secrets (write-only, typed values visible), Add. Mock: `?scenario=secrets`.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.

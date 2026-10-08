@@ -27,8 +27,10 @@ def _compose_argv(directory) -> list[str]:
             "up", "-d"]
 
 
-def _write_overlay(provider, project: Project, directory, domain: str):
-    text = overlay_yaml(project, domain)
+def _write_overlay(provider, project: Project, directory, domain: str, *,
+                   services=(), secret_names=(), declared=None):
+    text = overlay_yaml(project, domain, services=services,
+                        secret_names=secret_names, declared=declared)
     encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
     return provider.exec(["bash", "-lc",
                           f"mkdir -p {directory}/.eggie && echo {encoded} | "
@@ -37,7 +39,8 @@ def _write_overlay(provider, project: Project, directory, domain: str):
 
 
 def compose_up(provider, project: Project, directory, domain: str, *,
-              on_phase=None):
+              on_phase=None, services=(),
+              secrets: dict[str, str] | None = None, declared=None):
     """Returns (status, detail). `detail` carries the guest's own output when
     the stack did not start, so callers never have to report a bare status code
     that no one can act on. URLs are the API layer's job -- it is the only place
@@ -46,8 +49,14 @@ def compose_up(provider, project: Project, directory, domain: str, *,
     `on_phase`, when given, is called with "starting" once the overlay is
     written and before `docker compose up` itself -- the caller's phase
     report has to follow the overlay write, not precede it, or a failed
-    write would be reported as "starting" a stack that never did."""
-    written = _write_overlay(provider, project, directory, domain)
+    write would be reported as "starting" a stack that never did.
+
+    `secrets` reach compose only through its environment; the overlay names
+    them."""
+    written = _write_overlay(provider, project, directory, domain,
+                             services=services,
+                             secret_names=list(secrets or {}),
+                             declared=declared)
     if not written.ok:
         # exec() never raises. Starting the stack anyway would produce a project
         # with no Traefik labels: no route, and no error naming the cause.
@@ -56,19 +65,22 @@ def compose_up(provider, project: Project, directory, domain: str, *,
                 or "could not write the Traefik overlay inside the VM")
     if on_phase:
         on_phase("starting")
-    up = provider.exec(_compose_argv(directory), root=True)
+    env = dict(secrets) if secrets else None
+    up = provider.exec(_compose_argv(directory), root=True, env=env)
     ps = provider.exec([DOCKER, "compose", "-f",
                         f"{directory}/{COMPOSE_FILE}",
-                        "ps", "--format", "json"], root=True)
+                        "ps", "--format", "json"], root=True, env=env)
     status = classify(up, ps.stdout)
     detail = "" if status == STARTED_OK else (up.stderr or up.stdout or ps.stderr).strip()
     return status, detail
 
 
-def compose_down(provider, directory):
+# Every compose command interpolates the user's file, so a `${KEY:?}` fails
+# it unless `env` carries the project's secrets -- not just `up`.
+def compose_down(provider, directory, *, env: dict | None = None):
     return provider.exec([DOCKER, "compose", "-f", f"{directory}/{COMPOSE_FILE}",
                           "-f", f"{directory}/.eggie/overlay.yml", "down"],
-                         root=True)
+                         root=True, env=env)
 
 
 def _labelled(runner, kind: list[str], name: str, fmt: str) -> list[str]:
@@ -141,12 +153,13 @@ def remove_tree_as_root(runner, path) -> Completed:
                         image.stdout.strip(), "rm", "-rf", str(path)], root=True)
 
 
-def container_id(provider, directory, service: str) -> str:
+def container_id(provider, directory, service: str, *,
+                 env: dict | None = None) -> str:
     """Empty string when compose cannot resolve one — the project was never
     started, or the container is already gone. Callers hedge, they don't raise."""
     result = provider.exec([DOCKER, "compose", "-f",
                             f"{directory}/{COMPOSE_FILE}",
-                            "ps", "-q", service], root=True)
+                            "ps", "-q", service], root=True, env=env)
     lines = result.stdout.split() if result.ok else []
     return lines[0] if lines else ""
 
@@ -162,8 +175,9 @@ def logs_argv(directory, service: str | None = None, *,
     return argv
 
 
-def project_logs(provider, directory, service: str | None = None):
+def project_logs(provider, directory, service: str | None = None, *,
+                 env: dict | None = None):
     """Returns the `Completed`, not its stdout: compose exits non-zero when the
     project was never created or the daemon is down, and dropping that turned a
     real failure into an empty log listing."""
-    return provider.exec(logs_argv(directory, service), root=True)
+    return provider.exec(logs_argv(directory, service), root=True, env=env)

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { DeletePreview, DeleteResult, Job, Project, ProjectList, PublicStatus } from "./types";
+import type { DeletePreview, DeleteResult, Job, Project, ProjectList, PublicStatus, SecretsView } from "./types";
 
 const BUSY_MS = 3000;
 const IDLE_MS = 15_000;
@@ -111,5 +111,31 @@ export function useLogs(id: string, enabled: boolean) {
     queryKey: ["logs", id],
     queryFn: () => api.text(`${projectPath(id)}/logs`),
     enabled,
+  });
+}
+
+const SECRETS = (id: string) => ["projects", "secrets", id] as const;
+
+function secretPath(id: string, name: string): string {
+  return `${projectPath(id)}/secrets/${encodeURIComponent(name)}`;
+}
+
+export function useSecrets(id: string) {
+  return useQuery({ queryKey: SECRETS(id), queryFn: () => api.get<SecretsView>(`${projectPath(id)}/secrets`) });
+}
+
+export function useSetSecret(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, value }: { name: string; value: string }) => api.put<void>(secretPath(id, name), { value }),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
+export function useDeleteSecret(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.del<void>(secretPath(id, name)),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }

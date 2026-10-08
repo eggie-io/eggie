@@ -24,6 +24,7 @@ export interface Api {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body: Blob, headers: Record<string, string>, signal?: AbortSignal): Promise<T>;
+  put<T>(path: string, body: unknown): Promise<T>;
   del<T>(path: string): Promise<T>;
   text(path: string): Promise<string>;
 }
@@ -124,6 +125,7 @@ export function createApi(fetchImpl: typeof fetch, { timeoutMs = 10_000 }: { tim
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body === undefined ? {} : { json: body }),
     patch: (path, body, headers, signal) => request("PATCH", path, { raw: body, headers, signal }),
+    put: (path, body) => request("PUT", path, { json: body }),
     del: (path) => request("DELETE", path),
     text: async (path) => (await send("GET", path)).text,
   };

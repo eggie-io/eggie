@@ -9,6 +9,7 @@ again here and held equal by tests/test_constants_agree.py.
 from __future__ import annotations
 
 import argparse
+import getpass as _getpass
 import grp
 import json
 import os
@@ -21,7 +22,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, TextIO
+from typing import Callable, NoReturn, TextIO
 
 API_PORT = 39099
 GUEST_ROOT = "/opt/eggie"
@@ -260,6 +261,21 @@ class ApiClient:
             path += f"?service={urllib.parse.quote(service)}"
         return self._open("GET", path, timeout=LOGS_TIMEOUT)
 
+    def secrets(self, project_id: str) -> dict:
+        return self._call("GET", f"/projects/{project_id}/secrets")
+
+    def set_secret(self, project_id: str, name: str, value: str) -> None:
+        self._call("PUT", f"/projects/{project_id}/secrets/"
+                          f"{urllib.parse.quote(name, safe='')}", {"value": value})
+
+    def delete_secret(self, project_id: str, name: str) -> None:
+        self._call("DELETE", f"/projects/{project_id}/secrets/"
+                             f"{urllib.parse.quote(name, safe='')}")
+
+    def request_secret(self, project_id: str, name: str, hint: str) -> None:
+        self._call("PUT", f"/projects/{project_id}/secret-requests/"
+                          f"{urllib.parse.quote(name, safe='')}", {"hint": hint})
+
 
 def _default_client() -> ApiClient:
     return ApiClient(read_token(Path(GUEST_TOKEN)))
@@ -280,6 +296,8 @@ class Env:
     git: Callable[[list[str], dict], subprocess.CompletedProcess] = _run_git
     out: TextIO = field(default_factory=lambda: sys.stdout)
     err: TextIO = field(default_factory=lambda: sys.stderr)
+    stdin: TextIO = field(default_factory=lambda: sys.stdin)
+    getpass: Callable[[str], str] = _getpass.getpass
 
 
 def _project_here(env: Env, directory: str | None) -> tuple[Path, str] | None:
@@ -390,6 +408,93 @@ def cmd_down(env: Env) -> None:
     print(f"{project_id} stopped.", file=env.out)
 
 
+_APPLY_HINT = "Run `eggie up` to apply it."
+
+
+_SECRET_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_NO_ARGV_VALUE = ("The value can't go on the command line; run `eggie secret set "
+                  "NAME` and paste it at the prompt, or pipe it in.")
+_BAD_NAME = ("That isn't a valid secret name: use letters, digits and underscores, "
+             "not starting with a digit.")
+
+
+# Mirrors eggie_api's reserved names; tests hold the two equal.
+_RESERVED_PREFIXES = ("COMPOSE_", "DOCKER_", "LD_", "BUILDX_", "BUILDKIT_")
+_RESERVED_NAMES = frozenset({"PATH", "HOME"})
+
+
+def _secret_project(env: Env, name: str) -> tuple[ApiClient, str]:
+    # A mistyped `NAME=value` must fail here, before anything echoes or sends it.
+    if "=" in name:
+        raise EggieError(_NO_ARGV_VALUE)
+    if not _SECRET_NAME.fullmatch(name):
+        raise EggieError(_BAD_NAME)
+    upper = name.upper()
+    if upper in _RESERVED_NAMES or upper.startswith(_RESERVED_PREFIXES):
+        raise EggieError("That name is reserved: Eggie and Docker read it themselves.")
+    project_id = _require_project(env)
+    client = env.client()
+    client.ensure_project(project_id)
+    return client, project_id
+
+
+def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
+    if extra:
+        raise EggieError(_NO_ARGV_VALUE)
+    client, project_id = _secret_project(env, name)
+    # Never from argv: that ends up in shell history and `ps`.
+    if env.stdin.isatty():
+        value = env.getpass(f"Value for {name} (not shown): ")
+    else:
+        value = env.stdin.read().removesuffix("\n")
+    if value == "":
+        raise EggieError(f"No value given for {name}; nothing was saved.")
+    client.set_secret(project_id, name, value)
+    print(f"Saved {name} for {project_id}.", file=env.out)
+    if client.secrets(project_id).get("restart_needed"):
+        print(_APPLY_HINT, file=env.out)
+
+
+def cmd_secret_request(env: Env, name: str, hint: str) -> None:
+    client, project_id = _secret_project(env, name)
+    if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
+        print(f"{name} already has a value; ask the owner to Replace it on "
+              f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
+        return
+    client.request_secret(project_id, name, hint)
+    print(f"Requested {name}. Ask the owner to fill it on {project_id}'s Secrets "
+          "page in Eggie.", file=env.out)
+
+
+def cmd_secret_list(env: Env) -> None:
+    project_id = _require_project(env)
+    client = env.client()
+    client.ensure_project(project_id)
+    data = client.secrets(project_id)
+    names = [s["name"] for s in data.get("secrets", [])]
+    for name in names:
+        print(name, file=env.out)
+    requested = data.get("requested") or []
+    if requested:
+        print("Requested:", file=env.out)
+        for r in requested:
+            print(f"  {r['name']} — {r['hint']}", file=env.out)
+    if not names and not requested:
+        print(f"{project_id} has no secrets.", file=env.out)
+    if data.get("restart_needed"):
+        print("Run `eggie up` to apply the changes.", file=env.out)
+
+
+def cmd_secret_rm(env: Env, name: str) -> None:
+    client, project_id = _secret_project(env, name)
+    had_value = any(s["name"] == name for s in client.secrets(project_id).get("secrets", []))
+    client.delete_secret(project_id, name)
+    if had_value:
+        print(f"Removed {name} from {project_id}.", file=env.out)
+    else:
+        print(f"Dismissed the request for {name}.", file=env.out)
+
+
 def repo_name(url: str) -> str:
     """The last path segment without `.git`, for https and scp-style URLs alike."""
     return re.split(r"[/:]", url.rstrip("/"))[-1].removesuffix(".git")
@@ -439,6 +544,13 @@ def cmd_clone(env: Env, url: str, name: str | None) -> None:
               "be written before `eggie up`.", file=env.out)
 
 
+def _secret_usage_error(message: str) -> NoReturn:
+    # argparse would quote the offending argument, which may be a typed value.
+    print('usage: eggie secret set NAME | request NAME "hint" | list | rm NAME'
+          " — values are never taken on the command line", file=sys.stderr)
+    sys.exit(2)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="eggie",
@@ -460,11 +572,35 @@ def _parser() -> argparse.ArgumentParser:
                                          "~/projects and start it")
     clone.add_argument("url")
     clone.add_argument("name", nargs="?")
+    secret = sub.add_parser("secret", help="keys and passwords this project's "
+                                           "containers get as environment variables")
+    secret.error = _secret_usage_error
+    secret_sub = secret.add_subparsers(dest="secret_command", required=True,
+                                       metavar="<action>")
+    secret_set = secret_sub.add_parser(
+        "set", help="save a secret; the value is read from the terminal or stdin")
+    secret_set.error = _secret_usage_error
+    secret_set.add_argument("name")
+    secret_set.add_argument("extra", nargs="*", help=argparse.SUPPRESS)
+    secret_request = secret_sub.add_parser(
+        "request", help="ask the owner for a secret; shows on the project's Secrets page")
+    secret_request.error = _secret_usage_error
+    secret_request.add_argument("name")
+    secret_request.add_argument("hint")
+    secret_sub.add_parser("list", help="show secret names and open requests")
+    secret_rm = secret_sub.add_parser("rm", help="remove a secret or a request")
+    secret_rm.error = _secret_usage_error
+    secret_rm.add_argument("name")
     return parser
 
 
 def main(argv: list[str] | None = None, env: Env | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args, extra = parser.parse_known_args(argv)
+    if extra:
+        if args.command == "secret":
+            _secret_usage_error("")
+        parser.error("unrecognized arguments: " + " ".join(extra))
     env = env or Env()
     commands = {
         "up": lambda: cmd_up(env, args.directory),
@@ -473,6 +609,12 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "down": lambda: cmd_down(env),
         "new": lambda: cmd_new(env, args.name),
         "clone": lambda: cmd_clone(env, args.url, args.name),
+        "secret": lambda: {
+            "set": lambda: cmd_secret_set(env, args.name, args.extra),
+            "request": lambda: cmd_secret_request(env, args.name, args.hint),
+            "list": lambda: cmd_secret_list(env),
+            "rm": lambda: cmd_secret_rm(env, args.name),
+        }[args.secret_command](),
     }
     try:
         commands[args.command]()

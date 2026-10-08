@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from .migrate import migrate
@@ -167,6 +168,76 @@ class State:
     def clear_cloud_projects(self) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM cloud_projects")
+            self._conn.commit()
+
+    def secret_names(self, project_id) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(
+                "SELECT name, updated_at FROM secrets WHERE project_id=? "
+                "ORDER BY name", (project_id,))]
+
+    def secret_values(self, project_id) -> dict[str, str]:
+        with self._lock:
+            return {r["name"]: r["value"] for r in self._conn.execute(
+                "SELECT name, value FROM secrets WHERE project_id=?",
+                (project_id,))}
+
+    def set_secrets(self, project_id, values: dict[str, str],
+                    at: float | None = None) -> None:
+        with self._lock:
+            at = time.time() if at is None else at
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO secrets(project_id, name, value, updated_at) "
+                "VALUES (?,?,?,?)",
+                [(project_id, name, value, at) for name, value in values.items()])
+            self._conn.executemany(
+                "DELETE FROM secret_requests WHERE project_id=? AND name=?",
+                [(project_id, name) for name in values])
+            self._conn.execute("UPDATE projects SET secrets_changed_at=? WHERE id=?",
+                               (at, project_id))
+            self._conn.commit()
+
+    def secret_requests(self, project_id) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(
+                "SELECT name, hint FROM secret_requests r WHERE project_id=? "
+                "AND NOT EXISTS (SELECT 1 FROM secrets s WHERE s.project_id=r.project_id "
+                "AND s.name=r.name) ORDER BY name", (project_id,))]
+
+    def request_secret(self, project_id, name, hint) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO secret_requests(project_id, name, hint, created_at) "
+                "VALUES (?,?,?,?)", (project_id, name, hint, time.time()))
+            self._conn.commit()
+
+    def delete_request(self, project_id, name) -> bool:
+        with self._lock:
+            gone = self._conn.execute(
+                "DELETE FROM secret_requests WHERE project_id=? AND name=?",
+                (project_id, name)).rowcount > 0
+            self._conn.commit()
+            return gone
+
+    def delete_secret(self, project_id, name, at: float | None = None) -> bool:
+        with self._lock:
+            at = time.time() if at is None else at
+            gone = self._conn.execute(
+                "DELETE FROM secrets WHERE project_id=? AND name=?",
+                (project_id, name)).rowcount > 0
+            if gone:
+                self._conn.execute(
+                    "UPDATE projects SET secrets_changed_at=? WHERE id=?",
+                    (at, project_id))
+            self._conn.commit()
+            return gone
+
+    def drop_secrets(self, project_id) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM secrets WHERE project_id=?",
+                               (project_id,))
+            self._conn.execute("DELETE FROM secret_requests WHERE project_id=?",
+                               (project_id,))
             self._conn.commit()
 
     def close(self):

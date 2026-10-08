@@ -23,10 +23,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..core import connect, constants, disk, files, lifecycle
+from ..core import secrets as secret_rules
 from ..core.account import Account
 from ..core.cloud import Cloud, CloudError, CloudUnavailable
 from ..core.config import ApiConfig
 from ..core.detect import AmbiguousError
+from ..core.secrets import SecretError
 from ..core.exec import LocalRunner
 from ..core.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
                            clone_argv, redact, valid_repo)
@@ -35,7 +37,8 @@ from ..core.github_link import GitHubLink, NotConnected
 # Imported by name: the /health route below shadows a module named `health`.
 from ..core.health import answers, default_probe, diagnose
 from ..core.overlay import host_for
-from ..core.project import STARTED_OK, Project, _slug, load_project
+from ..core.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
+                            load_project)
 from ..core.public import Public, PublicBusy, TunnelClient, Unavailable
 from ..core.reconcile import discover, examine
 from ..core.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
@@ -45,6 +48,9 @@ from ..core.uploads import CHUNK_SIZE, UploadError, UploadStore
 from .jobs import JobFailed, JobRegistry
 
 TEXT = "text/plain; charset=utf-8"
+# Statuses whose containers exist and were handed the project's secrets.
+RUNNING = (STARTED_OK, CRASH_LOOPING)
+
 log = logging.getLogger("eggie.api")
 
 
@@ -120,6 +126,14 @@ class StartUpload(BaseModel):
 
 class Handoff(BaseModel):
     code: str
+
+
+class SecretValue(BaseModel):
+    value: str
+
+
+class SecretHint(BaseModel):
+    hint: str
 
 
 class CloneRepo(BaseModel):
@@ -255,6 +269,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     async def _upload_error(_request, exc: UploadError):
         return JSONResponse({"error": {"code": exc.code, "message": exc.message,
                                        **exc.extra}}, status_code=exc.status)
+
+    @app.exception_handler(SecretError)
+    async def _secret_error(_request, exc: SecretError):
+        return _body(exc.code, exc.message, 400)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_request, exc: StarletteHTTPException):
@@ -396,6 +414,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return [f"http://{host_for(project.id, web, domain)}:{config.edge_port}"
                 for web in project.webs]
 
+    def restart_needed(row: dict) -> bool:
+        changed = row.get("secrets_changed_at")
+        started = row.get("last_started_at")
+        return (row["status"] in RUNNING and changed is not None
+                and (started is None or changed > started))
+
+    def project_env(project_id: str) -> dict[str, str] | None:
+        return state.secret_values(project_id) or None
+
     def payload(row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
         # broken project must never take the whole listing down with it.
@@ -443,6 +470,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 "web": web,
                 "public": public_status,
                 "first_run": row.get("last_started_at") is None,
+                "restart_needed": restart_needed(row),
+                "secrets_requested": len(state.secret_requests(row["id"])),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
@@ -925,6 +954,46 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             target.unlink()
         return {"path": file_path, "deleted": True}
 
+    @router.get("/projects/{project_id}/secrets")
+    def list_secrets(project_id: str) -> dict:
+        row = require_row(project_id)
+        return {"secrets": state.secret_names(project_id),
+                "requested": state.secret_requests(project_id),
+                "restart_needed": restart_needed(row)}
+
+    # No project lock: one sqlite statement, and a start in flight is caught
+    # by restart_needed because the start is stamped before it reads values.
+    @router.put("/projects/{project_id}/secrets/{name}", status_code=204)
+    def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
+        require_row(project_id)
+        if body.value == "":
+            raise SecretError("secret_invalid_value",
+                              "a value can't be empty; delete the secret instead")
+        secret_rules.check_name(name)
+        secret_rules.check_value(body.value)
+        secret_rules.check_total({**state.secret_values(project_id),
+                                  name: body.value})
+        state.set_secrets(project_id, {name: body.value})
+        return Response(status_code=204)
+
+    @router.put("/projects/{project_id}/secret-requests/{name}", status_code=204)
+    def request_secret(project_id: str, name: str, body: SecretHint) -> Response:
+        require_row(project_id)
+        secret_rules.check_name(name)
+        secret_rules.check_hint(body.hint)
+        state.request_secret(project_id, name, body.hint)
+        return Response(status_code=204)
+
+    @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
+    def delete_secret(project_id: str, name: str) -> Response:
+        require_row(project_id)
+        removed = state.delete_secret(project_id, name)
+        dismissed = state.delete_request(project_id, name)
+        if not (removed or dismissed):
+            raise ApiError("secret_not_found",
+                           f"project '{project_id}' has no secret '{name}'", 404)
+        return Response(status_code=204)
+
     def compose_name_for(row: dict) -> str:
         return row.get("compose_name") or row["id"]
 
@@ -952,6 +1021,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 runner, resolve_compose_name(project_id, row), volumes=purge)
             if purge:
                 uploads.drop_project(project_id)
+                state.drop_secrets(project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
                 if folder.exists():
@@ -963,16 +1033,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}
 
-    def compose_name_of(project_id: str) -> str:
-        data = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE)
-        return str(data.get("name") or project_id)
-
     def start_work(project_id: str, *, stop_first: bool):
         row = require_row(project_id)
         # Parsing happens here, not in the job, so a broken compose file comes
         # back as an error code the caller can read instead of a failed job.
         project = load(project_id)
-        name = compose_name_of(project_id)
+        compose = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE)
+        services, declared_by = secret_rules.declared(compose)
+        name = str(compose.get("name") or project_id)
         domain = row["domain"]
         directory = project_dir(project_id)
 
@@ -980,7 +1048,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             try:
                 if stop_first:
                     write(f"compose down {project_id}\n")
-                    down_result = lifecycle.compose_down(runner, directory)
+                    down_result = lifecycle.compose_down(
+                        runner, directory, env=project_env(project_id))
                     if not down_result.ok:
                         raise JobFailed(
                             (down_result.stderr or down_result.stdout).strip()
@@ -990,15 +1059,23 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 # when `up` never reaches STARTED_OK.
                 state.set_compose_name(project_id, name)
                 write(f"compose up {project_id}\n")
+                # Stamped before the values are read, so a secret changed while
+                # compose runs still shows as needing a restart.
+                began = time.time()
+                values = project_env(project_id) or {}
                 status, detail = lifecycle.compose_up(
-                    runner, project, directory, domain, on_phase=write.phase)
+                    runner, project, directory, domain, on_phase=write.phase,
+                    services=services, secrets=values, declared=declared_by)
                 diagnosis = None
+                if status in RUNNING:
+                    # A crash-looping stack still got these values.
+                    state.mark_started(project_id, began)
                 if status == STARTED_OK:
-                    state.mark_started(project_id, time.time())
                     write.phase("checking")
                     write("waiting for the project to answer through Traefik\n")
                     diagnosis = diagnose(
                         runner, project, domain, directory=directory,
+                        env=values or None,
                         edge_port=config.edge_port,
                         traefik_host=config.traefik_host, http_probe=http_probe,
                         timeout=config.ready_timeout)
@@ -1046,7 +1123,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 write.phase("stopping")
                 write(f"compose down {project_id}\n")
                 result = lifecycle.compose_down(runner,
-                                                project_dir(project_id))
+                                                project_dir(project_id),
+                                                env=project_env(project_id))
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
@@ -1079,14 +1157,16 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         if not follow:
             result = lifecycle.project_logs(runner, project_dir(project_id),
-                                            service)
+                                            service, env=project_env(project_id))
             if not result.ok:
                 raise ApiError("logs_unavailable",
                                (result.stderr or result.stdout).strip()
                                or "docker compose logs failed", 409)
             return PlainTextResponse(result.stdout, media_type=TEXT)
         argv = lifecycle.logs_argv(project_dir(project_id), service, follow=True)
-        return StreamingResponse(runner.stream(argv, root=True), media_type=TEXT)
+        return StreamingResponse(
+            runner.stream(argv, root=True, env=project_env(project_id)),
+            media_type=TEXT)
 
     @router.get("/jobs/{job_id}")
     def job_status(job_id: str) -> dict:

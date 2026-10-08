@@ -42,6 +42,16 @@ and a host release. Prefer additive changes.
 
 ## Feature areas
 
+- **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
+  every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
+  for one and vanish once it has a value. The project's `.env` is never read or written. A service
+  gets a name unless it sets that name to a non-empty literal in its own `environment:` (`declared`).
+  `compose_up` lists bare names in `.eggie/overlay.yml`; values go only into the environment of
+  compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) — compose
+  interpolates the file for each, so `${KEY:?}` breaks any that lacks them. `restart_needed` =
+  `started_ok` or `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped
+  before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`/`BUILDX_`/`BUILDKIT_`, `PATH`, `HOME`) are refused.
+  Services pulled in through compose `include:` get no names. Purge drops values and requests.
 - **Files** (`core/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
   `extract_archive` **merges** an uploaded tar.gz into the project dir and rejects absolute paths,

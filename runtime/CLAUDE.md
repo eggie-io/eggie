@@ -16,7 +16,7 @@ release — if it does, the logic is on the wrong side of the seam (see the root
 - `eggie_api/` — the FastAPI service. Own CLAUDE.md.
 - `web/` — the browser console (npm workspace, `eggie-web` nginx image). Own CLAUDE.md.
 - `cli/eggie.py` — the `eggie` command **inside** the VM (`/usr/local/bin/eggie`), used by coding
-  agents: `up`/`new`/`clone`/`status`/`logs`/`down` over the API with the guest token. **One
+  agents: `up`/`new`/`clone`/`status`/`logs`/`down`/`secret` over the API with the guest token. **One
   stdlib-only file**: it can import neither `host/` nor `eggie_api`, so shared names are
   re-declared and held equal by `tests/test_constants_agree.py`. Tests load it by path
   (`tests/runtime/cli/loader.py`).

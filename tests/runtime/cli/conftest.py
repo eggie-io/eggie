@@ -42,10 +42,14 @@ class Guest:
         return cli.ApiClient(TOKEN, opener=AppOpener(self._client),
                              sleep=lambda _s: time.sleep(0.01))
 
-    def run(self, *argv, cwd: Path) -> tuple[int, str, str]:
+    def run(self, *argv, cwd: Path, stdin: str | io.StringIO = "",
+            getpass=None) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
+        stream = stdin if isinstance(stdin, io.StringIO) else io.StringIO(stdin)
         env = cli.Env(root=self.root, cwd=cwd, client=self._api_client,
-                      gid=os.getgid, git=self._git, out=out, err=err)
+                      gid=os.getgid, git=self._git, out=out, err=err,
+                      stdin=stream,
+                      getpass=getpass or (lambda _prompt: pytest.fail("no TTY here")))
         code = cli.main(list(argv), env)
         return code, out.getvalue(), err.getvalue()
 

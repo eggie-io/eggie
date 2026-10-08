@@ -83,7 +83,7 @@ never looks installed. Everything runs under `flock /opt/eggie/update.lock`.
 | Service | Image | Role |
 |---|---|---|
 | `traefik` | Traefik | Edge on `39080`: `/` → console, `/api` → API, `Host(<id>.127-0-0-1.sslip.io)` → project |
-| `api` | `eggie-api` (`runtime/eggie_api/`) | FastAPI on `39099`. Owns projects, jobs, sessions, accounts, GitHub, public URLs. Talks to Docker through the socket |
+| `api` | `eggie-api` (`runtime/eggie_api/`) | FastAPI on `39099`. Owns projects, jobs, sessions, accounts, GitHub, public URLs, secrets. Talks to Docker through the socket |
 | `web` | `eggie-web` (`runtime/web/`) | React console served by nginx. Works offline |
 | `tunnel` | cloudflared | Only under the `tunnel` compose profile, while a public URL is on |
 
@@ -106,7 +106,10 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
 2. The API parses the compose file and detects the web service and its port (`core/detect.py`).
 3. It writes a Traefik overlay (`core/overlay.py`) that joins that service to the `edge` network
    with a `Host(<project-id>.127-0-0-1.sslip.io)` rule, then runs `docker compose up` with the
-   project's file plus the overlay. The project's own files are never edited.
+   project's file plus the overlay. The project's own files are never edited. Secrets
+   reach containers as environment variables through the compose process environment and win over
+   the project's own `.env`; a non-empty literal a service sets in the compose file wins over them; the
+   overlay lists names only.
 4. `*.127-0-0-1.sslip.io` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `resume_projects()` restarts the projects that were running.
@@ -162,7 +165,9 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 The VM is the boundary. Everything inside it (the Docker socket, every project container, every
 login account, every agent) is root-equivalent. All host forwards are loopback-only. A public URL
 is the one way in from outside the machine. The API token tells the host apart from a stray
-container; it is not authentication. Details: [security.md](security.md).
+container; it is not authentication. Secrets live in `state.db`, readable by anything root-equivalent in the VM,
+coding agents included: they protect against leaks into files, git and chat, not against the
+agent. Details: [security.md](security.md).
 
 ## Where things live
 

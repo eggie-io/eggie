@@ -33,3 +33,38 @@ def test_two_web_services_get_distinct_hosts_and_routers():
     api = ov["services"]["api"]["labels"]
     assert fe["traefik.http.routers.shop-frontend.rule"] == "Host(`shop.d.io`)"
     assert api["traefik.http.routers.shop-api.rule"] == "Host(`api.shop.d.io`)"
+
+
+def test_every_service_gets_the_secret_names_and_web_routing_is_kept():
+    ov = build_overlay("p", [WebSpec("web", 80)], "d.io",
+                       services=["web", "worker"], secret_names={"B", "A"})
+    assert ov["services"]["web"]["environment"] == ["A", "B"]
+    assert "traefik.enable" in ov["services"]["web"]["labels"]
+    assert ov["services"]["worker"] == {"environment": ["A", "B"]}
+
+
+def test_non_web_services_get_the_secret_names_too():
+    ov = build_overlay("p", [], "d.io", services=["db", "worker"],
+                       secret_names=["KEY"])
+    assert ov["services"] == {"db": {"environment": ["KEY"]},
+                              "worker": {"environment": ["KEY"]}}
+
+
+def test_no_secrets_leaves_the_overlay_as_before():
+    ov = build_overlay("p", [WebSpec("web", 80)], "d.io", services=["web", "db"])
+    assert "environment" not in ov["services"]["web"]
+    assert "db" not in ov["services"]
+
+
+def test_a_name_a_service_declares_is_not_listed_for_that_service():
+    ov = build_overlay("p", [WebSpec("web", 80)], "d.io", services=["web", "worker"],
+                       secret_names=["DATABASE_URL", "KEY"],
+                       declared={"web": {"DATABASE_URL"}, "worker": set()})
+    assert ov["services"]["web"]["environment"] == ["KEY"]
+    assert ov["services"]["worker"]["environment"] == ["DATABASE_URL", "KEY"]
+
+
+def test_a_service_that_declares_every_name_gets_no_environment_entry():
+    ov = build_overlay("p", [], "d.io", services=["db"], secret_names=["A"],
+                       declared={"db": {"A"}})
+    assert "db" not in ov["services"]

@@ -49,7 +49,7 @@ runtime/eggie_api/
     compose.py detect.py overlay.py project.py secrets.py sync.py
   infra/             I/O adapters, no business rules
     runner.py db.py migrate.py docker.py cloud.py github.py files.py disk.py
-    health.py connect.py uploads.py tunnel.py
+    health.py connect.py uploads.py tunnel.py reconcile.py
     repos/ projects.py secrets.py sessions.py account.py github.py cloud_projects.py
   services/          use cases; hold state, locks and threads; no FastAPI
     loader.py projects.py lifecycle.py clone.py files.py uploads.py secrets.py

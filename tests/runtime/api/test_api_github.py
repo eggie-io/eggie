@@ -10,7 +10,8 @@ from eggie_api.services.github_link import GitHubLink
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
 from eggie_api.routes.app import create_app
-from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
+from tests.runtime.api.conftest import (AUTH, COMPOSE_MALFORMED, COMPOSE_ONE_WEB,
+                                        FakeProbe, FakeRunner)
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err
 
 REPO = {"full_name": "octo/app", "private": True, "description": "An app",
@@ -38,7 +39,7 @@ def connected_github(**scripts):
 
 def finish(app, client, resp):
     job_id = resp.json()["job_id"]
-    app.state.jobs.wait(job_id, timeout=5)
+    app.state.services.jobs.wait(job_id, timeout=5)
     return client.get(f"/jobs/{job_id}").json()
 
 
@@ -255,3 +256,20 @@ def test_clone_without_a_compose_file_finishes_stopped_without_starting_it(env):
     assert job["result"] == {"id": "app", "status": "stopped"}
     assert client.get("/projects/app").status_code == 200
     assert not runner.argv_containing("up")
+
+
+def test_clone_lock_is_released_when_start_work_refuses(env):
+    # A clone that lands a repo whose compose file will not parse must not
+    # leave the project locked: the next `up` has to be able to run.
+    client, runner, app, _ = make(env, connected_github())
+
+    def land(dest):
+        Path(dest).mkdir(parents=True)
+        (Path(dest) / "docker-compose.yml").write_text(COMPOSE_MALFORMED)
+
+    runner.on_clone = land
+    job = finish(app, client, client.post("/github/clone", json={"repo": "octo/app"}))
+    assert job["state"] == "done", job
+    again = client.post("/projects/app/up")
+    assert again.status_code == 422
+    assert again.json()["error"]["code"] == "invalid_compose"

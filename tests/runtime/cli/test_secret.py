@@ -17,7 +17,7 @@ def _project(guest, name="blog"):
 
 
 def _values(guest, pid="blog"):
-    return guest._client.app.state.repos.secrets.values(pid)
+    return guest._client.app.state.services.repos.secrets.values(pid)
 
 
 def test_secret_set_reads_the_value_from_stdin_without_its_trailing_newline(guest):

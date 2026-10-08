@@ -154,6 +154,6 @@ def test_a_failing_public_reconcile_does_not_stop_the_account_sync(env):
     app = create_app(config=env.config, runner=FakeRunner(), repos=repos,
                      account=account, cloud=cloud, public=Broken())
 
-    app.state.sync._run()
+    app.state.services.sync._run()
 
     assert repos.account.get()["sync_ok_at"] is not None

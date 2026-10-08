@@ -146,7 +146,7 @@ def env(tmp_path):
         # raw_client returns the 500 a real caller would see instead of
         # re-raising the exception inside the test.
         yield SimpleNamespace(client=client, config=config, runner=runner,
-                              probe=probe, repos=app.state.repos, jobs=app.state.jobs,
+                              probe=probe, repos=app.state.services.repos, jobs=app.state.services.jobs,
                               raw_client=TestClient(app, raise_server_exceptions=False,
                                                     headers=AUTH),
                               app=app)

@@ -3,14 +3,10 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-import shutil
 import tempfile
-import time
-import uuid
-from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
-import yaml
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (FileResponse, JSONResponse, PlainTextResponse,
@@ -21,15 +17,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import constants
 from ..config import ApiConfig
-from ..domain.project import STARTED_OK, _slug
 from ..errors import (BadRequest, Conflict, DiskFull, EggieError, Forbidden, Invalid,
                       NotFound, TooLarge, Unauthorized, Unavailable, Upstream)
-from ..infra import disk, files
-from ..infra import docker as lifecycle
+from ..infra import disk
 from ..infra.cloud import Cloud
-from ..infra.github import GitHub, auth_failed, clone_argv, redact, valid_repo
+from ..infra.github import GitHub
 # Imported by name: the /health route below shadows a module named `health`.
-from ..infra.health import answers, default_probe, diagnose
+from ..infra.health import default_probe
 from ..infra.runner import LocalRunner
 from ..infra.db import Database
 from ..infra.repos import Repos
@@ -37,16 +31,17 @@ from ..infra.tunnel import TunnelClient
 from ..infra.uploads import CHUNK_SIZE, UploadStore
 from ..services.account import Account
 from ..services.agents import AgentStatus
+from ..services.clone import CloneService
 from ..services.files import FileService
 from ..services.files import disk_full as _disk_full
 from ..services.github_link import GitHubLink
-from ..services.jobs import JobFailed, JobRegistry
+from ..services.jobs import JobRegistry
+from ..services.lifecycle import LifecycleService
 from ..services.loader import ProjectLoader
 from ..services.locks import ProjectLocks
-from ..services.locks import busy as _busy
+from ..services.projects import ProjectService
 from ..services.public import Public
-from ..infra.reconcile import discover, examine
-from ..services.secrets import RUNNING, SecretService
+from ..services.secrets import SecretService
 from ..services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
 from ..services.sync import SyncLoop, run_pass
 from ..services.system import SystemService
@@ -184,17 +179,22 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         repos.github, github, client_id=config.github_client_id,
         directory=config.github_dir)
     agent_status = AgentStatus(config.agent_status_dir, config.agents_dir)
+    lifecycle_svc = LifecycleService(config, runner, loader, repos.projects,
+                                     secrets_svc, jobs, locks, http_probe)
+    clone_svc = CloneService(config, runner, loader, repos.projects, locks, jobs,
+                             github_link, lifecycle_svc, sync.wake)
+    projects_svc = ProjectService(config, runner, loader, repos.projects, secrets_svc,
+                                  jobs, locks, uploads_svc, public, http_probe,
+                                  sync.wake)
 
     app = FastAPI(title="eggie-api", version=config.version)
     app.state.config = config
     app.state.runner = runner
-    app.state.repos = repos
-    app.state.jobs = jobs
     app.state.sessions = sessions
-    app.state.account = account
     app.state.github = github_link
-    app.state.sync = sync
-    app.state.public = public
+    app.state.services = SimpleNamespace(
+        repos=repos, jobs=jobs, public=public, account=account, sync=sync,
+        lifecycle=lifecycle_svc, projects=projects_svc)
     router = APIRouter()
     # Mounted only at /api: turning a public URL on or off is the console's
     # decision, never the guest token's (CLI, coding agents).
@@ -304,68 +304,6 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
             raise NotFound("job_not_found", f"no job with id '{job_id}'")
         return job
 
-    def payload(row: dict, *, recheck: bool = False) -> dict:
-        # A project with broken or missing files still has a status, and one
-        # broken project must never take the whole listing down with it.
-        problem = None
-        urls: list[str] = []
-        web: list[dict] = []
-        project = None
-        folder = loader.dir(row["id"])
-        if not folder.is_dir():
-            problem = {"code": "folder_missing",
-                       "message": "this project's folder is gone"}
-        else:
-            try:
-                project = loader.load(row["id"])
-                urls = loader.urls_for(project, row["domain"])
-                web = [{"url": url, "service": spec.service, "primary": index == 0}
-                       for index, (url, spec) in enumerate(zip(urls, project.webs))]
-            except EggieError as e:
-                problem = {"code": e.code, "message": e.message}
-        if problem is None and row.get("problem_code"):
-            # A file that will not parse outranks a routing fault: it is why
-            # the project has no URLs to be unreachable on.
-            problem = {"code": row["problem_code"],
-                       "message": row["problem_message"]}
-            # One request with a short timeout, never the readiness window:
-            # this runs inside a read the CLI is waiting on.
-            if recheck and project is not None and answers(
-                    project, row["domain"], edge_port=config.edge_port,
-                    traefik_host=config.traefik_host, http_probe=http_probe):
-                # An entrypoint slower than the readiness window stores a
-                # diagnosis that is true for a minute and false forever after.
-                repos.projects.set_problem(row["id"])
-                problem = None
-        active = jobs.active_for(row["id"])
-        try:
-            public_status = public.status(row["id"])
-        except Exception:
-            # A broken public-URL row must not take the whole listing down
-            # with it; the rest of the project's status is still good.
-            log.exception("reading the public URL status of %s failed", row["id"])
-            public_status = {"state": "off", "note": None}
-        return {"id": row["id"], "status": row["status"], "domain": row["domain"],
-                "path": row["guest_path"], "urls": urls, "problem": problem,
-                "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
-                "web": web,
-                "public": public_status,
-                "first_run": row.get("last_started_at") is None,
-                "restart_needed": secrets_svc.restart_needed(row),
-                "secrets_requested": secrets_svc.requested_count(row["id"]),
-                "job": None if active is None else {
-                    "id": active.id, "kind": active.kind,
-                    "phase": active.phase, "started_at": active.started_at}}
-
-    def submit_locked(project_id: str, work, kind: str | None = None) -> str:
-        """The job releases the lock itself, in its own `finally`."""
-        locks.acquire_or_raise(project_id)
-        try:
-            return jobs.submit(work, kind=kind, project_id=project_id)
-        except BaseException:
-            locks.release(project_id)
-            raise
-
     @router.get("/health")
     def health() -> dict:
         return system.health()
@@ -425,127 +363,25 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/github/clone", status_code=202)
     def github_clone(body: CloneRepo) -> dict:
-        if not valid_repo(body.repo):
-            raise Invalid("invalid_repo",
-                          f"'{body.repo}' is not an owner/name repository")
-        project_id = _slug(body.id or body.repo.split("/")[1])
-        if not project_id:
-            raise Invalid("invalid_project",
-                          f"'{body.repo}' has no usable project name")
-        directory = loader.dir(project_id)
-        if repos.projects.get(project_id) is not None or directory.exists():
-            raise Conflict("project_exists",
-                           f"project '{project_id}' already exists")
-        token = github_link.require_token()
-        if not locks.acquire(project_id):
-            raise _busy(project_id)
-
-        def work(write):
-            handed_over = False
-            # Cloned next to the real folder, not into it: nothing here holds
-            # `directory`'s name reserved while git runs, so another request
-            # (POST /projects, an adopt, a coding agent's own mkdir) can claim
-            # it first. Cloning into a dot-prefixed staging dir -- which
-            # `reconcile.discover` already skips -- and renaming in only once
-            # the name is still free means a failure can never touch a folder
-            # this job did not create.
-            staging = Path(config.projects_root) / f".clone-{uuid.uuid4().hex[:12]}"
-            try:
-                write.phase("cloning")
-                write(f"git clone https://github.com/{body.repo}.git\n")
-                result = runner.exec(clone_argv(body.repo, staging),
-                                     env={"EGGIE_GH_TOKEN": token,
-                                          "GIT_TERMINAL_PROMPT": "0"})
-                if not result.ok:
-                    output = redact((result.stderr or result.stdout).strip(), token)
-                    shutil.rmtree(staging, ignore_errors=True)
-                    if auth_failed(output):
-                        github_link.confirm_bad(token)
-                    raise JobFailed(output or "git clone failed")
-                if directory.exists() or repos.projects.get(project_id) is not None:
-                    shutil.rmtree(staging, ignore_errors=True)
-                    raise JobFailed(f"a project called '{project_id}' appeared "
-                                    "while downloading; nothing was changed")
-                os.rename(staging, directory)
-                repos.projects.add(project_id, str(directory), config.domain)
-                sync.wake()
-                if not (directory / constants.COMPOSE_FILE).exists():
-                    write(f"no {constants.COMPOSE_FILE} yet; left stopped\n")
-                    return {"id": project_id, "status": "stopped"}
-                try:
-                    up = start_work(project_id, stop_first=False)
-                except EggieError as e:
-                    write(f"{e.message}\n")
-                    return {"id": project_id, "status": "stopped"}
-                # start_work's job releases the lock in its own finally.
-                handed_over = True
-                return {"id": project_id, **up(write)}
-            finally:
-                if not handed_over:
-                    locks.release(project_id)
-
-        try:
-            job_id = jobs.submit(work, kind="clone", project_id=project_id)
-        except BaseException:
-            locks.release(project_id)
-            raise
-        return {"job_id": job_id, "id": project_id}
+        return clone_svc.clone(body.repo, body.id)
 
     @router.post("/projects", status_code=201)
     def create_project(body: CreateProject) -> dict:
-        # Same slug rule load_project applies to a directory name, so an id
-        # survives the round trip host -> API -> compose project name.
-        project_id = _slug(body.id)
-        if not project_id:
-            raise Invalid("invalid_project",
-                          f"'{body.id}' is not a usable project id")
-        if repos.projects.get(project_id) is not None:
-            raise Conflict("project_exists",
-                           f"project '{project_id}' already exists")
-
-        d = loader.dir(project_id)
-        d.mkdir(parents=True, exist_ok=True)
-        if body.web:
-            (d / ".eggie").mkdir(exist_ok=True)
-            (d / ".eggie" / "project.yml").write_text(yaml.safe_dump(
-                {"id": project_id, "web": [w.model_dump() for w in body.web]},
-                sort_keys=False))
-        repos.projects.add(project_id, str(d), body.domain or config.domain)
-        sync.wake()
-        return payload(repos.projects.get(project_id))
+        return projects_svc.create(
+            body.id, [w.model_dump() for w in body.web] if body.web else None,
+            body.domain)
 
     @router.post("/projects/{project_id}/adopt", status_code=201)
     def adopt_project(project_id: str) -> dict:
-        if repos.projects.get(project_id) is not None:
-            raise Conflict("project_exists",
-                           f"project '{project_id}' already exists")
-        folder = loader.dir(project_id)
-        if not folder.is_dir():
-            raise NotFound("folder_not_found",
-                           f"no folder '{project_id}' in the projects folder")
-        found = examine(folder)
-        if not found.adoptable:
-            raise Conflict("not_adoptable",
-                           f"'{project_id}' cannot be adopted: {found.reason}")
-        repos.projects.add(project_id, str(folder), config.domain)
-        sync.wake()
-        return payload(repos.projects.get(project_id))
+        return projects_svc.adopt(project_id)
 
     @router.get("/projects")
     def list_projects() -> dict:
-        # `eggie status` is the surface users actually read, so a stale
-        # diagnosis has to clear here too. payload() only probes a row that
-        # carries a stored problem -- normally none -- so an ordinary listing
-        # still pays no round trips at all.
-        rows = repos.projects.list()
-        known = {row["id"] for row in rows}
-        return {"projects": [payload(row, recheck=True) for row in rows],
-                "discovered": [asdict(d) for d in
-                               discover(Path(config.projects_root), known)]}
+        return projects_svc.list()
 
     @router.get("/projects/{project_id}")
     def get_project(project_id: str) -> dict:
-        return payload(loader.require(project_id), recheck=True)
+        return projects_svc.get(project_id)
 
     @router.get("/projects/{project_id}/public")
     def public_status(project_id: str) -> dict:
@@ -673,179 +509,34 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         secrets_svc.delete(project_id, name)
         return Response(status_code=204)
 
-    def compose_name_for(row: dict) -> str:
-        return row.get("compose_name") or row["id"]
-
-    def resolve_compose_name(project_id: str, row: dict) -> str:
-        return lifecycle.resolve_compose_name(
-            runner, loader.dir(project_id), compose_name_for(row))
-
     @router.get("/projects/{project_id}/delete-preview")
     def delete_preview(project_id: str) -> dict:
-        row = loader.require(project_id)
-        return {**files.tree_stats(loader.dir(project_id)),
-                **lifecycle.project_resources(
-                    runner, resolve_compose_name(project_id, row))}
+        return projects_svc.delete_preview(project_id)
 
     @router.delete("/projects/{project_id}")
     def delete_project(project_id: str, purge: bool = False) -> dict:
-        row = loader.require(project_id)
-        folder = loader.dir(project_id)
-        # Synchronous: the host CLI, install verification and the desktop's
-        # replace-import all wait on this answer. Removal is by compose label,
-        # not `compose down`, so a broken compose file can never block it.
-        with locks.held(project_id):
-            public.disable(project_id, force=True)
-            result = lifecycle.remove_by_label(
-                runner, resolve_compose_name(project_id, row), volumes=purge)
-            if purge:
-                uploads_svc.drop_project(project_id)
-                secrets_svc.drop(project_id)
-            if purge and folder.exists():
-                shutil.rmtree(folder, ignore_errors=True)
-                if folder.exists():
-                    removed = lifecycle.remove_tree_as_root(runner, folder)
-                    if not removed.ok and result.ok:
-                        result = removed
-            repos.projects.remove(project_id)
-            sync.wake()
-        return {"id": project_id, "stopped": result.ok,
-                "detail": "" if result.ok else (result.stderr or result.stdout).strip()}
-
-    def start_work(project_id: str, *, stop_first: bool):
-        row = loader.require(project_id)
-        # Parsing happens here, not in the job, so a broken compose file comes
-        # back as an error code the caller can read instead of a failed job.
-        project = loader.load(project_id)
-        compose = loader.parse_yaml(loader.dir(project_id) / constants.COMPOSE_FILE)
-        services, declared_by = secrets_svc.declared(compose)
-        name = str(compose.get("name") or project_id)
-        domain = row["domain"]
-        directory = loader.dir(project_id)
-
-        def work(write):
-            try:
-                if stop_first:
-                    write(f"compose down {project_id}\n")
-                    down_result = lifecycle.compose_down(
-                        runner, directory, env=secrets_svc.values(project_id))
-                    if not down_result.ok:
-                        raise JobFailed(
-                            (down_result.stderr or down_result.stdout).strip()
-                            or "compose down failed")
-                # Recorded before compose runs, not after a successful start:
-                # delete must be able to find these containers by name even
-                # when `up` never reaches STARTED_OK.
-                repos.projects.set_compose_name(project_id, name)
-                write(f"compose up {project_id}\n")
-                # Stamped before the values are read, so a secret changed while
-                # compose runs still shows as needing a restart.
-                began = time.time()
-                values = secrets_svc.values(project_id) or {}
-                status, detail = lifecycle.compose_up(
-                    runner, project, directory, domain, on_phase=write.phase,
-                    services=services, secrets=values, declared=declared_by)
-                diagnosis = None
-                if status in RUNNING:
-                    # A crash-looping stack still got these values.
-                    repos.projects.mark_started(project_id, began)
-                if status == STARTED_OK:
-                    write.phase("checking")
-                    write("waiting for the project to answer through Traefik\n")
-                    diagnosis = diagnose(
-                        runner, project, domain, directory=directory,
-                        env=values or None,
-                        edge_port=config.edge_port,
-                        traefik_host=config.traefik_host, http_probe=http_probe,
-                        timeout=config.ready_timeout)
-                repos.projects.set_status(project_id, status)
-                if diagnosis is None:
-                    repos.projects.set_problem(project_id)
-                else:
-                    repos.projects.set_problem(project_id, diagnosis.code,
-                                      diagnosis.message)
-                result = {"status": status, "urls": loader.urls_for(project, domain),
-                          "problem": diagnosis.as_dict() if diagnosis else None}
-                write(f"status: {status}\n")
-                if diagnosis:
-                    # The containers did start, so the job succeeds; the reason
-                    # the URL will not answer belongs in its log all the same.
-                    write(f"{diagnosis.message}\n")
-                if detail:
-                    write(f"{detail}\n")
-                if status != STARTED_OK:
-                    raise JobFailed(
-                        detail or f"containers did not stay up (status: {status})",
-                        result=result)
-                return result
-            finally:
-                locks.release(project_id)
-
-        return work
+        return projects_svc.delete(project_id, purge=purge)
 
     @router.post("/projects/{project_id}/up", status_code=202)
     def project_up(project_id: str) -> dict:
-        return {"job_id": submit_locked(
-            project_id, start_work(project_id, stop_first=False), "up")}
+        return {"job_id": lifecycle_svc.start(project_id)}
 
     @router.post("/projects/{project_id}/restart", status_code=202)
     def project_restart(project_id: str) -> dict:
-        return {"job_id": submit_locked(
-            project_id, start_work(project_id, stop_first=True), "restart")}
+        return {"job_id": lifecycle_svc.start(project_id, stop_first=True)}
 
     @router.post("/projects/{project_id}/down", status_code=202)
     def project_down(project_id: str) -> dict:
-        loader.require(project_id)
-
-        def work(write):
-            try:
-                write.phase("stopping")
-                write(f"compose down {project_id}\n")
-                result = lifecycle.compose_down(runner,
-                                                loader.dir(project_id),
-                                                env=secrets_svc.values(project_id))
-                if not result.ok:
-                    raise JobFailed((result.stderr or result.stdout).strip()
-                                    or "compose down failed")
-                repos.projects.set_status(project_id, "stopped")
-                return {"status": "stopped"}
-            finally:
-                locks.release(project_id)
-
-        return {"job_id": submit_locked(project_id, work, "down")}
-
-    def resume_projects() -> list[str]:
-        """Projects carry no restart policy, so a VM reboot leaves them stopped
-        while state.db still says started and Traefik answers 404."""
-        job_ids = []
-        for row in repos.projects.list():
-            if row["status"] != STARTED_OK:
-                continue
-            try:
-                job_ids.append(submit_locked(
-                    row["id"], start_work(row["id"], stop_first=False), "up"))
-            except EggieError as e:
-                log.warning("not resuming %s: %s", row["id"], e.message)
-        return job_ids
-
-    app.state.resume_projects = resume_projects
+        return {"job_id": lifecycle_svc.stop(project_id)}
 
     @router.get("/projects/{project_id}/logs")
     def project_logs(project_id: str, follow: bool = False,
                      service: str | None = None):
-        loader.require(project_id)
         if not follow:
-            result = lifecycle.project_logs(runner, loader.dir(project_id),
-                                            service, env=secrets_svc.values(project_id))
-            if not result.ok:
-                raise Conflict("logs_unavailable",
-                               (result.stderr or result.stdout).strip()
-                               or "docker compose logs failed")
-            return PlainTextResponse(result.stdout, media_type=TEXT)
-        argv = lifecycle.logs_argv(loader.dir(project_id), service, follow=True)
-        return StreamingResponse(
-            runner.stream(argv, root=True, env=secrets_svc.values(project_id)),
-            media_type=TEXT)
+            return PlainTextResponse(lifecycle_svc.logs(project_id, service),
+                                     media_type=TEXT)
+        return StreamingResponse(lifecycle_svc.logs_stream(project_id, service),
+                                 media_type=TEXT)
 
     @router.get("/jobs/{job_id}")
     def job_status(job_id: str) -> dict:

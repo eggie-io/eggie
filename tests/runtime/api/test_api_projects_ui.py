@@ -182,3 +182,11 @@ def test_delete_preview_counts_the_real_tree(env):
     compose_size = len((env.config.projects_root / "blog" /
                         "docker-compose.yml").read_bytes())
     assert (preview["files"], preview["bytes"]) == (2, 10 + compose_size)
+
+
+def test_listing_survives_a_public_status_crash(env):
+    _create(env, "blog")
+    env.app.state.services.public.status = lambda _id: 1 / 0
+    r = env.client.get("/projects")
+    assert r.status_code == 200
+    assert r.json()["projects"][0]["public"] == {"state": "off", "note": None}

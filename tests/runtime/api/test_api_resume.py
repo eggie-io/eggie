@@ -7,7 +7,7 @@ def _up_dirs(env):
 
 
 def _resume_and_wait(env):
-    for job_id in env.app.state.resume_projects():
+    for job_id in env.app.state.services.lifecycle.resume_all():
         env.jobs.wait(job_id, timeout=5)
 
 

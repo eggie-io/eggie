@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from eggie_api.routes.app import create_app
+from eggie_api.http.app import create_app
 from eggie_api.infra import files
 from eggie_api.config import ApiConfig
 from eggie_api.infra.runner import Completed

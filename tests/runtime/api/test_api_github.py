@@ -9,7 +9,7 @@ from eggie_api.infra.github import GitHubUnavailable
 from eggie_api.services.github_link import GitHubLink
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
-from eggie_api.routes.app import create_app
+from eggie_api.http.app import create_app
 from tests.runtime.api.conftest import (AUTH, COMPOSE_MALFORMED, COMPOSE_ONE_WEB,
                                         FakeProbe, FakeRunner)
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err

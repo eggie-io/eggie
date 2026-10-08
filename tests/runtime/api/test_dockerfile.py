@@ -34,3 +34,7 @@ def test_dockerfile_never_touches_opt_eggie():
 
 def test_dockerfile_installs_git_for_the_github_clone_job():
     assert "apt-get install" in _text() and " git" in _text()
+
+
+def test_dockerfile_starts_the_package_entrypoint():
+    assert '"-m", "eggie_api"]' in _text()

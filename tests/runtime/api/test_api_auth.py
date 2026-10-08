@@ -4,7 +4,7 @@ import re
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from eggie_api.routes.app import create_app
+from eggie_api.http.app import create_app
 from eggie_api.config import ApiConfig
 from tests.runtime.api.route_sweep import every_route
 

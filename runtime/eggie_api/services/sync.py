@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from typing import Callable
 
 from .account import NotSignedIn
 from ..infra.cloud import CloudError, CloudUnavailable
@@ -62,22 +63,28 @@ def run_pass(account, cloud, repos: Repos, clock=time.time) -> None:
 
 
 class SyncLoop:
-    def __init__(self, run, *, interval: float = 60.0):
-        self._run = run
+    def __init__(self, passes: list[Callable[[], None]], *, interval: float = 60.0):
+        self._passes = list(passes)
         self._interval = interval
         self._wake = threading.Event()
 
     def wake(self) -> None:
         self._wake.set()
 
+    def run_once(self) -> None:
+        # Each pass fails on its own: a broken public-URL check must not
+        # stop projects from being registered.
+        for run in self._passes:
+            try:
+                run()
+            except Exception:
+                log.exception("sync pass failed")
+
     def run_forever(self) -> None:
         while True:
             # Cleared before the pass: a change made during it runs another.
             self._wake.clear()
-            try:
-                self._run()
-            except Exception:
-                log.exception("sync pass failed")
+            self.run_once()
             self._wake.wait(self._interval)
 
     def start(self) -> None:

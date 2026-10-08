@@ -17,4 +17,4 @@ USER api
 # No --wait-for-client: the container starts and serves normally, and the
 # debugger attaches whenever you want it. Waiting would hang the HEALTHCHECK
 # and leave restart:always looping a container nobody has attached to yet.
-CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "eggie_api.routes"]
+CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "eggie_api"]

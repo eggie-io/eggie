@@ -6,7 +6,7 @@ from eggie_api.services.account import Account
 from eggie_api.services.public import Public, TunnelClient
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
-from eggie_api.routes.app import create_app
+from eggie_api.http.app import create_app
 from tests.runtime.api.conftest import AUTH, BROWSER, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.api.test_public import ON, Clock, TunnelRunner
@@ -154,6 +154,6 @@ def test_a_failing_public_reconcile_does_not_stop_the_account_sync(env):
     app = create_app(config=env.config, runner=FakeRunner(), repos=repos,
                      account=account, cloud=cloud, public=Broken())
 
-    app.state.services.sync._run()
+    app.state.services.sync.run_once()
 
     assert repos.account.get()["sync_ok_at"] is not None

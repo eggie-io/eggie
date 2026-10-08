@@ -418,10 +418,20 @@ _BAD_NAME = ("That isn't a valid secret name: use letters, digits and underscore
              "not starting with a digit.")
 
 
-def _secret_project(env: Env, name: str, bad_name: str) -> tuple[ApiClient, str]:
+# Mirrors eggie_api's reserved names; tests hold the two equal.
+_RESERVED_PREFIXES = ("COMPOSE_", "DOCKER_", "LD_", "BUILDX_", "BUILDKIT_")
+_RESERVED_NAMES = frozenset({"PATH", "HOME"})
+
+
+def _secret_project(env: Env, name: str) -> tuple[ApiClient, str]:
     # A mistyped `NAME=value` must fail here, before anything echoes or sends it.
+    if "=" in name:
+        raise EggieError(_NO_ARGV_VALUE)
     if not _SECRET_NAME.fullmatch(name):
-        raise EggieError(bad_name)
+        raise EggieError(_BAD_NAME)
+    upper = name.upper()
+    if upper in _RESERVED_NAMES or upper.startswith(_RESERVED_PREFIXES):
+        raise EggieError("That name is reserved: Eggie and Docker read it themselves.")
     project_id = _require_project(env)
     client = env.client()
     client.ensure_project(project_id)
@@ -431,7 +441,7 @@ def _secret_project(env: Env, name: str, bad_name: str) -> tuple[ApiClient, str]
 def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
     if extra:
         raise EggieError(_NO_ARGV_VALUE)
-    client, project_id = _secret_project(env, name, _NO_ARGV_VALUE)
+    client, project_id = _secret_project(env, name)
     # Never from argv: that ends up in shell history and `ps`.
     if env.stdin.isatty():
         value = env.getpass(f"Value for {name} (not shown): ")
@@ -446,7 +456,7 @@ def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
 
 
 def cmd_secret_request(env: Env, name: str, hint: str) -> None:
-    client, project_id = _secret_project(env, name, _BAD_NAME)
+    client, project_id = _secret_project(env, name)
     if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
         print(f"{name} already has a value; ask the owner to Replace it on "
               f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
@@ -476,7 +486,7 @@ def cmd_secret_list(env: Env) -> None:
 
 
 def cmd_secret_rm(env: Env, name: str) -> None:
-    client, project_id = _secret_project(env, name, _BAD_NAME)
+    client, project_id = _secret_project(env, name)
     had_value = any(s["name"] == name for s in client.secrets(project_id).get("secrets", []))
     client.delete_secret(project_id, name)
     if had_value:
@@ -536,7 +546,8 @@ def cmd_clone(env: Env, url: str, name: str | None) -> None:
 
 def _secret_usage_error(message: str) -> NoReturn:
     # argparse would quote the offending argument, which may be a typed value.
-    print(f"eggie secret: {_NO_ARGV_VALUE} See `eggie secret --help`.", file=sys.stderr)
+    print('usage: eggie secret set NAME | request NAME "hint" | list | rm NAME'
+          " — values are never taken on the command line", file=sys.stderr)
     sys.exit(2)
 
 

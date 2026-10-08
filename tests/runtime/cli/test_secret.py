@@ -152,3 +152,15 @@ def test_secret_rm_removes_it_and_an_unknown_name_fails(guest):
     assert _values(guest) == {}
     code, _, err = guest.run("secret", "rm", "API_KEY", cwd=folder)
     assert code == 1 and "API_KEY" in err
+
+
+def test_the_cli_refuses_the_same_reserved_names_as_the_api():
+    from eggie_api.core.secrets import RESERVED_NAMES, RESERVED_PREFIXES
+    assert cli._RESERVED_NAMES == RESERVED_NAMES
+    assert cli._RESERVED_PREFIXES == RESERVED_PREFIXES
+
+
+def test_secret_set_refuses_a_reserved_name_before_reading_the_value(guest):
+    folder = _project(guest)
+    code, _, err = guest.run("secret", "set", "docker_host", cwd=folder)
+    assert code == 1 and "reserved" in err

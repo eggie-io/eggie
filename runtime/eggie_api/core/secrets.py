@@ -91,4 +91,4 @@ def check_hint(hint: str) -> None:
         ok = False
     if not ok:
         raise SecretError("secret_hint_invalid",
-                          f"a hint is 1 to {MAX_HINT_CHARS} characters of plain text")
+                          f"a hint is one line of plain text, 1 to {MAX_HINT_CHARS} characters")

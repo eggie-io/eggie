@@ -241,7 +241,12 @@ fi
 
 # 9. the in-VM eggie command, the instructions every session loads, the shell's start
 #    directory, and SSH host keys that outlive a reboot.
-install -m 755 "$RUNTIME_DIR/cli/eggie.py" /usr/local/bin/eggie
+# One stdlib-only executable built from the package: the stock python3 runs
+# the zip directly, so the guest gains no dependency.
+cli_build="$(mktemp)"
+python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$cli_build"
+install -m 755 "$cli_build" /usr/local/bin/eggie
+rm -f "$cli_build"
 if ! system_instructions="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$RUNTIME_DIR/agents" instructions --system)"; then
   echo "the coding-agent manifests in this runtime are damaged" >&2
   exit 1

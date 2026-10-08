@@ -13,7 +13,7 @@ from .constants import (ALT_COMPOSE_FILES, API_PORT, API_UNCONFIGURED, COMPOSE_F
                         GUEST_TOKEN, VERIFY_PROJECT_ID)
 from .env import Env
 from .errors import ApiError, EggieError, JobFailed
-from .main import main
+from .cli import main
 from .project import (docker_gid, prepare_overlay_dir, project_id_for, project_of,
                       repo_name, require_id)
 from .secrets import RESERVED_NAMES, RESERVED_PREFIXES

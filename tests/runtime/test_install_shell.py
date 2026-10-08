@@ -434,3 +434,18 @@ def test_the_agent_instructions_check_for_the_vm_by_the_projects_folder():
     # started during a boot update would refuse to work inside the VM.
     text = (ROOT / "runtime" / "instructions" / "eggie.md").read_text()
     assert f"test -d {constants.GUEST_PROJECTS}" in text
+
+
+def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
+    # The CLI is a package; the VM gets one stdlib-only executable built from
+    # it. The build must precede the install, and the install must set 755 so
+    # every login account can run it.
+    commands = _commands()
+    build = _index_of("python3 -m zipapp")
+    assert '"$RUNTIME_DIR/cli"' in commands[build]
+    assert "-m \"eggie_cli.cli:main\"" in commands[build]
+    assert "-p \"/usr/bin/env python3\"" in commands[build]
+    installed = _index_of("/usr/local/bin/eggie")
+    assert build < installed
+    assert commands[installed].startswith("install -m 755 ")
+    assert not any("cli/eggie.py" in l for l in commands)

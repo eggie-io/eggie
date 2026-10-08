@@ -43,14 +43,14 @@ runtime/cli/
     env.py          Env, run_git, project_here, require_project
     commands.py     start, print_project, cmd_up/status/logs/down/new/clone, new_folder
     secrets.py      the secret-name rules and cmd_secret_set/request/list/rm
-    main.py         parser, secret usage error, main (the EggieError → exit 1 boundary)
+    cli.py          parser, secret usage error, main (the EggieError → exit 1 boundary)
 ```
 
 `runtime/cli/eggie.py` is deleted. The package name is `eggie_cli`: not `eggie` (the launcher's
 name on PATH) and not `cli` (the zipapp root sits first on `sys.path`, so a top-level name must
 not shadow a stdlib or common module — the lesson from #57's `http/`).
 
-Module dependencies run one way: `main → commands | secrets → env → api | project → errors |
+Module dependencies run one way: `cli → commands | secrets → env → api | project → errors |
 constants`. Relative imports inside the package; nothing else.
 
 `__init__.py` re-exports: every constant, `EggieError`, `ApiError`, `JobFailed`, `ApiClient`,
@@ -63,13 +63,13 @@ constants`. Relative imports inside the package; nothing else.
 
 ```bash
 tmp="$(mktemp)"
-python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.main:main" -p "/usr/bin/env python3" -o "$tmp"
+python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$tmp"
 install -m 755 "$tmp" /usr/local/bin/eggie
 rm -f "$tmp"
 ```
 
 `zipapp` archives `runtime/cli/` (which holds only `eggie_cli/`), prepends the shebang, and
-`-m` writes the `__main__` that calls `eggie_cli.main:main`. The result is one self-contained
+`-m` writes the `__main__` that calls `eggie_cli.cli:main`. The result is one self-contained
 file the stock `python3` runs; `python3 -m zipapp` is in the standard library, so the install
 gains no dependency. The `runtime/cli/` directory holds nothing but the package: anything added
 there ships inside the executable.
@@ -111,5 +111,5 @@ One branch (`feature/59-guest-cli-package`), one PR, each commit green:
 1. Create the package by moving the file's sections into the modules above; delete `eggie.py`;
    switch the loader and `test_boundaries.py`; suite green.
 2. `install.sh` zipapp build + its text test; a local `python3 -m zipapp runtime/cli -m
-   eggie_cli.main:main -o /tmp/x && /tmp/x --help` smoke run recorded in the PR.
+   eggie_cli.cli:main -o /tmp/x && /tmp/x --help` smoke run recorded in the PR.
 3. Docs.

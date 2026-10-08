@@ -4,7 +4,7 @@
 
 **Goal:** Turn `runtime/cli/eggie.py` into the stdlib-only package `runtime/cli/eggie_cli/` and have `install.sh` build the single `/usr/local/bin/eggie` from it with `zipapp`, with no change to what the command does.
 
-**Architecture:** Nine small modules with one dependency direction (`main → commands | secrets → env → api | project → errors | constants`), a barrel `__init__` that tests load through, and a `zipapp` build step in `install.sh` so the guest still receives one file and no new dependency.
+**Architecture:** Nine small modules with one dependency direction (`cli → commands | secrets → env → api | project → errors | constants`), a barrel `__init__` that tests load through, and a `zipapp` build step in `install.sh` so the guest still receives one file and no new dependency.
 
 **Tech Stack:** Python 3.12 stdlib (`argparse`, `urllib`, `zipapp`), bash (`install.sh`), pytest.
 
@@ -33,13 +33,13 @@
 ### Task 1: The package, the loader, the boundary tests
 
 **Files:**
-- Create: `runtime/cli/eggie_cli/__init__.py`, `constants.py`, `errors.py`, `api.py`, `project.py`, `env.py`, `commands.py`, `secrets.py`, `main.py`
+- Create: `runtime/cli/eggie_cli/__init__.py`, `constants.py`, `errors.py`, `api.py`, `project.py`, `env.py`, `commands.py`, `secrets.py`, `cli.py`
 - Delete: `runtime/cli/eggie.py`
 - Modify: `tests/runtime/cli/loader.py`, `tests/runtime/cli/test_boundaries.py`, `tests/runtime/cli/test_secret.py:158-160`
 - Test: `tests/runtime/cli/` (all), `tests/test_constants_agree.py`
 
 **Interfaces:**
-- Produces: the package `eggie_cli` whose `__init__` re-exports `API_PORT, GUEST_ROOT, GUEST_PROJECTS, GUEST_TOKEN, GUEST_STACK, COMPOSE_FILE, API_UNCONFIGURED, VERIFY_PROJECT_ID, DOCKER_GROUP, ALT_COMPOSE_FILES, START_STACK, RESTART_API, RESERVED_NAMES, RESERVED_PREFIXES, EggieError, ApiError, JobFailed, ApiClient, read_token, Env, project_id_for, project_of, require_id, prepare_overlay_dir, docker_gid, repo_name, main`; `eggie_cli.main:main(argv=None, env=None) -> int` (Task 2's zipapp entry).
+- Produces: the package `eggie_cli` whose `__init__` re-exports `API_PORT, GUEST_ROOT, GUEST_PROJECTS, GUEST_TOKEN, GUEST_STACK, COMPOSE_FILE, API_UNCONFIGURED, VERIFY_PROJECT_ID, DOCKER_GROUP, ALT_COMPOSE_FILES, START_STACK, RESTART_API, RESERVED_NAMES, RESERVED_PREFIXES, EggieError, ApiError, JobFailed, ApiClient, read_token, Env, project_id_for, project_of, require_id, prepare_overlay_dir, docker_gid, repo_name, main`; `eggie_cli.cli:main(argv=None, env=None) -> int` (Task 2's zipapp entry).
 - `tests.runtime.cli.loader.load() -> module` (the package) and `GUEST_CLI: Path` (the package directory).
 
 - [ ] **Step 1: Rewrite the loader and watch the suite fail**
@@ -179,7 +179,7 @@ from .env import Env, require_project
 from .errors import EggieError
 ```
 
-`eggie_cli/main.py` — lines 547–628 (`_secret_usage_error`, `_parser`, `main`, and the `if __name__ == "__main__": sys.exit(main())` guard).
+`eggie_cli/cli.py` — lines 547–628 (`_secret_usage_error`, `_parser`, `main`, and the `if __name__ == "__main__": sys.exit(main())` guard).
 ```python
 from __future__ import annotations
 
@@ -240,7 +240,7 @@ EOF
 - Test: `tests/runtime/test_install_shell.py` (one new test)
 
 **Interfaces:**
-- Consumes: `eggie_cli.main:main` from Task 1.
+- Consumes: `eggie_cli.cli:main` from Task 1.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -253,7 +253,7 @@ def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
     commands = _commands()
     build = _index_of("python3 -m zipapp")
     assert '"$RUNTIME_DIR/cli"' in commands[build]
-    assert "-m \"eggie_cli.main:main\"" in commands[build]
+    assert "-m \"eggie_cli.cli:main\"" in commands[build]
     assert "-p \"/usr/bin/env python3\"" in commands[build]
     installed = _index_of("/usr/local/bin/eggie")
     assert build < installed
@@ -271,7 +271,7 @@ Replace line 244 (`install -m 755 "$RUNTIME_DIR/cli/eggie.py" /usr/local/bin/egg
 # One stdlib-only executable built from the package: the stock python3 runs
 # the zip directly, so the guest gains no dependency.
 cli_build="$(mktemp)"
-python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.main:main" -p "/usr/bin/env python3" -o "$cli_build"
+python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$cli_build"
 install -m 755 "$cli_build" /usr/local/bin/eggie
 rm -f "$cli_build"
 ```
@@ -286,7 +286,7 @@ Expected: all pass (`test_install_is_valid_bash` covers the syntax).
 ```bash
 cd /home/ihor/projects/local-environment-for-non-tech/poc
 out=/tmp/claude-1000/-home-ihor-projects-local-environment-for-non-tech-poc/f64b519b-89dd-4fc0-9c32-24abb9266975/scratchpad/eggie
-python3 -m zipapp runtime/cli -m "eggie_cli.main:main" -p "/usr/bin/env python3" -o "$out"
+python3 -m zipapp runtime/cli -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$out"
 "$out" --help | head -3
 "$out" status; echo "exit=$?"
 ```
@@ -322,7 +322,7 @@ Replace the `cli/eggie.py` bullet with:
   `runtime/cli/` must hold nothing but the package (it is the zip's root, first on `sys.path`).
   **Stdlib only**: it can import neither `host/` nor `eggie_api`, so shared names are
   re-declared and held equal by `tests/test_constants_agree.py`. Modules depend one way:
-  `main → commands | secrets → env → api | project → errors | constants`; tests load the barrel
+  `cli → commands | secrets → env → api | project → errors | constants`; tests load the barrel
   through `tests/runtime/cli/loader.py`.
 ```
 

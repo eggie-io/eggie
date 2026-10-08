@@ -37,6 +37,7 @@ export const SCENARIOS = [
   "agents-installing",
   "agents-failed",
   "windows",
+  "secrets",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -65,6 +66,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
     first_run: false,
     job: null,
     public: { state: "off", note: null },
+    restart_needed: false,
     ...over,
   };
 }
@@ -116,6 +118,20 @@ export function handlersFor(scenario: Scenario) {
   const projects = new Map<string, Project>();
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
+  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; dotenv: string[] | null }>();
+  const secretsOf = (id: string) => {
+    let entry = secrets.get(id);
+    if (!entry) {
+      entry = scenario === "secrets" && id === "recipe-box"
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], dotenv: ["SMTP_PASSWORD", "SMTP_USER"] }
+        : { names: new Map(), missing: [], dotenv: null };
+      secrets.set(id, entry);
+    }
+    return entry;
+  };
+  const touched = (target: Project) => {
+    if (target.status === "started_ok") target.restart_needed = true;
+  };
 
   function startJob(target: Project, kind: JobKind): Job {
     const id = Math.random().toString(16).slice(2, 14);
@@ -163,6 +179,7 @@ export function handlersFor(scenario: Scenario) {
         return;
       }
       target.first_run = false;
+      target.restart_needed = false;
       target.status = "started_ok";
       // photo-sorter never gets better, so "Try again" can be walked.
       target.problem = target.id === "photo-sorter" ? LOOPBACK : null;
@@ -423,6 +440,44 @@ export function handlersFor(scenario: Scenario) {
       if (denied) return denied;
       const target = find(String(params.id));
       return target ? HttpResponse.json(target) : notFound(String(params.id));
+    }),
+    http.get("/api/projects/:id/secrets", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const entry = secretsOf(target.id);
+      return HttpResponse.json({
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at })),
+        missing: entry.missing.filter((n) => !entry.names.has(n)),
+        dotenv: entry.dotenv && { names: entry.dotenv, error: null },
+        restart_needed: target.restart_needed,
+      });
+    }),
+    http.put("/api/projects/:id/secrets/:name", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const name = String(params.name);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse("secret_name_invalid", `'${name}' can't be a secret name`, 400);
+      secretsOf(target.id).names.set(name, nowSec());
+      touched(target);
+      return new HttpResponse(null, { status: 204 });
+    }),
+    http.delete("/api/projects/:id/secrets/:name", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      if (!secretsOf(target.id).names.delete(String(params.name))) return refuse("secret_not_found", "no such secret", 404);
+      touched(target);
+      return new HttpResponse(null, { status: 204 });
+    }),
+    http.post("/api/projects/:id/secrets/import-dotenv", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const entry = secretsOf(target.id);
+      if (!entry.dotenv) return refuse("dotenv_missing", "no .env file", 404);
+      const imported = entry.dotenv;
+      for (const name of imported) entry.names.set(name, nowSec());
+      entry.dotenv = null;
+      touched(target);
+      return HttpResponse.json({ imported });
     }),
     http.post("/api/projects/:id/adopt", ({ params }) => {
       const denied = guard();

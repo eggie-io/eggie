@@ -123,6 +123,7 @@ export function ProjectPage() {
             <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Restart</Button>
           </div>
           {failed}
+          {project.restart_needed && <Notice>Secrets changed — press Restart to apply them.</Notice>}
           <AddressRows web={project.web} live publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
           {tiles}
         </>

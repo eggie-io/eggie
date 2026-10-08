@@ -10,6 +10,7 @@ export function TextField({
   error,
   autoFocus = false,
   placeholder,
+  type = "text",
 }: {
   label: string;
   value: string;
@@ -18,6 +19,7 @@ export function TextField({
   error?: string;
   autoFocus?: boolean;
   placeholder?: string;
+  type?: "text" | "password";
 }) {
   const id = useId();
   const note = error ?? hint;
@@ -26,6 +28,7 @@ export function TextField({
       <label htmlFor={id} className={s.label}>{label}</label>
       <input
         id={id}
+        type={type}
         className={cx(s.input, error !== undefined && s.invalid)}
         value={value}
         onChange={(event) => onChange(event.target.value)}

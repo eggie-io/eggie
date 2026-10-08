@@ -45,6 +45,14 @@ export interface Project {
   first_run: boolean;
   job: ActiveJob | null;
   public: PublicStatus;
+  restart_needed: boolean;
+}
+
+export interface SecretsView {
+  secrets: { name: string; updated_at: number }[];
+  missing: string[];
+  dotenv: { names: string[]; error: string | null } | null;
+  restart_needed: boolean;
 }
 
 export interface Discovered {

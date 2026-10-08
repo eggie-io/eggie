@@ -139,11 +139,3 @@ export function useDeleteSecret(id: string) {
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }
-
-export function useImportDotenv(id: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<{ imported: string[] }>(`${projectPath(id)}/secrets/import-dotenv`),
-    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
-  });
-}

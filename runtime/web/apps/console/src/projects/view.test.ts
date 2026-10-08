@@ -16,6 +16,7 @@ function project(over: Partial<Project> = {}): Project {
     job: null,
     public: { state: "off", note: null },
     restart_needed: false,
+    secrets_requested: 0,
     ...over,
   };
 }

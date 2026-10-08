@@ -14,7 +14,13 @@ describe("nameProblem", () => {
   it.each(["COMPOSE_FILE", "docker_host"])("refuses the reserved %s", (name) => {
     expect(nameProblem(name, [])).toMatch(/reserved/);
   });
-  it("points at Edit for a name that already exists", () => {
-    expect(nameProblem("API_KEY", ["API_KEY"])).toMatch(/Edit/);
+  it.each(["ld_preload", "PATH", "home"])("refuses the reserved %s", (name) => {
+    expect(nameProblem(name, [])).toMatch(/reserved/);
+  });
+  it("allows a name that only starts like PATH", () => {
+    expect(nameProblem("PATHS", [])).toBeNull();
+  });
+  it("points at Replace for a name that already exists", () => {
+    expect(nameProblem("API_KEY", ["API_KEY"])).toMatch(/Replace/);
   });
 });

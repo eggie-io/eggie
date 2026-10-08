@@ -4,9 +4,10 @@ import { filesRoute } from "../../uploads/paths";
 import { FOLDER, GLOBE, KEY, MAGNIFIER, TRASH } from "../icons";
 import s from "./ProjectPage.module.css";
 
-export function Tiles({ id, publicLine, publicDisabled, onPublic, onAnalyze, onDelete }: {
+export function Tiles({ id, publicLine, publicDisabled, secretsLine, onPublic, onAnalyze, onDelete }: {
   id: string;
   publicLine: string;
+  secretsLine: string;
   publicDisabled: boolean;
   onPublic: () => void;
   onAnalyze: () => void;
@@ -16,7 +17,7 @@ export function Tiles({ id, publicLine, publicDisabled, onPublic, onAnalyze, onD
     <div className={s.tiles}>
       <button type="button" className={s.tile} onClick={onAnalyze}>{MAGNIFIER}Analyze</button>
       <Link to={filesRoute(id, "")} className={s.tile}>{FOLDER}Files</Link>
-      <Link to={`/p/${encodeURIComponent(id)}/secrets`} className={s.tile}>{KEY}Secrets</Link>
+      <Link to={`/p/${encodeURIComponent(id)}/secrets`} className={s.tile}>{KEY}Secrets<small>{secretsLine}</small></Link>
       <button type="button" className={cx(s.tile, publicDisabled && s.off)} disabled={publicDisabled} onClick={onPublic}>
         {GLOBE}Public address<small>{publicLine}</small>
       </button>

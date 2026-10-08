@@ -46,13 +46,12 @@ export interface Project {
   job: ActiveJob | null;
   public: PublicStatus;
   restart_needed: boolean;
+  secrets_requested: number;
 }
 
 export interface SecretsView {
-  secrets: { name: string; updated_at: number; overrides_default: boolean }[];
-  defaults: { name: string; value: string; overridden: boolean; shadowed: boolean; compose_default: boolean }[];
-  missing: string[];
-  dotenv: { names: string[]; error: string | null } | null;
+  secrets: { name: string; updated_at: number }[];
+  requested: { name: string; hint: string }[];
   restart_needed: boolean;
 }
 

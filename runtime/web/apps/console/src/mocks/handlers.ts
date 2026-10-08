@@ -67,6 +67,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
     job: null,
     public: { state: "off", note: null },
     restart_needed: false,
+    secrets_requested: 0,
     ...over,
   };
 }
@@ -118,13 +119,13 @@ export function handlersFor(scenario: Scenario) {
   const projects = new Map<string, Project>();
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; defaults: Map<string, string>; composeDefaults: string[]; dotenv: string[] | null }>();
+  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string> }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"], ["PORT", "3000"]]), composeDefaults: ["PORT"], dotenv: ["LOG_LEVEL", "SMTP_PASSWORD", "SMTP_USER"] }
-        : { names: new Map(), missing: [], defaults: new Map(), composeDefaults: [], dotenv: null };
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]) }
+        : { names: new Map(), requested: new Map() };
       secrets.set(id, entry);
     }
     return entry;
@@ -275,6 +276,11 @@ export function handlersFor(scenario: Scenario) {
     if (p.id === "recipe-box" || p.empty) continue;
     seedFile(p.id, "docker-compose.yml", 1024, hoursAgo(30));
     seedFile(p.id, "README.md", 2048, hoursAgo(30));
+  }
+
+  if (scenario === "secrets") {
+    const box = projects.get("recipe-box");
+    if (box) box.secrets_requested = secretsOf("recipe-box").requested.size;
   }
 
   const disk = { free: scenario === "full" ? 2.1 * GB : 40 * GB, total: 64 * GB };
@@ -446,10 +452,8 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       return HttpResponse.json({
-        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, overrides_default: entry.defaults.has(name) })),
-        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name), shadowed: entry.dotenv?.includes(name) ?? false, compose_default: entry.composeDefaults.includes(name) })),
-        missing: entry.missing.filter((n) => !entry.names.has(n)),
-        dotenv: entry.dotenv && { names: entry.dotenv, error: null },
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at })),
+        requested: [...entry.requested].map(([name, hint]) => ({ name, hint })),
         restart_needed: target.restart_needed,
       });
     }),
@@ -460,27 +464,24 @@ export function handlersFor(scenario: Scenario) {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse("secret_name_invalid", `'${name}' can't be a secret name`, 400);
       const body = (await request.json().catch(() => ({}))) as { value?: unknown };
       if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
-      secretsOf(target.id).names.set(name, nowSec());
+      const entry = secretsOf(target.id);
+      entry.names.set(name, nowSec());
+      entry.requested.delete(name);
+      target.secrets_requested = entry.requested.size;
       touched(target);
       return new HttpResponse(null, { status: 204 });
     }),
     http.delete("/api/projects/:id/secrets/:name", ({ params }) => {
       const target = projects.get(String(params.id));
       if (!target) return notFound(String(params.id));
-      if (!secretsOf(target.id).names.delete(String(params.name))) return refuse("secret_not_found", "no such secret", 404);
-      touched(target);
-      return new HttpResponse(null, { status: 204 });
-    }),
-    http.post("/api/projects/:id/secrets/import-dotenv", ({ params }) => {
-      const target = projects.get(String(params.id));
-      if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
-      if (!entry.dotenv) return refuse("dotenv_missing", "no .env file", 404);
-      const imported = entry.dotenv;
-      for (const name of imported) entry.names.set(name, nowSec());
-      entry.dotenv = null;
-      touched(target);
-      return HttpResponse.json({ imported });
+      const name = String(params.name);
+      const hadValue = entry.names.delete(name);
+      const hadRequest = entry.requested.delete(name);
+      if (!hadValue && !hadRequest) return refuse("secret_not_found", "no such secret", 404);
+      target.secrets_requested = entry.requested.size;
+      if (hadValue) touched(target);
+      return new HttpResponse(null, { status: 204 });
     }),
     http.post("/api/projects/:id/adopt", ({ params }) => {
       const denied = guard();

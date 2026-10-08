@@ -70,6 +70,7 @@ export function ProjectPage() {
       id={project.id}
       publicLine={tileLine(pub!)}
       publicDisabled={pub!.kind === "unavailable"}
+      secretsLine={project.secrets_requested > 0 ? `${project.secrets_requested} requested` : "Keep API keys and passwords here, not in project files."}
       onPublic={() => setModal("public")}
       onAnalyze={() => setModal("analyze")}
       onDelete={() => setModal("delete")}

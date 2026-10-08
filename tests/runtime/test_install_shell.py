@@ -351,22 +351,6 @@ def test_a_github_cli_failure_is_reported_and_stops_the_install():
     assert "cli.github.com" in gh_block and ">&2" in gh_block
 
 
-def test_install_removes_what_an_engine_v_install_left_behind():
-    # A VM installed from an engine-v* ref keeps /opt/eggie/engine/,
-    # engine.version and agent.token forever otherwise: nothing reads them
-    # any more, engine.version sits beside runtime.version to mislead the
-    # next person who debugs the box, and agent.token is a live 0640
-    # docker-readable secret. The cleanup command spans several
-    # backslash-continued lines, so join them before checking.
-    text = INSTALL.read_text()
-    block = text.split("rm -rf ", 1)[1].split("\nif ", 1)[0]
-    cleanup = block.replace("\\\n", " ")
-    assert "eggie-setup" in cleanup, "sanity check: not the intended block"
-    for stale in ("/opt/eggie/engine ", "/opt/eggie/engine.version",
-                  "/opt/eggie/agent.token"):
-        assert stale in cleanup, f"cleanup no longer removes {stale!r}"
-
-
 def test_install_reasserts_the_github_file_modes_after_the_permission_sweep():
     text = INSTALL.read_text()
     sweep = text.index("chmod -R g+rwX /opt/eggie")

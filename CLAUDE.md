@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+PROJECT IS UNDER DEVELOPMENT. DO NOT WORRY ABOUT BACKWARD COMPATIBILITY
+
 ## What this is
 
 A PoC (`eggie`) that creates a managed Linux VM (Ubuntu 24.04), installs Docker inside it, runs

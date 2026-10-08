@@ -15,11 +15,14 @@ release — if it does, the logic is on the wrong side of the seam (see the root
   swaps in the debugpy api build; `stack.yml` itself must stay identical to what runs in production.
 - `eggie_api/` — the FastAPI service. Own CLAUDE.md.
 - `web/` — the browser console (npm workspace, `eggie-web` nginx image). Own CLAUDE.md.
-- `cli/eggie.py` — the `eggie` command **inside** the VM (`/usr/local/bin/eggie`), used by coding
-  agents: `up`/`new`/`clone`/`status`/`logs`/`down`/`secret` over the API with the guest token. **One
-  stdlib-only file**: it can import neither `host/` nor `eggie_api`, so shared names are
-  re-declared and held equal by `tests/test_constants_agree.py`. Tests load it by path
-  (`tests/runtime/cli/loader.py`).
+- `cli/eggie_cli/` — the `eggie` command **inside** the VM, used by coding agents:
+  `up`/`new`/`clone`/`status`/`logs`/`down`/`secret` over the API with the guest token.
+  `install.sh` builds it into the one file `/usr/local/bin/eggie` with `python3 -m zipapp`, so
+  `runtime/cli/` must hold nothing but the package (it is the zip's root, first on `sys.path`).
+  **Stdlib only**: it can import neither `host/` nor `eggie_api`, so shared names are
+  re-declared and held equal by `tests/test_constants_agree.py`. Modules depend one way:
+  `cli → commands | secrets → env → api | project → errors | constants`; tests load the barrel
+  through `tests/runtime/cli/loader.py`, and `test_boundaries.py` builds and runs the zip.
 - `instructions/` — what coding agents read (installed as `/etc/claude-code/CLAUDE.md` etc.). The
   five skills live in the separate `eggie-skills` repo (github.com/eggie-io/eggie-skills)
   and are installed by `install.sh` via `npx skills add`; they are not in this tree. The runtime

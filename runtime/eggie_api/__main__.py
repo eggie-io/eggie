@@ -3,7 +3,7 @@ from __future__ import annotations
 import uvicorn
 
 from .config import ApiConfig
-from .http.app import create_app
+from .rest.app import create_app
 from .infra.migrate import SchemaTooNew
 from .wiring import build
 

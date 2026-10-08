@@ -12,7 +12,7 @@ from tests.runtime.api.conftest import (COMPOSE_AMBIGUOUS, COMPOSE_MALFORMED,
 def test_importing_the_app_module_builds_nothing(env):
     # A module-level app would open sqlite under /opt/eggie at import time and
     # drag the whole suite onto the real filesystem.
-    import eggie_api.http.app as module
+    import eggie_api.rest.app as module
     assert not [name for name, value in vars(module).items()
                 if isinstance(value, (FastAPI, Database))]
 

@@ -11,4 +11,4 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 package-dir = {"eggie_api" = "."}
 packages = ["eggie_api", "eggie_api.domain", "eggie_api.infra", "eggie_api.infra.repos",
-            "eggie_api.services", "eggie_api.http", "eggie_api.http.routers"]
+            "eggie_api.services", "eggie_api.rest", "eggie_api.rest.routers"]

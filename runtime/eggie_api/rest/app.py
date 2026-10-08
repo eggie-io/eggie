@@ -16,8 +16,13 @@ def create_app(*, config: ApiConfig | None = None, services: Services | None = N
                **overrides) -> FastAPI:
     """A factory on purpose: no module-level app, so importing this opens no
     sqlite file and starts no thread."""
-    config = config or ApiConfig.from_env()
-    services = services or build(config, **overrides)
+    if services is not None:
+        if overrides:
+            raise TypeError("services and overrides are mutually exclusive")
+        config = config or services.config
+    else:
+        config = config or ApiConfig.from_env()
+        services = build(config, **overrides)
     app = FastAPI(title="eggie-api", version=config.version)
     app.state.services = services
     errors.install(app)

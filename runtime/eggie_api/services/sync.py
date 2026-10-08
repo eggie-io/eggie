@@ -78,7 +78,8 @@ class SyncLoop:
             try:
                 run()
             except Exception:
-                log.exception("sync pass failed")
+                log.exception("sync pass %s failed",
+                              getattr(run, "__qualname__", run))
 
     def run_forever(self) -> None:
         while True:

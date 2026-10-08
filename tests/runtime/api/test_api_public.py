@@ -6,7 +6,7 @@ from eggie_api.services.account import Account
 from eggie_api.services.public import Public, TunnelClient
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
-from eggie_api.http.app import create_app
+from eggie_api.rest.app import create_app
 from tests.runtime.api.conftest import AUTH, BROWSER, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.api.test_public import ON, Clock, TunnelRunner

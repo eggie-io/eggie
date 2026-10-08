@@ -57,7 +57,7 @@ COPY __init__.py __main__.py config.py constants.py errors.py wiring.py /app/
 COPY domain /app/domain
 COPY infra /app/infra
 COPY services /app/services
-COPY http /app/http
+COPY rest /app/rest
 RUN pip install --no-cache-dir .
 
 USER api

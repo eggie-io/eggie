@@ -9,7 +9,7 @@ from ..errors import BadRequest
 
 # No size cap here on an uploaded archive or a single file: removing the old
 # ~24 KB command-line ceiling is this module's entire purpose. The runaway/
-# abuse cap lives where the bytes are streamed in, http/routers/files.py's
+# abuse cap lives where the bytes are streamed in, rest/routers/files.py's
 # `stream_to_tempfile`, so it can abort mid-stream instead of after the fact.
 
 

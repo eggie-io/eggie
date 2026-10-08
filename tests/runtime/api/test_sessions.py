@@ -2,7 +2,7 @@ import hashlib
 
 from fastapi.testclient import TestClient
 
-from eggie_api.http.app import create_app
+from eggie_api.rest.app import create_app
 from eggie_api.config import ApiConfig
 from eggie_api.services.sessions import COOKIE, SESSION_TTL, Sessions
 from eggie_api.infra.db import Database

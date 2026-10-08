@@ -2,9 +2,9 @@ import time
 
 from fastapi.testclient import TestClient
 
-from eggie_api.core.account import Account
-from eggie_api.core.public import Public, TunnelClient
-from eggie_api.core.state import State
+from eggie_api.services.account import Account
+from eggie_api.services.public import Public, TunnelClient
+from eggie_api.infra.state import State
 from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, BROWSER, COMPOSE_ONE_WEB, FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud

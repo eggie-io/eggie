@@ -8,9 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from eggie_api.routes.app import create_app
-from eggie_api.core import files
-from eggie_api.core.config import ApiConfig
-from eggie_api.core.exec import Completed
+from eggie_api.infra import files
+from eggie_api.config import ApiConfig
+from eggie_api.infra.runner import Completed
 
 
 def _tar_bytes(*, add_default_file=True, entries=None) -> bytes:
@@ -37,7 +37,7 @@ def _entry(name, **kw):
 
 
 # ---------------------------------------------------------------------------
-# Core-level: eggie_api.core.files.extract_archive
+# Core-level: eggie_api.infra.files.extract_archive
 # ---------------------------------------------------------------------------
 
 def test_relative_traversal_entry_is_rejected(tmp_path):
@@ -412,7 +412,7 @@ def test_browsing_a_permission_denied_folder_is_409_not_a_500(env):
 
 
 def test_remove_tree_falls_back_to_root_for_files_a_container_owns(tmp_path):
-    from eggie_api.core import lifecycle
+    from eggie_api.infra import docker as lifecycle
 
     class Runner:
         def __init__(self):

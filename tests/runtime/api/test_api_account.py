@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
-from eggie_api.core.account import Account
-from eggie_api.core.cloud import CloudUnavailable
-from eggie_api.core.state import State
+from eggie_api.services.account import Account
+from eggie_api.infra.cloud import CloudUnavailable
+from eggie_api.infra.state import State
 from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, FakeRunner
 from tests.runtime.api.fake_cloud import CODE, FakeCloud

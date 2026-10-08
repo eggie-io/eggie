@@ -1,8 +1,8 @@
-from eggie_api.core import lifecycle
-from eggie_api.core.lifecycle import compose_up, _compose_argv
-from eggie_api.core.project import Project, STARTED_OK
-from eggie_api.core.detect import WebSpec
-from eggie_api.core.exec import Completed
+from eggie_api.infra import docker as lifecycle
+from eggie_api.infra.docker import compose_up, _compose_argv
+from eggie_api.domain.project import Project, STARTED_OK
+from eggie_api.domain.detect import WebSpec
+from eggie_api.infra.runner import Completed
 
 DIR = "/srv/projects/myproj"
 
@@ -54,8 +54,8 @@ def test_compose_up_runs_against_the_directory_it_is_given(tmp_path):
 def test_compose_up_carries_the_guest_error_when_the_stack_fails():
     # A bare status like "failed_to_start" is unactionable: the reason lives in
     # compose's own stderr, which used to be discarded.
-    from eggie_api.core.exec import Completed
-    from eggie_api.core.project import FAILED_TO_START
+    from eggie_api.infra.runner import Completed
+    from eggie_api.domain.project import FAILED_TO_START
 
     class FailingProvider(FakeProvider):
         def exec(self, argv, *, root=False, env=None):
@@ -74,8 +74,8 @@ def test_compose_up_reports_a_failed_overlay_write_instead_of_starting_the_stack
     # exec() never raises, so an unchecked overlay write turns into a project
     # that comes up with no Traefik labels: no route, and nothing anywhere
     # saying why. The write has to be the thing that fails, loudly.
-    from eggie_api.core.exec import Completed
-    from eggie_api.core.project import FAILED_TO_START
+    from eggie_api.infra.runner import Completed
+    from eggie_api.domain.project import FAILED_TO_START
 
     class OverlayFails(FakeProvider):
         def exec(self, argv, *, root=False, env=None):

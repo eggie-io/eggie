@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from eggie_api.core.github import (GitHub, GitHubError, GitHubUnavailable,
+from eggie_api.infra.github import (GitHub, GitHubError, GitHubUnavailable,
                                     auth_failed, clone_argv, identity_from,
                                     redact, valid_repo)
 

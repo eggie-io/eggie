@@ -2,8 +2,8 @@ import sqlite3
 
 import pytest
 
-from eggie_api.core import migrate
-from eggie_api.core.state import State
+from eggie_api.infra import migrate
+from eggie_api.infra.state import State
 
 # The shape state.py created before this module existed: no schema_version
 # table, and no columns for a project's problem.

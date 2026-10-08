@@ -21,7 +21,7 @@ ARG DOCKER_GID=999
 ENV EGGIE_SERVICE_VERSION=${SERVICE_VERSION} \
     PYTHONUNBUFFERED=1
 
-# Absolute /usr/bin/docker, not /usr/local/bin: core/lifecycle.py hardcodes
+# Absolute /usr/bin/docker, not /usr/local/bin: infra/docker.py hardcodes
 # this exact path, because a bare `docker` on a WSL2 host with Docker Desktop
 # integration on can resolve to Desktop's own engine instead of this VM's.
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
@@ -54,7 +54,10 @@ WORKDIR /app
 # verify fixture under host/provision/nginx-hello; neither ships inside the image.
 COPY pyproject.toml /app/
 COPY __init__.py /app/
-COPY core /app/core
+COPY config.py constants.py /app/
+COPY domain /app/domain
+COPY infra /app/infra
+COPY services /app/services
 COPY routes /app/routes
 RUN pip install --no-cache-dir .
 

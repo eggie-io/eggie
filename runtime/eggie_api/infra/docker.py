@@ -7,9 +7,9 @@ import os
 # PATH, and a bare `docker` would send this VM's projects to Desktop's engine.
 DOCKER = "/usr/bin/docker"
 
-from .constants import COMPOSE_FILE
-from .exec import Completed
-from .project import Project, FAILED_TO_START, STARTED_OK, classify, overlay_yaml
+from ..constants import COMPOSE_FILE
+from .runner import Completed
+from ..domain.project import Project, FAILED_TO_START, STARTED_OK, classify, overlay_yaml
 
 PROJECT_LABEL = "com.docker.compose.project"
 

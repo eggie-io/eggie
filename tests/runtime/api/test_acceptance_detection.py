@@ -1,8 +1,14 @@
 from pathlib import Path
-from eggie_api.core.compose import load_compose
-from eggie_api.core.detect import detect_web
+
+import yaml
+
+from eggie_api.domain.detect import detect_web
 
 FIX = Path("tests/fixtures/compose")
+
+
+def load_compose(path):
+    return yaml.safe_load(path.read_text()) or {}
 
 
 def test_php_nginx_mysql_picks_nginx_only():

@@ -3,12 +3,12 @@ import stat
 
 import pytest
 
-from eggie_api.core.account import Account
-from eggie_api.core.cloud import CloudError, CloudUnavailable
-from eggie_api.core.exec import Completed
-from eggie_api.core.public import (MESSAGES, Public, PublicBusy, TunnelClient,
+from eggie_api.services.account import Account
+from eggie_api.infra.cloud import CloudError, CloudUnavailable
+from eggie_api.infra.runner import Completed
+from eggie_api.services.public import (MESSAGES, Public, PublicBusy, TunnelClient,
                                     Unavailable, write_token)
-from eggie_api.core.state import State
+from eggie_api.infra.state import State
 from tests.runtime.api.fake_cloud import FakeCloud
 
 HOSTS = [{"service": "web", "hostname": "blog.d.io", "local_url": "http://blog.d.io:39080"}]

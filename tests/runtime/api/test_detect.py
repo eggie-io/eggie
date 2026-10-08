@@ -1,5 +1,5 @@
 import pytest
-from eggie_api.core.detect import detect_web, WebSpec, AmbiguousError
+from eggie_api.domain.detect import detect_web, WebSpec, AmbiguousError
 
 
 def test_single_service_with_published_port():

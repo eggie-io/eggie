@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 from .detect import WebSpec
-from . import constants
+from .. import constants
 
 
 def host_for(project_id: str, web: WebSpec, domain: str) -> str:

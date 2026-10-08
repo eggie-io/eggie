@@ -1,8 +1,8 @@
 import pytest
 
-from eggie_api.core.account import Account, NotSignedIn
-from eggie_api.core.cloud import CloudError, CloudUnavailable
-from eggie_api.core.state import State
+from eggie_api.services.account import Account, NotSignedIn
+from eggie_api.infra.cloud import CloudError, CloudUnavailable
+from eggie_api.infra.state import State
 from tests.runtime.api.fake_cloud import CODE, ME, TOKENS, FakeCloud
 
 

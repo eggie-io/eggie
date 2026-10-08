@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-from eggie_api.core.cloud import Cloud, CloudError, CloudUnavailable
+from eggie_api.infra.cloud import Cloud, CloudError, CloudUnavailable
 
 
 class _Response:

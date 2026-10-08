@@ -1,6 +1,6 @@
 import json
 
-from eggie_api.core import connect
+from eggie_api.infra import connect
 
 
 def _write(tmp_path, value):

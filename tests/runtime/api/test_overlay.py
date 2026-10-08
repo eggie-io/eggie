@@ -1,5 +1,5 @@
-from eggie_api.core.overlay import build_overlay, host_for
-from eggie_api.core.detect import WebSpec
+from eggie_api.domain.overlay import build_overlay, host_for
+from eggie_api.domain.detect import WebSpec
 
 
 def test_host_primary_is_bare_id_additional_prefixed():

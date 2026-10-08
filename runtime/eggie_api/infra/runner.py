@@ -22,7 +22,7 @@ class LocalRunner:
 
     Mirrors the host `VmProvider.exec` contract on purpose — a failure comes
     back as a `Completed` with `.ok` False and is never raised — so the
-    duck-typed callers in `core/lifecycle.py` work unchanged on either side.
+    duck-typed callers in `infra/docker.py` work unchanged on either side.
     """
 
     def exec(self, argv: list[str], *, root: bool = False,

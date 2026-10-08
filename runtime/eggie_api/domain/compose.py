@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-import yaml
-
-
-def load_compose(path) -> dict:
-    return yaml.safe_load(Path(path).read_text()) or {}
-
 
 def container_port(entry) -> int:
     if isinstance(entry, dict):  # long syntax

@@ -1,6 +1,6 @@
 import pytest
 
-from eggie_api.core.state import State
+from eggie_api.infra.state import State
 
 
 def test_add_and_get_project(tmp_path):

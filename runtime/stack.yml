@@ -13,7 +13,7 @@
 #
 # The edge network name is the literal `edge`, not a variable: it is
 # `constants.EDGE_NETWORK`, an authoritative constant the global rulings
-# forbid giving a second name. `eggie_api/core/overlay.py` hardcodes the same
+# forbid giving a second name. `eggie_api/domain/overlay.py` hardcodes the same
 # constant when it labels project containers, so parameterising only the
 # Traefik side here would let the two drift -- Traefik watching a network
 # nothing is attached to, every route answering 404 with no error anywhere.

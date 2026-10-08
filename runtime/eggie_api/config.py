@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import constants
-from .health import READY_TIMEOUT
-from .. import __version__
+from .infra.health import READY_TIMEOUT
+from . import __version__
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class ApiConfig:
     hardcode the domain or the entry port.
 
     `projects_root` is the single source of truth for where projects live:
-    uploads land there and `core/lifecycle.py` builds every compose `-f` path
+    uploads land there and `infra/docker.py` builds every compose `-f` path
     from the directory the API hands it, never from a constant of its own.
     In production it must stay under `/opt/eggie`, which is bind-mounted into
     the API container at the identical path -- compose files are parsed here

@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 
-from .cloud import CloudError, CloudUnavailable
+from ..infra.cloud import CloudError, CloudUnavailable
 
 CLIENT_NAME = "Eggie"
 REFRESH_MARGIN = 60.0

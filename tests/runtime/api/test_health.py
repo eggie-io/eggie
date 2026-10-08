@@ -2,10 +2,10 @@ import ipaddress
 
 import pytest
 
-from eggie_api.core import health
-from eggie_api.core.detect import WebSpec
-from eggie_api.core.exec import Completed
-from eggie_api.core.project import Project
+from eggie_api.infra import health
+from eggie_api.domain.detect import WebSpec
+from eggie_api.infra.runner import Completed
+from eggie_api.domain.project import Project
 
 # Real `cat /proc/net/tcp` output, trimmed: the header line every reader has to
 # skip, then one LISTEN row (st 0A). Port 80 is 0x0050.

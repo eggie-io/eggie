@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from eggie_api.core.exec import Completed
-from eggie_api.core.github import GitHubUnavailable
-from eggie_api.core.github_link import GitHubLink
-from eggie_api.core.state import State
+from eggie_api.infra.runner import Completed
+from eggie_api.infra.github import GitHubUnavailable
+from eggie_api.services.github_link import GitHubLink
+from eggie_api.infra.state import State
 from eggie_api.routes.app import create_app
 from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB, FakeProbe, FakeRunner
 from tests.runtime.api.fake_github import CODE, TOKEN, USER, FakeGitHub, err

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import uvicorn
 
-from ..core.config import ApiConfig
-from ..core.migrate import SchemaTooNew
+from ..config import ApiConfig
+from ..infra.migrate import SchemaTooNew
 from .app import create_app
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from eggie_api.core.secrets import (SecretError, check_hint, check_name,
+from eggie_api.domain.secrets import (SecretError, check_hint, check_name,
                                     check_total, check_value, declared,
                                     is_reserved)
 

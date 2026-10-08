@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from .github import GitHubError, GitHubUnavailable, identity_from
+from ..infra.github import GitHubError, GitHubUnavailable, identity_from
 
 SETUP_TIMEOUT = 30.0
 CHECK_EVERY = 300.0

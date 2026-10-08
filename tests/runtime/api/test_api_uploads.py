@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from eggie_api.core.uploads import RESERVE
+from eggie_api.infra.uploads import RESERVE
 from tests.runtime.api.conftest import _create
 
 

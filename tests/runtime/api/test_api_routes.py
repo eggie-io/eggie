@@ -2,8 +2,8 @@ import threading
 
 from fastapi import FastAPI
 
-from eggie_api.core.exec import Completed
-from eggie_api.core.state import State
+from eggie_api.infra.runner import Completed
+from eggie_api.infra.state import State
 from tests.runtime.api.conftest import (COMPOSE_AMBIGUOUS, COMPOSE_MALFORMED,
                                   PS_RESTARTING, _create, _run_to_completion,
                                   _write_compose)

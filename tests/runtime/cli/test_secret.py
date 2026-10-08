@@ -155,7 +155,7 @@ def test_secret_rm_removes_it_and_an_unknown_name_fails(guest):
 
 
 def test_the_cli_refuses_the_same_reserved_names_as_the_api():
-    from eggie_api.core.secrets import RESERVED_NAMES, RESERVED_PREFIXES
+    from eggie_api.domain.secrets import RESERVED_NAMES, RESERVED_PREFIXES
     assert cli._RESERVED_NAMES == RESERVED_NAMES
     assert cli._RESERVED_PREFIXES == RESERVED_PREFIXES
 

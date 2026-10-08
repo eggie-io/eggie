@@ -5,8 +5,8 @@ import threading
 
 import pytest
 
-from eggie_api.core import uploads as uploads_module
-from eggie_api.core.uploads import RESERVE, UploadError, UploadStore
+from eggie_api.infra import uploads as uploads_module
+from eggie_api.infra.uploads import RESERVE, UploadError, UploadStore
 
 GIB = 1024 ** 3
 

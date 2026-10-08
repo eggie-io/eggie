@@ -3,7 +3,7 @@ import threading
 
 import yaml
 
-from eggie_api.core.exec import Completed
+from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
                                         _write_compose)
 

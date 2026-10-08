@@ -22,30 +22,33 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..core import connect, constants, disk, files, lifecycle
-from ..core import secrets as secret_rules
-from ..core.account import Account
-from ..core.cloud import Cloud, CloudError, CloudUnavailable
-from ..core.config import ApiConfig
-from ..core.detect import AmbiguousError
-from ..core.secrets import SecretError
-from ..core.exec import LocalRunner
-from ..core.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
-                           clone_argv, redact, valid_repo)
-from ..core.agents import AgentStatus, UnknownAgent
-from ..core.github_link import GitHubLink, NotConnected
+from .. import constants
+from ..config import ApiConfig
+from ..domain import secrets as secret_rules
+from ..domain.detect import AmbiguousError
+from ..domain.overlay import host_for
+from ..domain.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
+                              load_project)
+from ..domain.secrets import SecretError
+from ..infra import connect, disk, files
+from ..infra import docker as lifecycle
+from ..infra.cloud import Cloud, CloudError, CloudUnavailable
+from ..infra.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
+                            clone_argv, redact, valid_repo)
 # Imported by name: the /health route below shadows a module named `health`.
-from ..core.health import answers, default_probe, diagnose
-from ..core.overlay import host_for
-from ..core.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
-                            load_project)
-from ..core.public import Public, PublicBusy, TunnelClient, Unavailable
-from ..core.reconcile import discover, examine
-from ..core.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
-from ..core.state import State
-from ..core.sync import SyncLoop, run_pass
-from ..core.uploads import CHUNK_SIZE, UploadError, UploadStore
-from .jobs import JobFailed, JobRegistry
+from ..infra.health import answers, default_probe, diagnose
+from ..infra.runner import LocalRunner
+from ..infra.state import State
+from ..infra.tunnel import TunnelClient
+from ..infra.uploads import CHUNK_SIZE, UploadError, UploadStore
+from ..services.account import Account
+from ..services.agents import AgentStatus, UnknownAgent
+from ..services.github_link import GitHubLink, NotConnected
+from ..services.jobs import JobFailed, JobRegistry
+from ..services.public import Public, PublicBusy, Unavailable
+from ..infra.reconcile import discover, examine
+from ..services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
+from ..services.sync import SyncLoop, run_pass
 
 TEXT = "text/plain; charset=utf-8"
 # Statuses whose containers exist and were handed the project's secrets.

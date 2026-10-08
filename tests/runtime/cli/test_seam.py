@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from eggie_api.core.exec import Completed
+from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import COMPOSE_MALFORMED, COMPOSE_ONE_WEB
 from tests.runtime.cli.loader import load
 

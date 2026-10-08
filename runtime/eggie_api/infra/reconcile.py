@@ -4,8 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import COMPOSE_FILE, VERIFY_PROJECT_ID
-from .project import _slug
+from ..constants import COMPOSE_FILE, VERIFY_PROJECT_ID
+from ..domain.project import _slug
 
 
 @dataclass(frozen=True)

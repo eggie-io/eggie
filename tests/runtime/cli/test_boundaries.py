@@ -47,6 +47,6 @@ def test_restart_api_recreates_the_compose_service_stack_yml_defines():
 def test_the_guest_cli_slugs_project_names_the_way_the_api_does():
     # The API derives the project folder from the slugged id; a guest that
     # slugs differently checks one folder and registers another.
-    from eggie_api.core.project import _slug
+    from eggie_api.domain.project import _slug
     for name in ("Blog", "my app", "My.Repo", "--x--", "Ünïcode 2", "a__b", ""):
         assert load().project_id_for(name) == _slug(name), name

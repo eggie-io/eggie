@@ -3,9 +3,9 @@ import hashlib
 from fastapi.testclient import TestClient
 
 from eggie_api.routes.app import create_app
-from eggie_api.core.config import ApiConfig
-from eggie_api.core.sessions import COOKIE, SESSION_TTL, Sessions
-from eggie_api.core.state import State
+from eggie_api.config import ApiConfig
+from eggie_api.services.sessions import COOKIE, SESSION_TTL, Sessions
+from eggie_api.infra.state import State
 from tests.runtime.api.conftest import AUTH, BROWSER
 
 ORIGIN = {"Origin": "http://localhost:41080"}

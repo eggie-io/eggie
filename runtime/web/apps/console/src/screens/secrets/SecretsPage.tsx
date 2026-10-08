@@ -68,7 +68,7 @@ function DefaultRow({ id, name, base, overridden }: { id: string; name: string; 
           <div className={s.grow}>
             <TextField label="Value" secret autoFocus value={value} onChange={setValue} />
           </div>
-          <Button variant="primary" disabled={value === "" || save.isPending} onClick={() => save.mutate({ name, value }, { onSuccess: () => setEditing(false) })}>Save</Button>
+          <Button variant="primary" disabled={value === "" || value === base || save.isPending} onClick={() => save.mutate({ name, value }, { onSuccess: () => setEditing(false) })}>Save</Button>
           <Button onClick={close}>Cancel</Button>
         </>
       ) : (

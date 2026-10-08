@@ -106,9 +106,10 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
 2. The API parses the compose file and detects the web service and its port (`core/detect.py`).
 3. It writes a Traefik overlay (`core/overlay.py`) that joins that service to the `edge` network
    with a `Host(<project-id>.127-0-0-1.sslip.io)` rule, then runs `docker compose up` with the
-   project's file plus the overlay. The project's own files are never edited. Secrets reach
-   containers as environment variables through the compose process environment; the overlay
-   lists names only.
+   project's file plus the overlay. The project's own files are never edited. Settings and
+   secrets reach containers as environment variables through the compose process environment:
+   `.env.example` defaults, overridden by values stored in `state.db`, and a literal the compose
+   file sets for a service wins over both; the overlay lists names only.
 4. `*.127-0-0-1.sslip.io` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `resume_projects()` restarts the projects that were running.

@@ -43,17 +43,20 @@ and a host release. Prefer additive changes.
 ## Feature areas
 
 - **Secrets** (`core/secrets.py`) — per-project values in `state.db` (`secrets` table, v6),
-  outside every project folder and never synced. `compose_up` lists the bare names under
-  `environment:` for every service in `.eggie/overlay.yml` and passes the values only as the
-  environment of every compose command that loads the user's file (`up`, `ps`, `down`, `logs`,
-  `container_id`) -- compose interpolates the file for each, so `${KEY:?}` breaks any that lacks
-  them; no route, log or file ever carries a value. `restart_needed` = `started_ok` or
-  `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped before it reads
-  values. `COMPOSE_`/`DOCKER_` names are refused because compose reads them, and never listed as
-  missing. import-dotenv **empties** `.env` (never deletes it: `env_file: .env` needs the file)
-  and never reads a symlinked one. Services pulled in through compose `include:` get no secret
-  names (only the main file's services are listed). Purge drops them; a plain delete keeps them
-  with the folder.
+  outside every project folder and never synced. A service gets a name from three sources:
+  compose literal (a value without `$` the service sets itself) > stored value > `.env.example`
+  default. Defaults are read fresh at every compose call by the lenient `parse_example`, so
+  editing the file needs no restart bookkeeping. `compose_up` lists the bare names under
+  `environment:` for every service in `.eggie/overlay.yml` and passes the effective env only to
+  compose commands that load the user's file (`up`, `ps`, `down`, `logs`, `container_id`) --
+  compose interpolates the file for each, so `${KEY:?}` breaks any that lacks them; no route, log
+  or file carries a value. `restart_needed` = `started_ok` or `crash_looping` and
+  `secrets_changed_at > last_started_at`; a start is stamped before it reads values. Reserved
+  names (`COMPOSE_`/`DOCKER_`/`LD_` prefixes, `PATH`, `HOME`) are refused and never listed as
+  missing. import-dotenv stores only non-empty values that differ from defaults, keeps reserved
+  lines in `.env`, **empties** the rest (never deletes: `env_file: .env` needs the file) and never
+  reads a symlinked one. Services pulled in through compose `include:` get no names. Purge drops
+  stored values; a plain delete keeps them with the folder.
 - **Files** (`core/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
   `extract_archive` **merges** an uploaded tar.gz into the project dir and rejects absolute paths,

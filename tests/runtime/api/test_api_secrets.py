@@ -353,3 +353,13 @@ def test_import_keeps_reserved_lines_in_dotenv(env):
     assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
     from eggie_api.core.secrets import parse_dotenv
     assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_PROJECT_NAME": "shop"}
+
+
+def test_import_rewrites_a_reserved_value_with_quotes_and_backslashes_intact(env):
+    folder = _project(env)
+    (folder / ".env").write_text('COMPOSE_X="a\\"b\\\\c"\nAPI_KEY=k\n')
+    from eggie_api.core.secrets import parse_dotenv
+    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_X": 'a"b\\c', "API_KEY": "k"}
+    assert env.client.post("/projects/blog/secrets/import-dotenv").json() == {"imported": ["API_KEY"]}
+    assert parse_dotenv((folder / ".env").read_text()) == {"COMPOSE_X": 'a"b\\c'}
+    assert env.state.secret_values("blog") == {"API_KEY": "k"}

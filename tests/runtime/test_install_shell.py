@@ -443,7 +443,7 @@ def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
     commands = _commands()
     build = _index_of("python3 -m zipapp")
     assert '"$RUNTIME_DIR/cli"' in commands[build]
-    assert "-m \"eggie_cli.cli:main\"" in commands[build]
+    assert "-m \"eggie_cli.cli:run\"" in commands[build]
     assert "-p \"/usr/bin/env python3\"" in commands[build]
     installed = _index_of("/usr/local/bin/eggie")
     assert build < installed

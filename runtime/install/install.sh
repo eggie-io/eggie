@@ -244,7 +244,7 @@ fi
 # One stdlib-only executable built from the package: the stock python3 runs
 # the zip directly, so the guest gains no dependency.
 cli_build="$(mktemp)"
-python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$cli_build"
+python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:run" -p "/usr/bin/env python3" -o "$cli_build"
 install -m 755 "$cli_build" /usr/local/bin/eggie
 rm -f "$cli_build"
 if ! system_instructions="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$RUNTIME_DIR/agents" instructions --system)"; then

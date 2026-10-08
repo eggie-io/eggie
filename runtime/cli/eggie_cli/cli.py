@@ -90,5 +90,11 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def run() -> NoReturn:
+    # zipapp's generated __main__ calls the entry point and drops its return
+    # value; this is what the archive runs so a handled error still exits 1.
     sys.exit(main())
+
+
+if __name__ == "__main__":
+    run()

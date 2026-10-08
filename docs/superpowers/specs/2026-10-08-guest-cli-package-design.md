@@ -63,20 +63,20 @@ constants`. Relative imports inside the package; nothing else.
 
 ```bash
 tmp="$(mktemp)"
-python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:main" -p "/usr/bin/env python3" -o "$tmp"
+python3 -m zipapp "$RUNTIME_DIR/cli" -m "eggie_cli.cli:run" -p "/usr/bin/env python3" -o "$tmp"
 install -m 755 "$tmp" /usr/local/bin/eggie
 rm -f "$tmp"
 ```
 
 `zipapp` archives `runtime/cli/` (which holds only `eggie_cli/`), prepends the shebang, and
-`-m` writes the `__main__` that calls `eggie_cli.cli:main`. The result is one self-contained
+`-m` writes the `__main__` that calls `eggie_cli.cli:run`. The result is one self-contained
 file the stock `python3` runs; `python3 -m zipapp` is in the standard library, so the install
 gains no dependency. The `runtime/cli/` directory holds nothing but the package: anything added
 there ships inside the executable.
 
-`main()` keeps its `(argv=None, env=None) -> int` signature; the zipapp entry calls it with no
-arguments and exits with its return value (zipapp's generated `__main__` does
-`sys.exit(main())`).
+`main()` keeps its `(argv=None, env=None) -> int` signature. zipapp's generated `__main__` only
+calls the entry point and drops its return value, so the entry is `cli.run()`, which does
+`sys.exit(main())`; without it every handled error would exit 0.
 
 ## 5. Tests
 
@@ -111,5 +111,5 @@ One branch (`feature/59-guest-cli-package`), one PR, each commit green:
 1. Create the package by moving the file's sections into the modules above; delete `eggie.py`;
    switch the loader and `test_boundaries.py`; suite green.
 2. `install.sh` zipapp build + its text test; a local `python3 -m zipapp runtime/cli -m
-   eggie_cli.cli:main -o /tmp/x && /tmp/x --help` smoke run recorded in the PR.
+   eggie_cli.cli:run -o /tmp/x && /tmp/x --help` smoke run recorded in the PR.
 3. Docs.

@@ -1,7 +1,6 @@
 import ast
 import subprocess
 import sys
-import zipapp
 from pathlib import Path
 
 import yaml
@@ -9,6 +8,8 @@ import yaml
 from tests.runtime.cli.loader import CLI_ROOT, GUEST_CLI, load
 
 STACK = Path(__file__).resolve().parents[3] / "runtime" / "stack.yml"
+# The entry point install.sh hands zipapp; the install test pins the same text.
+ENTRY = "eggie_cli.cli:run"
 
 
 def test_the_guest_cli_imports_only_the_standard_library():
@@ -36,17 +37,36 @@ def test_the_cli_source_root_holds_only_the_package():
     assert "eggie_cli" not in sys.stdlib_module_names
 
 
+def _built_executable(tmp_path):
+    # Built with the same zipapp invocation install.sh uses, flags included.
+    target = tmp_path / "eggie"
+    subprocess.run([sys.executable, "-m", "zipapp", str(CLI_ROOT),
+                    "-m", ENTRY, "-p", sys.executable, "-o", str(target)],
+                   check=True, timeout=30)
+    return target
+
+
+def _run_built(target, *argv):
+    return subprocess.run([sys.executable, str(target), *argv],
+                          capture_output=True, text=True, timeout=30)
+
+
 def test_the_built_executable_starts(tmp_path):
     # The package passes its tests on sys.path and can still fail inside the
     # zip install.sh builds: a barrel import that rebinds the entry module's
-    # name, say. Build it the way install.sh does and run it.
-    target = tmp_path / "eggie"
-    zipapp.create_archive(CLI_ROOT, target, interpreter=sys.executable,
-                          main="eggie_cli.cli:main")
-    run = subprocess.run([sys.executable, str(target), "--help"],
-                         capture_output=True, text=True, timeout=30)
+    # name, say.
+    run = _run_built(_built_executable(tmp_path), "--help")
     assert run.returncode == 0, run.stderr
     assert run.stdout.startswith("usage: eggie")
+
+
+def test_the_built_executable_reports_a_handled_error_with_exit_1(tmp_path):
+    # zipapp's own __main__ calls the entry point and drops its return value;
+    # coding agents judge `eggie up` by that code. This refusal needs no token
+    # and no network, so it runs anywhere.
+    run = _run_built(_built_executable(tmp_path), "secret", "set", "A=b")
+    assert run.returncode == 1, (run.returncode, run.stdout, run.stderr)
+    assert run.stderr.startswith("The value can't go on the command line")
 
 
 def test_start_stack_is_built_from_the_declared_stack_path():

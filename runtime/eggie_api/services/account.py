@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 
+from ..errors import Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.repos.account import AccountRepo
 from ..infra.repos.cloud_projects import CloudProjectRepo
@@ -38,6 +39,7 @@ class Account:
         self._spawn = spawn
         self.on_signed_in = lambda: None
         self.on_forget = lambda: None
+        self.before_sign_out = lambda: None
         self._refresh_lock = threading.Lock()
         self._poll_lock = threading.Lock()
         # Reentrant: _refresh's invalid_grant branch calls _forget while
@@ -70,7 +72,15 @@ class Account:
         if row["access_token"]:
             return self.status()
         if not (row["device_code"] and row["code_expires_at"] > self._clock()):
-            out = self._cloud.device_code(CLIENT_NAME)
+            try:
+                out = self._cloud.device_code(CLIENT_NAME)
+            except CloudUnavailable:
+                raise Unavailable("cloud_unavailable",
+                                  "The Eggie service can't be reached. Check the "
+                                  "internet connection and try again.") from None
+            except CloudError as e:
+                raise Upstream("cloud_error", "The Eggie service would not start "
+                               f"a sign-in: {e.message}") from None
             with self._write_lock:
                 # A sign-in may have landed while the service call was in
                 # flight; a fresh code must not overwrite a signed-in row.
@@ -245,6 +255,10 @@ class Account:
             self._account.update(**fields)
 
     def sign_out(self) -> dict:
+        try:
+            self.before_sign_out()
+        except Exception:
+            log.exception("the sign-out hook failed")
         token = self._account.get()["access_token"]
         if token:
             try:

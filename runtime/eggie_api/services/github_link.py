@@ -5,9 +5,10 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
-from ..errors import Conflict
+from ..errors import Conflict, Unavailable, Upstream
 from ..infra.github import GitHubError, GitHubUnavailable, identity_from
 from ..infra.repos.github import GitHubRepo
 
@@ -17,6 +18,22 @@ SLOW_DOWN_STEP = 5.0
 _REFUSED = {"access_denied", "expired_token"}
 
 log = logging.getLogger("eggie.github")
+
+
+def _github_down() -> Unavailable:
+    return Unavailable("github_unavailable", "GitHub can't be reached. Check the "
+                       "internet connection and try again.")
+
+
+def _reconnect() -> Conflict:
+    return Conflict("github_reconnect", "GitHub stopped accepting Eggie's "
+                    "access. Reconnect GitHub and try again.")
+
+
+def _epoch(iso: str | None) -> float | None:
+    if not iso:
+        return None
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
 
 
 class NotConnected(Conflict):
@@ -90,6 +107,31 @@ class GitHubLink:
             except OSError:
                 raise NotConnected() from None
 
+    def require_token(self) -> str:
+        try:
+            return self.token()
+        except NotConnected:
+            if self.status()["state"] == "needs_reconnect":
+                raise _reconnect() from None
+            raise
+
+    def repos(self, page: int) -> dict:
+        token = self.require_token()
+        try:
+            repos, more = self._github.repos(token, max(page, 1))
+        except GitHubUnavailable:
+            raise _github_down() from None
+        except GitHubError as e:
+            if e.code == "bad_credentials":
+                self.mark_bad_if_current(token)
+                raise _reconnect() from None
+            raise Upstream("github_error", "GitHub refused the repository list: "
+                           f"{e.message or e.code}") from None
+        return {"has_more": more, "repos": [
+            {"full_name": r["full_name"], "private": bool(r.get("private")),
+             "description": r.get("description"),
+             "updated_at": _epoch(r.get("updated_at"))} for r in repos]}
+
     def status(self) -> dict:
         with self._lock:
             if self._pending:
@@ -112,7 +154,13 @@ class GitHubLink:
                 return self.status()
             if self.status()["state"] == "connected":
                 return self.status()
-        out = self._github.device_code(self._client_id)
+        try:
+            out = self._github.device_code(self._client_id)
+        except GitHubUnavailable:
+            raise _github_down() from None
+        except GitHubError as e:
+            raise Upstream("github_error", "GitHub would not start a sign-in: "
+                           f"{e.message or e.code}") from None
         with self._lock:
             self._pending = {"device_code": out["device_code"],
                              "user_code": out["user_code"],
@@ -224,6 +272,15 @@ class GitHubLink:
             return self.status()
 
     def reapply(self) -> dict:
+        try:
+            return self._reapply()
+        except GitHubUnavailable:
+            raise _github_down() from None
+        except GitHubError as e:
+            raise Upstream("github_error", "GitHub would not confirm the "
+                           f"connection: {e.message or e.code}") from None
+
+    def _reapply(self) -> dict:
         token = self.token()
         try:
             identity = identity_from(self._github.user(token))

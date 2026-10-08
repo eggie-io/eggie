@@ -5,12 +5,9 @@ import os
 import secrets
 import shutil
 import tempfile
-import threading
 import time
 import uuid
-from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -24,18 +21,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import constants
 from ..config import ApiConfig
-from ..domain import secrets as secret_rules
-from ..domain.detect import AmbiguousError
-from ..domain.overlay import host_for
-from ..domain.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
-                              load_project)
+from ..domain.project import STARTED_OK, _slug
 from ..errors import (BadRequest, Conflict, DiskFull, EggieError, Forbidden, Invalid,
                       NotFound, TooLarge, Unauthorized, Unavailable, Upstream)
-from ..infra import connect, disk, files
+from ..infra import disk, files
 from ..infra import docker as lifecycle
-from ..infra.cloud import Cloud, CloudError, CloudUnavailable
-from ..infra.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
-                            clone_argv, redact, valid_repo)
+from ..infra.cloud import Cloud
+from ..infra.github import GitHub, auth_failed, clone_argv, redact, valid_repo
 # Imported by name: the /health route below shadows a module named `health`.
 from ..infra.health import answers, default_probe, diagnose
 from ..infra.runner import LocalRunner
@@ -45,17 +37,19 @@ from ..infra.tunnel import TunnelClient
 from ..infra.uploads import CHUNK_SIZE, UploadStore
 from ..services.account import Account
 from ..services.agents import AgentStatus
-from ..services.github_link import GitHubLink, NotConnected
+from ..services.github_link import GitHubLink
 from ..services.jobs import JobFailed, JobRegistry
+from ..services.loader import ProjectLoader
+from ..services.locks import ProjectLocks
+from ..services.locks import busy as _busy
 from ..services.public import Public
 from ..infra.reconcile import discover, examine
+from ..services.secrets import RUNNING, SecretService
 from ..services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
 from ..services.sync import SyncLoop, run_pass
+from ..services.system import SystemService
 
 TEXT = "text/plain; charset=utf-8"
-# Statuses whose containers exist and were handed the project's secrets.
-RUNNING = (STARTED_OK, CRASH_LOOPING)
-
 log = logging.getLogger("eggie.api")
 
 
@@ -73,44 +67,9 @@ def _status_of(exc: EggieError) -> int:
     return 500
 
 
-def _busy(project_id: str) -> Conflict:
-    return Conflict("project_busy",
-                    f"another operation on '{project_id}' is still running")
-
-
 def _disk_full() -> DiskFull:
     return DiskFull("disk_full", "Eggie's disk is full. Free up space in "
                     "the desktop app, then try again.")
-
-
-class ProjectLocks:
-    """One lifecycle operation per project at a time. Non-blocking on purpose:
-    two `up` jobs would race on the same `.eggie/overlay.yml`, and a blocking
-    lock would only move a multi-minute hold onto whoever waits."""
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._held: set[str] = set()
-
-    def acquire(self, project_id: str) -> bool:
-        with self._lock:
-            if project_id in self._held:
-                return False
-            self._held.add(project_id)
-            return True
-
-    def release(self, project_id: str) -> None:
-        with self._lock:
-            self._held.discard(project_id)
-
-    @contextmanager
-    def held(self, project_id: str):
-        if not self.acquire(project_id):
-            raise _busy(project_id)
-        try:
-            yield
-        finally:
-            self.release(project_id)
 
 
 class WebOverride(BaseModel):
@@ -147,22 +106,6 @@ class SecretHint(BaseModel):
 class CloneRepo(BaseModel):
     repo: str
     id: str | None = None
-
-
-def _epoch(iso: str | None) -> float | None:
-    if not iso:
-        return None
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
-
-
-def _github_down() -> Unavailable:
-    return Unavailable("github_unavailable", "GitHub can't be reached. Check the "
-                       "internet connection and try again.")
-
-
-def _reconnect() -> Conflict:
-    return Conflict("github_reconnect", "GitHub stopped accepting Eggie's "
-                    "access. Reconnect GitHub and try again.")
 
 
 def _body(code: str, message: str, status: int) -> JSONResponse:
@@ -205,6 +148,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
     http_probe = http_probe or default_probe
     repos = repos if repos is not None else Repos.open(Database(config.state_db))
     jobs = jobs or JobRegistry()
+    loader = ProjectLoader(config, repos.projects)
+    secrets_svc = SecretService(repos.secrets, loader)
+    system = SystemService(config, runner)
     locks = ProjectLocks()
     sessions = sessions if sessions is not None else Sessions(repos.sessions)
     uploads = UploadStore(config.uploads_root,
@@ -214,27 +160,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
     cloud = cloud or Cloud(config.cloud_url)
     account = account or Account(repos.account, repos.cloud_projects, cloud)
 
-    def public_hosts(project_id: str) -> list[dict]:
-        row = repos.projects.get(project_id)
-        if row is None:
-            return []
-        try:
-            project = load(project_id)
-        except EggieError:
-            return []
-        hosts = [host_for(project.id, web, row["domain"]) for web in project.webs]
-        return [{"service": web.service, "hostname": host,
-                 "local_url": f"http://{host}:{config.edge_port}"}
-                for web, host in zip(project.webs, hosts)]
-
     public = public or Public(
         projects=repos.projects, cloud_projects=repos.cloud_projects,
         account=account, cloud=cloud,
         client=TunnelClient(runner, config.stack_file),
         token_path=config.tunnel_token_path,
         origin=f"http://{config.traefik_host}:{config.edge_port}",
-        hosts_for=public_hosts)
+        hosts_for=loader.public_hosts)
     account.on_forget = public.forget_local
+    account.before_sign_out = lambda: public.release_all()
 
     def sync_pass() -> None:
         try:
@@ -364,64 +298,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
             return _body("unauthorized", "missing or invalid bearer token", 401)
         return await call_next(request)
 
-    def project_dir(project_id: str) -> Path:
-        return Path(config.projects_root) / project_id
-
-    def require_row(project_id: str) -> dict:
-        row = repos.projects.get(project_id)
-        if row is None:
-            raise NotFound("project_not_found",
-                           f"no project with id '{project_id}'")
-        return row
-
     def require_job(job_id: str):
         job = jobs.get(job_id)
         if job is None:
             raise NotFound("job_not_found", f"no job with id '{job_id}'")
         return job
-
-    def parse_yaml(path: Path) -> dict:
-        try:
-            data = yaml.safe_load(path.read_text()) or {}
-        except yaml.YAMLError as e:
-            # The parser already says where the mistake is; keep it on one line.
-            raise Invalid("invalid_compose",
-                          f"{path.name} is not valid YAML: {' '.join(str(e).split())}") from e
-        if not isinstance(data, dict):
-            raise Invalid("invalid_compose",
-                          f"{path.name} must be a mapping, not a "
-                          f"{type(data).__name__}")
-        return data
-
-    def load(project_id: str) -> Project:
-        d = project_dir(project_id)
-        compose_path = d / constants.COMPOSE_FILE
-        if not compose_path.exists():
-            raise BadRequest("compose_missing",
-                           f"project '{project_id}' has no {constants.COMPOSE_FILE}")
-        project_yml = d / ".eggie" / "project.yml"
-        overrides = parse_yaml(project_yml) if project_yml.exists() else None
-        try:
-            return load_project(parse_yaml(compose_path), overrides, project_id)
-        except AmbiguousError as e:
-            # The detector's message is already written for a human.
-            raise Invalid("invalid_project", str(e)) from e
-        except (AttributeError, KeyError, TypeError, ValueError) as e:
-            raise Invalid("invalid_project",
-                          f"the project definition cannot be read: {e}") from e
-
-    def urls_for(project: Project, domain: str) -> list[str]:
-        return [f"http://{host_for(project.id, web, domain)}:{config.edge_port}"
-                for web in project.webs]
-
-    def restart_needed(row: dict) -> bool:
-        changed = row.get("secrets_changed_at")
-        started = row.get("last_started_at")
-        return (row["status"] in RUNNING and changed is not None
-                and (started is None or changed > started))
-
-    def project_env(project_id: str) -> dict[str, str] | None:
-        return repos.secrets.values(project_id) or None
 
     def payload(row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -430,14 +311,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         urls: list[str] = []
         web: list[dict] = []
         project = None
-        folder = project_dir(row["id"])
+        folder = loader.dir(row["id"])
         if not folder.is_dir():
             problem = {"code": "folder_missing",
                        "message": "this project's folder is gone"}
         else:
             try:
-                project = load(row["id"])
-                urls = urls_for(project, row["domain"])
+                project = loader.load(row["id"])
+                urls = loader.urls_for(project, row["domain"])
                 web = [{"url": url, "service": spec.service, "primary": index == 0}
                        for index, (url, spec) in enumerate(zip(urls, project.webs))]
             except EggieError as e:
@@ -470,16 +351,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                 "web": web,
                 "public": public_status,
                 "first_run": row.get("last_started_at") is None,
-                "restart_needed": restart_needed(row),
-                "secrets_requested": len(repos.secrets.requests(row["id"])),
+                "restart_needed": secrets_svc.restart_needed(row),
+                "secrets_requested": secrets_svc.requested_count(row["id"]),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
 
     def submit_locked(project_id: str, work, kind: str | None = None) -> str:
         """The job releases the lock itself, in its own `finally`."""
-        if not locks.acquire(project_id):
-            raise _busy(project_id)
+        locks.acquire_or_raise(project_id)
         try:
             return jobs.submit(work, kind=kind, project_id=project_id)
         except BaseException:
@@ -488,30 +368,19 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/health")
     def health() -> dict:
-        probe = runner.exec([lifecycle.DOCKER, "version", "--format",
-                             "{{.Server.Version}}"])
-        return {
-            "status": "ok",
-            "version": config.version,
-            "api": constants.API_VERSION,
-            "docker": {
-                "reachable": probe.ok,
-                "version": probe.stdout.strip() if probe.ok else "",
-                "detail": "" if probe.ok else (probe.stderr or probe.stdout).strip(),
-            },
-        }
+        return system.health()
 
     @router.get("/version")
     def version() -> dict:
-        return {"version": config.version}
+        return system.version()
 
     @router.get("/disk")
     def disk_usage() -> dict:
-        return disk.usage(Path(config.projects_root))
+        return system.disk()
 
     @router.get("/connect")
     def connect_facts() -> dict:
-        return connect.facts(Path(config.connect_path))
+        return system.connect()
 
     @router.get("/agents/status")
     def agents_status() -> dict:
@@ -527,31 +396,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/account/sign-in")
     def account_sign_in() -> dict:
-        try:
-            return account.start_sign_in()
-        except CloudUnavailable:
-            raise Unavailable("cloud_unavailable",
-                           "The Eggie service can't be reached. Check the "
-                           "internet connection and try again.") from None
-        except CloudError as e:
-            raise Upstream("cloud_error", "The Eggie service would not start "
-                           f"a sign-in: {e.message}") from None
+        return account.start_sign_in()
 
     @router.post("/account/sign-out")
     def account_sign_out() -> dict:
-        try:
-            public.release_all()
-        except Exception:
-            log.exception("releasing public URLs on sign-out failed")
         return account.sign_out()
-
-    def require_github_token() -> str:
-        try:
-            return github_link.token()
-        except NotConnected:
-            if github_link.status()["state"] == "needs_reconnect":
-                raise _reconnect() from None
-            raise
 
     @router.get("/github")
     def github_status() -> dict:
@@ -560,13 +409,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/github/connect")
     def github_connect() -> dict:
-        try:
-            return github_link.connect()
-        except GitHubUnavailable:
-            raise _github_down() from None
-        except GitHubError as e:
-            raise Upstream("github_error", "GitHub would not start a sign-in: "
-                           f"{e.message or e.code}") from None
+        return github_link.connect()
 
     @router.post("/github/disconnect")
     def github_disconnect() -> dict:
@@ -574,31 +417,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/github/reapply")
     def github_reapply() -> dict:
-        try:
-            return github_link.reapply()
-        except GitHubUnavailable:
-            raise _github_down() from None
-        except GitHubError as e:
-            raise Upstream("github_error", "GitHub would not confirm the "
-                           f"connection: {e.message or e.code}") from None
+        return github_link.reapply()
 
     @router.get("/github/repos")
     def github_repos(page: int = 1) -> dict:
-        token = require_github_token()
-        try:
-            repos, more = github.repos(token, max(page, 1))
-        except GitHubUnavailable:
-            raise _github_down() from None
-        except GitHubError as e:
-            if e.code == "bad_credentials":
-                github_link.mark_bad_if_current(token)
-                raise _reconnect() from None
-            raise Upstream("github_error", f"GitHub refused the repository list: "
-                           f"{e.message or e.code}") from None
-        return {"has_more": more, "repos": [
-            {"full_name": r["full_name"], "private": bool(r.get("private")),
-             "description": r.get("description"),
-             "updated_at": _epoch(r.get("updated_at"))} for r in repos]}
+        return github_link.repos(page)
 
     @router.post("/github/clone", status_code=202)
     def github_clone(body: CloneRepo) -> dict:
@@ -609,11 +432,11 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         if not project_id:
             raise Invalid("invalid_project",
                           f"'{body.repo}' has no usable project name")
-        directory = project_dir(project_id)
+        directory = loader.dir(project_id)
         if repos.projects.get(project_id) is not None or directory.exists():
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
-        token = require_github_token()
+        token = github_link.require_token()
         if not locks.acquire(project_id):
             raise _busy(project_id)
 
@@ -680,7 +503,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
 
-        d = project_dir(project_id)
+        d = loader.dir(project_id)
         d.mkdir(parents=True, exist_ok=True)
         if body.web:
             (d / ".eggie").mkdir(exist_ok=True)
@@ -696,7 +519,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         if repos.projects.get(project_id) is not None:
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
-        folder = project_dir(project_id)
+        folder = loader.dir(project_id)
         if not folder.is_dir():
             raise NotFound("folder_not_found",
                            f"no folder '{project_id}' in the projects folder")
@@ -722,25 +545,25 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/projects/{project_id}")
     def get_project(project_id: str) -> dict:
-        return payload(require_row(project_id), recheck=True)
+        return payload(loader.require(project_id), recheck=True)
 
     @router.get("/projects/{project_id}/public")
     def public_status(project_id: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         return public.status(project_id)
 
     @console_router.post("/projects/{project_id}/public", status_code=202)
     def public_on(project_id: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         return public.enable(project_id)
 
     @console_router.delete("/projects/{project_id}/public")
     def public_off(project_id: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         return public.disable(project_id)
 
     def resolve_path(project_id: str, rel_path: str) -> Path:
-        return files.resolve_within(project_dir(project_id), rel_path)
+        return files.resolve_within(loader.dir(project_id), rel_path)
 
     def finish_upload(upload_id: str) -> dict:
         up = uploads.get(upload_id)
@@ -764,7 +587,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/projects/{project_id}/uploads", status_code=201)
     def start_upload(project_id: str, body: StartUpload) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         target = resolve_path(project_id, body.path)
         if target.is_dir():
             # `replace` means "overwrite this file", never "delete this
@@ -783,7 +606,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/projects/{project_id}/uploads")
     def pending_uploads(project_id: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         uploads.sweep()
         return {"uploads": [u.as_dict() for u in uploads.list_for(project_id)]}
 
@@ -857,8 +680,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
     # a `project_busy` on its own, where the wait can be bounded and reported.
     @router.post("/projects/{project_id}/files")
     async def upload_files(project_id: str, request: Request) -> dict:
-        require_row(project_id)
-        d = project_dir(project_id)
+        loader.require(project_id)
+        d = loader.dir(project_id)
         with locks.held(project_id):
             tmp = await _stream_to_tempfile(request, d.parent)
             try:
@@ -874,12 +697,12 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/projects/{project_id}/files")
     def list_files(project_id: str, dir: str | None = None) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         if dir is None:
-            return {"files": files.list_tree(project_dir(project_id))}
+            return {"files": files.list_tree(loader.dir(project_id))}
         try:
             return {"dir": dir,
-                    "entries": files.list_dir(project_dir(project_id), dir)}
+                    "entries": files.list_dir(loader.dir(project_id), dir)}
         except FileNotFoundError:
             raise NotFound("folder_not_found",
                            f"no folder '{dir}' in project '{project_id}'") from None
@@ -890,9 +713,9 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.put("/projects/{project_id}/files/{file_path:path}")
     async def write_file(project_id: str, file_path: str, request: Request) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         target = resolve_path(project_id, file_path)
-        d = project_dir(project_id)
+        d = loader.dir(project_id)
         with locks.held(project_id):
             # Staged next to the project directory, not inside it, so a listing
             # never catches the upload half-written.
@@ -906,7 +729,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/projects/{project_id}/files/{file_path:path}")
     def read_file(project_id: str, file_path: str):
-        require_row(project_id)
+        loader.require(project_id)
         target = resolve_path(project_id, file_path)
         if not target.is_file():
             raise NotFound("file_not_found",
@@ -916,7 +739,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.delete("/projects/{project_id}/files/{file_path:path}")
     def delete_file(project_id: str, file_path: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
         target = resolve_path(project_id, file_path)
         if not target.is_file():
             raise NotFound("file_not_found",
@@ -927,42 +750,21 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.get("/projects/{project_id}/secrets")
     def list_secrets(project_id: str) -> dict:
-        row = require_row(project_id)
-        return {"secrets": repos.secrets.names(project_id),
-                "requested": repos.secrets.requests(project_id),
-                "restart_needed": restart_needed(row)}
+        return secrets_svc.list(project_id)
 
-    # No project lock: one sqlite statement, and a start in flight is caught
-    # by restart_needed because the start is stamped before it reads values.
     @router.put("/projects/{project_id}/secrets/{name}", status_code=204)
     def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
-        require_row(project_id)
-        if body.value == "":
-            raise secret_rules.SecretError("secret_invalid_value",
-                                          "a value can't be empty; delete the secret instead")
-        secret_rules.check_name(name)
-        secret_rules.check_value(body.value)
-        secret_rules.check_total({**repos.secrets.values(project_id),
-                                  name: body.value})
-        repos.secrets.set(project_id, {name: body.value})
+        secrets_svc.put(project_id, name, body.value)
         return Response(status_code=204)
 
     @router.put("/projects/{project_id}/secret-requests/{name}", status_code=204)
     def request_secret(project_id: str, name: str, body: SecretHint) -> Response:
-        require_row(project_id)
-        secret_rules.check_name(name)
-        secret_rules.check_hint(body.hint)
-        repos.secrets.request(project_id, name, body.hint)
+        secrets_svc.request(project_id, name, body.hint)
         return Response(status_code=204)
 
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
     def delete_secret(project_id: str, name: str) -> Response:
-        require_row(project_id)
-        removed = repos.secrets.delete(project_id, name)
-        dismissed = repos.secrets.delete_request(project_id, name)
-        if not (removed or dismissed):
-            raise NotFound("secret_not_found",
-                           f"project '{project_id}' has no secret '{name}'")
+        secrets_svc.delete(project_id, name)
         return Response(status_code=204)
 
     def compose_name_for(row: dict) -> str:
@@ -970,19 +772,19 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     def resolve_compose_name(project_id: str, row: dict) -> str:
         return lifecycle.resolve_compose_name(
-            runner, project_dir(project_id), compose_name_for(row))
+            runner, loader.dir(project_id), compose_name_for(row))
 
     @router.get("/projects/{project_id}/delete-preview")
     def delete_preview(project_id: str) -> dict:
-        row = require_row(project_id)
-        return {**files.tree_stats(project_dir(project_id)),
+        row = loader.require(project_id)
+        return {**files.tree_stats(loader.dir(project_id)),
                 **lifecycle.project_resources(
                     runner, resolve_compose_name(project_id, row))}
 
     @router.delete("/projects/{project_id}")
     def delete_project(project_id: str, purge: bool = False) -> dict:
-        row = require_row(project_id)
-        folder = project_dir(project_id)
+        row = loader.require(project_id)
+        folder = loader.dir(project_id)
         # Synchronous: the host CLI, install verification and the desktop's
         # replace-import all wait on this answer. Removal is by compose label,
         # not `compose down`, so a broken compose file can never block it.
@@ -992,7 +794,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                 runner, resolve_compose_name(project_id, row), volumes=purge)
             if purge:
                 uploads.drop_project(project_id)
-                repos.secrets.drop(project_id)
+                secrets_svc.drop(project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
                 if folder.exists():
@@ -1005,22 +807,22 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}
 
     def start_work(project_id: str, *, stop_first: bool):
-        row = require_row(project_id)
+        row = loader.require(project_id)
         # Parsing happens here, not in the job, so a broken compose file comes
         # back as an error code the caller can read instead of a failed job.
-        project = load(project_id)
-        compose = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE)
-        services, declared_by = secret_rules.declared(compose)
+        project = loader.load(project_id)
+        compose = loader.parse_yaml(loader.dir(project_id) / constants.COMPOSE_FILE)
+        services, declared_by = secrets_svc.declared(compose)
         name = str(compose.get("name") or project_id)
         domain = row["domain"]
-        directory = project_dir(project_id)
+        directory = loader.dir(project_id)
 
         def work(write):
             try:
                 if stop_first:
                     write(f"compose down {project_id}\n")
                     down_result = lifecycle.compose_down(
-                        runner, directory, env=project_env(project_id))
+                        runner, directory, env=secrets_svc.values(project_id))
                     if not down_result.ok:
                         raise JobFailed(
                             (down_result.stderr or down_result.stdout).strip()
@@ -1033,7 +835,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                 # Stamped before the values are read, so a secret changed while
                 # compose runs still shows as needing a restart.
                 began = time.time()
-                values = project_env(project_id) or {}
+                values = secrets_svc.values(project_id) or {}
                 status, detail = lifecycle.compose_up(
                     runner, project, directory, domain, on_phase=write.phase,
                     services=services, secrets=values, declared=declared_by)
@@ -1056,7 +858,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                 else:
                     repos.projects.set_problem(project_id, diagnosis.code,
                                       diagnosis.message)
-                result = {"status": status, "urls": urls_for(project, domain),
+                result = {"status": status, "urls": loader.urls_for(project, domain),
                           "problem": diagnosis.as_dict() if diagnosis else None}
                 write(f"status: {status}\n")
                 if diagnosis:
@@ -1087,15 +889,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
 
     @router.post("/projects/{project_id}/down", status_code=202)
     def project_down(project_id: str) -> dict:
-        require_row(project_id)
+        loader.require(project_id)
 
         def work(write):
             try:
                 write.phase("stopping")
                 write(f"compose down {project_id}\n")
                 result = lifecycle.compose_down(runner,
-                                                project_dir(project_id),
-                                                env=project_env(project_id))
+                                                loader.dir(project_id),
+                                                env=secrets_svc.values(project_id))
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
@@ -1125,18 +927,18 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
     @router.get("/projects/{project_id}/logs")
     def project_logs(project_id: str, follow: bool = False,
                      service: str | None = None):
-        require_row(project_id)
+        loader.require(project_id)
         if not follow:
-            result = lifecycle.project_logs(runner, project_dir(project_id),
-                                            service, env=project_env(project_id))
+            result = lifecycle.project_logs(runner, loader.dir(project_id),
+                                            service, env=secrets_svc.values(project_id))
             if not result.ok:
                 raise Conflict("logs_unavailable",
                                (result.stderr or result.stdout).strip()
                                or "docker compose logs failed")
             return PlainTextResponse(result.stdout, media_type=TEXT)
-        argv = lifecycle.logs_argv(project_dir(project_id), service, follow=True)
+        argv = lifecycle.logs_argv(loader.dir(project_id), service, follow=True)
         return StreamingResponse(
-            runner.stream(argv, root=True, env=project_env(project_id)),
+            runner.stream(argv, root=True, env=secrets_svc.values(project_id)),
             media_type=TEXT)
 
     @router.get("/jobs/{job_id}")

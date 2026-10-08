@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from .migrate import migrate
@@ -181,8 +182,10 @@ class State:
                 "SELECT name, value FROM secrets WHERE project_id=?",
                 (project_id,))}
 
-    def set_secrets(self, project_id, values: dict[str, str], at: float) -> None:
+    def set_secrets(self, project_id, values: dict[str, str],
+                    at: float | None = None) -> None:
         with self._lock:
+            at = time.time() if at is None else at
             self._conn.executemany(
                 "INSERT OR REPLACE INTO secrets(project_id, name, value, updated_at) "
                 "VALUES (?,?,?,?)",
@@ -191,8 +194,9 @@ class State:
                                (at, project_id))
             self._conn.commit()
 
-    def delete_secret(self, project_id, name, at: float) -> bool:
+    def delete_secret(self, project_id, name, at: float | None = None) -> bool:
         with self._lock:
+            at = time.time() if at is None else at
             gone = self._conn.execute(
                 "DELETE FROM secrets WHERE project_id=? AND name=?",
                 (project_id, name)).rowcount > 0

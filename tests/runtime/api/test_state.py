@@ -111,3 +111,15 @@ def test_secrets_outlive_the_project_row_until_dropped(tmp_path):
     assert s.secret_values("a") == {"KEY": "one"}
     s.drop_secrets("a")
     assert s.secret_values("a") == {}
+
+
+def test_without_an_explicit_time_the_change_is_stamped_at_write(tmp_path):
+    import time
+    s = State(tmp_path / "state.db")
+    s.add_project("a", "/p/a", "d")
+    before = time.time()
+    s.set_secrets("a", {"KEY": "v"})
+    stamped = s.get_project("a")["secrets_changed_at"]
+    assert before <= stamped <= time.time()
+    assert s.delete_secret("a", "KEY") is True
+    assert s.get_project("a")["secrets_changed_at"] >= stamped

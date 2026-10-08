@@ -1,7 +1,9 @@
 import pytest
 
 from eggie_api.core.secrets import (SecretError, check_name, check_total,
-                                    check_value, expected, parse_dotenv)
+                                    check_value, declared, defaults, importable,
+                                    is_reserved, missing, parse_dotenv,
+                                    parse_example)
 
 
 @pytest.mark.parametrize("name", ["API_KEY", "_x", "a1"])
@@ -14,13 +16,6 @@ def test_names_compose_cannot_pass_as_env_are_refused(name):
     with pytest.raises(SecretError) as e:
         check_name(name)
     assert e.value.code == "secret_name_invalid"
-
-
-@pytest.mark.parametrize("name", ["COMPOSE_PROJECT_NAME", "DOCKER_HOST", "compose_file"])
-def test_names_that_steer_compose_itself_are_reserved(name):
-    with pytest.raises(SecretError) as e:
-        check_name(name)
-    assert e.value.code == "secret_name_reserved"
 
 
 def test_a_value_over_64_kib_is_refused_but_64_kib_is_not():
@@ -48,12 +43,7 @@ def test_the_project_total_is_capped():
     assert e.value.code == "secrets_too_large"
 
 
-def test_expected_reads_env_example_keys_and_ignores_their_values():
-    example = "# comment\n\nexport API_KEY=placeholder\nDB_URL = postgres://x\nnot a line\n"
-    assert expected(example, None) == {"API_KEY", "DB_URL"}
-
-
-def test_expected_counts_compose_refs_without_a_default():
+def test_missing_counts_compose_refs_without_a_default():
     compose = (
         "services:\n"
         "  web:\n"
@@ -68,11 +58,7 @@ def test_expected_counts_compose_refs_without_a_default():
         "      H: $$$H\n"
         "    # I: ${I}\n"
     )
-    assert expected(None, compose) == {"A", "D", "E", "H"}
-
-
-def test_expected_with_nothing_to_read_is_empty():
-    assert expected(None, None) == set()
+    assert missing({}, compose, have=set(), declared_names=set()) == ["A", "D", "E", "H"]
 
 
 def test_parse_dotenv_handles_quotes_export_and_inline_comments():
@@ -112,12 +98,6 @@ def test_parse_dotenv_refuses_an_unclosed_quote():
     assert e.value.code == "dotenv_invalid"
 
 
-def test_parse_dotenv_refuses_a_reserved_name():
-    with pytest.raises(SecretError) as e:
-        parse_dotenv("DOCKER_HOST=tcp://x\n")
-    assert e.value.code == "secret_name_reserved"
-
-
 def test_parse_dotenv_never_echoes_an_invalid_key():
     with pytest.raises(SecretError) as e:
         parse_dotenv("abc+/SECRETPART=x\n")
@@ -130,7 +110,76 @@ def test_parse_dotenv_reads_a_comment_after_an_empty_value_as_empty():
     assert parse_dotenv(text) == {"A": "", "B": "", "C": "", "HASH": "a#b"}
 
 
-def test_expected_never_asks_for_a_reserved_name():
-    example = "DOCKER_HOST=\ncompose_file=\nAPI_KEY=\n"
-    compose = "x: ${COMPOSE_PROJECT_NAME:?} ${Docker_Thing}\n"
-    assert expected(example, compose) == {"API_KEY"}
+@pytest.mark.parametrize("name", ["COMPOSE_FILE", "docker_host", "LD_PRELOAD",
+                                  "PATH", "home"])
+def test_names_the_runtime_reads_itself_are_reserved(name):
+    assert is_reserved(name)
+    with pytest.raises(SecretError) as e:
+        check_name(name)
+    assert e.value.code == "secret_name_reserved"
+
+
+@pytest.mark.parametrize("name", ["PATHS", "MY_HOME", "LDAP_URL", "API_KEY"])
+def test_lookalikes_are_not_reserved(name):
+    assert not is_reserved(name)
+
+
+def test_an_unpaired_surrogate_is_an_invalid_value_not_a_crash():
+    with pytest.raises(SecretError) as e:
+        check_value("a\ud800b")
+    assert e.value.code == "secret_invalid_value"
+
+
+def test_parse_dotenv_ignores_a_bom():
+    assert parse_dotenv("\ufeffAPI_KEY=k\n") == {"API_KEY": "k"}
+
+
+def test_parse_dotenv_returns_reserved_names_for_the_caller_to_handle():
+    assert parse_dotenv("COMPOSE_PROJECT_NAME=x\nA=1\n") == {
+        "COMPOSE_PROJECT_NAME": "x", "A": "1"}
+
+
+def test_example_parsing_skips_broken_lines():
+    text = ("APP_NAME=Laravel\nnot a pair\n1BAD=x\nCOMPOSE_FILE=x\n"
+            "APP_KEY=\nQUOTED=\"a b\"\nLAST='never closed\nIGNORED=1\n")
+    assert parse_example(text) == {"APP_NAME": "Laravel", "APP_KEY": "",
+                                   "QUOTED": "a b"}
+
+
+def test_example_of_none_is_empty():
+    assert parse_example(None) == {}
+
+
+def test_declared_reads_mapping_and_list_environments():
+    compose = {"services": {
+        "web": {"environment": {"DATABASE_URL": "postgres://db/app", "X": None,
+                                "Y": "${Y}", "PORT": 8080}},
+        "worker": {"environment": ["A=1", "B", "C=${C:-d}"]},
+        "db": {"image": "postgres"},
+    }}
+    services, names = declared(compose)
+    assert services == ["web", "worker", "db"]
+    assert names == {"web": {"DATABASE_URL", "PORT"}, "worker": {"A"}, "db": set()}
+
+
+def test_declared_tolerates_a_compose_without_services():
+    assert declared({}) == ([], {})
+
+
+def test_defaults_are_non_empty_and_never_reserved():
+    assert defaults({"A": "1", "B": "", "PATH": "/x"}) == {"A": "1"}
+
+
+def test_missing_combines_empty_example_keys_and_compose_refs():
+    example = {"APP_KEY": "", "APP_NAME": "Laravel", "STRIPE_KEY": "",
+               "DB_PASSWORD": "", "HOME": ""}
+    compose = "services:\n  web:\n    environment:\n      A: ${OPENAI_KEY}\n      B: ${APP_NAME}\n      C: ${OPT:-x}\n"
+    assert missing(example, compose, have={"STRIPE_KEY"},
+                   declared_names={"DB_PASSWORD"}) == ["APP_KEY", "OPENAI_KEY"]
+
+
+def test_importable_drops_empty_reserved_and_unchanged_values():
+    values = {"APP_NAME": "Laravel", "APP_KEY": "base64:abc", "EMPTY": "",
+              "COMPOSE_PROJECT_NAME": "x", "APP_ENV": "production"}
+    assert importable(values, {"APP_NAME": "Laravel", "APP_ENV": "local"}) == {
+        "APP_KEY": "base64:abc", "APP_ENV": "production"}

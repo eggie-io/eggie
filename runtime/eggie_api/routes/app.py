@@ -23,10 +23,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..core import connect, constants, disk, files, lifecycle
+from ..core import secrets as secret_rules
 from ..core.account import Account
 from ..core.cloud import Cloud, CloudError, CloudUnavailable
 from ..core.config import ApiConfig
 from ..core.detect import AmbiguousError
+from ..core.secrets import SecretError
 from ..core.exec import LocalRunner
 from ..core.github import (GitHub, GitHubError, GitHubUnavailable, auth_failed,
                            clone_argv, redact, valid_repo)
@@ -120,6 +122,10 @@ class StartUpload(BaseModel):
 
 class Handoff(BaseModel):
     code: str
+
+
+class SecretValue(BaseModel):
+    value: str
 
 
 class CloneRepo(BaseModel):
@@ -255,6 +261,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     async def _upload_error(_request, exc: UploadError):
         return JSONResponse({"error": {"code": exc.code, "message": exc.message,
                                        **exc.extra}}, status_code=exc.status)
+
+    @app.exception_handler(SecretError)
+    async def _secret_error(_request, exc: SecretError):
+        return _body(exc.code, exc.message, 400)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_request, exc: StarletteHTTPException):
@@ -396,6 +406,18 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         return [f"http://{host_for(project.id, web, domain)}:{config.edge_port}"
                 for web in project.webs]
 
+    def restart_needed(row: dict) -> bool:
+        changed = row.get("secrets_changed_at")
+        started = row.get("last_started_at")
+        return (row["status"] == STARTED_OK and changed is not None
+                and (started is None or changed > started))
+
+    def read_text(path: Path) -> str | None:
+        try:
+            return path.read_text()
+        except (OSError, UnicodeDecodeError):
+            return None
+
     def payload(row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
         # broken project must never take the whole listing down with it.
@@ -443,6 +465,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 "web": web,
                 "public": public_status,
                 "first_run": row.get("last_started_at") is None,
+                "restart_needed": restart_needed(row),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
@@ -925,6 +948,70 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             target.unlink()
         return {"path": file_path, "deleted": True}
 
+    @router.get("/projects/{project_id}/secrets")
+    def list_secrets(project_id: str) -> dict:
+        row = require_row(project_id)
+        d = project_dir(project_id)
+        names = state.secret_names(project_id)
+        missing = secret_rules.expected(read_text(d / ".env.example"),
+                                        read_text(d / constants.COMPOSE_FILE))
+        dotenv = None
+        text = read_text(d / ".env")
+        if text is not None:
+            try:
+                dotenv = {"names": sorted(secret_rules.parse_dotenv(text)),
+                          "error": None}
+            except SecretError as e:
+                dotenv = {"names": [], "error": e.message}
+        return {"secrets": names,
+                "missing": sorted(missing - {s["name"] for s in names}),
+                "dotenv": dotenv,
+                "restart_needed": restart_needed(row)}
+
+    # No project lock: one sqlite statement, and a start in flight is caught
+    # by restart_needed because the start is stamped before it reads values.
+    @router.put("/projects/{project_id}/secrets/{name}", status_code=204)
+    def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
+        require_row(project_id)
+        secret_rules.check_name(name)
+        secret_rules.check_value(body.value)
+        secret_rules.check_total({**state.secret_values(project_id),
+                                  name: body.value})
+        state.set_secrets(project_id, {name: body.value}, time.time())
+        return Response(status_code=204)
+
+    @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
+    def delete_secret(project_id: str, name: str) -> Response:
+        require_row(project_id)
+        if not state.delete_secret(project_id, name, time.time()):
+            raise ApiError("secret_not_found",
+                           f"project '{project_id}' has no secret '{name}'", 404)
+        return Response(status_code=204)
+
+    @router.post("/projects/{project_id}/secrets/import-dotenv")
+    def import_dotenv(project_id: str) -> dict:
+        require_row(project_id)
+        path = project_dir(project_id) / ".env"
+        with locks.held(project_id):
+            text = read_text(path)
+            if text is None:
+                raise ApiError("dotenv_missing",
+                               f"project '{project_id}' has no .env file", 404)
+            values = secret_rules.parse_dotenv(text)
+            secret_rules.check_total({**state.secret_values(project_id), **values})
+            if values:
+                state.set_secrets(project_id, values, time.time())
+            try:
+                path.unlink()
+            except PermissionError:
+                removed = lifecycle.remove_tree_as_root(runner, path)
+                if not removed.ok:
+                    raise ApiError("dotenv_not_removed",
+                                   "the values are saved as secrets, but Eggie "
+                                   "couldn't remove the .env file; delete it "
+                                   "from the Files page", 409) from None
+        return {"imported": sorted(values)}
+
     def compose_name_for(row: dict) -> str:
         return row.get("compose_name") or row["id"]
 
@@ -952,6 +1039,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 runner, resolve_compose_name(project_id, row), volumes=purge)
             if purge:
                 uploads.drop_project(project_id)
+                state.drop_secrets(project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
                 if folder.exists():
@@ -973,6 +1061,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         # back as an error code the caller can read instead of a failed job.
         project = load(project_id)
         name = compose_name_of(project_id)
+        services = parse_yaml(project_dir(project_id) / constants.COMPOSE_FILE).get("services")
+        services = list(services) if isinstance(services, dict) else []
         domain = row["domain"]
         directory = project_dir(project_id)
 
@@ -990,11 +1080,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 # when `up` never reaches STARTED_OK.
                 state.set_compose_name(project_id, name)
                 write(f"compose up {project_id}\n")
+                # Stamped before the values are read, so a secret changed while
+                # compose runs still shows as needing a restart.
+                began = time.time()
                 status, detail = lifecycle.compose_up(
-                    runner, project, directory, domain, on_phase=write.phase)
+                    runner, project, directory, domain, on_phase=write.phase,
+                    services=services, secrets=state.secret_values(project_id))
                 diagnosis = None
                 if status == STARTED_OK:
-                    state.mark_started(project_id, time.time())
+                    state.mark_started(project_id, began)
                     write.phase("checking")
                     write("waiting for the project to answer through Traefik\n")
                     diagnosis = diagnose(

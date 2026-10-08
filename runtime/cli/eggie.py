@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, TextIO
+from typing import Callable, NoReturn, TextIO
 
 API_PORT = 39099
 GUEST_ROOT = "/opt/eggie"
@@ -411,12 +411,27 @@ def cmd_down(env: Env) -> None:
 _APPLY_HINT = "Run `eggie up` to apply it."
 
 
+_SECRET_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_NO_ARGV_VALUE = ("The value can't go on the command line; run `eggie secret set "
+                  "NAME` and paste it at the prompt, or pipe it in.")
+_BAD_NAME = ("That isn't a valid secret name: use letters, digits and underscores, "
+             "not starting with a digit.")
+
+
+def _secret_project(env: Env, name: str, bad_name: str) -> tuple[ApiClient, str]:
+    # A mistyped `NAME=value` must fail here, before anything echoes or sends it.
+    if not _SECRET_NAME.fullmatch(name):
+        raise EggieError(bad_name)
+    project_id = _require_project(env)
+    client = env.client()
+    client.ensure_project(project_id)
+    return client, project_id
+
+
 def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
     if extra:
-        # Raised here, not by argparse, which would echo the value back.
-        raise EggieError("eggie secret set takes no value argument; "
-                         "pipe it in or type it at the prompt")
-    project_id = _require_project(env)
+        raise EggieError(_NO_ARGV_VALUE)
+    client, project_id = _secret_project(env, name, _NO_ARGV_VALUE)
     # Never from argv: that ends up in shell history and `ps`.
     if env.stdin.isatty():
         value = env.getpass(f"Value for {name} (not shown): ")
@@ -424,7 +439,6 @@ def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
         value = env.stdin.read().removesuffix("\n")
     if value == "":
         raise EggieError(f"No value given for {name}; nothing was saved.")
-    client = env.client()
     client.set_secret(project_id, name, value)
     print(f"Saved {name} for {project_id}.", file=env.out)
     if client.secrets(project_id).get("restart_needed"):
@@ -432,8 +446,7 @@ def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
 
 
 def cmd_secret_request(env: Env, name: str, hint: str) -> None:
-    project_id = _require_project(env)
-    client = env.client()
+    client, project_id = _secret_project(env, name, _BAD_NAME)
     if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
         print(f"{name} already has a value; ask the owner to Replace it on "
               f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
@@ -445,7 +458,9 @@ def cmd_secret_request(env: Env, name: str, hint: str) -> None:
 
 def cmd_secret_list(env: Env) -> None:
     project_id = _require_project(env)
-    data = env.client().secrets(project_id)
+    client = env.client()
+    client.ensure_project(project_id)
+    data = client.secrets(project_id)
     names = [s["name"] for s in data.get("secrets", [])]
     for name in names:
         print(name, file=env.out)
@@ -461,8 +476,7 @@ def cmd_secret_list(env: Env) -> None:
 
 
 def cmd_secret_rm(env: Env, name: str) -> None:
-    project_id = _require_project(env)
-    client = env.client()
+    client, project_id = _secret_project(env, name, _BAD_NAME)
     had_value = any(s["name"] == name for s in client.secrets(project_id).get("secrets", []))
     client.delete_secret(project_id, name)
     if had_value:
@@ -520,6 +534,12 @@ def cmd_clone(env: Env, url: str, name: str | None) -> None:
               "be written before `eggie up`.", file=env.out)
 
 
+def _secret_usage_error(message: str) -> NoReturn:
+    # argparse would quote the offending argument, which may be a typed value.
+    print(f"eggie secret: {_NO_ARGV_VALUE} See `eggie secret --help`.", file=sys.stderr)
+    sys.exit(2)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="eggie",
@@ -543,24 +563,33 @@ def _parser() -> argparse.ArgumentParser:
     clone.add_argument("name", nargs="?")
     secret = sub.add_parser("secret", help="keys and passwords this project's "
                                            "containers get as environment variables")
+    secret.error = _secret_usage_error
     secret_sub = secret.add_subparsers(dest="secret_command", required=True,
                                        metavar="<action>")
     secret_set = secret_sub.add_parser(
         "set", help="save a secret; the value is read from the terminal or stdin")
+    secret_set.error = _secret_usage_error
     secret_set.add_argument("name")
     secret_set.add_argument("extra", nargs="*", help=argparse.SUPPRESS)
     secret_request = secret_sub.add_parser(
         "request", help="ask the owner for a secret; shows on the project's Secrets page")
+    secret_request.error = _secret_usage_error
     secret_request.add_argument("name")
     secret_request.add_argument("hint")
     secret_sub.add_parser("list", help="show secret names and open requests")
     secret_rm = secret_sub.add_parser("rm", help="remove a secret or a request")
+    secret_rm.error = _secret_usage_error
     secret_rm.add_argument("name")
     return parser
 
 
 def main(argv: list[str] | None = None, env: Env | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args, extra = parser.parse_known_args(argv)
+    if extra:
+        if args.command == "secret":
+            _secret_usage_error("")
+        parser.error("unrecognized arguments: " + " ".join(extra))
     env = env or Env()
     commands = {
         "up": lambda: cmd_up(env, args.directory),

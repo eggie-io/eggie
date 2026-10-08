@@ -58,12 +58,36 @@ def test_secret_set_refuses_an_empty_value(guest):
     assert _values(guest) == {}
 
 
-def test_secret_set_never_takes_the_value_as_an_argument(guest):
+@pytest.mark.parametrize("argv", [
+    ("API_KEY", "leaked"),
+    ("API_KEY=leaked",),
+    ("--value=leaked", "API_KEY"),
+    ("API_KEY", "--value=leaked"),
+])
+def test_secret_set_never_takes_or_echoes_the_value_from_the_command_line(guest, capsys, argv):
     folder = _project(guest)
-    code, out, err = guest.run("secret", "set", "API_KEY", "leaked", cwd=folder)
-    assert code == 1
-    assert "leaked" not in out + err
+    try:
+        code, out, err = guest.run("secret", "set", *argv, cwd=folder, stdin="piped")
+    except SystemExit as e:
+        code, out, err = e.code, "", ""
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "leaked" not in out + err + captured.out + captured.err
     assert _values(guest) == {}
+
+
+def test_secret_request_and_rm_do_not_echo_a_malformed_name(guest):
+    folder = _project(guest)
+    for cmd in (("request", "K=leaked", "hint"), ("rm", "K=leaked")):
+        code, out, err = guest.run("secret", *cmd, cwd=folder)
+        assert code == 1 and "leaked" not in out + err
+
+
+def test_secret_request_in_a_folder_the_api_does_not_know_yet(guest):
+    folder = guest.root / "fresh"
+    folder.mkdir()
+    code, _, err = guest.run("secret", "request", "STRIPE_KEY", "hint", cwd=folder)
+    assert (code, err) == (0, "")
 
 
 def test_secret_request_for_a_name_with_a_value_does_not_open_a_request(guest):

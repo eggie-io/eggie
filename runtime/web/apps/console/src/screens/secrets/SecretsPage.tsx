@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { Button, Notice, TextField } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { useDeleteSecret, useImportDotenv, useLifecycle, useSecrets, useSetSecret } from "../../projects/queries";
@@ -44,11 +44,13 @@ export function SecretsPage() {
   const add = useSetSecret(id);
   const move = useImportDotenv(id);
   const lifecycle = useLifecycle(id);
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [tried, setTried] = useState(false);
 
-  const back = <Link to={`/p/${encodeURIComponent(id)}`} className={page.back}>‹ {id}</Link>;
+  const projectUrl = `/p/${encodeURIComponent(id)}`;
+  const back = <Link to={projectUrl} className={page.back}>‹ {id}</Link>;
   if (!query.data) {
     return (
       <section className={s.page}>
@@ -72,15 +74,17 @@ export function SecretsPage() {
       {data.restart_needed && (
         <Notice>
           Secrets changed — restart {id} to apply them.{" "}
-          <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Restart</Button>
+          <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart", { onSuccess: () => navigate(projectUrl) })}>
+            Restart
+          </Button>
         </Notice>
       )}
       {data.dotenv && (data.dotenv.error ? (
         <Notice>This project has a .env file Eggie can't read: {data.dotenv.error}</Notice>
       ) : (
         <Notice icon="folder">
-          This project has a .env file with {data.dotenv.names.length} values. Move them into secrets so they stay out
-          of the project's files?{" "}
+          This project has a .env file with {data.dotenv.names.length} {data.dotenv.names.length === 1 ? "value" : "values"}.
+          Move them into secrets so they stay out of the project's files? Eggie leaves the .env file empty.{" "}
           <Button variant="primary" disabled={move.isPending} onClick={() => move.mutate()}>Move into secrets</Button>
         </Notice>
       ))}

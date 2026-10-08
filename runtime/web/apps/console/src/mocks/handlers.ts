@@ -130,7 +130,7 @@ export function handlersFor(scenario: Scenario) {
     return entry;
   };
   const touched = (target: Project) => {
-    if (target.status === "started_ok") target.restart_needed = true;
+    if (target.status === "started_ok" || target.status === "crash_looping") target.restart_needed = true;
   };
 
   function startJob(target: Project, kind: JobKind): Job {

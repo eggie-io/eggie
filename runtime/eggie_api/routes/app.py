@@ -37,6 +37,8 @@ from ..infra.tunnel import TunnelClient
 from ..infra.uploads import CHUNK_SIZE, UploadStore
 from ..services.account import Account
 from ..services.agents import AgentStatus
+from ..services.files import FileService
+from ..services.files import disk_full as _disk_full
 from ..services.github_link import GitHubLink
 from ..services.jobs import JobFailed, JobRegistry
 from ..services.loader import ProjectLoader
@@ -48,6 +50,7 @@ from ..services.secrets import RUNNING, SecretService
 from ..services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
 from ..services.sync import SyncLoop, run_pass
 from ..services.system import SystemService
+from ..services.uploads import UploadService
 
 TEXT = "text/plain; charset=utf-8"
 log = logging.getLogger("eggie.api")
@@ -65,11 +68,6 @@ def _status_of(exc: EggieError) -> int:
         if cls in STATUS:
             return STATUS[cls]
     return 500
-
-
-def _disk_full() -> DiskFull:
-    return DiskFull("disk_full", "Eggie's disk is full. Free up space in "
-                    "the desktop app, then try again.")
 
 
 class WebOverride(BaseModel):
@@ -157,6 +155,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                           free_bytes=lambda: disk.usage(
                               Path(config.projects_root))["free_bytes"])
     uploads.sweep()
+    uploads_svc = UploadService(uploads, loader, locks)
+    files_svc = FileService(loader, locks)
     cloud = cloud or Cloud(config.cloud_url)
     account = account or Account(repos.account, repos.cloud_projects, cloud)
 
@@ -562,57 +562,18 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
         loader.require(project_id)
         return public.disable(project_id)
 
-    def resolve_path(project_id: str, rel_path: str) -> Path:
-        return files.resolve_within(loader.dir(project_id), rel_path)
-
-    def finish_upload(upload_id: str) -> dict:
-        up = uploads.get(upload_id)
-        # The existence check has to happen inside the lock too, not just the
-        # write: checked first and locked after, delete could still finish in
-        # the gap between the two and this would resurrect the folder it
-        # just removed.
-        with locks.held(up.project_id):
-            if repos.projects.get(up.project_id) is None:
-                uploads.cancel(upload_id)
-                raise NotFound("project_not_found",
-                               f"no project with id '{up.project_id}'")
-            try:
-                uploads.finish(upload_id, resolve_path(up.project_id, up.path))
-            except PermissionError as e:
-                raise Conflict("permission_denied",
-                               "Eggie can't write into that folder; a program "
-                               "in the project owns it. Pick another folder.") from e
-        return {"upload_id": upload_id, "offset": up.size, "size": up.size,
-                "done": True}
-
     @router.post("/projects/{project_id}/uploads", status_code=201)
     def start_upload(project_id: str, body: StartUpload) -> dict:
-        loader.require(project_id)
-        target = resolve_path(project_id, body.path)
-        if target.is_dir():
-            # `replace` means "overwrite this file", never "delete this
-            # folder and put a file where it was" -- that has no undo.
-            raise Conflict("path_is_folder",
-                           f"'{body.path}' is a folder in the project")
-        if target.exists() and not body.replace:
-            raise Conflict("file_exists",
-                           f"'{body.path}' is already in the project")
-        up = uploads.start(project_id, body.path, body.size, body.fingerprint,
-                           body.replace)
-        if up.size == 0:
-            return finish_upload(up.id)
-        return {"upload_id": up.id, "offset": 0, "size": up.size,
-                "chunk_size": CHUNK_SIZE, "done": False}
+        return uploads_svc.start(project_id, path=body.path, size=body.size,
+                                 fingerprint=body.fingerprint, replace=body.replace)
 
     @router.get("/projects/{project_id}/uploads")
     def pending_uploads(project_id: str) -> dict:
-        loader.require(project_id)
-        uploads.sweep()
-        return {"uploads": [u.as_dict() for u in uploads.list_for(project_id)]}
+        return uploads_svc.list(project_id)
 
     @router.get("/uploads/{upload_id}")
     def upload_status(upload_id: str) -> dict:
-        return uploads.get(upload_id).as_dict()
+        return uploads_svc.get(upload_id)
 
     @router.patch("/uploads/{upload_id}")
     async def upload_chunk(upload_id: str, request: Request) -> dict:
@@ -628,16 +589,12 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
                                f"{CHUNK_SIZE} bytes")
         # Both append() and finish() do blocking file I/O; run them off the
         # event loop so one slow upload can't stall every other request.
-        up = await run_in_threadpool(uploads.append, upload_id, offset, bytes(body))
-        if up.offset == up.size:
-            return await run_in_threadpool(finish_upload, upload_id)
-        return {"upload_id": upload_id, "offset": up.offset, "size": up.size,
-                "done": False}
+        return await run_in_threadpool(uploads_svc.append, upload_id, offset,
+                                       bytes(body))
 
     @router.delete("/uploads/{upload_id}")
     def cancel_upload(upload_id: str) -> dict:
-        uploads.cancel(upload_id)
-        return {"upload_id": upload_id, "cancelled": True}
+        return uploads_svc.cancel(upload_id)
 
     async def _stream_to_tempfile(request: Request, dir_: Path) -> Path:
         # Written next to its destination, never buffered whole in memory -
@@ -673,80 +630,29 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
             raise
         return path
 
-    # Held across the whole body, not just the extract: an archive that lands
-    # between the overlay being written and compose reading docker-compose.yml
-    # starts a project from two different versions of itself. Refused rather
-    # than queued, like every other lock holder here -- the host client retries
-    # a `project_busy` on its own, where the wait can be bounded and reported.
     @router.post("/projects/{project_id}/files")
     async def upload_files(project_id: str, request: Request) -> dict:
-        loader.require(project_id)
-        d = loader.dir(project_id)
-        with locks.held(project_id):
-            tmp = await _stream_to_tempfile(request, d.parent)
-            try:
-                try:
-                    files.extract_archive(tmp, d)
-                except OSError as e:
-                    if disk.is_disk_full(e):
-                        raise _disk_full() from e
-                    raise
-            finally:
-                tmp.unlink(missing_ok=True)
-        return {"id": project_id, "files": files.list_tree(d)}
+        return await files_svc.extract(
+            project_id, lambda dir_: _stream_to_tempfile(request, dir_))
 
     @router.get("/projects/{project_id}/files")
     def list_files(project_id: str, dir: str | None = None) -> dict:
-        loader.require(project_id)
-        if dir is None:
-            return {"files": files.list_tree(loader.dir(project_id))}
-        try:
-            return {"dir": dir,
-                    "entries": files.list_dir(loader.dir(project_id), dir)}
-        except FileNotFoundError:
-            raise NotFound("folder_not_found",
-                           f"no folder '{dir}' in project '{project_id}'") from None
-        except PermissionError as e:
-            raise Conflict("permission_denied",
-                           "Eggie can't look inside that folder; a program "
-                           "in the project owns it.") from e
+        return files_svc.list(project_id, dir)
 
     @router.put("/projects/{project_id}/files/{file_path:path}")
     async def write_file(project_id: str, file_path: str, request: Request) -> dict:
-        loader.require(project_id)
-        target = resolve_path(project_id, file_path)
-        d = loader.dir(project_id)
-        with locks.held(project_id):
-            # Staged next to the project directory, not inside it, so a listing
-            # never catches the upload half-written.
-            tmp = await _stream_to_tempfile(request, d.parent)
-            try:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(tmp, target)
-            finally:
-                tmp.unlink(missing_ok=True)
-        return {"path": file_path, "size": target.stat().st_size}
+        return await files_svc.write(
+            project_id, file_path, lambda dir_: _stream_to_tempfile(request, dir_))
 
     @router.get("/projects/{project_id}/files/{file_path:path}")
     def read_file(project_id: str, file_path: str):
-        loader.require(project_id)
-        target = resolve_path(project_id, file_path)
-        if not target.is_file():
-            raise NotFound("file_not_found",
-                           f"no file '{file_path}' in project '{project_id}'")
+        target = files_svc.file(project_id, file_path)
         # Starlette streams this from disk; the file is never read whole.
         return FileResponse(target, filename=target.name)
 
     @router.delete("/projects/{project_id}/files/{file_path:path}")
     def delete_file(project_id: str, file_path: str) -> dict:
-        loader.require(project_id)
-        target = resolve_path(project_id, file_path)
-        if not target.is_file():
-            raise NotFound("file_not_found",
-                           f"no file '{file_path}' in project '{project_id}'")
-        with locks.held(project_id):
-            target.unlink()
-        return {"path": file_path, "deleted": True}
+        return files_svc.delete(project_id, file_path)
 
     @router.get("/projects/{project_id}/secrets")
     def list_secrets(project_id: str) -> dict:
@@ -793,7 +699,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, repos=None,
             result = lifecycle.remove_by_label(
                 runner, resolve_compose_name(project_id, row), volumes=purge)
             if purge:
-                uploads.drop_project(project_id)
+                uploads_svc.drop_project(project_id)
                 secrets_svc.drop(project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)

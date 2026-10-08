@@ -50,7 +50,7 @@ https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
   fi
 fi
 
-# setfacl, for steps 4 and 11. Lima's Ubuntu image ships without it.
+# setfacl, for steps 4 and 10. Lima's Ubuntu image ships without it.
 if ! dpkg -s acl >/dev/null 2>&1; then
   if ! { apt-get update && apt-get install -y acl; }; then
     echo "could not install acl: the Ubuntu package mirrors may be unreachable" >&2
@@ -251,29 +251,13 @@ while IFS= read -r target; do
 done <<< "$system_instructions"
 install -m 644 "$INSTALL_DIR/profile/eggie-cwd.sh" /etc/profile.d/eggie-cwd.sh
 # SSH host keys that survive a reboot (see the file). Lima only, detected the
-# same way as step 13: on a cloud VM, a disk image cloned from this one must
+# same way as step 12: on a cloud VM, a disk image cloned from this one must
 # still get keys of its own, which is what cloud-init's default is for.
 if [[ -d /mnt/lima-cidata && -d /etc/cloud/cloud.cfg.d ]]; then
     install -m 644 "$INSTALL_DIR/cloud/99-eggie-keep-ssh-host-keys.cfg" /etc/cloud/cloud.cfg.d/
 fi
 
-# 10. copies earlier provisioning made, which npx now owns or nothing reads.
-# The last three are what an engine-v* install left behind: engine.version
-# sits beside runtime.version and would mislead the next person to debug the
-# box, and agent.token is a live 0640 docker-readable secret nothing reads
-# any more.
-rm -rf /etc/codex/skills/eggie-setup /opt/eggie/bin /opt/eggie/agents \
-  /opt/eggie/.bootstrapped \
-  /opt/eggie/engine /opt/eggie/engine.version /opt/eggie/agent.token \
-  /etc/skel/.claude/skills/eggie-setup /etc/skel/.agents/skills/eggie-setup
-if [[ -f /etc/skel/.codex/AGENTS.md ]]; then
-  sed -i '\|^<!-- eggie:begin -->$|,\|^<!-- eggie:end -->$|d' /etc/skel/.codex/AGENTS.md
-fi
-if [[ -L /etc/skel/projects && "$(readlink /etc/skel/projects)" == /opt/eggie/projects ]]; then
-  rm -f /etc/skel/projects
-fi
-
-# 11. per account: docker group, agent instructions, ~/projects, skills.
+# 10. per account: docker group, agent instructions, ~/projects, skills.
 if ! skill_agents="$(python3 "$INSTALL_DIR/lib/agents.py" --agents-dir "$RUNTIME_DIR/agents" skills)"; then
   echo "the coding-agent manifests in this runtime are damaged" >&2
   exit 1
@@ -301,7 +285,7 @@ while IFS=: read -r name uid gid home; do
   fi
 done < <(accounts)
 
-# 12. GitHub: apply on every change of the API's desired state, and once now
+# 11. GitHub: apply on every change of the API's desired state, and once now
 # so a repair or a newly added account catches up.
 install -m 644 "$INSTALL_DIR/systemd/eggie-github.path" \
   "$INSTALL_DIR/systemd/eggie-github.service" /etc/systemd/system/
@@ -312,13 +296,13 @@ if ! systemctl start eggie-github.service; then
   exit 1
 fi
 
-# 12b. the boot-time updater. Enabled only: starting it here would run an
+# 11b. the boot-time updater. Enabled only: starting it here would run an
 # update inside this install.
 install -m 644 "$INSTALL_DIR/systemd/eggie-update.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable eggie-update.service
 
-# 12c. coding agents: the root-side runner the API pokes to detect connected
+# 11c. coding agents: the root-side runner the API pokes to detect connected
 # agents and run their setup. The API writes counters here, never into a home.
 install -d -m 2770 -o root -g docker /opt/eggie/agent-status /opt/eggie/agent-status/setup
 chmod 2770 /opt/eggie/agent-status /opt/eggie/agent-status/setup
@@ -329,7 +313,7 @@ systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
 systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
 
-# 13. what the console's "Connect an agent" guide needs to know.
+# 12. what the console's "Connect an agent" guide needs to know.
 if grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
 elif [[ -d /mnt/lima-cidata ]]; then vm=lima
 else vm=other
@@ -339,6 +323,6 @@ agent_user=$(getent passwd | bash "$INSTALL_DIR/lib/login-users.sh" /etc/shells 
 printf '{"vm": "%s", "user": "%s"}\n' "$vm" "$agent_user" > /opt/eggie/connect.json
 chmod 644 /opt/eggie/connect.json
 
-# 14. marker, last: a failure above must leave no marker behind.
+# 13. marker, last: a failure above must leave no marker behind.
 echo "$REF" > /opt/eggie/runtime.version
 echo "Eggie runtime $REF installed"

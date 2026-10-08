@@ -83,7 +83,7 @@ never looks installed. Everything runs under `flock /opt/eggie/update.lock`.
 | Service | Image | Role |
 |---|---|---|
 | `traefik` | Traefik | Edge on `39080`: `/` → console, `/api` → API, `Host(<id>.127-0-0-1.sslip.io)` → project |
-| `api` | `eggie-api` (`runtime/eggie_api/`) | FastAPI on `39099`. Owns projects, jobs, sessions, accounts, GitHub, public URLs. Talks to Docker through the socket |
+| `api` | `eggie-api` (`runtime/eggie_api/`) | FastAPI on `39099`. Owns projects, jobs, sessions, accounts, GitHub, public URLs, secrets. Talks to Docker through the socket |
 | `web` | `eggie-web` (`runtime/web/`) | React console served by nginx. Works offline |
 | `tunnel` | cloudflared | Only under the `tunnel` compose profile, while a public URL is on |
 

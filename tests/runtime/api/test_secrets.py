@@ -123,3 +123,14 @@ def test_parse_dotenv_never_echoes_an_invalid_key():
         parse_dotenv("abc+/SECRETPART=x\n")
     assert e.value.code == "dotenv_invalid"
     assert "SECRETPART" not in e.value.message
+
+
+def test_parse_dotenv_reads_a_comment_after_an_empty_value_as_empty():
+    text = "A= # set me\nB=#nothing\nC=\t# tab\nHASH=a#b\n"
+    assert parse_dotenv(text) == {"A": "", "B": "", "C": "", "HASH": "a#b"}
+
+
+def test_expected_never_asks_for_a_reserved_name():
+    example = "DOCKER_HOST=\ncompose_file=\nAPI_KEY=\n"
+    compose = "x: ${COMPOSE_PROJECT_NAME:?} ${Docker_Thing}\n"
+    assert expected(example, compose) == {"API_KEY"}

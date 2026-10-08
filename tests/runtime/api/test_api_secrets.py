@@ -1,6 +1,8 @@
 import threading
 
-from tests.runtime.api.conftest import _create, _run_to_completion, _write_compose
+from eggie_api.core.exec import Completed
+from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
+                                        _write_compose)
 
 COMPOSE_TWO = """
 services:
@@ -134,7 +136,9 @@ def test_a_secret_set_during_a_start_still_needs_a_restart(env):
     assert env.client.get("/projects/blog").json()["restart_needed"] is True
 
 
-def test_import_moves_dotenv_values_into_secrets_and_removes_the_file(env):
+def test_import_moves_dotenv_values_into_secrets_and_empties_the_file(env):
+    # Emptied, not deleted: a service with `env_file: .env` fails to start
+    # when the file is gone.
     folder = _project(env)
     (folder / ".env").write_text('API_KEY=from-file\nexport PEM="a\\nb"\n')
     listed = env.client.get("/projects/blog/secrets").json()
@@ -142,7 +146,7 @@ def test_import_moves_dotenv_values_into_secrets_and_removes_the_file(env):
     env.client.put("/projects/blog/secrets/API_KEY", json={"value": "old"})
     resp = env.client.post("/projects/blog/secrets/import-dotenv")
     assert resp.json() == {"imported": ["API_KEY", "PEM"]}
-    assert not (folder / ".env").exists()
+    assert (folder / ".env").read_bytes() == b""
     assert env.state.secret_values("blog") == {"API_KEY": "from-file", "PEM": "a\nb"}
     assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
 
@@ -157,6 +161,77 @@ def test_import_of_an_invalid_dotenv_stores_nothing_and_keeps_the_file(env):
     assert (resp.status_code, resp.json()["error"]["code"]) == (400, "dotenv_invalid")
     assert (folder / ".env").exists()
     assert env.state.secret_values("blog") == {}
+
+
+def test_a_dotenv_without_values_is_not_offered_and_cannot_be_imported(env):
+    folder = _project(env)
+    (folder / ".env").write_text("# nothing here\n\n")
+    assert env.client.get("/projects/blog/secrets").json()["dotenv"] is None
+    resp = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert (resp.status_code, resp.json()["error"]["code"]) == (404, "dotenv_missing")
+
+
+def test_a_dotenv_eggie_cannot_write_is_emptied_as_root(env):
+    folder = _project(env)
+    dotenv = folder / ".env"
+    dotenv.write_text("API_KEY=v\n")
+    dotenv.chmod(0o444)
+    resp = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert resp.status_code == 200
+    run = env.runner.argv_containing("run")[-1]
+    assert ["--user", "0"] == run[run.index("--user"):run.index("--user") + 2]
+    assert run[-1] == str(dotenv)
+
+
+def test_a_dotenv_that_cannot_be_emptied_keeps_the_values_and_says_so(env):
+    folder = _project(env)
+    (folder / ".env").write_text("API_KEY=v\n")
+    (folder / ".env").chmod(0o444)
+    real = env.runner.exec
+
+    def failing_run(argv, **kw):
+        if argv[1:2] == ["run"]:
+            env.runner.calls.append(argv)
+            return Completed(1, "", "denied")
+        return real(argv, **kw)
+
+    env.runner.exec = failing_run
+    resp = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert (resp.status_code, resp.json()["error"]["code"]) == (409, "dotenv_not_removed")
+    assert env.state.secret_values("blog") == {"API_KEY": "v"}
+
+
+def test_a_dotenv_symlink_is_never_followed(env):
+    folder = _project(env)
+    outside = folder.parent / "outside.env"
+    outside.write_text("STOLEN=value\n")
+    (folder / ".env").symlink_to(outside)
+    listed = env.client.get("/projects/blog/secrets").json()
+    assert listed["dotenv"]["names"] == []
+    assert "link" in listed["dotenv"]["error"]
+    resp = env.client.post("/projects/blog/secrets/import-dotenv")
+    assert (resp.status_code, resp.json()["error"]["code"]) == (400, "dotenv_invalid")
+    assert env.state.secret_values("blog") == {}
+    assert outside.read_text() == "STOLEN=value\n"
+
+
+def test_a_reserved_name_is_never_reported_missing(env):
+    folder = _project(env)
+    (folder / ".env.example").write_text("DOCKER_HOST=\nAPI_KEY=\n")
+    assert env.client.get("/projects/blog/secrets").json()["missing"] == ["API_KEY"]
+
+
+def test_a_crash_looping_project_needs_a_restart_after_a_secret_change(env):
+    # A service exiting for lack of a key is the usual crash loop, and the
+    # fix is exactly a secret set followed by a restart.
+    _project(env)
+    env.runner.ps = Completed(0, PS_RESTARTING, "")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["restart_needed"] is False
+    env.client.put("/projects/blog/secrets/API_KEY", json={"value": "v"})
+    assert env.client.get("/projects/blog").json()["restart_needed"] is True
+    _run_to_completion(env, env.client.post("/projects/blog/restart"))
+    assert env.client.get("/projects/blog").json()["restart_needed"] is False
 
 
 def test_import_without_a_dotenv_is_a_404(env):

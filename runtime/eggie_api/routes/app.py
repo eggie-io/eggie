@@ -37,7 +37,8 @@ from ..core.github_link import GitHubLink, NotConnected
 # Imported by name: the /health route below shadows a module named `health`.
 from ..core.health import answers, default_probe, diagnose
 from ..core.overlay import host_for
-from ..core.project import STARTED_OK, Project, _slug, load_project
+from ..core.project import (CRASH_LOOPING, STARTED_OK, Project, _slug,
+                            load_project)
 from ..core.public import Public, PublicBusy, TunnelClient, Unavailable
 from ..core.reconcile import discover, examine
 from ..core.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL, Sessions
@@ -47,6 +48,9 @@ from ..core.uploads import CHUNK_SIZE, UploadError, UploadStore
 from .jobs import JobFailed, JobRegistry
 
 TEXT = "text/plain; charset=utf-8"
+# Statuses whose containers exist and were handed the project's secrets.
+RUNNING = (STARTED_OK, CRASH_LOOPING)
+
 log = logging.getLogger("eggie.api")
 
 
@@ -409,8 +413,15 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
     def restart_needed(row: dict) -> bool:
         changed = row.get("secrets_changed_at")
         started = row.get("last_started_at")
-        return (row["status"] == STARTED_OK and changed is not None
+        return (row["status"] in RUNNING and changed is not None
                 and (started is None or changed > started))
+
+    def read_dotenv(path: Path) -> str | None:
+        # A link can point at any file the API can read, outside the project.
+        if path.is_symlink():
+            raise SecretError("dotenv_invalid",
+                              ".env is a link; Eggie only reads a regular file")
+        return read_text(path)
 
     def secret_env(project_id: str) -> dict | None:
         return state.secret_values(project_id) or None
@@ -958,14 +969,14 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         names = state.secret_names(project_id)
         missing = secret_rules.expected(read_text(d / ".env.example"),
                                         read_text(d / constants.COMPOSE_FILE))
+        # An import leaves an empty .env behind, which has nothing to offer.
         dotenv = None
-        text = read_text(d / ".env")
-        if text is not None:
-            try:
-                dotenv = {"names": sorted(secret_rules.parse_dotenv(text)),
-                          "error": None}
-            except SecretError as e:
-                dotenv = {"names": [], "error": e.message}
+        try:
+            text = read_dotenv(d / ".env")
+            if text is not None and (found := secret_rules.parse_dotenv(text)):
+                dotenv = {"names": sorted(found), "error": None}
+        except SecretError as e:
+            dotenv = {"names": [], "error": e.message}
         return {"secrets": names,
                 "missing": sorted(missing - {s["name"] for s in names}),
                 "dotenv": dotenv,
@@ -996,23 +1007,27 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         require_row(project_id)
         path = project_dir(project_id) / ".env"
         with locks.held(project_id):
-            text = read_text(path)
-            if text is None:
+            text = read_dotenv(path)
+            values = secret_rules.parse_dotenv(text) if text is not None else {}
+            if not values:
                 raise ApiError("dotenv_missing",
-                               f"project '{project_id}' has no .env file", 404)
-            values = secret_rules.parse_dotenv(text)
+                               f"project '{project_id}' has no .env file with "
+                               "values to move", 404)
             secret_rules.check_total({**state.secret_values(project_id), **values})
-            if values:
-                state.set_secrets(project_id, values, time.time())
+            state.set_secrets(project_id, values, time.time())
+            # Emptied, not deleted: `env_file: .env` fails on a missing file.
             try:
-                path.unlink()
+                os.close(os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW))
+                emptied = True
             except PermissionError:
-                removed = lifecycle.remove_tree_as_root(runner, path)
-                if not removed.ok:
-                    raise ApiError("dotenv_not_removed",
-                                   "the values are saved as secrets, but Eggie "
-                                   "couldn't remove the .env file; delete it "
-                                   "from the Files page", 409) from None
+                emptied = lifecycle.empty_file_as_root(runner, path).ok
+            except OSError:
+                emptied = False
+            if not emptied:
+                raise ApiError("dotenv_not_removed",
+                               "the values are saved as secrets, but the .env "
+                               "file could not be emptied; empty it from the "
+                               "Files page", 409)
         return {"imported": sorted(values)}
 
     def compose_name_for(row: dict) -> str:
@@ -1092,8 +1107,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                     runner, project, directory, domain, on_phase=write.phase,
                     services=services, secrets=values)
                 diagnosis = None
-                if status == STARTED_OK:
+                if status in RUNNING:
+                    # A crash-looping stack still got these values.
                     state.mark_started(project_id, began)
+                if status == STARTED_OK:
                     write.phase("checking")
                     write("waiting for the project to answer through Traefik\n")
                     diagnosis = diagnose(

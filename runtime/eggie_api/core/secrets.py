@@ -82,8 +82,10 @@ def _compose_refs(text: str) -> set[str]:
 
 
 def expected(example_text: str | None, compose_text: str | None) -> set[str]:
-    return ((_example_keys(example_text) if example_text else set())
-            | (_compose_refs(compose_text) if compose_text else set()))
+    names = ((_example_keys(example_text) if example_text else set())
+             | (_compose_refs(compose_text) if compose_text else set()))
+    # Asking for a name that can never be set would leave it missing forever.
+    return {n for n in names if not n.upper().startswith(RESERVED_PREFIXES)}
 
 
 def _closing(body: str, quote: str) -> int:
@@ -138,6 +140,8 @@ def parse_dotenv(text: str) -> dict[str, str]:
                 i += 1
                 end = _closing(body, quote)
             value = _unescape(body[:end]) if quote == '"' else body[:end]
+        elif rest.startswith("#"):
+            value = ""
         else:
             value = re.split(r"\s+#", rest, maxsplit=1)[0].strip()
         check_value(value)

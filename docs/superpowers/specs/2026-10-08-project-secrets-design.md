@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS secrets (
 );
 ```
 
-plus `_add_column(projects, "secrets_changed_at", "TEXT")`.
+plus `_add_column(projects, "secrets_changed_at", "REAL")`.
 
 `state.db` already holds the cloud and GitHub tokens, sits outside every project folder, and is
-never synced. `core/state.py` gains `list_secret_names`, `secret_values`, `set_secret`,
-`delete_secret`, `drop_secrets` (all under the existing RLock); `set`/`delete` also stamp
-`projects.secrets_changed_at`.
+never synced. `core/state.py` gains `secret_names`, `secret_values`, `set_secrets`,
+`delete_secret`, `drop_secrets` (all under the existing RLock); `set_secrets`/`delete_secret` also
+stamp `projects.secrets_changed_at`.
 
 Lifetime: `DELETE /projects/{id}?purge=1` drops the project's secrets. A plain delete keeps them
 (the folder stays too); re-adding the same id brings them back.
@@ -66,8 +66,10 @@ Lifetime: `DELETE /projects/{id}?purge=1` drops the project's secrets. A plain d
 - `build_overlay(project_id, webs, domain, services, secret_names)`: when `secret_names` is
   non-empty, **every** compose service gets `environment: [NAME, …]` (bare names, no values).
   Web services keep their networks/labels; non-web services get only `environment`.
-- `compose_up` passes `env={name: value}` to `provider.exec` for the `up` call only. `down`, `ps`,
-  `logs`, `container_id` are unchanged.
+- Every compose command that loads the user's file gets `env={name: value}`: `up`, `ps`, `down`,
+  `logs` (buffered and follow) and `container_id` (`ps -q`). Compose interpolates the whole file
+  for each of them, so a `${KEY:?}` that only `up` could resolve would break the rest. Plain
+  `docker` calls (`ps -a --filter`, `inspect`, `rm`, `exec`) get no env.
 - Bare `- NAME` in compose resolves from the compose process environment, and so does `${NAME}`
   interpolation in the user's compose file. Secrets are merged over the API's inherited
   environment, so they win over it.
@@ -82,7 +84,10 @@ Lifetime: `DELETE /projects/{id}?purge=1` drops the project's secrets. A plain d
   skipped; leading `export ` allowed; the value is ignored (placeholders).
 - `docker-compose.yml` raw text: `${VAR}`, `${VAR:?err}`, `${VAR?err}` and `$VAR` count;
   `${VAR:-x}`, `${VAR-x}`, `${VAR:+x}`, `${VAR+x}` do not; `$$` is an escape, not a reference.
-- `missing = sorted(expected - secret_names)`.
+- `missing = sorted(expected - secret_names)`; `COMPOSE_*`/`DOCKER_*` names never count as
+  expected, since they can never be set.
+- Only the main `docker-compose.yml` is read: services pulled in through compose `include:` get no
+  secret names in the overlay and their refs are not listed.
 
 The current stack skills write `${X_API_KEY:-}`; the eggie-skills PR makes them also list such
 keys in `.env.example`, which is how they become "missing".
@@ -97,13 +102,15 @@ any secrets route contains a value.
 | GET | `/projects/{id}/secrets` | `{secrets: [{name, updated_at}], missing: [name], dotenv: {names: [name], error: str \| null} \| null, restart_needed: bool}` |
 | PUT | `/projects/{id}/secrets/{name}` | body `{value}`; create or replace; `204` |
 | DELETE | `/projects/{id}/secrets/{name}` | `204`; `404 secret_not_found` if absent |
-| POST | `/projects/{id}/secrets/import-dotenv` | parse root `.env`, store every key (file values overwrite), delete the file; returns `{imported: [name]}` |
+| POST | `/projects/{id}/secrets/import-dotenv` | parse root `.env`, store every key (file values overwrite), empty the file; returns `{imported: [name]}` |
 
-Unknown project → existing `404`. PUT/DELETE take no project lock (one sqlite statement each); `start_work` stamps the start time before reading values, so a change during a start still reports `restart_needed`. import-dotenv takes the project lock because it deletes a file.
+Unknown project → existing `404`. PUT/DELETE take no project lock (one sqlite statement each); `start_work` stamps the start time before reading values, so a change during a start still reports `restart_needed`. import-dotenv takes the project lock because it writes a file.
 
-import-dotenv errors: a `.env` line with an invalid name fails with `dotenv_invalid` and a message naming only the line number (never the key text, which may be part of a secret); a reserved-prefix name fails with `secret_name_reserved`.
+import-dotenv errors: a `.env` line with an invalid name fails with `dotenv_invalid` and a message naming only the line number (never the key text, which may be part of a secret); a reserved-prefix name fails with `secret_name_reserved`; a `.env` with no values is `404 dotenv_missing`; a `.env` that is a symlink is never read (`400 dotenv_invalid`, and GET reports it as `dotenv.error`); a file that cannot be emptied is `409 dotenv_not_removed` after the values are saved.
 
-`restart_needed` = project status is `started_ok` and `secrets_changed_at > last_started_at`.
+`restart_needed` = project status is `started_ok` or `crash_looping` and
+`secrets_changed_at > last_started_at` (a service exiting for lack of a key is the usual crash
+loop). A start that ends in either status stamps `last_started_at`.
 It is also added to the project payload (`GET /projects/{id}` and the list) so the project page can
 show the notice.
 
@@ -111,11 +118,16 @@ show the notice.
 
 `KEY=value` lines; `export ` prefix; `#` comments and blank lines skipped; single-quoted values
 literal; double-quoted values support `\n`, `\"`, `\\` and may span lines; unquoted values end at
-` #` and are trimmed. Invalid names or reserved prefixes fail the whole import with the validation
-error naming the key (nothing stored, file kept). Deleting the file uses the existing root-container
-fallback if the API cannot unlink it.
+` #` and are trimmed, and one that starts with `#` (`KEY= # note`) is empty. Invalid names or
+reserved prefixes fail the whole import (nothing stored, file kept): `dotenv_invalid` naming only
+the line number, or `secret_name_reserved`.
 
-The `.env` offer stays visible while the file exists; there is no dismissed state.
+The file is emptied, not deleted: a service with `env_file: .env` fails to start without it.
+Emptying falls back to a root container (`truncate`, same image as the tree-removal fallback) when
+the API cannot write the file.
+
+The `.env` offer stays visible while the file has values (an emptied file is `dotenv: null`);
+there is no dismissed state.
 
 ## 6. Console (`runtime/web/apps/console`)
 
@@ -159,9 +171,11 @@ Only where a wrong result is plausible:
 - Missing detection: `.env.example` comments/`export`/quotes; `${VAR}` vs defaults; `$$`.
 - `.env` import parsing: quotes, multi-line, `export`, inline comments; invalid key fails whole import.
 - Overlay: every service gets the names; no values in the overlay text.
-- `compose_up`: values reach the exec `env` of `up`, never argv.
+- Compose calls: values reach the exec `env` of every compose command, never argv; plain docker
+  calls get none.
 - Routes: no secrets-route response contains a stored value; `restart_needed` transitions; purge
-  drops secrets, plain delete keeps them; import-dotenv deletes the file.
+  drops secrets, plain delete keeps them; import-dotenv empties the file; a `.env` symlink is
+  never read.
 - CLI: `set` reads stdin, refuses an extra positional value; `list` shows missing.
 - Vitest only for pure console logic if any appears; no component tests.
 

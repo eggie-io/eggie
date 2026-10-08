@@ -2,6 +2,7 @@
 
 | Doc | For |
 |---|---|
+| [architecture.md](architecture.md) | The high-level map: host vs runtime, the contract between them, the in-VM stack, updates, platforms |
 | [development.md](development.md) | Setting up a checkout, running tests, the web UI dev server, debugging the API in a VM |
 | [building.md](building.md) | Building the Windows installer, the macOS package, and the container images |
 | [releasing.md](releasing.md) | Cutting runtime and desktop app releases, and how installed machines update |

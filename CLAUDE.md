@@ -98,8 +98,9 @@ In the WSL sandbox `/tmp/pytest-of-$USER` is root-owned, which breaks `tmp_path`
   name changes.
 - `docs/superpowers/` — the original blueprint plus every design spec and plan (dated filenames).
   `.superpowers/sdd/` (gitignored) is the per-task execution ledger.
-- `docs/architecture.md` and `docs/roadmap.md` **do not exist** — check `ls docs/` before trusting a
-  pointer to either. Phase 1 (MVP) fixes what exists (repo split, no host CLI, SSH-only access,
+- `docs/architecture.md` is the high-level map for humans; keep it in step when the seam, the
+  stack or the update flow changes. `docs/roadmap.md` **does not exist** — check `ls docs/` before
+  trusting a pointer to it. Phase 1 (MVP) fixes what exists (repo split, no host CLI, SSH-only access,
   autostart, self-update, signing) and adds accounts, a web app, secrets and public URLs; Phases 2
   and 3 are VPS deploys, paid plans and an own cloud.
 - Top-level `agent/`, `engine/`, `tests/agent/`, `tests/engine/` are untracked `__pycache__`

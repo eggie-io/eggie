@@ -1775,7 +1775,7 @@ EOF
 - [ ] **Step 1: Write the layering test**
 
 ```python
-"""The one dependency edge inside eggie_api: http -> services -> domain | infra."""
+"""The one dependency edge inside eggie_api: rest -> services -> domain | infra."""
 import ast
 from pathlib import Path
 
@@ -1816,12 +1816,12 @@ def _target(name: str) -> str:
 
 def test_layers_only_depend_downward():
     forbidden = {
-        "domain": {"infra", "services", "http", *IO_LIBS},
-        "infra": {"services", "http", *WEB_LIBS},
-        "services": {"http", *WEB_LIBS},
-        "config": {"services", "http"},
-        "constants": {"domain", "infra", "services", "http"},
-        "errors": {"domain", "infra", "services", "http"},
+        "domain": {"infra", "services", "rest", *IO_LIBS},
+        "infra": {"services", "rest", *WEB_LIBS},
+        "services": {"rest", *WEB_LIBS},
+        "config": {"services", "rest"},
+        "constants": {"domain", "infra", "services", "rest"},
+        "errors": {"domain", "infra", "services", "rest"},
     }
     offenders = []
     files = [p for p in API.rglob("*.py") if "__pycache__" not in p.parts]
@@ -1834,13 +1834,24 @@ def test_layers_only_depend_downward():
     assert not offenders, "\n".join(offenders)
 
 
-def test_only_http_wiring_and_main_import_services():
-    allowed = {"http", "wiring", "__main__", "services"}
+def test_only_rest_wiring_and_main_import_services():
+    allowed = {"rest", "wiring", "__main__", "services"}
     offenders = [f"{py.relative_to(API)} imports {name}"
                  for py in API.rglob("*.py") if "__pycache__" not in py.parts
                  for name in _imports(py)
                  if _target(name) == "services" and _layer(py) not in allowed]
     assert not offenders, "\n".join(offenders)
+
+
+def test_no_package_directory_shadows_the_standard_library():
+    # The image copies the package into its working directory, which is first
+    # on sys.path for `python -m` and the healthcheck's `python -c`; a top-level
+    # `http/` once made `import http.client` fail inside the container.
+    import sys
+    tops = {p.name for p in API.iterdir() if p.is_dir() and p.name != "__pycache__"}
+    tops |= {p.stem for p in API.glob("*.py") if p.stem != "__init__"}
+    clashes = sorted(tops & set(sys.stdlib_module_names))
+    assert not clashes, f"these shadow the stdlib from the image's working dir: {clashes}"
 ```
 
 Run: `… tests/runtime/api/test_layering.py -q` → PASS. To prove it can fail, temporarily add `import fastapi` to `services/jobs.py`, run again (FAIL naming the file), revert.
@@ -1852,7 +1863,7 @@ Replace the "Shape" section with:
 ```markdown
 ## Shape
 
-One dependency edge: `http → services → domain | infra`. `tests/runtime/api/test_layering.py`
+One dependency edge: `rest → services → domain | infra`. `tests/runtime/api/test_layering.py`
 fails on anything else.
 
 - `domain/` — pure logic, no I/O: compose parsing (`compose.py`), web-service detection
@@ -1868,7 +1879,7 @@ fails on anything else.
   dependencies in the constructor. `loader.py` is the read-only project reader everything else
   may hold; `lifecycle.py` owns start/stop jobs and the per-project lock contract; `jobs.py` is
   the in-process job registry; `locks.py` the non-blocking per-project locks.
-- `http/` — the only tree importing FastAPI. `app.py`'s `create_app` is a **factory on
+- `rest/` — the only tree importing FastAPI (named `rest`, not `http`: a top-level `http/` would shadow the stdlib once copied into the image's working directory). `app.py`'s `create_app` is a **factory on
   purpose**: no module-level `app`. `auth.py` is the middleware, `errors.py` the one
   class → status map, `schemas.py` the request models, `routers/<feature>.py` one `build(services)`
   per feature. A router parses the request, calls one service method and shapes the response:
@@ -1876,7 +1887,7 @@ fails on anything else.
 - `wiring.py` — `build(config, **fakes) -> Services`, the composition root; `__main__.py` is the
   uvicorn entrypoint (`python -m eggie_api`) and the only place background threads start.
 - `errors.py` — `EggieError(code, message)` and its subclasses (`NotFound`, `Conflict`,
-  `Invalid`, …). Anything below `http/` that wants the caller to act raises one with the wire
+  `Invalid`, …). Anything below `rest/` that wants the caller to act raises one with the wire
   code; the status comes from the class. Transport exceptions (`CloudError`, `GitHubError`,
   `NotSignedIn`, `JobFailed`) never reach HTTP — the calling service translates.
 - `config.py` — `ApiConfig`, the **only** place the domain and edge port may come from.
@@ -1888,7 +1899,7 @@ fails on anything else.
 
 1. A table → `infra/migrate.py` migration + `infra/repos/<name>.py`, added to `Repos`.
 2. `services/<name>.py` taking the repos and services it needs; raise `errors.*` subclasses.
-3. `http/routers/<name>.py` with `build(services)`; add it to `FEATURES` in `http/app.py`.
+3. `rest/routers/<name>.py` with `build(services)`; add it to `FEATURES` in `rest/app.py`.
 4. Construct it in `wiring.build()` and add the field to `Services`.
 ```
 
@@ -1896,7 +1907,7 @@ Update the remaining path mentions in that file (`core/secrets.py` → `domain/s
 
 - [ ] **Step 3: Update the other path mentions**
 
-`docs/releasing.md:32`: `runtime/eggie_api/core/constants.py` → `runtime/eggie_api/constants.py`. `runtime/stack.yml:16`: `eggie_api/core/overlay.py` → `eggie_api/domain/overlay.py`. `config.py` docstring: `core/lifecycle.py` → `infra/docker.py`, `eggie_api/routes/app.py's auth check` → `eggie_api/http/auth.py`. `infra/runner.py` docstring: `core/lifecycle.py` → `infra/docker.py`. `test_dockerfile.py` comment: `core/lifecycle.py` → `infra/docker.py`. Run the grep from the Files list once more; it must print nothing outside `docs/superpowers/`.
+`docs/releasing.md:32`: `runtime/eggie_api/core/constants.py` → `runtime/eggie_api/constants.py`. `runtime/stack.yml:16`: `eggie_api/core/overlay.py` → `eggie_api/domain/overlay.py`. `config.py` docstring: `core/lifecycle.py` → `infra/docker.py`, `eggie_api/routes/app.py's auth check` → `eggie_api/rest/auth.py`. `infra/runner.py` docstring: `core/lifecycle.py` → `infra/docker.py`. `test_dockerfile.py` comment: `core/lifecycle.py` → `infra/docker.py`. Run the grep from the Files list once more; it must print nothing outside `docs/superpowers/`.
 
 - [ ] **Step 4: Run the whole suite**
 
@@ -1916,7 +1927,7 @@ git push -u origin feature/57-api-refactor
 gh pr create --base main --title "Refactor eggie_api into layered modules" --body "$(cat <<'EOF'
 Closes #57.
 
-`runtime/eggie_api/` is now `domain/` (pure logic), `infra/` (I/O adapters, one repository per table), `services/` (one class per feature area) and `http/` (FastAPI only), with `wiring.build()` as the composition root and `errors.py` as the single error hierarchy mapped to HTTP in one place. The wire contract is unchanged; the existing test suite is the regression net (import paths and `State` construction are the only test edits), plus `test_layering.py` for the dependency rule.
+`runtime/eggie_api/` is now `domain/` (pure logic), `infra/` (I/O adapters, one repository per table), `services/` (one class per feature area) and `rest/` (FastAPI only), with `wiring.build()` as the composition root and `errors.py` as the single error hierarchy mapped to HTTP in one place. The wire contract is unchanged; the existing test suite is the regression net (import paths and `State` construction are the only test edits), plus `test_layering.py` for the dependency rule.
 
 Design: `docs/superpowers/specs/2026-10-08-api-refactor-design.md`.
 

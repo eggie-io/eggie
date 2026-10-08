@@ -55,15 +55,15 @@ runtime/eggie_api/
     loader.py projects.py lifecycle.py clone.py files.py uploads.py secrets.py
     github_link.py account.py public.py sessions.py agents.py sync.py system.py
     jobs.py locks.py
-  http/              the only tree importing fastapi / starlette / pydantic
+  rest/              the only tree importing fastapi / starlette / pydantic (not `http`: shadows the stdlib in the image)
     app.py auth.py errors.py schemas.py
     routers/ system.py projects.py lifecycle.py files.py uploads.py secrets.py
              jobs.py account.py github.py public.py agents.py sessions.py
 ```
 
-**One dependency edge:** `http → services → domain | infra`. `domain` imports nothing from the
+**One dependency edge:** `rest → services → domain | infra`. `domain` imports nothing from the
 other three. `infra` never imports `services` or `http`. `wiring.py` and `__main__.py` are the
-only modules outside `http/` that import `services`. A test enforces this (§8).
+only modules outside `rest/` that import `services`. A test enforces this (§8).
 
 Where today's modules go:
 
@@ -108,8 +108,8 @@ class Unavailable(EggieError): ...   # 503
 
 Rules:
 
-- Anything below `http/` that wants the caller to act raises one of these with today's wire
-  code. The status is not in the exception; `http/errors.py` holds the only class → status map.
+- Anything below `rest/` that wants the caller to act raises one of these with today's wire
+  code. The status is not in the exception; `rest/errors.py` holds the only class → status map.
 - Named subclasses exist only where code catches by type: `PathTraversalError(BadRequest)`,
   `BadArchiveError(BadRequest)` in `infra/files.py`; `SecretError(BadRequest)` in
   `domain/secrets.py`; `PublicBusy(Conflict)` and `PublicUnavailable(Conflict)` in
@@ -121,7 +121,7 @@ Rules:
   `CloudUnavailable`, `GitHubError`, `GitHubUnavailable` (infra clients, carrying the upstream
   code), `NotSignedIn`, `JobFailed`, `AmbiguousError`, `SchemaTooNew`. The service that calls
   them translates.
-- `http/errors.py` registers four handlers: `EggieError` (map + body), `RequestValidationError`
+- `rest/errors.py` registers four handlers: `EggieError` (map + body), `RequestValidationError`
   (`invalid_request`, 422, first error's location as today), Starlette `HTTPException`
   (`not_found` / `method_not_allowed` / `http_error`), and the catch-all 500 with the same
   message and logging as now.
@@ -160,7 +160,7 @@ class Database:
 ## 6. Services
 
 A router parses the request, calls one service method and shapes the response. No
-`try/except`, no business branching, no lock handling in `http/`. Every translation to an
+`try/except`, no business branching, no lock handling in `rest/`. Every translation to an
 `EggieError` lives in the service that knows why it failed.
 
 | service | constructor takes | responsibility |
@@ -187,7 +187,7 @@ bus.
 
 ## 7. HTTP layer and composition root
 
-`http/`:
+`rest/`:
 
 - `app.py` — `create_app(services, config) -> FastAPI`. Registers handlers and middleware,
   includes every feature router at `/` and `/api`, the console-only router (public URL on/off)
@@ -225,7 +225,7 @@ def build(config, *, runner=None, http_probe=None, cloud=None, github=None,
 
 `build()` constructs infra, then services in dependency order, sets the hooks and assembles
 `SyncLoop([public.reconcile, lambda: run_pass(account, cloud, repos)])`. The keyword overrides
-are the fakes tests inject today. `http.app.create_app(*, config=None, **overrides)` keeps the
+are the fakes tests inject today. `rest.app.create_app(*, config=None, **overrides)` keeps the
 current convenience signature by calling `build()` — `conftest.py` changes only its import.
 
 `__main__.py` at package top (`python -m eggie_api`; both Dockerfiles' `CMD` updated). Boot
@@ -241,7 +241,7 @@ order unchanged: `account.resume()`, `sync.start()`, `lifecycle.resume_all()`, `
   each file's imports with `ast`, and asserts: `domain/` imports none of `infra`, `services`,
   `http`, `sqlite3`, `subprocess`, `urllib`, `fastapi`; `infra/` imports neither `services` nor
   `http`; `infra/` and `services/` import none of `fastapi`, `starlette`, `pydantic`; only
-  `http/`, `wiring.py` and `__main__.py` import `services`; and that it scanned at least 40
+  `rest/`, `wiring.py` and `__main__.py` import `services`; and that it scanned at least 40
   files.
 - `tests/test_constants_agree.py` and `tests/test_no_platform_leak.py` get the new paths;
   `test_no_host_import.py` is unchanged.
@@ -265,7 +265,7 @@ One branch (`feature/57-api-refactor`), one PR, each commit green on the full su
    `docker`, `tunnel.py` out of `public.py`, `jobs.py` out of `routes/`.
 2. `errors.py`; `Database` + repos replace `State`; services raise typed errors; `http` maps.
 3. Services extracted from `app.py`; `app.py` is down to routes.
-4. `http/` split into routers, auth, errors, schemas; `wiring.py`; `__main__.py`; Dockerfiles.
+4. `rest/` split into routers, auth, errors, schemas; `wiring.py`; `__main__.py`; Dockerfiles.
 5. Layering test; CLAUDE.md and docs.
 
 Verification: `.venv/bin/python -m pytest -q` after each commit; `docker build

@@ -215,7 +215,9 @@ For each start, the effective variables are, highest precedence first:
 4. **Defaults** — keys of the project-root `.env.example` with a non-empty value, read fresh from the
    file at every compose call. Parsed with the `.env` rules (§5); a line that doesn't parse is skipped,
    never fatal. A symlinked `.env.example` counts as absent (no defaults, nothing missing from it).
-   Changes apply at the next start; `restart_needed` doesn't track them.
+   Changes apply at the next start; `restart_needed` doesn't track them. A name the compose file
+   references anywhere with its own default (`${X:-y}`, `${X-y}`, `${X:+y}`, `${X+y}`) is dropped
+   from the defaults like a `.env`-set name, so compose's own default wins (D7); a stored value still wins.
 
 Values of 2 and 4 (yours win) are passed as the environment of every compose call that loads the
 user's file; their names go into the overlay for every service except where rule 1 applies. No `.env`
@@ -237,14 +239,16 @@ exact names `PATH`, `HOME` (compose and the docker CLI read these from their own
 ```json
 {"secrets":  [{"name": "STRIPE_KEY", "updated_at": 1.0, "overrides_default": false}],
  "missing":  ["OPENAI_API_KEY"],
- "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false, "shadowed": false}],
+ "defaults": [{"name": "APP_NAME", "value": "Laravel", "overridden": false, "shadowed": false,
+               "compose_default": false}],
  "dotenv":   null,
  "restart_needed": false}
 ```
 
 Default values come from the repo file and are returned in clear; stored values never are.
 `shadowed` is true when the current `.env` sets that name (R1 rule 3); the console then shows the
-default with a "set by .env" tag instead of Edit.
+default with a "set by .env" tag instead of Edit. `compose_default` is true when the compose file
+gives that name its own default (R1 rule 4); the console tags it "compose default" and keeps Edit.
 "Reset to default" is `DELETE /projects/{id}/secrets/{name}`. `PUT` refuses an empty value
 (`secret_invalid_value`), like the CLI and console already do.
 

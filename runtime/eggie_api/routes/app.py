@@ -448,7 +448,10 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
             return set(secret_rules.parse_example(text))
 
     def project_env(project_id: str) -> dict[str, str] | None:
-        shadowed = dotenv_names(project_id)
+        # The compose file's own `${X:-y}` is its explicit choice and must
+        # not lose to an `.env.example` default.
+        shadowed = dotenv_names(project_id) | secret_rules.compose_defaulted(
+            read_text(project_dir(project_id) / constants.COMPOSE_FILE))
         base = {k: v for k, v in secret_rules.defaults(example_of(project_id)).items()
                 if k not in shadowed}
         return {**base, **state.secret_values(project_id)} or None
@@ -999,6 +1002,7 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
         have = {s["name"] for s in stored}
         shadowed = dotenv_names(project_id)
         compose_text = read_text(d / constants.COMPOSE_FILE)
+        compose_defaulted = secret_rules.compose_defaulted(compose_text)
         try:
             compose = yaml.safe_load(compose_text or "") or {}
         except yaml.YAMLError:
@@ -1020,7 +1024,8 @@ def create_app(*, config: ApiConfig | None = None, runner=None, state=None,
                 "missing": secret_rules.missing(example, compose_text, have=have,
                                                 declared_names=declared_names),
                 "defaults": [{"name": k, "value": v, "overridden": k in have,
-                              "shadowed": k in shadowed}
+                              "shadowed": k in shadowed,
+                              "compose_default": k in compose_defaulted}
                              for k, v in sorted(base.items())],
                 "dotenv": dotenv,
                 "restart_needed": restart_needed(row)}

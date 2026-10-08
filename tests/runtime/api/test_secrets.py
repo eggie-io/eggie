@@ -1,7 +1,7 @@
 import pytest
 
 from eggie_api.core.secrets import (SecretError, check_name, check_total,
-                                    check_value, declared, defaults, importable,
+                                    check_value, compose_defaulted, declared, defaults, importable,
                                     is_reserved, missing, parse_dotenv,
                                     parse_example)
 
@@ -59,6 +59,13 @@ def test_missing_counts_compose_refs_without_a_default():
         "    # I: ${I}\n"
     )
     assert missing({}, compose, have=set(), declared_names=set()) == ["A", "D", "E", "H"]
+
+
+def test_compose_defaulted_lists_only_refs_that_carry_their_own_default():
+    compose = ("environment:\n"
+               "  - ${A} ${B:-x} ${C-y} $$D ${E:?e} ${F:+z} $${G:-g}\n"
+               "# ${H:-h}\n")
+    assert compose_defaulted(compose) == {"B", "C", "F"}
 
 
 def test_parse_dotenv_handles_quotes_export_and_inline_comments():

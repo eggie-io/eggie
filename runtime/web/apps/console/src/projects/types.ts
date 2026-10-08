@@ -50,7 +50,7 @@ export interface Project {
 
 export interface SecretsView {
   secrets: { name: string; updated_at: number; overrides_default: boolean }[];
-  defaults: { name: string; value: string; overridden: boolean; shadowed: boolean }[];
+  defaults: { name: string; value: string; overridden: boolean; shadowed: boolean; compose_default: boolean }[];
   missing: string[];
   dotenv: { names: string[]; error: string | null } | null;
   restart_needed: boolean;

@@ -47,7 +47,8 @@ and a host release. Prefer additive changes.
   compose literal (a value without `$` the service sets itself) > stored value > the project's
   `.env` until it is imported > `.env.example` default. Every name a regular-file `.env` sets
   (empty included; leniently re-read if it doesn't parse) is dropped from the defaults, since
-  compose and frameworks read that file themselves. Defaults are read at every compose call by
+  compose and frameworks read that file themselves. So is every name the compose file references
+  with its own default (`${X:-y}` etc., `compose_defaulted`): compose's default wins. Defaults are read at every compose call by
   the lenient `parse_example`; a symlinked `.env.example` counts as absent. `.env.example` changes
   apply at the next start; `restart_needed` doesn't track them. `compose_up` lists the bare names under
   `environment:` for every service in `.eggie/overlay.yml` and passes the effective env only to

@@ -55,7 +55,7 @@ function StoredRow({ id, name, resets }: { id: string; name: string; resets: boo
   );
 }
 
-function DefaultRow({ id, name, base, overridden, shadowed }: { id: string; name: string; base: string; overridden: boolean; shadowed: boolean }) {
+function DefaultRow({ id, name, base, overridden, shadowed, composeDefault }: { id: string; name: string; base: string; overridden: boolean; shadowed: boolean; composeDefault: boolean }) {
   const save = useSetSecret(id);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(base);
@@ -73,10 +73,13 @@ function DefaultRow({ id, name, base, overridden, shadowed }: { id: string; name
         </>
       ) : (
         <>
-          <span className={`${s.plain} ${s.grow} ${overridden || shadowed ? s.struck : ""}`}>{base}</span>
+          <span className={`${s.plain} ${s.grow} ${overridden || shadowed || composeDefault ? s.struck : ""}`}>{base}</span>
           {overridden ? <span className={s.tag}>overridden</span>
             : shadowed ? <span className={s.tag}>set by .env</span>
-            : <Button onClick={() => setEditing(true)}>Edit</Button>}
+            : <>
+                {composeDefault && <span className={s.tag}>compose default</span>}
+                <Button onClick={() => setEditing(true)}>Edit</Button>
+              </>}
         </>
       )}
       {save.error && <Notice>{actionError(save.error)}</Notice>}
@@ -154,7 +157,7 @@ export function SecretsPage() {
       {data.defaults.length > 0 && (
         <Collapsible summary={`Defaults from .env.example (${data.defaults.length})`}>
           <div className={s.rows}>
-            {data.defaults.map((d) => <DefaultRow key={d.name} id={id} name={d.name} base={d.value} overridden={d.overridden} shadowed={d.shadowed} />)}
+            {data.defaults.map((d) => <DefaultRow key={d.name} id={id} name={d.name} base={d.value} overridden={d.overridden} shadowed={d.shadowed} composeDefault={d.compose_default} />)}
           </div>
         </Collapsible>
       )}

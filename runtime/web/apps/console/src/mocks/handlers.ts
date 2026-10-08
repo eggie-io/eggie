@@ -118,13 +118,13 @@ export function handlersFor(scenario: Scenario) {
   const projects = new Map<string, Project>();
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; defaults: Map<string, string>; dotenv: string[] | null }>();
+  const secrets = new Map<string, { names: Map<string, number>; missing: string[]; defaults: Map<string, string>; composeDefaults: string[]; dotenv: string[] | null }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"]]), dotenv: ["LOG_LEVEL", "SMTP_PASSWORD", "SMTP_USER"] }
-        : { names: new Map(), missing: [], defaults: new Map(), dotenv: null };
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), missing: ["OPENAI_API_KEY"], defaults: new Map([["APP_NAME", "Recipe Box"], ["LOG_LEVEL", "info"], ["MAIL_FROM", "hello@recipe.box"], ["PORT", "3000"]]), composeDefaults: ["PORT"], dotenv: ["LOG_LEVEL", "SMTP_PASSWORD", "SMTP_USER"] }
+        : { names: new Map(), missing: [], defaults: new Map(), composeDefaults: [], dotenv: null };
       secrets.set(id, entry);
     }
     return entry;
@@ -447,7 +447,7 @@ export function handlersFor(scenario: Scenario) {
       const entry = secretsOf(target.id);
       return HttpResponse.json({
         secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, overrides_default: entry.defaults.has(name) })),
-        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name), shadowed: entry.dotenv?.includes(name) ?? false })),
+        defaults: [...entry.defaults].map(([name, value]) => ({ name, value, overridden: entry.names.has(name), shadowed: entry.dotenv?.includes(name) ?? false, compose_default: entry.composeDefaults.includes(name) })),
         missing: entry.missing.filter((n) => !entry.names.has(n)),
         dotenv: entry.dotenv && { names: entry.dotenv, error: null },
         restart_needed: target.restart_needed,

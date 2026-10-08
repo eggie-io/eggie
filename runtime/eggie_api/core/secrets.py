@@ -65,19 +65,27 @@ def check_total(values: dict[str, str]) -> None:
                           f"{MAX_PROJECT_BYTES // 1024} KB")
 
 
-def _compose_refs(text: str) -> set[str]:
-    refs = set()
+def _scan_refs(text: str) -> tuple[set[str], set[str]]:
+    """(names referenced without a default, names referenced with one)."""
+    plain, defaulted = set(), set()
     for line in text.splitlines():
         if line.lstrip().startswith("#"):
             continue
         # `$$` is compose's escape for a literal dollar sign.
         line = line.replace("$$", "")
         for match in _BRACED.finditer(line):
-            if match.group(2) not in _DEFAULTED:
-                refs.add(match.group(1))
+            (defaulted if match.group(2) in _DEFAULTED else plain).add(match.group(1))
         for match in _BARE.finditer(_BRACED.sub("", line)):
-            refs.add(match.group(1))
-    return refs
+            plain.add(match.group(1))
+    return plain, defaulted
+
+
+def _compose_refs(text: str) -> set[str]:
+    return _scan_refs(text)[0]
+
+
+def compose_defaulted(compose_text: str | None) -> set[str]:
+    return _scan_refs(compose_text)[1] if compose_text else set()
 
 
 def _closing(body: str, quote: str) -> int:

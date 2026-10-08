@@ -313,9 +313,9 @@ def test_the_listing_shows_defaults_in_clear_and_values_never(env):
     env.client.put("/projects/blog/secrets/MODE", json={"value": SECRET})
     body = env.client.get("/projects/blog/secrets").json()
     assert body["defaults"] == [{"name": "APP_NAME", "value": "Blog", "overridden": False,
-                                 "shadowed": False},
+                                 "shadowed": False, "compose_default": False},
                                 {"name": "MODE", "value": "dev", "overridden": True,
-                                 "shadowed": False}]
+                                 "shadowed": False, "compose_default": True}]
     assert body["secrets"] == [{"name": "MODE", "updated_at": body["secrets"][0]["updated_at"],
                                 "overrides_default": True}]
     assert body["missing"] == ["API_KEY"]
@@ -409,3 +409,26 @@ def test_a_dotenv_example_symlink_is_treated_as_absent(env):
     assert "LEAKED" not in env.client.get("/projects/blog/secrets").text
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert _up_envs(env) == [None]
+
+
+COMPOSE_DEFAULTS_X = """
+services:
+  web:
+    image: nginx
+    ports: ["8080:80"]
+    environment:
+      X: ${X:-c}
+"""
+
+
+def test_the_compose_files_own_default_beats_the_example_and_a_stored_value_beats_both(env):
+    folder = _project(env, compose=COMPOSE_DEFAULTS_X)
+    (folder / ".env.example").write_text("X=a\nY=b\n")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env) == [{"Y": "b"}]
+    assert _overlay_names(env, folder)["web"]["environment"] == ["Y"]
+    defaults = env.client.get("/projects/blog/secrets").json()["defaults"]
+    assert [(d["name"], d["compose_default"]) for d in defaults] == [("X", True), ("Y", False)]
+    env.client.put("/projects/blog/secrets/X", json={"value": "stored"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert _up_envs(env)[-1] == {"X": "stored", "Y": "b"}

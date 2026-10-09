@@ -3,9 +3,9 @@
 .sheen {
   position: absolute; top: 0; bottom: 0; left: 0; width: 26%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
-  animation: om-bar 1.8s linear infinite;
+  animation: global(om-bar) 1.8s linear infinite;
 }
 .sweep {
   position: absolute; top: 0; bottom: 0; left: 0; width: 34%; border-radius: 99px; background: var(--yolk);
-  animation: om-bar 2.4s cubic-bezier(.45,0,.55,1) infinite;
+  animation: global(om-bar) 2.4s cubic-bezier(.45,0,.55,1) infinite;
 }

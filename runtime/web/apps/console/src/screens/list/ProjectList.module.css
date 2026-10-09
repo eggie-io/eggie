@@ -73,3 +73,10 @@
 @media (min-width: 1040px) {
   .row { display: grid; grid-template-columns: 1fr 200px 200px; }
 }
+
+.loading { display: flex; align-items: center; gap: 12px; font-size: 16px; color: var(--ink); }
+.spinner {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  border: 2.5px solid var(--yolk); border-top-color: transparent;
+  animation: global(om-spin) .9s linear infinite;
+}

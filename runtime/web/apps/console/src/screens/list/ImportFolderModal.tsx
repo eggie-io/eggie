@@ -16,7 +16,7 @@ import s from "./ProjectList.module.css";
 
 type Step =
   | { kind: "pick"; problem: string | null }
-  | { kind: "reading"; done: number; total: number | null }
+  | { kind: "reading" }
   | { kind: "review"; plan: ImportPlan; mode: Mode }
   | { kind: "working"; plan: ImportPlan; phase: Phase }
   | { kind: "failed"; plan: ImportPlan; mode: Mode; message: string };
@@ -78,17 +78,15 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     const run = ++pickRun.current;
     opened.current = run;
     const pickerClosed = () => {
-      if (pickRun.current === run) setStep((current) => (current.kind === "pick" ? { kind: "reading", done: 0, total: null } : current));
+      if (pickRun.current === run) setStep((current) => (current.kind === "pick" ? { kind: "reading" } : current));
     };
     window.addEventListener("focus", pickerClosed, { once: true });
     picker.current?.click();
   }
 
   async function plan(picked: Picked[], run: number) {
-    setStep({ kind: "reading", done: 0, total: picked.length });
-    const planned = await planImport(picked, (done, total) => {
-      if (pickRun.current === run) setStep({ kind: "reading", done, total });
-    });
+    setStep({ kind: "reading" });
+    const planned = await planImport(picked);
     if (pickRun.current === run) review(planned);
   }
 
@@ -113,10 +111,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     setDragging(false);
     const run = ++pickRun.current;
     // The item list is only readable inside this handler, so it is read before the first await.
-    const walking = fromDrop(event.dataTransfer.items, (found) => {
-      if (pickRun.current === run) setStep({ kind: "reading", done: found, total: null });
-    });
-    setStep({ kind: "reading", done: 0, total: null });
+    const walking = fromDrop(event.dataTransfer.items);
+    setStep({ kind: "reading" });
     const picked = await walking;
     if (pickRun.current !== run) return;
     if (picked === null) setStep({ kind: "pick", problem: "Drop a folder, not files — single files go up from a project's Files page." });
@@ -184,15 +180,11 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     case "reading":
       body = (
         <>
-          <ProgressBar value={step.total ? step.done / step.total : undefined} label="Reading the folder" />
-          <p>Reading the folder…</p>
-          <p className={s.quiet}>
-            {step.total !== null
-              ? `${step.done.toLocaleString()} of ${step.total.toLocaleString()} files looked at`
-              : step.done > 0
-                ? `${step.done.toLocaleString()} files found so far`
-                : "A folder with tens of thousands of files can take a minute."}
-          </p>
+          <div className={s.loading} role="status">
+            <span className={s.spinner} aria-hidden="true" />
+            <p>Reading the folder…</p>
+          </div>
+          <p className={s.quiet}>This can take a while, depending on how big the project is.</p>
           <div className={s.formActions}>
             <Button variant="quiet" onClick={reset}>Cancel</Button>
           </div>

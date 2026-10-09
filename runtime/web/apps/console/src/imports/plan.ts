@@ -34,21 +34,14 @@ const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // The first `file.size` of a picked file is a blocking disk stat (about half
 // a millisecond each in Chrome), so a big folder is planned in batches that
-// give the page a chance to paint the count.
-export async function planImport(
-  picked: readonly Picked[],
-  onProgress: (done: number, total: number) => void = () => {},
-  pause: () => Promise<void> = nextTask,
-): Promise<ImportPlan> {
+// give the page a chance to paint.
+export async function planImport(picked: readonly Picked[], pause: () => Promise<void> = nextTask): Promise<ImportPlan> {
   const entries: Entry[] = [];
   const skipped = new Set<string>();
   let name = "";
   let bytes = 0;
   for (let i = 0; i < picked.length; i += 1) {
-    if (i > 0 && i % BATCH === 0) {
-      onProgress(i, picked.length);
-      await pause();
-    }
+    if (i > 0 && i % BATCH === 0) await pause();
     const { path, file } = picked[i];
     const parts = path.split("/").filter((part) => part !== "");
     if (parts.length < 2) continue;
@@ -64,6 +57,5 @@ export async function planImport(
     entries.push({ path: rel, size: file.size, file });
     bytes += file.size;
   }
-  onProgress(picked.length, picked.length);
   return { name, id: slugify(name), entries, bytes, skipped: [...skipped].sort() };
 }

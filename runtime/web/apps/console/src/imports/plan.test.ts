@@ -45,11 +45,9 @@ describe("planImport", () => {
 
   it("hands the page back between batches so a big folder doesn't freeze it", async () => {
     const files = Array.from({ length: 1200 }, (_, i) => pick(`big/f${i}.txt`));
-    const progress: number[] = [];
     let pauses = 0;
-    const plan = await planImport(files, (done) => progress.push(done), async () => void (pauses += 1));
+    const plan = await planImport(files, async () => void (pauses += 1));
     expect(pauses).toBe(2);
-    expect(progress).toEqual([500, 1000, 1200]);
     expect(plan.entries).toHaveLength(1200);
   });
 

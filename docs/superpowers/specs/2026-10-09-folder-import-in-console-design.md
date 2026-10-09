@@ -58,11 +58,10 @@ Measured in Chrome on a folder of 62,000 small files, 42,000 of them kept:
 | First `file.size` per file is a blocking disk stat | about 11 s | planner, batched with yields |
 | Reading and packing | 14–26 s (61 s one at a time) | packer, 32 small files read ahead |
 
-So the dialog shows one "Reading the folder…" loader between the pick and the review. Nothing
+So the dialog shows one "Reading the folder…" spinner between the pick and the review, with no count or bar. Nothing
 changes while the native picker is open. The loader starts when the window gets focus back,
 which is the only sign that the picker closed before the browser finishes listing the files.
-A `cancel` after that returns to the pick step. Once the files arrive, it shows a live count while
-sizes are read, or while a dropped folder is walked. A dropped folder never opens an
+A `cancel` after that returns to the pick step. A dropped folder never opens an
 excluded directory; the picker can't skip one, because the browser lists everything first.
 
 ## UI

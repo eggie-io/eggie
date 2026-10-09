@@ -72,6 +72,9 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `runtime/agents/` is outside this workspace: the image needs `--build-context agents=runtime/agents`
   (use `packaging/images/build.sh`), and `content.test.ts` reaches it with five `../`, which
   matches `/runtime/agents` in the image only because `WORKDIR` is `/runtime/web`.
+- In a `.module.css` file, CSS Modules renames animation names to local ones, and the shared
+  `om-*` keyframes in `tokens.css` have no local twin. Write `animation: global(om-spin) …`
+  (no colon). A bare name silently never runs; `packages/ui/test/animations.test.ts` checks.
 - The first `file.size` of each picked file is a blocking disk stat (about half a millisecond in
   Chrome): 40k files freeze the page for 15 s. `imports/plan.ts` reads sizes in batches that yield.
 - A file input's `cancel` event bubbles, and `Modal`'s `<dialog>` closes itself on `cancel`.

@@ -72,5 +72,4 @@ describe("tarBlob", () => {
   it("an empty folder is just the end-of-archive marker", async () => {
     expect(readTar(await tarBytes([]))).toEqual([]);
   });
-
 });

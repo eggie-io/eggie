@@ -27,8 +27,10 @@ services:
     command:
       - "--entryPoints.web.address=:${EGGIE_EDGE_PORT:-39080}"
       # The default 60 s is for reading the whole request, body included,
-      # which cuts off a large folder import mid-upload.
-      - "--entryPoints.web.transport.respondingTimeouts.readTimeout=0"
+      # which cuts off a large folder import mid-upload. Still finite: public
+      # URLs share this entry point, and a body that never ends must not hold
+      # a connection forever.
+      - "--entryPoints.web.transport.respondingTimeouts.readTimeout=30m"
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"

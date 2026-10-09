@@ -227,7 +227,7 @@ def test_upload_route_rejects_a_traversal_archive(env):
     assert _stray_temp_files(config) == []
 
 
-def test_upload_route_rejects_a_non_gzip_body(env):
+def test_upload_route_rejects_a_body_that_is_not_an_archive(env):
     client, config = env
     _create(client)
     resp = client.post("/projects/blog/files", content=b"not a tarball",

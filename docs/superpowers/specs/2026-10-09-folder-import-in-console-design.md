@@ -46,7 +46,7 @@ runtime: a later change to how import works needs no host release.
    way to show upload progress. Once everything is sent the dialog shows "Unpacking it in
    Eggie…" until the API answers. The API accepts plain tar and tar.gz, unpacks in a worker
    thread so its other routes keep answering, and caps an upload at 16 GiB. Traefik's entry point
-   has no read timeout, since its 60 s default covers the whole request body. `project_busy` is retried for up to a minute, as the host client
+   allows 30 minutes to read a request, since its 60 s default covers the whole request body. `project_busy` is retried for up to a minute, as the host client
    does. The API's own messages for `payload_too_large` and `disk_full` are shown as they are.
 7. **Done.** Navigate to the project page.
 

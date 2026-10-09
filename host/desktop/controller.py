@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import threading
 
 from .settings import TRAY_NOTICE_SHOWN, Settings
+
+log = logging.getLogger(__name__)
 
 TRAY_NOTICE = "Eggie is still running. Find it in the system tray."
 START_FAILED = "Eggie could not start. Open Eggie to see why."
@@ -43,7 +45,7 @@ class Controller:
                 if self.tray.notify(TRAY_NOTICE):
                     self.settings.set(TRAY_NOTICE_SHOWN, True)
         except Exception as e:
-            print(f"Eggie could not show the tray notice: {e!r}", file=sys.stderr)
+            log.warning("could not show the tray notice: %r", e)
         return False
 
     def allow_exit(self) -> None:
@@ -110,7 +112,7 @@ class Controller:
         try:
             return bool(self.tray.notify(text))
         except Exception as e:
-            print(f"Eggie could not show a notification: {e!r}", file=sys.stderr)
+            log.warning("could not show a notification: %r", e)
             return False
 
     def _tell_page(self) -> None:
@@ -122,14 +124,14 @@ class Controller:
         try:
             self._push(event)
         except Exception as e:
-            print(f"Eggie could not refresh its window: {e!r}", file=sys.stderr)
+            log.warning("could not refresh the window: %r", e)
 
     def start_vm_in_background(self) -> threading.Thread:
         def run():
             try:
                 self.provider.start()
             except Exception as e:
-                print(f"Eggie could not start the virtual machine: {e!r}", file=sys.stderr)
+                log.exception("could not start the virtual machine in the background")
                 if not self._notify(START_FAILED):
                     self.show()
             finally:

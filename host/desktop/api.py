@@ -10,6 +10,7 @@ window.
 """
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from urllib.parse import quote
@@ -21,6 +22,8 @@ from .jobs import JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
 from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
+
+log = logging.getLogger(__name__)
 
 _FROZEN = object()
 # Past WSL's own 30 s poweroff wait; a hung wsl.exe must not keep Quit from quitting.
@@ -35,7 +38,7 @@ class DesktopApi:
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
                  settings=None, autostart_exe=_FROZEN, window_shown_once=None,
-                 stop_timeout=QUIT_STOP_TIMEOUT):
+                 stop_timeout=QUIT_STOP_TIMEOUT, log_path=None):
         self._provider = provider
         self._state = state
         self._probe = probe_fn
@@ -60,6 +63,7 @@ class DesktopApi:
         self._quitting = False
         self._quit_thread = None
         self._stop_timeout = stop_timeout
+        self._log_path = log_path
 
     @staticmethod
     def _default_client_factory(provider):
@@ -193,8 +197,7 @@ class DesktopApi:
                     enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
             except Exception as e:
                 # The VM is installed; an unsaved flag is not a failed install.
-                print(f"Eggie could not record turning on open at login: {e!r}",
-                      file=sys.stderr)
+                log.warning("could not record turning on open at login: %r", e)
             return terminal_event(None)
 
         job_id = self.jobs.start("install", work)
@@ -271,7 +274,10 @@ class DesktopApi:
         diagnosis = self._provider.preflight()
         # Rendered by host/core so the modal shows exactly what `eggie doctor`
         # prints -- one wording for the user to read out to whoever helps them.
-        return {"ok": diagnosis.ok, "text": render_diagnosis(diagnosis)}
+        text = render_diagnosis(diagnosis)
+        if self._log_path is not None:
+            text += f"\nLog file: {self._log_path}"
+        return {"ok": diagnosis.ok, "text": text}
 
     def start_vm(self) -> dict:
         def work(emit):
@@ -418,8 +424,8 @@ class DesktopApi:
         stopper.start()
         stopper.join(self._stop_timeout)
         if stopper.is_alive():
-            print(f"Eggie timed out stopping the virtual machine after "
-                  f"{self._stop_timeout:g} s; quitting anyway.", file=sys.stderr)
+            log.warning("timed out stopping the virtual machine after %g s; quitting anyway",
+                        self._stop_timeout)
         self._quit_app()
 
     def _stop_vm(self) -> None:
@@ -428,4 +434,4 @@ class DesktopApi:
                 self._provider.stop()
         except Exception as e:
             # A VM that will not stop must not leave an app that cannot close.
-            print(f"Eggie could not stop the virtual machine: {e!r}", file=sys.stderr)
+            log.warning("could not stop the virtual machine: %r", e)

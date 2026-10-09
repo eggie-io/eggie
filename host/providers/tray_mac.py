@@ -5,10 +5,12 @@ from any other, so everything here is scheduled onto that loop.
 """
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from pathlib import Path
 from typing import Callable
+
+log = logging.getLogger(__name__)
 
 
 def _run_off_main(callback: Callable[[], None]) -> None:
@@ -17,8 +19,8 @@ def _run_off_main(callback: Callable[[], None]) -> None:
     def run():
         try:
             callback()
-        except Exception as e:
-            print(f"tray callback failed: {e!r}", file=sys.stderr)
+        except Exception:
+            log.exception("tray callback failed")
 
     threading.Thread(target=run, daemon=True, name="eggie-tray-action").start()
 

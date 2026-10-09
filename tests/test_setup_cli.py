@@ -269,12 +269,14 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
     captured = {}
     provider = StubProvider()
 
-    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False):
+    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
+                 log_path=None):
         captured["provider"] = provider
         captured["a"] = steps_factory()
         captured["b"] = steps_factory()
         captured["resumed"] = resumed
         captured["background"] = background
+        captured["log_path"] = log_path
         return 0
 
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
@@ -288,6 +290,8 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
     assert captured["provider"] is provider
     assert captured["a"] is not captured["b"], \
         "steps_factory must build a fresh list on every call, not close over one"
+    # Next to settings.json, where Doctor and a support request can find it.
+    assert captured["log_path"] == tmp_path / "eggie.log"
 
 
 def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
@@ -296,7 +300,8 @@ def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
     with "Continuing setup after the restart"."""
     captured = {}
 
-    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False):
+    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
+                 log_path=None):
         captured["resumed"] = resumed
         captured["background"] = background
         return 0
@@ -334,7 +339,8 @@ def test_packaging_spec_bundles_exactly_the_assets_selfcheck_verifies():
 def test_setup_background_reaches_the_window(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False):
+    def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
+                 log_path=None):
         captured["background"] = background
         return 0
 

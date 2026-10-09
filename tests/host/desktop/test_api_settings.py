@@ -139,7 +139,7 @@ def test_quit_anyway_runs_while_a_job_is_still_running(tmp_path):
         api.jobs.join(timeout=5)
 
 
-def test_an_install_still_ends_done_when_the_once_flag_cannot_be_saved(tmp_path, capsys):
+def test_an_install_still_ends_done_when_the_once_flag_cannot_be_saved(tmp_path, caplog):
     pushed = []
     settings = Settings(tmp_path / "settings.json")
 
@@ -153,10 +153,10 @@ def test_an_install_still_ends_done_when_the_once_flag_cannot_be_saved(tmp_path,
                      settings=settings, autostart_exe=EXE, quit_app=lambda: None)
     api.start_install(); api.jobs.join(timeout=5)
     assert pushed[-1]["type"] == "done"
-    assert "disk full" in capsys.readouterr().err
+    assert "disk full" in caplog.text
 
 
-def test_quit_exits_when_stopping_the_vm_hangs(tmp_path, capsys):
+def test_quit_exits_when_stopping_the_vm_hangs(tmp_path, caplog):
     release = threading.Event()
 
     class Hanging(FakeProvider):
@@ -168,6 +168,6 @@ def test_quit_exits_when_stopping_the_vm_hangs(tmp_path, capsys):
     try:
         api.quit(False); api._quit_thread.join(timeout=5)
         assert quits == [True]
-        assert "timed out" in capsys.readouterr().err
+        assert "timed out" in caplog.text
     finally:
         release.set()

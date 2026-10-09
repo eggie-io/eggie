@@ -61,7 +61,7 @@ services:
       - "${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
     environment:
       - EGGIE_API_PORT=${EGGIE_API_PORT:-39099}
-      - EGGIE_DOMAIN=${EGGIE_DOMAIN:-127-0-0-1.sslip.io}
+      - EGGIE_DOMAIN=${EGGIE_DOMAIN:-local.eggie.space}
       - EGGIE_EDGE_PORT=${EGGIE_EDGE_PORT:-39080}
       - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
     volumes:

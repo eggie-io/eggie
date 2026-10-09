@@ -34,7 +34,7 @@ def test_stack_yml_hardcodes_no_domain_or_port_outside_a_default():
     stripped = _without_interpolation()
     assert "39080" not in stripped
     assert "39099" not in stripped
-    assert "127-0-0-1.sslip.io" not in stripped
+    assert "local.eggie.space" not in stripped
 
 
 def test_the_api_service_binds_the_port_it_is_published_on():

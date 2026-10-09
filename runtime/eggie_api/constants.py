@@ -4,7 +4,7 @@ GUEST_ROOT = "/opt/eggie"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 EDGE_NETWORK = "edge"
 COMPOSE_FILE = "docker-compose.yml"
-DEFAULT_DOMAIN = "127-0-0-1.sslip.io"
+DEFAULT_DOMAIN = "local.eggie.space"
 # Reserved for the setup smoke test. Deriving it from the template directory
 # name would let `verify` compose-down a user project that happened to share it.
 VERIFY_PROJECT_ID = "eggie-selftest"

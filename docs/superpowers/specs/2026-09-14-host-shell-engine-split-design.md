@@ -41,7 +41,7 @@ The only things both sides agree on:
 |---|---|
 | Token file | `/opt/eggie/agent.token`, readable by root |
 | Agent API | `127.0.0.1:39099`; `GET /health` returns `"api": <int>` |
-| Edge | port `39080`, domain `127-0-0-1.sslip.io` |
+| Edge | port `39080`, domain `local.eggie.space` |
 | Installed marker | `/opt/eggie/engine.version` — the host checks presence only, never the value |
 | Engine entrypoint | the script at `EGGIE_ENGINE_URL`, run as root with `bash` |
 | Entrypoint env | `EGGIE_ENGINE_REF` (optional), `EGGIE_ENGINE_REPAIR=1` (optional) |

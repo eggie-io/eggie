@@ -62,7 +62,7 @@ def build(provider, tmp_path, **overrides):
     kwargs = dict(
         cache_dir=tmp_path / "cache",
         template_dir=tmp_path / "template",
-        domain="127-0-0-1.sslip.io",
+        domain="local.eggie.space",
         exe_path=r"C:\Apps\Eggie\setup.exe",
     )
     return default_steps(provider, **{**kwargs, **overrides})

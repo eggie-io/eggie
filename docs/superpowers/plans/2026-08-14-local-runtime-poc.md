@@ -17,7 +17,7 @@
 - The runtime **never edits the user's compose file** — routing is added via a separate generated `runtime/.runtime/overlay.yml` in the project dir (`.runtime/`).
 - Guest services and Traefik **bind `0.0.0.0`**, never `127.0.0.1`.
 - Exactly one host-visible port: **`39080`**. Traefik's entrypoint listens on `39080` inside the guest (identical on both OSes); WSL same-port `localhostForwarding` and Lima `portForwards` both surface it on host `39080`. No `netsh`/admin for the edge port.
-- Default routing domain: `127-0-0-1.sslip.io` (resolves to 127.0.0.1 in every browser incl. Safari; needs internet). URL shape: `http://<id>.127-0-0-1.sslip.io:39080`.
+- Default routing domain: `local.eggie.space` (resolves to 127.0.0.1 in every browser incl. Safari; needs internet). URL shape: `http://<id>.local.eggie.space:39080`.
 - Distro/VM name: `runtime-vm`. Guest project root: `/opt/runtime/projects/<id>`. Bootstrap marker: `/opt/runtime/.bootstrapped` holding an integer version (current: `1`).
 - No stack names (`wordpress`, `laravel`, `django`, …) anywhere in `runtime/core/` or `runtime/providers/`.
 
@@ -906,7 +906,7 @@ git commit -m "feat(M0): runtime doctor renders host diagnosis"
 - Test: `tests/guest/test_bootstrap_shell.py`, `tests/guest/__init__.py`
 
 **Interfaces:**
-- Produces: `runtime/core/constants.py` with `EDGE_PORT = 39080`, `BOOTSTRAP_VERSION = 1`, `GUEST_PROJECTS = "/opt/runtime/projects"`, `BOOTSTRAP_MARKER = "/opt/runtime/.bootstrapped"`, `EDGE_NETWORK = "edge"`, `DEFAULT_DOMAIN = "127-0-0-1.sslip.io"`.
+- Produces: `runtime/core/constants.py` with `EDGE_PORT = 39080`, `BOOTSTRAP_VERSION = 1`, `GUEST_PROJECTS = "/opt/runtime/projects"`, `BOOTSTRAP_MARKER = "/opt/runtime/.bootstrapped"`, `EDGE_NETWORK = "edge"`, `DEFAULT_DOMAIN = "local.eggie.space"`.
 - `bootstrap.sh` is idempotent, writes the marker with `BOOTSTRAP_VERSION`.
 
 - [ ] **Step 1: Write `runtime/core/constants.py`**
@@ -918,7 +918,7 @@ GUEST_ROOT = "/opt/runtime"
 GUEST_PROJECTS = "/opt/runtime/projects"
 BOOTSTRAP_MARKER = "/opt/runtime/.bootstrapped"
 EDGE_NETWORK = "edge"
-DEFAULT_DOMAIN = "127-0-0-1.sslip.io"
+DEFAULT_DOMAIN = "local.eggie.space"
 ```
 
 - [ ] **Step 2: Write `runtime/guest/traefik.yml`**
@@ -2396,7 +2396,7 @@ The CLI shells out to `wsl.exe`. Provide an Ubuntu 24.04 rootfs tarball (from
 
 ```bash
 runtime vm create        # imports the runtime-vm distro, enables systemd, bootstraps Docker + Traefik
-runtime up ./my-project  # prints http://my-project.127-0-0-1.sslip.io:39080
+runtime up ./my-project  # prints http://my-project.local.eggie.space:39080
 ```
 
 `runtime status`, `runtime logs <id>`, `runtime down <id>`, `runtime destroy <id>`.

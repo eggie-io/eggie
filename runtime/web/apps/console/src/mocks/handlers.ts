@@ -47,7 +47,7 @@ export function scenarioFrom(search: string): Scenario {
   return SCENARIOS.find((scenario) => scenario === wanted) ?? "ok";
 }
 
-const DOMAIN = "127-0-0-1.sslip.io";
+const DOMAIN = "local.eggie.space";
 const address = (id: string, sub?: string) => `http://${sub ? `${sub}.` : ""}${id}.${DOMAIN}:39080`;
 const nowSec = () => Date.now() / 1000;
 

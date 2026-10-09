@@ -1742,7 +1742,7 @@ Expected: pass.
   `/opt/eggie/tunnel.token` (0640, present only while a URL is on) and starts the
   profile-gated `tunnel` service in `stack.yml` through compose. The service rewrites Host to the
   project's local hostname, so overlays are unchanged; apps that build absolute URLs from Host
-  send public visitors to `*.127-0-0-1.sslip.io`. Only the console turns it on; the CLI never
+  send public visitors to `*.local.eggie.space`. Only the console turns it on; the CLI never
   shows it. Reconciled on every sync pass.
 ```
 

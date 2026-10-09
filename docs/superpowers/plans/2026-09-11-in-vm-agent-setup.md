@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A coding agent running inside the Eggie VM can turn a repo URL, an archive, a folder, or a plain-words app idea into a routed project with a working sslip URL, without asking the user a technical question.
+**Goal:** A coding agent running inside the Eggie VM can turn a repo URL, an archive, a folder, or a plain-words app idea into a routed project with a working local URL, without asking the user a technical question.
 
 **Architecture:** A stdlib-only `eggie` command inside the guest talks to the existing agent API (`127.0.0.1:39099`, bearer token) exactly the way the host client does. Two agent-neutral Markdown files (always-loaded instructions + an `eggie-setup` skill) are pushed with it, and provisioning copies them into each coding agent's discovery locations. Nothing is written into user repositories.
 
@@ -1586,4 +1586,4 @@ Never boot or exec into the VM from the development WSL shell; give the user the
    3. copy a folder in through `\\wsl.localhost\eggie-vm\opt\eggie\projects` and say "set this up".
 4. In Codex (WSL mode), repeat 3.1 or 3.2.
 
-Each passes when the agent asks no technical question, replies with a `…127-0-0-1.sslip.io:39080` URL, the URL opens in a Windows browser, and a page edit shows after a reload.
+Each passes when the agent asks no technical question, replies with a `…local.eggie.space:39080` URL, the URL opens in a Windows browser, and a page edit shows after a reload.

@@ -58,7 +58,7 @@ bash /opt/eggie/runtime/install/install.sh "$(cat /opt/eggie/runtime.version)" -
 ```
 
 Ports: the API listens on `39099`, and all project and console traffic enters through Traefik on
-`39080`. Project URLs look like `http://<name>.127-0-0-1.sslip.io:39080`.
+`39080`. Project URLs look like `http://<name>.local.eggie.space:39080`.
 
 ## Troubleshooting
 

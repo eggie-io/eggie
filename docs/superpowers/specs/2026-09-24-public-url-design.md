@@ -20,7 +20,7 @@ Everything here lives in `runtime/`. No host change and no host release.
 |---|----------|-----|
 | 1 | The VM is written against the service contract in section 3, agreed with the service on 2026-09-25. | The live API did not match on 2026-09-24; the service dev changed it to this. As with sign-in, no client-side workarounds for service gaps. |
 | 2 | The service rewrites the Host header to the project's local hostname; project routing and overlays do not change. | Verified: project routers are `Host(<local hostname>)` with no entrypoint restriction (`core/overlay.py`), and Traefik v3's `Host()` ignores the port. |
-| 3 | Apps that build absolute URLs from the Host header send public visitors to `*.127-0-0-1.sslip.io`. Accepted as a known limit (section 10). | Most dev apps use relative links. The fix (public-host routes via a Traefik dynamic file) is a follow-up. |
+| 3 | Apps that build absolute URLs from the Host header send public visitors to `*.local.eggie.space`. Accepted as a known limit (section 10). | Most dev apps use relative links. The fix (public-host routes via a Traefik dynamic file) is a follow-up. |
 | 4 | Only the console turns a public URL on or off. The in-VM `eggie` CLI and coding agents never see public URLs. | Putting a project on the internet is a human decision. Agents only need local URLs. |
 | 5 | The tunnel client is a `stack.yml` service behind a compose profile, started and stopped by the API. | Absent when unused, visible in the stack, and the API already runs compose. |
 | 6 | The tunnel client sits on its own network, shared only with Traefik. | Cloudflare, not us, decides where the client sends traffic. A bad remote config must not reach the api container (it holds the Docker socket) or project containers directly. |
@@ -38,15 +38,15 @@ through `Account.authed()`. `{id}` is the service project id already stored in
 
 ```json
 request: {"origin": "http://traefik:39080",
-          "routes": [{"local_hostname": "recipe-box.127-0-0-1.sslip.io", "service": "web"},
-                     {"local_hostname": "api.recipe-box.127-0-0-1.sslip.io", "service": "api_v2"}]}
+          "routes": [{"local_hostname": "recipe-box.local.eggie.space", "service": "web"},
+                     {"local_hostname": "api.recipe-box.local.eggie.space", "service": "api_v2"}]}
 
 201:     {"id": "…", "project_id": "…", "slug": "k3x9m2p7qa", "created_at": "…",
           "expires_at": "2026-09-24T15:00:00Z",
           "url": "https://k3x9m2p7qa.eggie.io",
-          "urls": [{"service": "web", "local_hostname": "recipe-box.127-0-0-1.sslip.io",
+          "urls": [{"service": "web", "local_hostname": "recipe-box.local.eggie.space",
                     "url": "https://k3x9m2p7qa.eggie.io"},
-                   {"service": "api_v2", "local_hostname": "api.recipe-box.127-0-0-1.sslip.io",
+                   {"service": "api_v2", "local_hostname": "api.recipe-box.local.eggie.space",
                     "url": "https://api-v2--k3x9m2p7qa.eggie.io"}],
           "credentials": {"provider": "cloudflare", "token": "…"}}
 ```
@@ -360,7 +360,7 @@ Not tested: the enable thread and event wiring, the modal's rendering (glue).
 
 - **Absolute URLs.** An app that builds links or redirects from its Host header
   (Django `build_absolute_uri`, Rails `url_for`, WordPress site URL, OAuth
-  callbacks, emailed links) sends public visitors to `*.127-0-0-1.sslip.io`, which is
+  callbacks, emailed links) sends public visitors to `*.local.eggie.space`, which is
   their own machine. Follow-up: the service passes the public host through and the
   API writes Traefik dynamic-file routes for it.
 - Residual reach: the tunnel client can reach Traefik's edge entrypoint with any

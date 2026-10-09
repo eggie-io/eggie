@@ -8,6 +8,9 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 - `view.py` — **pure** mappings from `host/core` values to what a screen needs. No provider, no
   client, nothing reaching the VM or network (it does walk the local filesystem in
   `inspect_folder()`). This is where real decisions go, because it is the one module worth unit-testing.
+  `screen_for()` decides what Home draws and the one action the page takes first (`home()` returns
+  it as `screen` / `action` / `message`); `refresh()` in `app.js` only dispatches on those. Add a
+  screen name to `SCREENS` and its template lands in `test_ui_assets.py`'s check.
 - `api.py` — `DesktopApi`, the **only** object JavaScript can reach. A thin, fixed list of methods
   taking scalars; push every decision into `view.py`.
 - `shell.py` — `Shell` tracks which page is showing; `guarded()` wraps each public `DesktopApi`

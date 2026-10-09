@@ -281,14 +281,15 @@ def test_every_bridge_call_in_the_ui_names_a_real_method():
     assert called <= set(public_methods(DesktopApi)), called - set(public_methods(DesktopApi))
 
 
-def test_the_runtime_update_screens_exist_and_auto_start_once():
+def test_every_screen_the_bridge_can_name_has_a_template():
+    """home() tells the page which template to draw; a name with no template
+    is a blank window with an error only the devtools would show."""
+    from host.desktop.view import SCREENS
+
     markup = (UI / "index.html").read_text()
-    for screen in ("runtime-update:running", "runtime-update:failed"):
-        assert f'data-screen="{screen}"' in markup
-    script = (UI / "app.js").read_text()
-    # Auto-starting on every refresh would loop forever on an update that
-    # "succeeds" without fixing the API.
-    assert "runtimeUpdateTried" in script
+    assert SCREENS, "view.SCREENS names nothing"
+    for screen in SCREENS:
+        assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
 def test_the_page_lets_pywebview_build_its_bridge():

@@ -9,8 +9,11 @@ function sendArchive(url: string, archive: Blob, onProgress: (sent: number, tota
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
-    xhr.setRequestHeader("Content-Type", "application/gzip");
+    xhr.setRequestHeader("Content-Type", "application/x-tar");
     xhr.upload.onprogress = (event) => onProgress(event.loaded, event.lengthComputable ? event.total : archive.size);
+    // Progress events are optional (a service worker in the way sends none);
+    // this one marks the body fully sent, so the dialog can say it's unpacking.
+    xhr.upload.onload = () => onProgress(archive.size, archive.size);
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve(undefined);
       else reject(errorFromAnswer(xhr.status, xhr.responseText));

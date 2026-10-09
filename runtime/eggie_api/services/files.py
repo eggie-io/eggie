@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -36,15 +37,22 @@ class FileService:
         d = self._loader.dir(project_id)
         with self._locks.held(project_id):
             tmp = await receive(d.parent)
+            # Unpacking, deleting the multi-GB archive and listing every file
+            # each take seconds on a large project; on the event loop every
+            # other request would wait for all of them.
+            return await asyncio.to_thread(self._unpack, project_id, tmp, d)
+
+    @staticmethod
+    def _unpack(project_id: str, tmp: Path, d: Path) -> dict:
+        try:
             try:
-                try:
-                    files.extract_archive(tmp, d)
-                except OSError as e:
-                    if disk.is_disk_full(e):
-                        raise disk_full() from e
-                    raise
-            finally:
-                tmp.unlink(missing_ok=True)
+                files.extract_archive(tmp, d)
+            except OSError as e:
+                if disk.is_disk_full(e):
+                    raise disk_full() from e
+                raise
+        finally:
+            tmp.unlink(missing_ok=True)
         return {"id": project_id, "files": files.list_tree(d)}
 
     def list(self, project_id: str, dir: str | None) -> dict:

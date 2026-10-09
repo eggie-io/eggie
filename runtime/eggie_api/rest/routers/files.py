@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from pathlib import Path
@@ -46,7 +47,10 @@ async def stream_to_tempfile(request: Request, dir_: Path, *,
                         "-- build output, videos and database files are the "
                         "usual cause -- and try again.")
                 try:
-                    f.write(chunk)
+                    # Off the event loop: a large body is always ready to
+                    # read, so the loop would otherwise never hand control
+                    # to another request until the upload is on disk.
+                    await asyncio.to_thread(f.write, chunk)
                 except OSError as e:
                     if disk.is_disk_full(e):
                         raise disk_full() from e

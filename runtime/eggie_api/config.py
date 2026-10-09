@@ -42,9 +42,10 @@ class ApiConfig:
     # Partial uploads, outside projects_root so neither a listing, the
     # reconcile scan nor the coding agent ever sees a half-written file.
     uploads_root: Path = Path(f"{constants.GUEST_ROOT}/uploads")
-    # A runaway/abuse guard on file uploads, not a policy -- generous enough
-    # that no real project hits it. Raise via env, no rebuild needed.
-    max_upload_bytes: int = 512 * 1024 * 1024
+    # A runaway/abuse guard on file uploads, not a policy. A folder import is
+    # an uncompressed tar of the whole project, media included, so this sits
+    # well above any real project; free disk is checked separately.
+    max_upload_bytes: int = 16 * 1024 ** 3
     cloud_url: str = "https://app.eggie.io/api"
     stack_file: Path = Path(f"{constants.GUEST_ROOT}/stack.yml")
     tunnel_token_path: Path = Path(f"{constants.GUEST_ROOT}/tunnel/token")
@@ -74,7 +75,7 @@ class ApiConfig:
             uploads_root=Path(env.get("EGGIE_UPLOADS_ROOT",
                                       f"{constants.GUEST_ROOT}/uploads")),
             max_upload_bytes=int(env.get("EGGIE_MAX_UPLOAD_BYTES",
-                                         512 * 1024 * 1024)),
+                                         16 * 1024 ** 3)),
             cloud_url=env.get("EGGIE_CLOUD_URL", "https://app.eggie.io/api"),
             stack_file=Path(env.get("EGGIE_STACK_FILE",
                                     f"{constants.GUEST_ROOT}/stack.yml")),

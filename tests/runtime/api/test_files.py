@@ -78,12 +78,27 @@ def test_hardlink_target_escaping_the_project_is_rejected(tmp_path):
         files.extract_archive(archive, dest)
 
 
-def test_a_body_that_is_not_gzip_is_a_bad_archive(tmp_path):
+def test_a_body_that_is_not_an_archive_is_a_bad_archive(tmp_path):
     archive = tmp_path / "not-a-tar.tar.gz"
     archive.write_bytes(b"this is plainly not a tarball")
     dest = tmp_path / "project"
     with pytest.raises(files.BadArchiveError):
         files.extract_archive(archive, dest)
+
+
+def test_an_uncompressed_tar_is_accepted(tmp_path):
+    # The console sends a plain tar built from file references: gzipping a
+    # large folder in the page is what ran it out of memory.
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo("src/app.php")
+        info.size = 4
+        tar.addfile(info, io.BytesIO(b"<?ph"))
+    archive = tmp_path / "plain.tar"
+    archive.write_bytes(buf.getvalue())
+    dest = tmp_path / "project"
+    files.extract_archive(archive, dest)
+    assert (dest / "src" / "app.php").read_bytes() == b"<?ph"
 
 
 def test_a_non_escaping_dotdot_entry_is_accepted(tmp_path):
@@ -212,7 +227,7 @@ def test_upload_route_rejects_a_traversal_archive(env):
     assert _stray_temp_files(config) == []
 
 
-def test_upload_route_rejects_a_non_gzip_body(env):
+def test_upload_route_rejects_a_body_that_is_not_an_archive(env):
     client, config = env
     _create(client)
     resp = client.post("/projects/blog/files", content=b"not a tarball",

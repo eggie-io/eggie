@@ -1,7 +1,6 @@
-import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import type { Entry } from "./plan";
-import { FileChanged, packGzip, tarStream } from "./tar";
+import { tarBlob } from "./tar";
 
 const decoder = new TextDecoder();
 
@@ -49,10 +48,10 @@ function readTar(bytes: Uint8Array): Member[] {
 const entry = (path: string, content: string, size = content.length): Entry => ({ path, size, file: new Blob([content]) });
 
 async function tarBytes(entries: Entry[]): Promise<Uint8Array> {
-  return new Uint8Array(await new Response(tarStream(entries)).arrayBuffer());
+  return new Uint8Array(await tarBlob(entries).arrayBuffer());
 }
 
-describe("tarStream", () => {
+describe("tarBlob", () => {
   it("frames each file in 512-byte blocks that an independent reader gets back intact", async () => {
     const odd = "x".repeat(513);
     const members = readTar(await tarBytes([entry("src/main.py", "print(1)\n"), entry("big.bin", odd), entry("empty.txt", "")]));
@@ -70,43 +69,7 @@ describe("tarStream", () => {
     expect(members.map((m) => m.content)).toEqual(["a", "b", "c"]);
   });
 
-  it("keeps archive order when files read ahead finish out of order", async () => {
-    // Earlier files answer last, the way a slow disk read would.
-    const slow = (content: string, delayMs: number) =>
-      ({
-        size: content.length,
-        arrayBuffer: () => new Promise((resolve) => setTimeout(() => resolve(new TextEncoder().encode(content).buffer), delayMs)),
-        stream: () => new Blob([content]).stream(),
-      }) as unknown as Blob;
-    const entries = ["a", "b", "c", "d"].map((name, i) => ({ path: `${name}.txt`, size: 1, file: slow(name, 40 - i * 10) }));
-    const members = readTar(await tarBytes(entries));
-    expect(members.map((m) => `${m.name}=${m.content}`)).toEqual(["a.txt=a", "b.txt=b", "c.txt=c", "d.txt=d"]);
-  });
-
-  it("streams a large file between small ones without mixing them up", async () => {
-    const big = "y".repeat(1024 * 1024 + 7);
-    const members = readTar(await tarBytes([entry("a.txt", "a"), entry("big.bin", big), entry("z.txt", "z")]));
-    expect(members.map((m) => [m.name, m.size])).toEqual([["a.txt", 1], ["big.bin", big.length], ["z.txt", 1]]);
-    expect(members[1].content === big).toBe(true);
-  });
-
   it("an empty folder is just the end-of-archive marker", async () => {
     expect(readTar(await tarBytes([]))).toEqual([]);
-  });
-
-  it("refuses a file whose size no longer matches what was planned", async () => {
-    await expect(tarBytes([entry("grew.txt", "hello", 3)])).rejects.toBeInstanceOf(FileChanged);
-    await expect(tarBytes([entry("shrank.txt", "hi", 10)])).rejects.toBeInstanceOf(FileChanged);
-  });
-});
-
-describe("packGzip", () => {
-  it("is a gzip whose contents are the tar, and reports bytes as they are read", async () => {
-    const read: number[] = [];
-    const blob = await packGzip([entry("a.txt", "hello"), entry("b.txt", "world!")], (n) => read.push(n));
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
-    expect(readTar(new Uint8Array(gunzipSync(bytes))).map((m) => m.content)).toEqual(["hello", "world!"]);
-    expect(read.reduce((a, b) => a + b, 0)).toBe(11);
   });
 });

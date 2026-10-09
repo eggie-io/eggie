@@ -81,7 +81,8 @@ and a host release. Prefer additive changes.
   Services pulled in through compose `include:` get no names. Purge drops values and requests.
 - **Files** (`infra/files.py`, `services/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
-  `extract_archive` **merges** an uploaded tar.gz into the project dir and rejects absolute paths,
+  `extract_archive` **merges** an uploaded tar or tar.gz (the console sends plain tar, the host
+  client gzip) into the project dir and rejects absolute paths,
   `..` escapes and escaping links via `tarfile`'s `filter="data"` plus an explicit absolute-path
   check (the filter silently normalizes absolute names instead of refusing).
 - **Uploads** (`infra/uploads.py`, `services/uploads.py`) — resumable chunked uploads staged in `/opt/eggie/uploads`,

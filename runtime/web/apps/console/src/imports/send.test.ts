@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
-import { BUSY_DEADLINE_MS, runImport, type ImportApi, type Phase } from "./send";
+import { BUSY_DEADLINE_MS, runImport, type ImportApi, type Progress } from "./send";
 
 function setup(failures: Partial<Record<keyof ImportApi, Error[]>> = {}) {
   const calls: string[] = [];
-  const phases: Phase[] = [];
+  const progress: Progress[] = [];
   const sleeps: number[] = [];
   let clock = 0;
   const fail = (method: keyof ImportApi) => {
@@ -26,39 +26,31 @@ function setup(failures: Partial<Record<keyof ImportApi, Error[]>> = {}) {
       onProgress(archive.size, archive.size);
     },
   };
-  const run = (mode: "merge" | "replace", packed = "tar.gz") =>
+  const run = (mode: "merge" | "replace") =>
     runImport(api, {
       id: "shop",
       mode,
-      bytes: 10,
-      pack: async (onRead) => {
-        onRead(4);
-        onRead(6);
-        return new Blob([packed]);
-      },
-      onPhase: (phase) => phases.push(phase),
+      archive: new Blob(["tar.gz"]),
+      onProgress: (p) => progress.push(p),
       sleep: async (ms) => {
         sleeps.push(ms);
         clock += ms;
       },
       now: () => clock,
     });
-  return { calls, phases, sleeps, run };
+  return { calls, progress, sleeps, run };
 }
 
 const busy = () => new ApiError("project_busy", "busy", 409);
 
 describe("runImport", () => {
-  it("merge: packs, creates, sends, and reports both phases", async () => {
-    const { calls, phases, run } = setup();
+  it("merge: creates, sends, and reports how much went", async () => {
+    const { calls, progress, run } = setup();
     await run("merge");
     expect(calls).toEqual(["create shop", "send shop 6"]);
-    expect(phases).toEqual([
-      { kind: "packing", read: 0, total: 10 },
-      { kind: "packing", read: 4, total: 10 },
-      { kind: "packing", read: 10, total: 10 },
-      { kind: "sending", sent: 0, total: 6 },
-      { kind: "sending", sent: 6, total: 6 },
+    expect(progress).toEqual([
+      { sent: 0, total: 6 },
+      { sent: 6, total: 6 },
     ]);
   });
 
@@ -68,7 +60,7 @@ describe("runImport", () => {
     expect(calls).toEqual(["create shop", "send shop 6"]);
   });
 
-  it("replace deletes before it creates, and the deletion happens after packing", async () => {
+  it("replace deletes before it creates", async () => {
     const { calls, run } = setup();
     await run("replace");
     expect(calls).toEqual(["remove shop", "create shop", "send shop 6"]);

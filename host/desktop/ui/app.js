@@ -448,15 +448,7 @@ window.eggie.handlers.repair = (event) => {
   if (event.type === 'crashed') showNotice(event.message);
   refresh();
 };
-// Auto-started once per session: an update that "succeeds" without fixing the
-// API would otherwise restart itself on every refresh.
-let runtimeUpdateTried = false;
-// home.problem is empty when the runtime answers but speaks an old API, so the
-// failed screen reached again from refresh() shows the job's own error.
-let runtimeUpdateError = '';
-
 async function startRuntimeUpdate() {
-  runtimeUpdateTried = true;
   show('runtime-update:running', {});
   await api().start_runtime_update();
 }
@@ -466,10 +458,7 @@ JOB_ACTIONS.add('retry-runtime-update');
 
 window.eggie.handlers.runtime_update = (event) => {
   if (event.type === 'progress' || event.type === 'stage') return;
-  if (event.type === 'crashed') {
-    runtimeUpdateError = event.message;
-    return show('runtime-update:failed', { message: event.message });
-  }
+  if (event.type === 'crashed') return show('runtime-update:failed', { message: event.message });
   refresh();
 };
 
@@ -498,19 +487,16 @@ async function refresh() {
   }
   if (generation !== screenGeneration) return;
   document.title = 'Eggie';
-  // A window RunOnce reopened by itself must continue setup, not show Home.
-  if (home.resumed) return ACTIONS['start-install'](null, home);
-  if (home.first_run) return show('first-run', home);
-  if (home.enter_console) {
+  // The bridge decided (view.screen_for); this only carries it out. An
+  // action that cannot complete falls through to the screen it named.
+  if (home.action === 'start_install') return ACTIONS['start-install'](null, home);
+  if (home.action === 'start_runtime_update') return startRuntimeUpdate();
+  if (home.action === 'enter_console') {
     const result = await api().enter_console();
     if (result.ok) return window.location.assign(result.url);
     showNotice(result.message);
   }
-  if (home.route === 'update_runtime') {
-    if (!runtimeUpdateTried) return startRuntimeUpdate();
-    return show('runtime-update:failed', { message: runtimeUpdateError || home.problem });
-  }
-  show(home.route === 'home' ? `home:${home.state}` : home.route, home);
+  show(home.screen, home);
 }
 
 function start() {

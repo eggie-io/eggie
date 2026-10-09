@@ -21,7 +21,8 @@ from host.core.status import probe
 from .jobs import JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
-from .view import inspect_folder, progress_event, route_for, rows_for, terminal_event
+from .view import (inspect_folder, progress_event, route_for, rows_for, screen_for,
+                   terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +63,8 @@ class DesktopApi:
         self._autostart_exe = autostart_exe
         self._quitting = False
         self._quit_thread = None
+        self._runtime_update_tried = False
+        self._runtime_update_error = ""
         self._stop_timeout = stop_timeout
         self._log_path = log_path
 
@@ -120,21 +123,23 @@ class DesktopApi:
                          and not first_run and not resumed)
         if visible:
             self._home_seen = True
+        screen = screen_for(route, state, first_run=first_run, resumed=resumed,
+                            enter_console=enter_console,
+                            update_tried=self._runtime_update_tried,
+                            update_error=self._runtime_update_error,
+                            problem=readiness.problem)
         return {
+            "screen": screen.name,
+            "action": screen.action,
+            "message": screen.message,
             "route": route,
             "state": state,
-            # Carried over from host/setup_app/app.py's _should_auto_start:
-            # true only where nothing has ever been recorded. Once any step
-            # has completed the answer flips, because "not vm_exists" stays
-            # true across every failed create_vm relaunch too.
-            "first_run": first_run,
             "app_version": constants.APP_VERSION,
             "runtime_version": readiness.runtime_version or "",
             "problem": readiness.problem,
-            # Set by __main__.run() when RunOnce reopened the window after a
-            # restart, so the install screen can explain why it appeared.
+            # The install screen's notice explains why the window reopened
+            # by itself after the restart.
             "resumed": resumed,
-            "enter_console": enter_console,
             "app_update": self._app_release.version if self._app_release else "",
         }
 
@@ -335,9 +340,17 @@ class DesktopApi:
     def start_runtime_update(self) -> dict:
         from host.core import install
 
+        self._runtime_update_tried = True
+
         def work(emit):
             emit({"type": "stage", "stage": "update"})
-            install.connect_with_updates(self._provider)
+            try:
+                install.connect_with_updates(self._provider)
+            except Exception as e:
+                # The next home() shows this: the probe's problem is empty
+                # when the runtime answers but speaks an old API.
+                self._runtime_update_error = f"{e}"
+                raise
             # Into the console, as a fresh launch on a running machine would.
             self._home_seen = False
             return {"type": "done"}

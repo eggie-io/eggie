@@ -24,7 +24,7 @@ def _api(tmp_path, readiness):
 
 
 def test_a_virgin_machine_is_first_run(tmp_path):
-    assert _api(tmp_path, Readiness()).home()["first_run"] is True
+    assert _api(tmp_path, Readiness()).home()["screen"] == "first-run"
 
 
 def test_a_machine_that_got_partway_is_not_first_run(tmp_path):
@@ -36,12 +36,11 @@ def test_a_machine_that_got_partway_is_not_first_run(tmp_path):
     api = DesktopApi(FakeProvider(), state, push=lambda event: None,
                      probe_fn=lambda provider: Readiness())
     home = api.home()
-    assert home["first_run"] is False
-    assert (home["route"], home["state"]) == ("home", "not_installed")
+    assert home["screen"] == "home:not_installed"
 
 
 def test_a_ready_machine_is_never_first_run(tmp_path):
-    assert _api(tmp_path, READY).home()["first_run"] is False
+    assert _api(tmp_path, READY).home()["screen"] != "first-run"
 
 
 def test_home_carries_the_versions_the_odds_and_ends_row_shows(tmp_path):
@@ -123,8 +122,31 @@ def test_a_hidden_tray_launch_keeps_the_console_entry_for_the_first_visible_home
     api = DesktopApi(FakeProvider(), state, push=lambda event: None,
                      probe_fn=lambda provider: READY,
                      window_shown_once=lambda: shown["yet"])
-    assert api.home()["enter_console"] is False
-    assert api.home()["enter_console"] is False
+    assert api.home()["action"] == ""
+    assert api.home()["action"] == ""
     shown["yet"] = True
-    assert api.home()["enter_console"] is True
-    assert api.home()["enter_console"] is False
+    assert api.home()["action"] == "enter_console"
+    assert api.home()["action"] == ""
+
+
+OLD_API = Readiness(vm_exists=True, vm_reachable=True,
+                    runtime_version="runtime-v0.1.0", api_version=0)
+
+
+def test_a_runtime_update_is_started_once_per_launch_and_then_shows_why_it_failed(
+        tmp_path, monkeypatch):
+    """Both halves live in the bridge now, not the page: a second launch-time
+    start would loop on an update that "succeeds" without fixing the API,
+    and the failed screen needs the job's own error because the probe's
+    problem is empty when the runtime answers but speaks an old API."""
+    def failing_update(provider):
+        raise RuntimeError("ghcr timed out")
+
+    monkeypatch.setattr("host.core.install.connect_with_updates", failing_update)
+    api = _api(tmp_path, OLD_API)
+    assert api.home()["action"] == "start_runtime_update"
+    api.start_runtime_update()
+    api.jobs.join(timeout=5)
+    again = api.home()
+    assert again["action"] == ""
+    assert (again["screen"], again["message"]) == ("runtime-update:failed", "ghcr timed out")

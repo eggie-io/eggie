@@ -13,9 +13,55 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dataclasses import dataclass
+
 from host.client import EXCLUDED_DIRS, EXCLUDED_FILES
 from host.core import constants
 from host.core.status import Readiness
+
+
+@dataclass(frozen=True)
+class Screen:
+    """What Home draws, and the one thing the page does before or instead.
+
+    `action` is "", "start_install", "enter_console" or
+    "start_runtime_update"; `name` is the template to draw if the action
+    does not take the page elsewhere.
+    """
+    name: str
+    action: str = ""
+    message: str = ""
+
+
+HOME_STATES = ("not_installed", "stopped", "running", "wrong")
+# Every name screen_for() can return; each must have a template.
+SCREENS = frozenset(
+    [f"home:{state}" for state in HOME_STATES]
+    + ["first-run", "install:running", "unreachable", "unresponsive",
+       "runtime-update:running", "runtime-update:failed"])
+
+
+def screen_for(route: str, state: str, *, first_run: bool, resumed: bool,
+               enter_console: bool, update_tried: bool, update_error: str,
+               problem: str) -> Screen:
+    """Ordered: the earlier rule wins.
+
+    A resumed launch still has the first-run shape (nothing recorded, no VM)
+    and must continue setup, not restart it; the runtime update starts once
+    per launch, or an update that "succeeds" without fixing the API would
+    loop forever.
+    """
+    if resumed:
+        return Screen("install:running", action="start_install")
+    if first_run:
+        return Screen("first-run")
+    if enter_console:
+        return Screen("home:running", action="enter_console")
+    if route == "update_runtime":
+        if not update_tried:
+            return Screen("runtime-update:running", action="start_runtime_update")
+        return Screen("runtime-update:failed", message=update_error or problem)
+    return Screen(f"home:{state}" if route == "home" else route)
 
 
 def route_for(readiness: Readiness) -> tuple[str, str]:

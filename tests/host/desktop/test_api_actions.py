@@ -246,8 +246,8 @@ def test_a_successful_runtime_update_goes_into_the_console(tmp_path, monkeypatch
     api.home()
     api.start_runtime_update()
     api.jobs.join(timeout=5)
-    assert api.home()["enter_console"] is True
-    assert api.home()["enter_console"] is False
+    assert api.home()["action"] == "enter_console"
+    assert api.home()["action"] != "enter_console"
 
 
 def test_doctor_names_the_log_file(tmp_path):

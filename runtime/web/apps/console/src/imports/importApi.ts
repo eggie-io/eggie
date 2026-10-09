@@ -28,7 +28,8 @@ export function createImportApi(
 ): ImportApi {
   return {
     create: (id) => client.post("/api/projects", { id }),
-    remove: (id) => client.del(projectPath(id)),
+    // A plain DELETE keeps the folder and volumes; a replace means emptied.
+    remove: (id) => client.del(`${projectPath(id)}?purge=true`),
     send: (id, archive, onProgress) => send(`${projectPath(id)}/files`, archive, onProgress),
   };
 }

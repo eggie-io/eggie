@@ -38,8 +38,9 @@ runtime: a later change to how import works needs no host release.
    PAX header, piped through the native `CompressionStream("gzip")` and collected into a Blob.
    Not streamed as a request body: plain-HTTP `fetch` cannot stream uploads in Chrome, and the
    console is served over HTTP/1.1 on localhost. Empty directories are not carried.
-6. **Sending.** Replace mode: `DELETE /api/projects/{id}` first (the other order would wipe the
-   import). Then `POST /api/projects` (a `project_exists` answer is fine in merge mode), then
+6. **Sending.** Replace mode: `DELETE /api/projects/{id}?purge=true` first (the other order would
+   wipe the import; without `purge` the API keeps the folder and volumes and the replace would be
+   a merge, which is what the old desktop screen silently did). Then `POST /api/projects` (a `project_exists` answer is fine in merge mode), then
    `POST /api/projects/{id}/files` with the gzip body over `XMLHttpRequest`, which is the only
    way to show upload progress. `project_busy` is retried for up to a minute, as the host client
    does. The API's own messages for `payload_too_large` and `disk_full` are shown as they are.

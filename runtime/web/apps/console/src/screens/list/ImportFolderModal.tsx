@@ -157,7 +157,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
               </label>
               {mode === "replace" && (
                 <Notice>
-                  Replace deletes files. Anything in the existing project that isn't in your folder is gone for good — including work your coding agent did in there. There's no undo.
+                  Replace deletes files. Everything in the existing project is gone for good — its files, its database data and its secrets, including work your coding agent did in there. There's no undo.
                 </Notice>
               )}
             </fieldset>

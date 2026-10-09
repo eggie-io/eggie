@@ -16,10 +16,7 @@ def test_a_warning_reaches_the_file_when_there_is_no_stderr(tmp_path, monkeypatc
     monkeypatch.setattr(sys, "stderr", None)
     path = tmp_path / "eggie.log"
     log.setup(path)
-    try:
-        logging.getLogger("host.providers.tray_win").warning("tray callback failed: boom")
-    finally:
-        log.setup(None)
+    logging.getLogger("host.providers.tray_win").warning("tray callback failed: boom")
     assert "tray callback failed: boom" in path.read_text()
 
 
@@ -27,8 +24,15 @@ def test_setting_up_twice_writes_each_line_once(tmp_path):
     path = tmp_path / "eggie.log"
     log.setup(path)
     log.setup(path)
-    try:
-        logging.getLogger("host.desktop.api").warning("once")
-    finally:
-        log.setup(None)
+    logging.getLogger("host.desktop.api").warning("once")
     assert path.read_text().count("once") == 1
+
+
+def test_an_unwritable_log_path_falls_back_to_stderr(tmp_path, capsys):
+    """setup() is the first thing run() does; a read-only install root must
+    cost the file, not the app."""
+    blocker = tmp_path / "blocker"
+    blocker.write_text("")
+    log.setup(blocker / "eggie.log")
+    logging.getLogger("host.desktop.api").warning("still heard")
+    assert "still heard" in capsys.readouterr().err

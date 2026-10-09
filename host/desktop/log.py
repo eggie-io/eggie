@@ -51,13 +51,22 @@ def setup(path: Path | None) -> None:
             handler.close()
     formatter = logging.Formatter(_FORMAT)
     handlers: list[logging.Handler] = [_StderrHandler()]
+    unavailable = None
     if path is not None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        handlers.append(RotatingFileHandler(path, maxBytes=1_000_000, backupCount=2,
-                                            encoding="utf-8"))
+        # A read-only or missing install root costs the file, never the app:
+        # this runs before the window exists, so an exception here is a
+        # launch that dies with nothing on screen.
+        try:
+            path = Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handlers.append(RotatingFileHandler(path, maxBytes=1_000_000, backupCount=2,
+                                                encoding="utf-8"))
+        except OSError as e:
+            unavailable = e
     for handler in handlers:
         handler.eggie = True
         handler.setFormatter(formatter)
         root.addHandler(handler)
     root.setLevel(logging.INFO)
+    if unavailable is not None:
+        logging.getLogger(__name__).warning("log file %s unavailable: %r", path, unavailable)

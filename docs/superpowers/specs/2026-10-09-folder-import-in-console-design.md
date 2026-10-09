@@ -32,17 +32,21 @@ runtime: a later change to how import works needs no host release.
 3. **Review.** The dialog shows the name it will use, the counts, and a note when something was
    skipped. If a project with that id is already in the list, it offers **Merge into it**
    (default) or **Replace it**, with the same deletion warning the desktop screen had.
-4. **Room check.** `GET /api/disk`; the raw byte total must fit with the same reserve the upload
-   queue uses, or the dialog refuses before packing.
-5. **Packing** (`imports/tar.ts`, pure). A ustar stream written in the browser, long names in a
-   PAX header, piped through the native `CompressionStream("gzip")` and collected into a Blob.
-   Not streamed as a request body: plain-HTTP `fetch` cannot stream uploads in Chrome, and the
-   console is served over HTTP/1.1 on localhost. Empty directories are not carried.
+4. **Room check.** `GET /api/disk`; twice the raw byte total must fit with the same reserve the
+   upload queue uses, because the API keeps the archive on disk until it has unpacked it.
+5. **Archive** (`imports/tar.ts`, pure). An uncompressed ustar Blob, long names in a PAX header,
+   built by reference: the headers are made in the page and each picked file is a Blob part, so
+   the browser streams it from disk while sending and the page never reads a byte. Empty
+   directories are not carried. (Issue #69: the first version read every file and gzipped it in
+   the page: 36 s for 1.8 GB, with the whole archive held in the browser process.)
 6. **Sending.** Replace mode: `DELETE /api/projects/{id}?purge=true` first (the other order would
    wipe the import; without `purge` the API keeps the folder and volumes and the replace would be
    a merge, which is what the old desktop screen silently did). Then `POST /api/projects` (a `project_exists` answer is fine in merge mode), then
-   `POST /api/projects/{id}/files` with the gzip body over `XMLHttpRequest`, which is the only
-   way to show upload progress. `project_busy` is retried for up to a minute, as the host client
+   `POST /api/projects/{id}/files` with the tar body over `XMLHttpRequest`, which is the only
+   way to show upload progress. Once everything is sent the dialog shows "Unpacking it in
+   Eggie…" until the API answers. The API accepts plain tar and tar.gz, unpacks in a worker
+   thread so its other routes keep answering, and caps an upload at 16 GiB. Traefik's entry point
+   has no read timeout, since its 60 s default covers the whole request body. `project_busy` is retried for up to a minute, as the host client
    does. The API's own messages for `payload_too_large` and `disk_full` are shown as they are.
 7. **Done.** Navigate to the project page.
 
@@ -56,7 +60,7 @@ Measured in Chrome on a folder of 62,000 small files, 42,000 of them kept:
 |---|---|---|
 | Browser enumerates the folder before `change` fires | about 12 s | browser, page stays responsive |
 | First `file.size` per file is a blocking disk stat | about 11 s | planner, batched with yields |
-| Reading and packing | 14–26 s (61 s one at a time) | packer, 32 small files read ahead |
+| Building the archive | under a second | headers only, files are referenced |
 
 So the dialog shows one "Reading the folder…" spinner between the pick and the review, with no count or bar. Nothing
 changes while the native picker is open. The loader starts when the window gets focus back,
@@ -82,12 +86,14 @@ sets stay: the CLI's `up` and the install verification still use them.
 
 - `plan.test.ts`: exclusions, slug from the first path segment, counts, skipped report.
 - `tar.test.ts`: the archive round-trips through an independent reader in the test (header
-  fields, checksum, 512-byte padding, long names via PAX); gunzip with Node's zlib.
+  fields, checksum, 512-byte padding, long names via PAX).
+- API: a plain tar unpacks; `/health` answers while an archive is unpacking.
 - `send.test.ts`: order of calls per mode, `project_exists` tolerated only in merge mode,
   `project_busy` retried, other errors surfaced.
 - Host: the shell test's method list drops `start_import`; the desktop suite otherwise shrinks.
 
 ## Verified in a browser, not by tests
 
-The folder picker and `CompressionStream` in WebView2 and WKWebView, and Chrome's "Upload N
-files?" confirm.
+The folder picker in WebView2 and WKWebView, and Chrome's "Upload N files?" confirm. Memory was
+measured in headless Chrome with a disk-backed file: a 1.8 GB archive built by reference peaked
+at 228 MB and sent in 4 s.

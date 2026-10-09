@@ -2,9 +2,10 @@ import { ApiError } from "../api/client";
 
 export type Mode = "merge" | "replace";
 
-export type Phase =
-  | { kind: "packing"; read: number; total: number }
-  | { kind: "sending"; sent: number; total: number };
+export interface Progress {
+  sent: number;
+  total: number;
+}
 
 export interface ImportApi {
   create(id: string): Promise<unknown>;
@@ -15,9 +16,8 @@ export interface ImportApi {
 export interface ImportRun {
   id: string;
   mode: Mode;
-  bytes: number;
-  pack: (onRead: (bytes: number) => void) => Promise<Blob>;
-  onPhase: (phase: Phase) => void;
+  archive: Blob;
+  onProgress: (progress: Progress) => void;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -45,15 +45,6 @@ export async function runImport(api: ImportApi, run: ImportRun): Promise<void> {
     }
   }
 
-  // Packed before anything is touched: a replace deletes a project, and a
-  // folder that turns out unpackable must not cost one.
-  let read = 0;
-  run.onPhase({ kind: "packing", read, total: run.bytes });
-  const archive = await run.pack((bytes) => {
-    read += bytes;
-    run.onPhase({ kind: "packing", read, total: run.bytes });
-  });
-
   if (run.mode === "replace") {
     // Delete first. The other order merges the folder in and then wipes it.
     try {
@@ -68,6 +59,6 @@ export async function runImport(api: ImportApi, run: ImportRun): Promise<void> {
     if (!(run.mode === "merge" && isCode(error, "project_exists"))) throw error;
   }
 
-  run.onPhase({ kind: "sending", sent: 0, total: archive.size });
-  await whileBusy(() => api.send(run.id, archive, (sent, total) => run.onPhase({ kind: "sending", sent, total })));
+  run.onProgress({ sent: 0, total: run.archive.size });
+  await whileBusy(() => api.send(run.id, run.archive, (sent, total) => run.onProgress({ sent, total })));
 }

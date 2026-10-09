@@ -6,8 +6,8 @@ import { api } from "../../api/client";
 import { createImportApi } from "../../imports/importApi";
 import { fromDrop, fromFileList } from "../../imports/pick";
 import { planImport, type ImportPlan, type Picked } from "../../imports/plan";
-import { runImport, type Mode, type Phase } from "../../imports/send";
-import { packGzip } from "../../imports/tar";
+import { runImport, type Mode, type Progress } from "../../imports/send";
+import { tarBlob } from "../../imports/tar";
 import { size } from "../../projects/format";
 import { fits } from "../../uploads/queue";
 import type { Disk } from "../../uploads/uploadApi";
@@ -18,20 +18,14 @@ type Step =
   | { kind: "pick"; problem: string | null }
   | { kind: "reading" }
   | { kind: "review"; plan: ImportPlan; mode: Mode }
-  | { kind: "working"; plan: ImportPlan; phase: Phase }
+  | { kind: "working"; plan: ImportPlan; progress: Progress }
   | { kind: "failed"; plan: ImportPlan; mode: Mode; message: string };
 
 const PICK: Step = { kind: "pick", problem: null };
 const importApi = createImportApi();
 
-function phaseLine(phase: Phase): string {
-  if (phase.kind === "packing") return phase.total === 0 ? "Packing…" : `Packing · ${Math.floor((phase.read / phase.total) * 100)}%`;
-  return `Sending · ${size(phase.sent)} of ${size(phase.total)}`;
-}
-
-function fraction(phase: Phase): number {
-  return phase.kind === "packing" ? (phase.total === 0 ? 1 : phase.read / phase.total) : phase.total === 0 ? 1 : phase.sent / phase.total;
-}
+// Everything sent, answer not back yet: the API is unpacking it.
+const unpacking = (progress: Progress) => progress.total > 0 && progress.sent >= progress.total;
 
 export function ImportFolderModal({ open, onClose, existing }: { open: boolean; onClose: () => void; existing: readonly string[] }) {
   const [step, setStep] = useState<Step>(PICK);
@@ -120,24 +114,25 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
   }
 
   async function bringIn(plan: ImportPlan, mode: Mode) {
-    setStep({ kind: "working", plan, phase: { kind: "packing", read: 0, total: plan.bytes } });
+    setStep({ kind: "working", plan, progress: { sent: 0, total: 0 } });
     try {
       const disk = await api.get<Disk>("/api/disk");
-      if (!fits(plan.bytes, disk.free_bytes)) {
+      // The API keeps the uploaded archive on disk until it has unpacked it.
+      const needed = plan.bytes * 2;
+      if (!fits(needed, disk.free_bytes)) {
         setStep({
           kind: "failed",
           plan,
           mode,
-          message: `It won't fit — the folder is ${size(plan.bytes)} and Eggie has ${size(disk.free_bytes)} of room left. Make some space in the desktop app, then try again.`,
+          message: `It won't fit — bringing in ${size(plan.bytes)} needs about ${size(needed)} of room while it unpacks, and Eggie has ${size(disk.free_bytes)}. Make some space in the desktop app, then try again.`,
         });
         return;
       }
       await runImport(importApi, {
         id: plan.id,
         mode,
-        bytes: plan.bytes,
-        pack: (onRead) => packGzip(plan.entries, onRead),
-        onPhase: (phase) => setStep({ kind: "working", plan, phase }),
+        archive: tarBlob(plan.entries),
+        onProgress: (progress) => setStep({ kind: "working", plan, progress }),
       });
     } catch (error) {
       setStep({ kind: "failed", plan, mode, message: error instanceof Error ? error.message : "Something went wrong." });
@@ -237,8 +232,20 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
       body = (
         <>
           <p>Carrying <strong>{step.plan.name}</strong> in. Your original folder isn't being touched.</p>
-          <ProgressBar value={fraction(step.phase)} label={`${step.plan.name} import`} />
-          <p className={s.quiet}>{phaseLine(step.phase)}</p>
+          {unpacking(step.progress) ? (
+            <>
+              <div className={s.loading} role="status">
+                <span className={s.spinner} aria-hidden="true" />
+                <p>Unpacking it in Eggie…</p>
+              </div>
+              <p className={s.quiet}>This can take a while, depending on how big the project is.</p>
+            </>
+          ) : (
+            <>
+              <ProgressBar value={step.progress.total === 0 ? 0 : step.progress.sent / step.progress.total} label={`${step.plan.name} import`} />
+              <p className={s.quiet}>Sending · {size(step.progress.sent)} of {size(step.progress.total || step.plan.bytes)}</p>
+            </>
+          )}
         </>
       );
       break;

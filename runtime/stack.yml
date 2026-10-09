@@ -26,6 +26,9 @@ services:
     restart: always
     command:
       - "--entryPoints.web.address=:${EGGIE_EDGE_PORT:-39080}"
+      # The default 60 s is for reading the whole request, body included,
+      # which cuts off a large folder import mid-upload.
+      - "--entryPoints.web.transport.respondingTimeouts.readTimeout=0"
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"

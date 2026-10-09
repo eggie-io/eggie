@@ -22,7 +22,7 @@ class PathTraversalError(BadRequest):
 
 
 class BadArchiveError(BadRequest):
-    """The body handed to `POST /files` is not a readable tar.gz."""
+    """The body handed to `POST /files` is not a readable tar or tar.gz."""
 
     def __init__(self, message: str):
         super().__init__("bad_archive", message)
@@ -41,7 +41,8 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     try:
-        tar = tarfile.open(archive_path, mode="r:gz")
+        # Plain tar from the console, tar.gz from the host client.
+        tar = tarfile.open(archive_path, mode="r:*")
     except (tarfile.TarError, OSError, EOFError) as e:
         raise BadArchiveError(str(e)) from e
 

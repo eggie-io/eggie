@@ -38,10 +38,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     the last chunk, hold on `disk_full`) with no React in it. One instance lives above the router in
     `uploads/QueueProvider.tsx`, so uploads continue across screens but stop when the page closes.
   - `imports/` — "From a folder" on the projects page: `plan.ts` drops `.git`/`node_modules`/… and
-    names the project after the folder, `tar.ts` writes a ustar+PAX stream and gzips it with the
-    native `CompressionStream` (a Blob, not a streamed body: plain-HTTP `fetch` can't stream uploads),
-    `send.ts` orders delete/create/upload per merge or replace mode with no React in it. One
-    `POST /projects/{id}/files` request, no resume; the API unpacks it with Python's `tarfile`.
+    names the project after the folder, `tar.ts` builds an uncompressed ustar+PAX Blob around
+    references to the picked files, `send.ts` orders delete/create/upload per merge or replace
+    mode with no React in it. One `POST /projects/{id}/files` request, no resume; the API unpacks
+    it with Python's `tarfile`.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
     `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
   - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
@@ -77,6 +77,14 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   (no colon). A bare name silently never runs; `packages/ui/test/animations.test.ts` checks.
 - The first `file.size` of each picked file is a blocking disk stat (about half a millisecond in
   Chrome): 40k files freeze the page for 15 s. `imports/plan.ts` reads sizes in batches that yield.
+- Don't read a picked folder into the page to build an upload. Gzipping 1.8 GB in the page took
+  36 s and held the whole archive in the browser process; a Blob with the `File`s as parts is
+  built at once and streamed from disk (180 MB peak, 5 s).
+- Upload memory and progress can't be measured in the dev app: MSW's service worker reads every
+  request body itself (7 GB for a 1.8 GB upload) and no upload progress or `load` event fires.
+  Measure from a page that never booted the app. Playwright's `setInputFiles(directory)` and
+  `fileChooser.setFiles()` also hand the page in-memory copies; only `setInputFiles(path)` of a
+  single file is disk-backed like a real pick.
 - A file input's `cancel` event bubbles, and `Modal`'s `<dialog>` closes itself on `cancel`.
   Stop it at the input, or dismissing the folder picker closes the whole dialog.
 - A file input's `files` is a live list: resetting `value` to let the same pick fire again empties

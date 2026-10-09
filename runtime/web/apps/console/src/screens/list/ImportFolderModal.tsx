@@ -16,7 +16,6 @@ import s from "./ProjectList.module.css";
 
 type Step =
   | { kind: "pick"; problem: string | null }
-  | { kind: "opening" }
   | { kind: "reading"; done: number; total: number | null }
   | { kind: "review"; plan: ImportPlan; mode: Mode }
   | { kind: "working"; plan: ImportPlan; phase: Phase }
@@ -65,11 +64,25 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     if (!input) return;
     const cancelled = (event: Event) => {
       event.stopPropagation();
-      setStep((current) => (current.kind === "opening" ? PICK : current));
+      if (opened.current === pickRun.current) reset();
     };
     input.addEventListener("cancel", cancelled);
     return () => input.removeEventListener("cancel", cancelled);
   }, [open]);
+
+  // Nothing tells the page that a folder was picked until the browser has
+  // listed every file in it, which takes seconds on a big folder. The window
+  // getting focus back means the picker closed, so the loader starts there;
+  // a `cancel` arriving after it sends the dialog back to the pick step.
+  function choose() {
+    const run = ++pickRun.current;
+    opened.current = run;
+    const pickerClosed = () => {
+      if (pickRun.current === run) setStep((current) => (current.kind === "pick" ? { kind: "reading", done: 0, total: null } : current));
+    };
+    window.addEventListener("focus", pickerClosed, { once: true });
+    picker.current?.click();
+  }
 
   async function plan(picked: Picked[], run: number) {
     setStep({ kind: "reading", done: 0, total: picked.length });
@@ -158,11 +171,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             <p className={s.dropText}>Drop a folder here, or</p>
             <Button
               variant="primary"
-              onClick={() => {
-                opened.current = ++pickRun.current;
-                setStep({ kind: "opening" });
-                picker.current?.click();
-              }}
+              onClick={choose}
             >
               Choose a folder…
             </Button>
@@ -172,27 +181,17 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
         </>
       );
       break;
-    case "opening":
-      body = (
-        <>
-          <ProgressBar label="Opening the folder" />
-          <p>Opening the folder…</p>
-          <p className={s.quiet}>Your browser counts every file in it first, and may ask whether to upload them. A folder with tens of thousands of files can take a minute.</p>
-          <div className={s.formActions}>
-            <Button variant="quiet" onClick={reset}>Cancel</Button>
-          </div>
-        </>
-      );
-      break;
     case "reading":
       body = (
         <>
           <ProgressBar value={step.total ? step.done / step.total : undefined} label="Reading the folder" />
           <p>Reading the folder…</p>
           <p className={s.quiet}>
-            {step.total === null
-              ? `${step.done.toLocaleString()} files found so far`
-              : `${step.done.toLocaleString()} of ${step.total.toLocaleString()} files looked at`}
+            {step.total !== null
+              ? `${step.done.toLocaleString()} of ${step.total.toLocaleString()} files looked at`
+              : step.done > 0
+                ? `${step.done.toLocaleString()} files found so far`
+                : "A folder with tens of thousands of files can take a minute."}
           </p>
           <div className={s.formActions}>
             <Button variant="quiet" onClick={reset}>Cancel</Button>

@@ -294,7 +294,7 @@ ACTIONS['toggle-autostart'] = async (node) => {
   }
 };
 
-// A tray route lands while a job's screen (install, update, import) may be
+// A tray route lands while a job's screen (install, update) may be
 // showing; its nodes are parked, not discarded, so the job's live handlers
 // keep a DOM to update and Cancel/Back can put it back.
 let stash = null;
@@ -352,59 +352,6 @@ const ROUTES = {
 window.eggie.route = (name) => {
   const go = ROUTES[name];
   if (go) go();
-};
-
-// --- Import ---------------------------------------------------------
-
-// Set by choose-folder, read by do-import, cleared when Import is opened --
-// otherwise a user who opens Import and clicks "Bring it in" without
-// choosing a folder would re-import whatever they picked last time.
-let pending = null;
-
-ACTIONS['import'] = () => {
-  // Reopening Import must not re-import whatever was chosen last time:
-  // do-import reads pending, and the screen alone doesn't show a stale path.
-  pending = null;
-  show('import', { path: '', name: '', summary: '' });
-};
-
-ACTIONS['choose-folder'] = async () => {
-  const chosen = await api().choose_folder();
-  if (chosen.cancelled) return;
-  pending = chosen;
-  const megabytes = (chosen.bytes / 1e6).toFixed(1);
-  fill(document.getElementById('screen'), {
-    path: chosen.path, name: chosen.name,
-    summary: `${chosen.files} files · ${megabytes} MB`,
-  });
-  document.querySelector('[data-conflict]').hidden = !chosen.conflict;
-};
-
-ACTIONS['do-import'] = async () => {
-  if (!pending) return;
-  // No conflict means there is nothing to merge into or replace, so the
-  // radios are hidden and merge is the only meaning.
-  const picked = document.querySelector('input[name="mode"]:checked');
-  const mode = pending.conflict && picked ? picked.value : 'merge';
-  const started = await api().start_import(pending.path, mode);
-  show('import:progress', { name: started.name, counter: '' });
-};
-
-window.eggie.handlers.import = (event) => {
-  if (event.type === 'progress') {
-    const percent = event.total ? Math.round((event.done / event.total) * 100) : 0;
-    const bar = document.querySelector('[data-field="fraction"]');
-    if (bar) bar.style.width = `${percent}%`;
-    const counter = document.querySelector('[data-field="counter"]');
-    if (counter) {
-      counter.textContent = event.phase === 'packing'
-        ? `Packing ${event.done} of ${event.total} files`
-        : `${percent}% copied`;
-    }
-    return;
-  }
-  if (event.type === 'crashed') showNotice(event.message);
-  if (event.type === 'done' || event.type === 'crashed') refresh();
 };
 
 // --- Doctor, repair, VM lifecycle, uninstall --------------------------

@@ -99,7 +99,7 @@ def test_every_public_method_is_refused_from_the_console(tmp_path):
     bridge = _bridge(tmp_path, shell)
     _enter_console(tmp_path, window, shell)
     names = public_methods(DesktopApi)
-    assert "reboot_now" in names and "start_import" in names
+    assert "reboot_now" in names and "start_vm" in names
     for name in names:
         with pytest.raises(NotLocalPage):
             bridge[name]()

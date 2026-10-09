@@ -155,7 +155,7 @@ export function FilesPage() {
           </>
         )}
       </div>
-      {folderRefused && <Notice>Folders can't go up as they are — zip it first, then drop the zip.</Notice>}
+      {folderRefused && <Notice>Folders don't go up here — zip it first, or bring a whole folder in as a project with "From a folder" on the projects page.</Notice>}
       <DestinationModal
         projectId={id}
         files={dialog?.files ?? []}

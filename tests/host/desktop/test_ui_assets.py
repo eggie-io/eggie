@@ -135,15 +135,6 @@ def test_nothing_installed_offers_no_uninstall():
     assert 'data-action="uninstall"' not in markup[start:end]
 
 
-def test_nothing_installed_disables_the_import_tile():
-    markup = (UI / "index.html").read_text()
-    start = markup.index('data-screen="home:not_installed"')
-    end = markup.index("</template>", start)
-    screen = markup[start:end]
-    tile = screen.index('data-action="import"')
-    assert "disabled" in screen[tile:tile + 80], "import tile must be disabled"
-
-
 def test_no_user_facing_copy_names_one_platform():
     """The app ships on Windows and macOS and may not branch on platform, so a
     sentence naming either one is false on the other."""
@@ -223,8 +214,7 @@ def test_only_a_dead_end_removes_the_retry_button():
 
 def test_the_utility_screens_have_templates():
     markup = (UI / "index.html").read_text()
-    for screen in ("import", "import:progress", "doctor",
-                   "uninstall-confirm", "unresponsive", "recover-confirm"):
+    for screen in ("doctor", "uninstall-confirm", "unresponsive", "recover-confirm"):
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
@@ -235,19 +225,9 @@ def test_purge_is_not_preselected():
     assert "checked" not in markup[purge:purge + 120]
 
 
-def test_replace_is_not_the_preselected_import_mode():
-    # Replace deletes files with no undo. The board preselects Merge; a
-    # stray Enter on this screen must not wipe a project.
-    markup = (UI / "index.html").read_text()
-    merge = markup.index('value="merge"')
-    replace = markup.index('value="replace"')
-    assert "checked" in markup[merge:merge + 120]
-    assert "checked" not in markup[replace:replace + 120]
-
-
 def test_a_crashed_job_tells_the_user_something_went_wrong():
-    """import/vm/repair/uninstall crashes used to bounce the user Home with
-    the reason discarded."""
+    """vm/repair/uninstall crashes used to bounce the user Home with the
+    reason discarded."""
     js = (UI / "app.js").read_text()
     assert js.count("showNotice(") >= 4, "every job kind must surface a crash"
     markup = (UI / "index.html").read_text()

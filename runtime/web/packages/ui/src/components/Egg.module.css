@@ -1,2 +1,2 @@
 .egg { flex: none; }
-.bob { animation: om-bob 4s ease-in-out infinite; }
+.bob { animation: global(om-bob) 4s ease-in-out infinite; }

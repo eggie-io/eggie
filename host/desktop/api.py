@@ -21,7 +21,7 @@ from host.core.status import probe
 from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
-from .view import (inspect_folder, progress_event, route_for, rows_for, screen_for,
+from .view import (progress_event, route_for, rows_for, screen_for,
                    terminal_event)
 
 log = logging.getLogger(__name__)
@@ -32,8 +32,6 @@ QUIT_STOP_TIMEOUT = 60.0
 
 
 class DesktopApi:
-    IMPORT_MODES = ("merge", "replace")
-
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,
                  client_factory=None, install_dir_factory=None, local_url=None,
@@ -220,59 +218,6 @@ class DesktopApi:
         """Forget every recorded step so the next run starts from preflight."""
         self._state.clear()
         return {"ok": True}
-
-    def choose_folder(self) -> dict:
-        """Native folder picker. pywebview supplies it on both platforms."""
-        import webview
-        window = webview.windows[0]
-        chosen = window.create_file_dialog(webview.FOLDER_DIALOG)
-        if not chosen:
-            return {"cancelled": True}
-        return self.inspect_folder(chosen[0])
-
-    def inspect_folder(self, path: str) -> dict:
-        from host.client import project_id_for
-
-        summary = inspect_folder(path)
-        project_id = project_id_for(summary["name"])
-        try:
-            self._client_factory(self._provider).get_project(project_id)
-            conflict = True
-        except Exception:
-            # Any refusal means "no project by that name to merge into". A
-            # conflict banner shown because the API was briefly unreachable
-            # would offer Replace -- which deletes -- over nothing.
-            conflict = False
-        return {**summary, "path": path, "project_id": project_id,
-                "conflict": conflict}
-
-    def start_import(self, path: str, mode: str) -> dict:
-        from host.client import project_id_for
-
-        if mode not in self.IMPORT_MODES:
-            # Never guessed: one of the two modes deletes a project.
-            raise ValueError(f"unknown import mode {mode!r}")
-
-        summary = inspect_folder(path)
-        project_id = project_id_for(summary["name"])
-        client = self._client_factory(self._provider)
-
-        def work(emit):
-            if mode == "replace":
-                # Delete first. The other order merges the folder in and then
-                # wipes it, losing the import along with the old project.
-                client.delete_project(project_id)
-            client.ensure_project(project_id)
-
-            def on_progress(phase, done, total):
-                emit({"type": "progress", "phase": phase,
-                      "done": done, "total": total})
-
-            client.upload_directory(project_id, path, on_progress=on_progress)
-            return {"type": "done", "project_id": project_id}
-
-        return {"job": self.jobs.start("import", work),
-                "project_id": project_id, **summary}
 
     def doctor(self) -> dict:
         from host.core.diagnose import render_diagnosis

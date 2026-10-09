@@ -4,10 +4,12 @@ import s from "./ProjectList.module.css";
 
 export function EmptyCounter({
   onNew,
+  onFolder,
   onGitHub,
   connectedAgent,
 }: {
   onNew: () => void;
+  onFolder: () => void;
   onGitHub: () => void;
   connectedAgent: string | null;
 }) {
@@ -35,6 +37,14 @@ export function EmptyCounter({
           <Button variant="primary" onClick={onNew}>New project</Button>
         </div>
         <div className={s.card}>
+          <span className={`${s.cardIcon} ${s.cardIconMuted}`}>{FOLDER}</span>
+          <div className={s.cardText}>
+            <h2 className={s.cardTitle}>From a folder</h2>
+            <p className={s.cardBody}>Already have one on this computer? Eggie copies it in. The original stays where it is.</p>
+          </div>
+          <Button onClick={onFolder}>Choose a folder</Button>
+        </div>
+        <div className={s.card}>
           <span className={`${s.cardIcon} ${s.cardIconMuted}`}>{GITHUB}</span>
           <div className={s.cardText}>
             <h2 className={s.cardTitle}>From GitHub</h2>
@@ -43,9 +53,6 @@ export function EmptyCounter({
           <Button onClick={onGitHub}>Pick a repo</Button>
         </div>
       </div>
-      <p className={s.emptyFoot}>
-        {FOLDER}Already have a folder on your computer? The desktop app carries it in for you.
-      </p>
     </section>
   );
 }

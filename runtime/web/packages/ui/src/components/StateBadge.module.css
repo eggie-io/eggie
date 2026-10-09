@@ -6,7 +6,7 @@
 .spinner {
   width: 11px; height: 11px; border-radius: 50%;
   border: 2px solid currentColor; border-top-color: transparent;
-  animation: om-spin .9s linear infinite;
+  animation: global(om-spin) .9s linear infinite;
 }
 .running { background: var(--basil-soft); color: var(--basil); }
 .stopped { background: var(--cold-soft); color: var(--ink-2); }

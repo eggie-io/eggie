@@ -52,6 +52,15 @@ function parse(text: string): { ok: true; value: unknown } | { ok: false } {
   }
 }
 
+// The API's error envelope for a non-2xx answer, or a generic error when the
+// body isn't one (a proxy page, say).
+export function errorFromAnswer(status: number, text: string): ApiError {
+  const parsed = parse(text);
+  const error = parsed.ok ? parseApiError(parsed.value) : null;
+  if (error) return new ApiError(error.code, error.message, status, error.details);
+  return new ApiError("unexpected", `unexpected answer (${status})`, status);
+}
+
 // AbortSignal.any is missing before Safari 17.4.
 function either(a: AbortSignal, b: AbortSignal): AbortSignal {
   if (typeof AbortSignal.any === "function") return AbortSignal.any([a, b]);
@@ -105,12 +114,7 @@ export function createApi(fetchImpl: typeof fetch, { timeoutMs = 10_000 }: { tim
       if (payload.signal?.aborted) throw new ApiError("aborted", "the request was cancelled", 0);
       throw new ApiError("unreachable", "Eggie's service isn't answering", 0);
     }
-    if (!ok) {
-      const parsed = parse(text);
-      const error = parsed.ok ? parseApiError(parsed.value) : null;
-      if (error) throw new ApiError(error.code, error.message, status, error.details);
-      throw new ApiError("unexpected", `unexpected answer (${status})`, status);
-    }
+    if (!ok) throw errorFromAnswer(status, text);
     return { status, text };
   }
 

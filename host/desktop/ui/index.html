@@ -77,7 +77,6 @@
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
-        <button data-action="import">Import folder</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
@@ -111,7 +110,6 @@
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
-        <button data-action="import">Import folder</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
@@ -144,7 +142,6 @@
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
-        <button data-action="import" disabled>Import folder</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
@@ -179,7 +176,6 @@
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
-        <button data-action="import">Import folder</button>
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
@@ -364,55 +360,6 @@
         <pre data-field="message"></pre></details>
     </div>
     <div class="rows-col"><ol class="rows" data-rows></ol></div>
-  </section>
-</template>
-
-<template data-screen="import">
-  <section class="pad">
-    <h2 class="title">Bring in a folder</h2>
-    <p class="lede">Copy a folder from your computer into the kitchen. The
-      original stays exactly where it is.</p>
-    <div class="field">
-      <span class="overline">Folder</span>
-      <div class="picker">
-        <span class="mono" data-field="path"></span>
-        <button class="btn-secondary" data-action="choose-folder">Choose…</button>
-      </div>
-    </div>
-    <div class="field">
-      <span class="overline">Project name</span>
-      <div class="derived"><span data-field="name"></span>
-        <span class="hint">from folder name</span></div>
-    </div>
-    <fieldset data-conflict hidden>
-      <legend class="overline">A project with this name already exists in here</legend>
-      <label class="choice"><input type="radio" name="mode" value="merge" checked>
-        <b>Merge into it</b>
-        <span>Adds the new files and updates ones with the same name.
-          Everything else stays put.</span></label>
-      <label class="choice"><input type="radio" name="mode" value="replace">
-        <b>Replace it</b>
-        <span>Empties the project first, then copies your folder in.</span></label>
-      <p class="warn"><b>Replace deletes files.</b> Anything in the existing
-        project that isn't in your folder is gone for good — including work the
-        cook did in there. There's no undo.</p>
-    </fieldset>
-    <div class="row">
-      <button class="btn-primary" data-action="do-import">Bring it in</button>
-      <button class="btn-secondary" data-action="go-home">Cancel</button>
-      <span class="hint" data-field="summary"></span>
-    </div>
-  </section>
-</template>
-
-<template data-screen="import:progress">
-  <section class="pad centered">
-    <div class="pan pan-carry" aria-hidden="true"></div>
-    <h2 class="title">Carrying it in…</h2>
-    <p class="lede">Copying <b data-field="name"></b> into the kitchen. Your
-      original folder isn't being touched.</p>
-    <div class="bar"><span data-field="fraction"></span></div>
-    <span class="hint" data-field="counter"></span>
   </section>
 </template>
 

@@ -11,6 +11,7 @@ import { useOnboarding } from "../onboarding/Onboarding";
 import { PLUS } from "../icons";
 import { DiscoveredBand } from "./DiscoveredBand";
 import { EmptyCounter } from "./EmptyCounter";
+import { ImportFolderModal } from "./ImportFolderModal";
 import { NewProjectModal } from "./NewProjectModal";
 import { ProjectRow } from "./ProjectRow";
 import s from "./ProjectList.module.css";
@@ -31,6 +32,7 @@ export function ProjectList() {
   const client = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [github, setGitHub] = useState(false);
+  const [folder, setFolder] = useState(false);
   const deleted = (useLocation().state as { deleted?: DeleteResult } | null)?.deleted;
   const { connectedAgent } = useOnboarding();
   const modal = <NewProjectModal open={creating} onClose={() => setCreating(false)} />;
@@ -51,7 +53,12 @@ export function ProjectList() {
       body = (
         <>
           {deleted && <DeletedNotice result={deleted} />}
-          <EmptyCounter onNew={() => setCreating(true)} onGitHub={() => setGitHub(true)} connectedAgent={connectedAgent} />
+          <EmptyCounter
+            onNew={() => setCreating(true)}
+            onFolder={() => setFolder(true)}
+            onGitHub={() => setGitHub(true)}
+            connectedAgent={connectedAgent}
+          />
         </>
       );
     } else {
@@ -66,6 +73,7 @@ export function ProjectList() {
               <p className={s.sub}>{subtitle(projects.length, cooking)}</p>
             </div>
             <div className={s.actions}>
+              <Button onClick={() => setFolder(true)}>From a folder</Button>
               <Button onClick={() => setGitHub(true)}>From GitHub</Button>
               <Button variant="primary" onClick={() => setCreating(true)}>{PLUS}New project</Button>
             </div>
@@ -89,6 +97,7 @@ export function ProjectList() {
       {body}
       {modal}
       <GitHubModal open={github} onClose={() => setGitHub(false)} />
+      <ImportFolderModal open={folder} onClose={() => setFolder(false)} existing={query.data?.projects.map((p) => p.id) ?? []} />
     </>
   );
 }

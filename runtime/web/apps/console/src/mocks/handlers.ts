@@ -442,6 +442,16 @@ export function handlersFor(scenario: Scenario) {
       const created = makeProject(raw);
       return created instanceof Response ? created : HttpResponse.json(created, { status: 201 });
     }),
+    http.post("/api/projects/:id/files", async ({ params, request }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const target = find(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const body = await request.arrayBuffer();
+      // Long enough to watch the bar move; the archive itself is thrown away.
+      await delay(Math.min(4000, 500 + body.byteLength / 500));
+      return HttpResponse.json({ id: target.id, files: [] });
+    }),
     http.get("/api/projects/:id", ({ params }) => {
       const denied = guard();
       if (denied) return denied;

@@ -37,6 +37,11 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   - `uploads/queue.ts` owns the chunked-upload protocol (resume at the API's offset, busy retry on
     the last chunk, hold on `disk_full`) with no React in it. One instance lives above the router in
     `uploads/QueueProvider.tsx`, so uploads continue across screens but stop when the page closes.
+  - `imports/` — "From a folder" on the projects page: `plan.ts` drops `.git`/`node_modules`/… and
+    names the project after the folder, `tar.ts` writes a ustar+PAX stream and gzips it with the
+    native `CompressionStream` (a Blob, not a streamed body: plain-HTTP `fetch` can't stream uploads),
+    `send.ts` orders delete/create/upload per merge or replace mode with no React in it. One
+    `POST /projects/{id}/files` request, no resume; the API unpacks it with Python's `tarfile`.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
     `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
   - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
@@ -67,5 +72,14 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `runtime/agents/` is outside this workspace: the image needs `--build-context agents=runtime/agents`
   (use `packaging/images/build.sh`), and `content.test.ts` reaches it with five `../`, which
   matches `/runtime/agents` in the image only because `WORKDIR` is `/runtime/web`.
+- In a `.module.css` file, CSS Modules renames animation names to local ones, and the shared
+  `om-*` keyframes in `tokens.css` have no local twin. Write `animation: global(om-spin) …`
+  (no colon). A bare name silently never runs; `packages/ui/test/animations.test.ts` checks.
+- The first `file.size` of each picked file is a blocking disk stat (about half a millisecond in
+  Chrome): 40k files freeze the page for 15 s. `imports/plan.ts` reads sizes in batches that yield.
+- A file input's `cancel` event bubbles, and `Modal`'s `<dialog>` closes itself on `cancel`.
+  Stop it at the input, or dismissing the folder picker closes the whole dialog.
+- A file input's `files` is a live list: resetting `value` to let the same pick fire again empties
+  it, so copy the files out first. The folder picker in `ImportFolderModal` once lost every pick to this.
 - nginx's `/agent-guides/` location has no SPA fallback, so its path must never be a console route
   prefix: `/agents/` once turned every guide reload into a bare 404. `content.test.ts` checks.

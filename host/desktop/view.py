@@ -1,9 +1,8 @@
 """Pure mappings from host/core values to what a screen needs.
 
-No provider and no client -- `inspect_folder()` does walk the local
-filesystem, but nothing here ever reaches the VM or the network. That is
-what makes this the only module in host/desktop worth testing, and why
-api.py stays thin enough to read in one sitting.
+No provider and no client -- nothing here ever reaches the VM, the network
+or the filesystem. That is what makes this the only module in host/desktop
+worth testing, and why api.py stays thin enough to read in one sitting.
 
 No user-facing copy lives here. These functions return state identifiers;
 ui/index.html holds the words, so the design board stays the single source
@@ -11,11 +10,8 @@ for them.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from dataclasses import dataclass
 
-from host.client import EXCLUDED_DIRS, EXCLUDED_FILES
 from host.core import constants
 from host.core.status import Readiness
 
@@ -165,34 +161,3 @@ def terminal_event(exc: BaseException | None) -> dict:
     if isinstance(exc, InstallError):
         return {"type": "failed", "message": exc.message, "action": exc.action}
     return {"type": "failed", "message": f"{exc}", "action": ""}
-
-
-def inspect_folder(path) -> dict:
-    """Count what an import would actually send.
-
-    Walks with the same two exclusion sets client._uploadable applies, so the
-    "412 files · 38 MB" line describes the transfer rather than the disk.
-    Symlinks are skipped rather than followed: following one could leave the
-    tree or loop.
-    """
-    root = Path(path)
-    files = 0
-    total = 0
-    stack = [root]
-    while stack:
-        current = stack.pop()
-        for entry in current.iterdir():
-            if entry.is_symlink():
-                continue
-            if entry.is_dir():
-                if entry.name not in EXCLUDED_DIRS:
-                    stack.append(entry)
-                continue
-            # EXCLUDED_FILES holds paths relative to the project root
-            # (".eggie/overlay.yml"), so compare the same way the tar filter
-            # sees them -- posix separators, relative to root.
-            if entry.relative_to(root).as_posix() in EXCLUDED_FILES:
-                continue
-            files += 1
-            total += entry.stat().st_size
-    return {"name": root.name, "files": files, "bytes": total}

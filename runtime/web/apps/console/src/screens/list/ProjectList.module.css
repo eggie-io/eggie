@@ -48,12 +48,35 @@
 .cardTitle { margin: 0; font: 700 18px var(--font-body); color: var(--ink); }
 .cardBody { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
 .card button { margin-top: 2px; }
-.emptyFoot { margin: 0; display: flex; align-items: center; gap: 9px; font-size: 14.5px; color: var(--ink-3); }
-.emptyFoot svg { flex: none; }
 
 .form { display: flex; flex-direction: column; gap: 18px; }
+.form p { margin: 0; }
 .formActions { display: flex; gap: 10px; }
+
+.dropZone {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 20px; border-radius: 18px;
+  border: 2px dashed var(--line-2); color: var(--ink-2); text-align: center;
+}
+.dropZoneActive { border-color: var(--yolk-deep); background: var(--yolk-soft); }
+.dropIcon { display: flex; color: var(--ink-3); }
+.dropIcon svg { width: 28px; height: 28px; }
+.dropText { margin: 0; font-size: 15px; }
+.summary { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 15px; }
+.summary dt { color: var(--ink-3); }
+.summary dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.modes { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px; }
+.modesTitle { padding: 0; margin-bottom: 4px; font: 700 15px var(--font-body); color: var(--ink); }
+.mode { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); cursor: pointer; }
+.mode input { margin-top: 4px; }
+.mode strong { color: var(--ink); }
 
 @media (min-width: 1040px) {
   .row { display: grid; grid-template-columns: 1fr 200px 200px; }
+}
+
+.loading { display: flex; align-items: center; gap: 12px; font-size: 16px; color: var(--ink); }
+.spinner {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  border: 2.5px solid var(--yolk); border-top-color: transparent;
+  animation: global(om-spin) .9s linear infinite;
 }

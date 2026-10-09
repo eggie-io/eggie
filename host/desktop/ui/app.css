@@ -382,23 +382,9 @@ details.log {
 .row-step[data-status="failed"] .mark::after { content:'!'; }
 .row-step[data-status="failed"] .state { color:var(--paprika); }
 
-/* Import, Doctor, Uninstall -- odds-and-ends screens reached from the
-   home tiles rather than the main flow, so they reuse .pad/.title/.lede/.row
-   above and only add what those screens need. */
-.field {
-  display:flex; flex-direction:column; gap:6px;
-}
-.picker, .derived {
-  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-  padding:12px 14px; border-radius:var(--r-md);
-  background:var(--surface); border:1px solid var(--line);
-}
-.picker .mono:empty::before { content:'Nothing chosen yet'; color:var(--ink-3); }
-
-fieldset[data-conflict] {
-  border:1px solid var(--line); border-radius:var(--r-md);
-  padding:16px 18px; display:flex; flex-direction:column; gap:12px; margin:0;
-}
+/* Doctor, Uninstall -- odds-and-ends screens reached from the home tiles
+   rather than the main flow, so they reuse .pad/.title/.lede/.row above and
+   only add what those screens need. */
 .choice {
   display:grid; grid-template-columns:auto 1fr; column-gap:12px; row-gap:2px;
   align-items:start; cursor:pointer;
@@ -420,15 +406,6 @@ fieldset[data-conflict] {
   transition:transform 120ms var(--ease);
 }
 .btn-danger:hover { transform:translateY(-2px); }
-
-/* import:progress reuses .pan and adds one more loop; only one animates at a
-   time because it is the only template that shows a .pan. */
-.pan-carry { background:var(--yolk-soft); }
-.pan-carry::after {
-  content:''; position:absolute; left:50%; top:50%; width:26px; height:18px;
-  margin:-9px 0 0 -13px; border-radius:4px; background:var(--yolk-deep);
-  animation:om-bob 1.1s var(--ease) infinite;
-}
 
 pre.log {
   font:400 13px 'IBM Plex Mono', monospace; white-space:pre-wrap; word-break:break-word;

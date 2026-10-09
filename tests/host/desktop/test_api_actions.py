@@ -248,3 +248,12 @@ def test_a_successful_runtime_update_goes_into_the_console(tmp_path, monkeypatch
     api.jobs.join(timeout=5)
     assert api.home()["enter_console"] is True
     assert api.home()["enter_console"] is False
+
+
+def test_doctor_names_the_log_file(tmp_path):
+    """The modal is what a user reads out to whoever helps them; it has to
+    say where the file with the actual failures is."""
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"),
+                     push=lambda e: None, probe_fn=lambda p: Readiness(),
+                     log_path=tmp_path / "eggie.log")
+    assert str(tmp_path / "eggie.log") in api.doctor()["text"]

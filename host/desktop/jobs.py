@@ -10,10 +10,13 @@ JSON file, and two installs writing it would race.
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
 from typing import Callable
+
+log = logging.getLogger(__name__)
 
 
 class JobBusy(RuntimeError):
@@ -78,9 +81,11 @@ class JobRegistry:
             pending[0] = None
             send(event)
 
+        log.info("%s job started", kind)
         try:
             result = work(emit)
         except Exception as e:
+            log.exception("%s job crashed", kind)
             # Never let a worker die into a daemon thread's silence: the
             # screen that started it would spin forever.
             if pending[0] is not None:
@@ -89,4 +94,6 @@ class JobRegistry:
             return
         if pending[0] is not None:
             send(pending[0])
-        send(result if result is not None else {"type": "done"})
+        result = result if result is not None else {"type": "done"}
+        log.info("%s job ended: %s", kind, result.get("type"))
+        send(result)

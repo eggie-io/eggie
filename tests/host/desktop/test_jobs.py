@@ -6,6 +6,8 @@ and a second job starting while the first is mid-write of install-state.json.
 """
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from host.desktop.jobs import JobBusy, JobRegistry
@@ -146,3 +148,20 @@ def test_the_last_dropped_progress_event_is_flushed_before_the_terminal_event():
 
     assert [e["type"] for e in pushed] == ["progress", "progress", "done"]
     assert pushed[1]["percent"] == 100
+
+
+def test_a_crashed_job_is_logged_with_its_traceback(caplog):
+    """The screen gets one sentence; the log file is where the stack goes,
+    or a crash report from a user names a message and nothing else."""
+    jobs = JobRegistry(lambda event: None)
+
+    def work(emit):
+        raise ValueError("compose file unreadable")
+
+    with caplog.at_level(logging.ERROR, logger="host.desktop.jobs"):
+        jobs.start("import", work)
+        jobs.join(timeout=5)
+
+    crash = next(r for r in caplog.records if "import" in r.getMessage())
+    assert crash.exc_info is not None
+    assert "compose file unreadable" in caplog.text

@@ -8,8 +8,13 @@ listener and the background VM start.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
+
+from . import log as logfile
+
+log = logging.getLogger(__name__)
 
 WINDOW_TITLE = "Eggie"
 # The board's frames are 880x620. The OS draws the title bar, so that is the
@@ -71,17 +76,21 @@ def _default_start(**kwargs):
 
 def run(provider, state, *, create=_default_create, start=_default_start,
         resumed: bool = False, background: bool = False, steps_factory=None,
-        app_update_fn=None, settings=None) -> int:
+        app_update_fn=None, settings=None, log_path=None) -> int:
     from .api import DesktopApi
     from .controller import Controller
     from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
     from .settings import Settings
     from .shell import Shell, guarded
+    from host.core import constants
 
     if settings is None:
         from host.providers import default_install_dir
         settings = Settings(default_install_dir().parent / "settings.json")
 
+    logfile.setup(log_path)
+    log.info("Eggie %s starting (resumed=%s, background=%s)",
+             constants.APP_VERSION, resumed, background)
     shell = Shell()
     controller = Controller(provider, settings, shell, push=shell.push)
     if not provider.single_instance(controller.show, announce=not background):
@@ -91,7 +100,8 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
-                     window_shown_once=lambda: controller.shown_once)
+                     window_shown_once=lambda: controller.shown_once,
+                     log_path=log_path)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
@@ -105,15 +115,15 @@ def run(provider, state, *, create=_default_create, start=_default_start,
                              on_settings=lambda: controller.open_route("settings"),
                              on_quit=lambda: controller.open_route("quit"))
         tray.start()
-    except Exception as e:
-        print(f"Eggie could not start its tray icon: {e!r}", file=sys.stderr)
+    except Exception:
+        log.exception("could not start the tray icon")
         tray = None
         mode = WINDOW
     if tray is not None:
         try:
             provider.let_session_end_close(controller.allow_exit)
         except Exception as e:
-            print(f"Eggie could not watch for sign-out: {e!r}", file=sys.stderr)
+            log.warning("could not watch for sign-out: %r", e)
 
     try:
         window = create(title=WINDOW_TITLE, url=str(ui_dir() / "index.html"),
@@ -126,8 +136,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         # type. The repr goes out too because this same handler catches
         # ordinary bugs -- without it, a typo'd kwarg reads to the user as
         # "install WebView2", which would not help and would not be true.
-        print(WEBVIEW_MISSING, file=sys.stderr)
-        print(f"(technical detail: {e!r})", file=sys.stderr)
+        log.error("%s\n(technical detail: %r)", WEBVIEW_MISSING, e)
         if tray is not None:
             tray.stop()
         return 3
@@ -181,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     return run(provider, state, steps_factory=build_steps, resumed=args.resume,
-               background=args.background)
+               background=args.background, log_path=logfile.log_file(root))
 
 
 if __name__ == "__main__":

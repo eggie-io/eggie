@@ -1,17 +1,19 @@
 """The Windows notification-area icon."""
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 def _guarded(callback):
     def run():
         try:
             callback()
-        except Exception as e:
-            print(f"tray callback failed: {e!r}", file=sys.stderr)
+        except Exception:
+            log.exception("tray callback failed")
     return run
 
 
@@ -81,7 +83,7 @@ class WinTray:
             try:
                 step()
             except Exception as e:
-                print(f"tray stop failed: {e!r}", file=sys.stderr)
+                log.warning("tray stop failed: %r", e)
 
     def notify(self, text: str) -> bool:
         # Shell_NotifyIcon fails silently until the icon has been added.

@@ -291,3 +291,11 @@ def test_a_session_end_lets_the_hiding_close_through(tmp_path):
     provider.session_end()
     assert [h() for h in window.events.closing.handlers] == [True]
     assert window.calls == []
+
+
+def test_a_tray_failure_is_recorded_in_the_log_file(tmp_path):
+    """stderr is gone on the windowed Windows build; the file is the only
+    place a user can find why the tray icon never appeared."""
+    provider = FakeProvider(exists=True, tray_fails=True)
+    _run(tmp_path, provider, log_path=tmp_path / "eggie.log")
+    assert "pystray" in (tmp_path / "eggie.log").read_text()

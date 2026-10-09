@@ -18,7 +18,11 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 - `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
   routes reach the page via `window.eggie.route()` or a `#route` reload when the console shows.
   If the tray cannot start, the app runs as a plain window for that run (close exits) and the
-  failure goes to stderr.
+  failure goes to the log.
+- `log.py` — the log file (`eggie.log` next to `settings.json`, rotated), set up by `run()` and
+  named by the Doctor modal. **Never `print(..., file=sys.stderr)` here**: the Windows build is
+  windowed, so `sys.stderr` is `None` and the line is lost. Use `logging.getLogger(__name__)`;
+  stderr is mirrored while one exists. Job crashes land here with their traceback.
 - `lifecycle.py` / `settings.py` — pure launch-mode decision and the `settings.json` flags that
   must outlive the VM (`install-state.json` is deleted on reset).
 - `ui/` — HTML/CSS/JS and bundled fonts. Must work fully offline. This is **not** the browser

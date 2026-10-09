@@ -290,8 +290,10 @@ def setup(resume: bool = typer.Option(False, "--resume"),
 
     if not headless:
         from host.desktop.__main__ import run
+        from host.desktop.log import log_file
         raise typer.Exit(code=run(provider, state, steps_factory=build_steps,
-                                  resumed=resume, background=background))
+                                  resumed=resume, background=background,
+                                  log_path=log_file(root)))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is

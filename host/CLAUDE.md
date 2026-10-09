@@ -7,8 +7,9 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
 ## Hard constraints
 
 - **Frozen with PyInstaller.** Every declared dependency lands in the binary, so the list is fixed:
-  `typer`, `pywebview`, and pywebview's native backends — `pythonnet` (Windows) and three `pyobjc-*`
-  packages (macOS), marker-scoped in `pyproject.toml` so neither installs on the other platform.
+  `typer`, `certifi`, `pywebview`, and pywebview's native backends — `pythonnet` plus the tray's
+  `pystray`/`Pillow` (Windows) and four `pyobjc-*` packages (macOS), marker-scoped in
+  `pyproject.toml` so neither installs on the other platform.
   `tests/host/test_host_dependencies.py` fails on anything else declared *or imported*. No HTTP
   library: the client is stdlib `urllib.request`. FastAPI/uvicorn must never appear.
 - **Never import `eggie_api`** (`tests/host/test_no_api_import.py`). Shared values are duplicated

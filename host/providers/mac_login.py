@@ -6,9 +6,11 @@ from the open-application Apple event instead of a --background flag.
 """
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import Callable
+
+log = logging.getLogger(__name__)
 
 # keyAEPropData / keyAELaunchedAsLogInItem, as four-char codes.
 _PROP_DATA = int.from_bytes(b"prdt", "big")
@@ -70,8 +72,8 @@ def _make_open_handler(on_login: Callable[[], None]):
             def _run(self):
                 try:
                     self.on_login()
-                except Exception as e:
-                    print(f"login-launch handler failed: {e!r}", file=sys.stderr)
+                except Exception:
+                    log.exception("login-launch handler failed")
 
         _open_handler = EggieOpenHandler.alloc().init()
     _open_handler.on_login = on_login

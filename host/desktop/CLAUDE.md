@@ -18,6 +18,9 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
   `DesktopApi` method is covered automatically.
 - `jobs.py` — runs **one** slow job at a time on a worker thread (`JobBusy` otherwise):
   `InstallState` is a JSON file and two installs writing it would race.
+- Two platform objects reach here, both from `host/providers`: the `VmProvider` (the machine) and
+  the `DesktopPlatform` (tray, single instance, login). `run()`, `Controller` and `DesktopApi`
+  take both; never reach a desktop method through the provider.
 - `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
   routes reach the page via `window.eggie.route()` or a `#route` reload when the console shows.
   If the tray cannot start, the app runs as a plain window for that run (close exits) and the
@@ -56,7 +59,7 @@ system browser — there is no native menu.
   `applicationShouldTerminate_`, so neither reaches it). `Controller` lets a close through only after
   `exit()` or `allow_exit()`. A new close path must go through one of them or it becomes a hide.
 - **Windows sign-out, restart and installers close the window themselves.** pywebview cancels any
-  close our handler refuses, whatever the reason, so `provider.let_session_end_close` wraps the
+  close our handler refuses, whatever the reason, so `desktop.let_session_end_close` wraps the
   winforms form's `on_closing` before `create()` and calls `Controller.allow_exit()` for
   `WindowsShutDown` / `TaskManagerClosing`.
 - **macOS Dock → Quit, logout and restart do not stop the VM.** `tray_mac` overrides

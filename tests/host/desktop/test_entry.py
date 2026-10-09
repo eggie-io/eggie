@@ -29,18 +29,23 @@ class FakeTray:
 
 
 class FakeProvider:
-    def __init__(self, exists=True, primary=True, tray_fails=False):
-        self._exists, self._primary = exists, primary
-        self._tray_fails = tray_fails
+    def __init__(self, exists=True):
+        self._exists = exists
         self.vm_started = threading.Event()
-        self.tray_made, self.started, self.login_watch = None, 0, None
-        self.announce = None
-        self.session_end = None
+        self.started = 0
 
     def exists(self): return self._exists
     def start(self):
         self.started += 1
         self.vm_started.set()
+
+
+class FakeDesktop:
+    def __init__(self, primary=True, tray_fails=False):
+        self._primary, self._tray_fails = primary, tray_fails
+        self.tray_made, self.login_watch = None, None
+        self.announce, self.session_end = None, None
+
     def single_instance(self, on_show, *, announce):
         self.announce = announce
         return self._primary
@@ -98,8 +103,8 @@ def test_a_missing_webview_runtime_is_a_sentence_not_a_traceback(tmp_path, capsy
 
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=create, start=lambda **kwargs: None,
-               app_update_fn=_no_update_check,
-        settings=Settings(tmp_path / "settings.json"))
+               app_update_fn=_no_update_check, desktop=FakeDesktop(),
+               settings=Settings(tmp_path / "settings.json"))
 
     assert code == 3
     assert WEBVIEW_MISSING in capsys.readouterr().err
@@ -115,8 +120,8 @@ def test_a_working_window_starts_the_loop_and_returns_zero(tmp_path):
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=lambda **kwargs: FakeWindow(),
                start=lambda **kwargs: started.append(kwargs),
-               app_update_fn=_no_update_check,
-        settings=Settings(tmp_path / "settings.json"))
+               app_update_fn=_no_update_check, desktop=FakeDesktop(),
+               settings=Settings(tmp_path / "settings.json"))
 
     assert code == 0
     # debug must be off in a shipped build: it exposes devtools and a context
@@ -133,8 +138,8 @@ def test_the_real_failure_reaches_stderr_under_the_runtime_message(tmp_path, cap
 
     code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
                create=create, start=lambda **kwargs: None,
-               app_update_fn=_no_update_check,
-        settings=Settings(tmp_path / "settings.json"))
+               app_update_fn=_no_update_check, desktop=FakeDesktop(),
+               settings=Settings(tmp_path / "settings.json"))
 
     err = capsys.readouterr().err
     assert code == 3
@@ -148,7 +153,7 @@ def test_a_resumed_launch_is_recorded_for_the_install_screen(tmp_path):
     window = FakeWindow()
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
         create=lambda **kwargs: window, start=lambda **kwargs: None, resumed=True,
-        app_update_fn=_no_update_check,
+        app_update_fn=_no_update_check, desktop=FakeDesktop(),
         settings=Settings(tmp_path / "settings.json"))
 
     assert window.exposed["home"]()["resumed"] is True
@@ -165,7 +170,7 @@ def test_javascript_gets_the_guarded_bridge_not_the_api(tmp_path):
 
     run(FakeProvider(), InstallState(tmp_path / "s.json"),
         create=create, start=lambda **kwargs: None,
-        app_update_fn=_no_update_check,
+        app_update_fn=_no_update_check, desktop=FakeDesktop(),
         settings=Settings(tmp_path / "settings.json"))
     # pywebview resolves a dotted call name from js_api with plain getattr, so
     # any object there lets a page walk "home.__func__.__globals__" past the
@@ -177,7 +182,7 @@ def test_javascript_gets_the_guarded_bridge_not_the_api(tmp_path):
         window.exposed["reset_install"]()
 
 
-def _run(tmp_path, provider, **kwargs):
+def _run(tmp_path, provider, desktop=None, **kwargs):
     captured = {}
     window = FakeWindow()
 
@@ -187,16 +192,17 @@ def _run(tmp_path, provider, **kwargs):
 
     code = run(provider, InstallState(tmp_path / "s.json"), create=create,
                start=lambda **kw: None, app_update_fn=_no_update_check,
+               desktop=desktop or FakeDesktop(),
                settings=Settings(tmp_path / "settings.json"), **kwargs)
     return code, captured, window
 
 
 def test_a_login_launch_with_a_vm_stays_in_the_tray(tmp_path):
-    provider = FakeProvider(exists=True)
-    code, captured, _ = _run(tmp_path, provider, background=True)
+    desktop = FakeDesktop()
+    code, captured, _ = _run(tmp_path, FakeProvider(exists=True), desktop, background=True)
     assert code == 0
     assert captured["hidden"] is True
-    assert provider.tray_made[1].started is True
+    assert desktop.tray_made[1].started is True
 
 
 def test_a_login_launch_before_setup_opens_the_window(tmp_path):
@@ -211,22 +217,22 @@ def test_closing_the_window_is_wired_to_hide(tmp_path):
 
 
 def test_a_second_instance_exits_without_a_window(tmp_path):
-    provider = FakeProvider(primary=False)
-    code, captured, _ = _run(tmp_path, provider)
+    desktop = FakeDesktop(primary=False)
+    code, captured, _ = _run(tmp_path, FakeProvider(), desktop)
     assert code == 0 and captured == {}
-    assert provider.announce is True
+    assert desktop.announce is True
 
 
 def test_a_second_background_instance_does_not_ask_for_the_window(tmp_path):
-    provider = FakeProvider(primary=False)
-    _run(tmp_path, provider, background=True)
-    assert provider.announce is False
+    desktop = FakeDesktop(primary=False)
+    _run(tmp_path, FakeProvider(), desktop, background=True)
+    assert desktop.announce is False
 
 
 def test_the_tray_menu_carries_open_settings_and_quit(tmp_path):
-    provider = FakeProvider()
-    _, _, window = _run(tmp_path, provider)
-    kwargs, _tray = provider.tray_made
+    desktop = FakeDesktop()
+    _, _, window = _run(tmp_path, FakeProvider(), desktop)
+    kwargs, _tray = desktop.tray_made
     assert set(kwargs) == {"icon", "on_open", "on_settings", "on_quit"}
     assert kwargs["icon"].is_file()
     kwargs["on_settings"]()
@@ -236,13 +242,13 @@ def test_the_tray_menu_carries_open_settings_and_quit(tmp_path):
 
 
 def test_the_tray_stops_when_the_loop_ends(tmp_path):
-    provider = FakeProvider()
-    _run(tmp_path, provider)
-    assert provider.tray_made[1].stopped is True
+    desktop = FakeDesktop()
+    _run(tmp_path, FakeProvider(), desktop)
+    assert desktop.tray_made[1].stopped is True
 
 
 def test_a_tray_that_cannot_start_falls_back_to_a_plain_window(tmp_path, capsys):
-    provider = FakeProvider(exists=True, tray_fails=True)
+    provider, desktop = FakeProvider(exists=True), FakeDesktop(tray_fails=True)
     started = []
     captured = {}
     window = FakeWindow()
@@ -253,7 +259,7 @@ def test_a_tray_that_cannot_start_falls_back_to_a_plain_window(tmp_path, capsys)
 
     code = run(provider, InstallState(tmp_path / "s.json"), create=create,
                start=lambda **kw: started.append(kw), background=True,
-               app_update_fn=_no_update_check,
+               app_update_fn=_no_update_check, desktop=desktop,
                settings=Settings(tmp_path / "settings.json"))
     assert code == 0
     assert captured["hidden"] is False
@@ -262,7 +268,7 @@ def test_a_tray_that_cannot_start_falls_back_to_a_plain_window(tmp_path, capsys)
     assert "pystray" in capsys.readouterr().err
     assert not provider.vm_started.wait(0.2)
     # A login watch would hide the window with no tray to bring it back.
-    assert provider.login_watch is None
+    assert desktop.login_watch is None
 
 
 def test_a_login_launch_starts_the_vm(tmp_path):
@@ -272,23 +278,23 @@ def test_a_login_launch_starts_the_vm(tmp_path):
 
 
 def test_a_normal_launch_watches_for_login_launches(tmp_path):
-    provider = FakeProvider()
-    _run(tmp_path, provider)
-    assert provider.login_watch is not None
+    provider, desktop = FakeProvider(), FakeDesktop()
+    _run(tmp_path, provider, desktop)
+    assert desktop.login_watch is not None
     assert not provider.vm_started.wait(0.2)
 
 
 def test_resumed_and_login_launches_do_not_watch_for_login_launches(tmp_path):
-    resumed, login = FakeProvider(), FakeProvider()
-    _run(tmp_path, resumed, resumed=True)
-    _run(tmp_path, login, background=True)
+    resumed, login = FakeDesktop(), FakeDesktop()
+    _run(tmp_path, FakeProvider(), resumed, resumed=True)
+    _run(tmp_path, FakeProvider(), login, background=True)
     assert resumed.login_watch is None and login.login_watch is None
 
 
 def test_a_session_end_lets_the_hiding_close_through(tmp_path):
-    provider = FakeProvider()
-    _, _, window = _run(tmp_path, provider)
-    provider.session_end()
+    desktop = FakeDesktop()
+    _, _, window = _run(tmp_path, FakeProvider(), desktop)
+    desktop.session_end()
     assert [h() for h in window.events.closing.handlers] == [True]
     assert window.calls == []
 
@@ -296,6 +302,6 @@ def test_a_session_end_lets_the_hiding_close_through(tmp_path):
 def test_a_tray_failure_is_recorded_in_the_log_file(tmp_path):
     """stderr is gone on the windowed Windows build; the file is the only
     place a user can find why the tray icon never appeared."""
-    provider = FakeProvider(exists=True, tray_fails=True)
-    _run(tmp_path, provider, log_path=tmp_path / "eggie.log")
+    _run(tmp_path, FakeProvider(exists=True), FakeDesktop(tray_fails=True),
+         log_path=tmp_path / "eggie.log")
     assert "pystray" in (tmp_path / "eggie.log").read_text()

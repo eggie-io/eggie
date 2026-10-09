@@ -60,8 +60,8 @@ Shared constants are declared on each side and kept equal by `tests/test_constan
 
 | Part | Role |
 |---|---|
-| `host/core/provider.py` | `VmProvider` protocol: create, start, stop, exec, forward, diagnose |
-| `host/providers/` | `Wsl2Provider` (shells `wsl.exe`) and `LimaProvider` (shells `limactl`, VM in `eggie.yaml`). The only place platform differences live |
+| `host/core/provider.py` | `VmProvider` protocol: create, start, stop, exec, forward, diagnose. `DesktopPlatform` protocol: tray, single instance, open at login |
+| `host/providers/` | `Wsl2Provider` (shells `wsl.exe`) and `LimaProvider` (shells `limactl`, VM in `eggie.yaml`); `WindowsDesktop` and `MacDesktop` for what the window asks of the OS. The only place platform differences live |
 | `host/core/install.py` | Setup steps: preflight → (Mac) install Lima → (Win) enable WSL, reboot gate → fetch image → create VM → (Mac) SSH alias → bootstrap → connect → verify → finish |
 | `host/core/bootstrap.py` | The host's whole share of provisioning: run `get.sh` unless the marker exists |
 | `host/client.py` | `ApiClient` (stdlib `urllib`), the only way the host reaches project logic |

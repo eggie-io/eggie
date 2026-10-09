@@ -25,7 +25,7 @@ eggie setup                 # desktop window: builds the VM and installs the run
 eggie setup --headless      # same, in the terminal
 eggie doctor                # what this machine is missing
 
-eggie up ./my-project       # → http://my-project.127-0-0-1.sslip.io:39080
+eggie up ./my-project       # → http://my-project.local.eggie.space:39080
 eggie status | logs <id> | down <id> | destroy <id>
 eggie vm stop | vm destroy
 eggie uninstall --purge     # removes the VM and every project in it

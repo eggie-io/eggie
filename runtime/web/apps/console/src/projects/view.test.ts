@@ -6,7 +6,7 @@ function project(over: Partial<Project> = {}): Project {
   return {
     id: "recipe-box",
     status: "stopped",
-    domain: "127-0-0-1.sslip.io",
+    domain: "local.eggie.space",
     path: "/opt/eggie/projects/recipe-box",
     urls: [],
     problem: null,

@@ -111,7 +111,7 @@ and a host release. Prefer additive changes.
   `/opt/eggie/tunnel/token` (0640, present only while a URL is on; the directory is mounted
   read-only into the client) and starts the profile-gated `tunnel` service in `stack.yml` through
   compose. The service rewrites Host to the project's local hostname, so overlays are unchanged;
-  apps that build absolute URLs from Host send public visitors to `*.127-0-0-1.sslip.io`. Only the
+  apps that build absolute URLs from Host send public visitors to `*.local.eggie.space`. Only the
   console turns it on or off (POST and DELETE are mounted at `/api` alone); the CLI never shows it.
   Nothing about it is in `state.db`: the service is the record, the API keeps only a memory of it
   and re-reads the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The `tunnel`

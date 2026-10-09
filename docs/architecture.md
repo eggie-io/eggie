@@ -19,7 +19,7 @@ has the detail.
  ┌───────────────────────────────────────────────────────────────────────┐
  │ traefik :39080 ── /                         → web   (console)         │
  │                ── /api                      → api   (session cookie)  │
- │                ── <id>.127-0-0-1.sslip.io   → project containers      │
+ │                ── <id>.local.eggie.space   → project containers      │
  │ api :39099 ── docker socket → project compose stacks                  │
  │            ── /opt/eggie: api.token, state.db, projects/              │
  │            ── https → Eggie service, GitHub                           │
@@ -82,7 +82,7 @@ never looks installed. Everything runs under `flock /opt/eggie/update.lock`.
 
 | Service | Image | Role |
 |---|---|---|
-| `traefik` | Traefik | Edge on `39080`: `/` → console, `/api` → API, `Host(<id>.127-0-0-1.sslip.io)` → project |
+| `traefik` | Traefik | Edge on `39080`: `/` → console, `/api` → API, `Host(<id>.local.eggie.space)` → project |
 | `api` | `eggie-api` (`runtime/eggie_api/`) | FastAPI on `39099`. Owns projects, jobs, sessions, accounts, GitHub, public URLs, secrets. Talks to Docker through the socket |
 | `web` | `eggie-web` (`runtime/web/`) | React console served by nginx. Works offline |
 | `tunnel` | cloudflared | Only under the `tunnel` compose profile, while a public URL is on |
@@ -105,12 +105,12 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    folders the API doesn't know).
 2. The API parses the compose file and detects the web service and its port (`domain/detect.py`).
 3. It writes a Traefik overlay (`domain/overlay.py`) that joins that service to the `edge` network
-   with a `Host(<project-id>.127-0-0-1.sslip.io)` rule, then runs `docker compose up` with the
+   with a `Host(<project-id>.local.eggie.space)` rule, then runs `docker compose up` with the
    project's file plus the overlay. The project's own files are never edited. Secrets
    reach containers as environment variables through the compose process environment and win over
    the project's own `.env`; a non-empty literal a service sets in the compose file wins over them; the
    overlay lists names only.
-4. `*.127-0-0-1.sslip.io` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
+4. `*.local.eggie.space` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.
 

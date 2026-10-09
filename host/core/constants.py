@@ -25,7 +25,7 @@ API_PORT = 39099
 EDGE_PORT = 39080
 # The host only needs the domain to hand the installer's smoke test a value;
 # every project URL it prints comes from the api service's own payload.
-DEFAULT_DOMAIN = "127-0-0-1.sslip.io"
+DEFAULT_DOMAIN = "local.eggie.space"
 VERIFY_PROJECT_ID = "eggie-selftest"
 # The api service decides what a project must contain; the host only needs the
 # name to refuse an empty folder before uploading it. Declared on both sides so

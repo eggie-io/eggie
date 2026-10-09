@@ -18,7 +18,7 @@ class FakeClient:
         self.calls: list[tuple] = []
         self._job = job or {"state": "done",
                             "result": {"status": "started_ok",
-                                       "urls": ["http://blog.127-0-0-1.sslip.io:39080"]}}
+                                       "urls": ["http://blog.local.eggie.space:39080"]}}
         self._projects = projects or []
         self._delete = delete or {"id": "blog", "stopped": True, "detail": ""}
         self._logs = logs
@@ -82,7 +82,7 @@ def test_up_creates_uploads_starts_and_prints_the_url(monkeypatch, tmp_path):
     assert [c[0] for c in client.calls] == [
         "ensure_project", "upload_directory", "project_up", "wait_for_job"]
     assert client.calls[0][1] == "blog"
-    assert "http://blog.127-0-0-1.sslip.io:39080" in result.output
+    assert "http://blog.local.eggie.space:39080" in result.output
 
 
 def test_up_says_so_when_a_project_exposes_nothing_over_http(monkeypatch, tmp_path):
@@ -189,7 +189,7 @@ def test_up_warns_when_the_api_could_not_reach_the_started_project(monkeypatch,
     client = use(monkeypatch, FakeClient(job={
         "state": "done",
         "result": {"status": "started_ok",
-                   "urls": ["http://blog.127-0-0-1.sslip.io:39080"],
+                   "urls": ["http://blog.local.eggie.space:39080"],
                    "problem": {"code": "bound_to_loopback",
                                "message": "listen on 0.0.0.0, not 127.0.0.1"}}}))
     result = runner.invoke(cli.app, ["up", str(project_dir(tmp_path))])

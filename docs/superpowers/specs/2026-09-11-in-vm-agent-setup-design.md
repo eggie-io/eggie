@@ -14,7 +14,7 @@ A non-technical user opens the Eggie VM in their coding agent (Claude Code
 Desktop's WSL environment on Windows, an SSH environment into Lima on macOS) and
 says "set up this repo", "I want a web app for tracking routines", or "set up
 this folder". The agent does it without asking a single technical question and
-hands back a working `http://<id>.127-0-0-1.sslip.io:39080` URL.
+hands back a working `http://<id>.local.eggie.space:39080` URL.
 
 Today that fails. Inside the VM there is no `eggie` command, and nothing tells
 the agent that projects must be started through the Eggie agent API. Left to
@@ -320,7 +320,7 @@ version bump re-provisions), open `~/projects` in the agent and:
 4. Codex: repeat (1) or (2).
 
 Each passes when the agent asks no technical question, the reply contains a
-`…127-0-0-1.sslip.io:39080` URL, that URL answers in a Windows browser, and
+`…local.eggie.space:39080` URL, that URL answers in a Windows browser, and
 editing a page shows on reload.
 
 ## 11. Risks and open items

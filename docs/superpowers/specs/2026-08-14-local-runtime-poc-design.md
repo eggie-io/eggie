@@ -171,7 +171,7 @@ two HTTP services) with **zero stack-specific code**.
 
 ### 6.4 Domain
 
-Default `‹proj›.127-0-0-1.sslip.io` (public DNS, resolves to `127.0.0.1`
+Default `‹proj›.local.eggie.space` (public DNS, resolves to `127.0.0.1`
 everywhere including Safari; needs internet). Documented fallback: direct
 `localhost:PORT` forward for a single active project. Configurable so a
 `/etc/hosts` mode can be added later.

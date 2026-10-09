@@ -22,7 +22,7 @@ Every task's requirements implicitly include this section.
   - arm64 URL `https://cdimages.ubuntu.com/releases/24.04.4/release/ubuntu-24.04.4-wsl-arm64.wsl`, sha256 `6b244d89f412a68f51e58f396fab65bed3b5896a25c045a99bef9c78a07df507`
 - **Install target:** per-user, `%LOCALAPPDATA%\Programs\LocalRuntime`. Inno `PrivilegesRequired=lowest`.
 - **State and cache:** `%LOCALAPPDATA%\Runtime\install-state.json`, `%LOCALAPPDATA%\Runtime\cache`, `%LOCALAPPDATA%\Runtime\logs`.
-- **Existing constants** in `runtime/core/constants.py` are authoritative: `EDGE_PORT = 39080`, `DEFAULT_DOMAIN = "127-0-0-1.sslip.io"`. Never re-declare them.
+- **Existing constants** in `runtime/core/constants.py` are authoritative: `EDGE_PORT = 39080`, `DEFAULT_DOMAIN = "local.eggie.space"`. Never re-declare them.
 - **PyInstaller one-dir**, never one-file.
 - **Running tests:** `python3 -m pytest -q`. In sandboxes where `/tmp/pytest-of-*` is root-owned, prefix with `TMPDIR=<writable dir>` or `tmp_path` fixtures fail. Baseline before this plan: **82 passed**.
 - **No network in tests.** Every download, subprocess, registry write, and HTTP request is behind an injected callable.
@@ -755,15 +755,15 @@ def test_verify_passes_on_200_and_tears_the_project_down(template):
         seen.append(url)
         return 200
 
-    verify_step(provider, template, "127-0-0-1.sslip.io", http_get=http_get)
-    assert seen == ["http://nginx-hello.127-0-0-1.sslip.io:39080"]
+    verify_step(provider, template, "local.eggie.space", http_get=http_get)
+    assert seen == ["http://nginx-hello.local.eggie.space:39080"]
     assert any("down" in argv for argv in provider.execs), \
         "the smoke-test project must not be left running"
 
 
 def test_verify_fails_on_a_non_200_status(template):
     with pytest.raises(VerificationFailed, match="502"):
-        verify_step(FakeProvider(), template, "127-0-0-1.sslip.io",
+        verify_step(FakeProvider(), template, "local.eggie.space",
                     http_get=lambda url: 502)
 
 
@@ -774,7 +774,7 @@ def test_verify_tears_down_even_when_the_request_fails(template):
         raise OSError("connection refused")
 
     with pytest.raises(VerificationFailed):
-        verify_step(provider, template, "127-0-0-1.sslip.io", http_get=http_get)
+        verify_step(provider, template, "local.eggie.space", http_get=http_get)
     assert any("down" in argv for argv in provider.execs)
 ```
 

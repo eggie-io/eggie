@@ -39,16 +39,16 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 
-def _protocol_methods() -> set[str]:
+def _protocol_methods(name: str = "VmProvider") -> set[str]:
     source = (HOST / "core" / "provider.py").read_text()
     for node in ast.parse(source).body:
-        if isinstance(node, ast.ClassDef) and node.name == "VmProvider":
+        if isinstance(node, ast.ClassDef) and node.name == name:
             return {
                 child.name
                 for child in node.body
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
             }
-    raise AssertionError(f"no VmProvider class in {HOST / 'core' / 'provider.py'}")
+    raise AssertionError(f"no {name} class in {HOST / 'core' / 'provider.py'}")
 
 
 def test_protocol_is_exactly_the_lifecycle_surface():
@@ -86,21 +86,36 @@ def test_the_install_surface_stays_out_of_the_lifecycle_protocol():
     assert not (INSTALL_SURFACE & _protocol_methods())
 
 
-# What the desktop app asks of a provider to live in the tray and open at
-# login. Not lifecycle and not install, so it is pinned separately; a provider
-# missing one fails only on that platform, at the user's first launch.
+# What the desktop app asks of the platform to live in the tray and open at
+# login. Nothing about a VM: it is its own object (`get_desktop()`), and a
+# platform missing one fails only there, at the user's first launch.
 DESKTOP_SURFACE = {"autostart_enabled", "set_autostart", "single_instance",
                    "watch_login_launch", "on_window_shown", "tray",
                    "let_session_end_close"}
 
 
-def test_every_provider_offers_the_desktop_surface():
+def test_the_desktop_protocol_is_exactly_the_desktop_surface():
+    assert _protocol_methods("DesktopPlatform") == DESKTOP_SURFACE
+
+
+def test_every_desktop_platform_offers_the_whole_surface():
+    from host.providers.desktop_mac import MacDesktop
+    from host.providers.desktop_win import WindowsDesktop
+
+    for cls in (MacDesktop, WindowsDesktop):
+        missing = [name for name in DESKTOP_SURFACE if not callable(getattr(cls, name, None))]
+        assert not missing, f"{cls.__name__} does not implement {missing}"
+
+
+def test_the_vm_providers_carry_none_of_the_desktop_surface():
+    # The split: a tray or a Run key on the VM provider is the smell this
+    # test exists to catch coming back.
     from host.providers.lima import LimaProvider
     from host.providers.wsl2 import Wsl2Provider
 
     for cls in (LimaProvider, Wsl2Provider):
-        missing = [name for name in DESKTOP_SURFACE if not callable(getattr(cls, name, None))]
-        assert not missing, f"{cls.__name__} does not implement {missing}"
+        leaked = [name for name in DESKTOP_SURFACE if hasattr(cls, name)]
+        assert not leaked, f"{cls.__name__} still carries {leaked}"
 
 
 def test_the_desktop_surface_stays_out_of_the_lifecycle_protocol():

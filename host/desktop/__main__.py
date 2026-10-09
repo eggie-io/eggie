@@ -74,7 +74,7 @@ def _default_start(**kwargs):
     webview.start(**kwargs)
 
 
-def run(provider, state, *, create=_default_create, start=_default_start,
+def run(provider, state, *, desktop, create=_default_create, start=_default_start,
         resumed: bool = False, background: bool = False, steps_factory=None,
         app_update_fn=None, settings=None, log_path=None) -> int:
     from .api import DesktopApi
@@ -92,8 +92,8 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     log.info("Eggie %s starting (resumed=%s, background=%s)",
              constants.APP_VERSION, resumed, background)
     shell = Shell()
-    controller = Controller(provider, settings, shell, push=shell.push)
-    if not provider.single_instance(controller.show, announce=not background):
+    controller = Controller(provider, desktop, settings, shell, push=shell.push)
+    if not desktop.single_instance(controller.show, announce=not background):
         return 0
 
     mode = launch_mode(resume=resumed, background=background, vm_exists=provider.exists)
@@ -101,7 +101,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
                      window_shown_once=lambda: controller.shown_once,
-                     log_path=log_path)
+                     log_path=log_path, desktop=desktop)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
@@ -111,7 +111,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
     # import, icon) must not leave a windowless app with an unseen traceback.
     tray = None
     try:
-        tray = provider.tray(icon=icon_path(), on_open=controller.show,
+        tray = desktop.tray(icon=icon_path(), on_open=controller.show,
                              on_settings=lambda: controller.open_route("settings"),
                              on_quit=lambda: controller.open_route("quit"))
         tray.start()
@@ -121,7 +121,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         mode = WINDOW
     if tray is not None:
         try:
-            provider.let_session_end_close(controller.allow_exit)
+            desktop.let_session_end_close(controller.allow_exit)
         except Exception as e:
             log.warning("could not watch for sign-out: %r", e)
 
@@ -149,10 +149,10 @@ def run(provider, state, *, create=_default_create, start=_default_start,
         controller.tray = tray
     if mode == TRAY_ONLY:
         controller.mark_hidden_launch()
-        provider.on_window_shown(False)
+        desktop.on_window_shown(False)
         controller.start_vm_in_background()
     elif not resumed and tray is not None:
-        provider.watch_login_launch(controller.on_login_launch)
+        desktop.watch_login_launch(controller.on_login_launch)
 
     try:
         start(debug=False)
@@ -165,7 +165,7 @@ def run(provider, state, *, create=_default_create, start=_default_start,
 def main(argv: list[str] | None = None) -> int:
     from host.core import constants
     from host.core.install import VERIFY_TEMPLATE, InstallState, default_steps
-    from host.providers import default_install_dir, get_provider
+    from host.providers import default_install_dir, get_desktop, get_provider
 
     parser = argparse.ArgumentParser(prog="eggie-desktop")
     # Written by provider.register_resume() into Windows RunOnce. The flag
@@ -189,8 +189,9 @@ def main(argv: list[str] | None = None) -> int:
             exe_path=sys.executable,
         )
 
-    return run(provider, state, steps_factory=build_steps, resumed=args.resume,
-               background=args.background, log_path=logfile.log_file(root))
+    return run(provider, state, desktop=get_desktop(), steps_factory=build_steps,
+               resumed=args.resume, background=args.background,
+               log_path=logfile.log_file(root))
 
 
 if __name__ == "__main__":

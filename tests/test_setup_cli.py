@@ -13,7 +13,6 @@ class StubProvider:
     location = r"C:\Users\you\AppData\Local\Eggie\vm"
     terminal = "PowerShell"
     remediable = True
-    autostart_off = False
 
     def __init__(self, diagnosis=None, reboot=False):
         self._diagnosis = diagnosis or Diagnosis([CheckResult("all good", True)])
@@ -29,11 +28,16 @@ class StubProvider:
     def start(self): pass
     def exec(self, argv, *, root=False): return Completed(0, "", "")
     def destroy(self): pass
-    def set_autostart(self, on, exe): self.autostart_off = (on is False)
     def image(self): return Image("http://example.invalid/img.wsl", "0" * 64)
     def runtime(self): return None
     def ssh_shortcut(self): return None
     def access(self): return Access(headline="Connect", summary="", command="wsl")
+
+
+class StubDesktop:
+    autostart_off = False
+
+    def set_autostart(self, on, exe): self.autostart_off = (on is False)
 
 
 class FailingDestroyProvider(StubProvider):
@@ -270,16 +274,18 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
     provider = StubProvider()
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None):
+                 log_path=None, desktop=None):
         captured["provider"] = provider
         captured["a"] = steps_factory()
         captured["b"] = steps_factory()
         captured["resumed"] = resumed
         captured["background"] = background
         captured["log_path"] = log_path
+        captured["desktop"] = desktop
         return 0
 
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
+    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     monkeypatch.setattr(cli, "_provider_factory", lambda: provider)
     monkeypatch.setattr("host.providers.default_install_dir",
                         lambda: tmp_path / "vm")
@@ -292,6 +298,7 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
         "steps_factory must build a fresh list on every call, not close over one"
     # Next to settings.json, where Doctor and a support request can find it.
     assert captured["log_path"] == tmp_path / "eggie.log"
+    assert isinstance(captured["desktop"], StubDesktop)
 
 
 def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
@@ -301,12 +308,13 @@ def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None):
+                 log_path=None, desktop=None):
         captured["resumed"] = resumed
         captured["background"] = background
         return 0
 
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
+    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
     monkeypatch.setattr("host.providers.default_install_dir",
                         lambda: tmp_path / "vm")
@@ -340,30 +348,33 @@ def test_setup_background_reaches_the_window(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None):
+                 log_path=None, desktop=None):
         captured["background"] = background
         return 0
 
     monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
+    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     result = runner.invoke(cli.app, ["setup", "--background"])
     assert result.exit_code == 0
     assert captured["background"] is True
 
 
 def test_uninstall_turns_open_at_login_off(monkeypatch):
-    provider = StubProvider()
-    monkeypatch.setattr(cli, "_provider_factory", lambda: provider)
+    desktop = StubDesktop()
+    monkeypatch.setattr(cli, "_provider_factory", StubProvider)
+    monkeypatch.setattr(cli, "_desktop_factory", lambda: desktop)
     result = runner.invoke(cli.app, ["uninstall", "--purge"])
     assert result.exit_code == 0
-    assert provider.autostart_off is True
+    assert desktop.autostart_off is True
 
 
 def test_uninstall_goes_on_when_autostart_cannot_be_removed(monkeypatch):
-    class Stuck(StubProvider):
+    class Stuck(StubDesktop):
         def set_autostart(self, on, exe):
             raise OSError("registry locked")
-    monkeypatch.setattr(cli, "_provider_factory", lambda: Stuck())
+    monkeypatch.setattr(cli, "_provider_factory", StubProvider)
+    monkeypatch.setattr(cli, "_desktop_factory", Stuck)
     assert runner.invoke(cli.app, ["uninstall", "--purge"]).exit_code == 0
 
 

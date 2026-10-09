@@ -31,12 +31,18 @@ class FakeTray:
     def stop(self): self.stopped = True
 
 
-class FakeProvider:
-    def __init__(self, start_error=None, exists=True):
-        self.shown, self.started = [], 0
-        self._start_error, self._exists = start_error, exists
+class FakeDesktop:
+    def __init__(self):
+        self.shown = []
 
     def on_window_shown(self, visible): self.shown.append(visible)
+
+
+class FakeProvider:
+    def __init__(self, start_error=None, exists=True):
+        self.started = 0
+        self._start_error, self._exists = start_error, exists
+
     def exists(self): return self._exists
 
     def start(self):
@@ -48,7 +54,8 @@ class FakeProvider:
 def _controller(tmp_path, *, provider=None, tray=None, url=LOCAL):
     window = FakeWindow(url)
     shell = Shell(window)
-    controller = Controller(provider or FakeProvider(), Settings(tmp_path / "s.json"), shell)
+    controller = Controller(provider or FakeProvider(), FakeDesktop(),
+                            Settings(tmp_path / "s.json"), shell)
     controller.window, controller.tray = window, tray or FakeTray()
     return controller, window
 
@@ -87,7 +94,7 @@ def test_show_brings_the_window_and_dock_back(tmp_path):
     controller.on_closing()
     controller.show()
     assert window.calls[-1] == "show"
-    assert controller.provider.shown == [False, True]
+    assert controller.desktop.shown == [False, True]
 
 
 def test_a_route_on_the_local_ui_is_handed_to_the_page(tmp_path):
@@ -209,8 +216,8 @@ def test_a_login_launch_without_a_tray_keeps_the_window(tmp_path):
 def _pushing_controller(tmp_path, provider):
     pushed = []
     window = FakeWindow()
-    controller = Controller(provider, Settings(tmp_path / "s.json"), Shell(window),
-                            push=pushed.append)
+    controller = Controller(provider, FakeDesktop(), Settings(tmp_path / "s.json"),
+                            Shell(window), push=pushed.append)
     controller.window, controller.tray = window, FakeTray()
     return controller, pushed
 

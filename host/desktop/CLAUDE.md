@@ -15,6 +15,9 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
   `DesktopApi` method is covered automatically.
 - `jobs.py` — runs **one** slow job at a time on a worker thread (`JobBusy` otherwise):
   `InstallState` is a JSON file and two installs writing it would race.
+- Two platform objects reach here, both from `host/providers`: the `VmProvider` (the machine) and
+  the `DesktopPlatform` (tray, single instance, login). `run()`, `Controller` and `DesktopApi`
+  take both; never reach a desktop method through the provider.
 - `controller.py` — the window and tray as one app: close hides, `exit()` really closes, tray
   routes reach the page via `window.eggie.route()` or a `#route` reload when the console shows.
   If the tray cannot start, the app runs as a plain window for that run (close exits) and the

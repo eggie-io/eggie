@@ -18,8 +18,9 @@ WINDOW_SHOWN = {"kind": "window", "type": "shown"}
 
 
 class Controller:
-    def __init__(self, provider, settings: Settings, shell, push=None):
+    def __init__(self, provider, desktop, settings: Settings, shell, push=None):
         self.provider = provider
+        self.desktop = desktop
         self._push = push
         self.settings = settings
         self.shell = shell
@@ -56,7 +57,7 @@ class Controller:
     def hide(self) -> None:
         if self.window is not None:
             self.window.hide()
-        self.provider.on_window_shown(False)
+        self.desktop.on_window_shown(False)
 
     def show(self) -> None:
         if self.window is None:
@@ -65,7 +66,7 @@ class Controller:
         self._send(WINDOW_SHOWN)
 
     def _show_window(self) -> None:
-        self.provider.on_window_shown(True)
+        self.desktop.on_window_shown(True)
         self.window.show()
         self.shown_once = True
 

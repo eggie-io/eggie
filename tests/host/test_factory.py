@@ -62,3 +62,13 @@ def test_both_providers_satisfy_the_vm_provider_protocol():
     from host.core.provider import VmProvider
     assert isinstance(Wsl2Provider(), VmProvider)
     assert isinstance(LimaProvider(), VmProvider)
+
+
+def test_the_desktop_follows_the_same_platform_as_the_provider(monkeypatch):
+    from host.providers.desktop_mac import MacDesktop
+    from host.providers.desktop_win import WindowsDesktop
+
+    monkeypatch.setattr(providers.sys, "platform", "win32")
+    assert isinstance(providers.get_desktop(), WindowsDesktop)
+    monkeypatch.setattr(providers.sys, "platform", "darwin")
+    assert isinstance(providers.get_desktop(), MacDesktop)

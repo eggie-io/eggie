@@ -3,11 +3,16 @@ from contextlib import contextmanager
 import typer
 
 from host.core.diagnose import render_diagnosis
-from host.providers import get_provider
+from host.providers import get_desktop, get_provider
 
 app = typer.Typer(help="Eggie: VM + Docker + one exposed port.", no_args_is_help=True)
 
 _provider_factory = get_provider  # tests override this
+_desktop_factory = get_desktop
+
+
+def _desktop():
+    return _desktop_factory()
 
 
 def _provider():
@@ -291,7 +296,8 @@ def setup(resume: bool = typer.Option(False, "--resume"),
     if not headless:
         from host.desktop.__main__ import run
         from host.desktop.log import log_file
-        raise typer.Exit(code=run(provider, state, steps_factory=build_steps,
+        raise typer.Exit(code=run(provider, state, desktop=_desktop(),
+                                  steps_factory=build_steps,
                                   resumed=resume, background=background,
                                   log_path=log_file(root)))
 
@@ -352,7 +358,7 @@ def uninstall(purge: bool = typer.Option(False, "--purge")):
     import sys as _sys
     provider = _provider()
     try:
-        provider.set_autostart(False, _sys.executable)
+        _desktop().set_autostart(False, _sys.executable)
     except Exception as e:
         # Whatever stops the login entry coming off (locked registry, already
         # gone) must not block removing the VM.

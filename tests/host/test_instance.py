@@ -59,13 +59,6 @@ def test_a_path_that_cannot_be_listened_on_still_runs_the_app():
         shutil.rmtree(sock_dir, ignore_errors=True)
 
 
-def test_the_lima_provider_leaves_single_instance_to_launchservices():
-    from pathlib import Path
-    from host.providers.lima import LimaProvider
-    provider = LimaProvider(config=Path("/tmp/eggie.yaml"), runner=lambda a: None)
-    assert provider.single_instance(lambda: None, announce=True) is True
-
-
 def test_an_announcing_second_instance_lets_the_first_take_the_foreground(address):
     shown, allowed = threading.Event(), []
     claim(address, "AF_UNIX", shown.set, announce=True)
@@ -86,7 +79,7 @@ def test_a_background_second_instance_does_not_hand_over_the_foreground(address)
 def test_the_wsl_pipe_name_survives_an_unreadable_user_name(monkeypatch):
     import getpass
     from host.providers import instance
-    from host.providers.wsl2 import Wsl2Provider
+    from host.providers.desktop_win import WindowsDesktop
 
     def no_user():
         raise OSError("no USERNAME")
@@ -99,5 +92,5 @@ def test_the_wsl_pipe_name_survives_an_unreadable_user_name(monkeypatch):
 
     monkeypatch.setattr(getpass, "getuser", no_user)
     monkeypatch.setattr(instance, "claim", fake_claim)
-    assert Wsl2Provider(runner=lambda a: None).single_instance(lambda: None, announce=True)
+    assert WindowsDesktop().single_instance(lambda: None, announce=True)
     assert seen["address"].startswith(r"\\.\pipe\eggie-")

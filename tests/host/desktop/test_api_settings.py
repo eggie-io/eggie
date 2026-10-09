@@ -10,16 +10,21 @@ from host.desktop.settings import Settings
 EXE = r"C:\Eggie\setup.exe"
 
 
-class FakeProvider:
-    def __init__(self, running=True, stop_error=None):
-        self.autostart, self.stops = {}, 0
-        self._running, self._stop_error = running, stop_error
+class FakeDesktop:
+    def __init__(self):
+        self.autostart = {}
 
     def autostart_enabled(self, exe):
         return self.autostart.get(exe, False)
 
     def set_autostart(self, on, exe):
         self.autostart[exe] = on
+
+
+class FakeProvider:
+    def __init__(self, running=True, stop_error=None):
+        self.stops = 0
+        self._running, self._stop_error = running, stop_error
 
     def running(self):
         return self._running
@@ -30,9 +35,10 @@ class FakeProvider:
             raise self._stop_error
 
 
-def _api(tmp_path, provider=None, *, exe=EXE, steps=None, quits=None, **kwargs):
+def _api(tmp_path, provider=None, *, desktop=None, exe=EXE, steps=None, quits=None, **kwargs):
     return DesktopApi(provider or FakeProvider(), InstallState(tmp_path / "state.json"),
                       push=lambda e: None, probe_fn=lambda p: Readiness(),
+                      desktop=desktop or FakeDesktop(),
                       steps_factory=lambda: steps or [Step("preflight", lambda: None)],
                       settings=Settings(tmp_path / "settings.json"), autostart_exe=exe,
                       quit_app=(lambda: quits.append(True)) if quits is not None else lambda: None,
@@ -40,10 +46,10 @@ def _api(tmp_path, provider=None, *, exe=EXE, steps=None, quits=None, **kwargs):
 
 
 def test_settings_read_the_real_state(tmp_path):
-    provider = FakeProvider()
-    api = _api(tmp_path, provider)
+    desktop = FakeDesktop()
+    api = _api(tmp_path, desktop=desktop)
     assert api.get_settings() == {"autostart": False, "autostart_available": True}
-    provider.autostart[EXE] = True     # turned on outside Eggie
+    desktop.autostart[EXE] = True     # turned on outside Eggie
     assert api.get_settings()["autostart"] is True
 
 
@@ -54,38 +60,38 @@ def test_a_source_checkout_cannot_register_itself(tmp_path):
 
 
 def test_set_autostart_reports_a_refusal_as_text(tmp_path):
-    class Refusing(FakeProvider):
+    class Refusing(FakeDesktop):
         def set_autostart(self, on, exe):
             raise RuntimeError("macOS refused to add Eggie to Login Items")
-    result = _api(tmp_path, Refusing()).set_autostart(True)
+    result = _api(tmp_path, desktop=Refusing()).set_autostart(True)
     assert result == {"ok": False, "error": "macOS refused to add Eggie to Login Items"}
 
 
 def test_the_first_successful_install_turns_autostart_on(tmp_path):
-    provider = FakeProvider()
-    api = _api(tmp_path, provider)
+    desktop = FakeDesktop()
+    api = _api(tmp_path, desktop=desktop)
     api.start_install()
     api.jobs.join(timeout=5)
-    assert provider.autostart == {EXE: True}
+    assert desktop.autostart == {EXE: True}
 
 
 def test_a_second_successful_install_does_not_turn_autostart_back_on(tmp_path):
-    provider = FakeProvider()
-    api = _api(tmp_path, provider)
+    desktop = FakeDesktop()
+    api = _api(tmp_path, desktop=desktop)
     api.start_install(); api.jobs.join(timeout=5)
     api.set_autostart(False)
     InstallState(tmp_path / "state.json").clear()      # reset / repair path
     api.start_install(); api.jobs.join(timeout=5)
-    assert provider.autostart == {EXE: False}
+    assert desktop.autostart == {EXE: False}
 
 
 def test_a_failed_install_does_not_turn_autostart_on(tmp_path):
     def boom():
         raise RuntimeError("download failed")
-    provider = FakeProvider()
-    api = _api(tmp_path, provider, steps=[Step("fetch_image", boom)])
+    desktop = FakeDesktop()
+    api = _api(tmp_path, desktop=desktop, steps=[Step("fetch_image", boom)])
     api.start_install(); api.jobs.join(timeout=5)
-    assert provider.autostart == {}
+    assert desktop.autostart == {}
 
 
 def test_quit_stops_a_running_vm_then_exits(tmp_path):

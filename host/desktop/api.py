@@ -38,8 +38,9 @@ class DesktopApi:
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
                  settings=None, autostart_exe=_FROZEN, window_shown_once=None,
-                 stop_timeout=QUIT_STOP_TIMEOUT, log_path=None):
+                 stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None):
         self._provider = provider
+        self._desktop = desktop
         self._state = state
         self._probe = probe_fn
         self._steps_factory = steps_factory
@@ -194,7 +195,7 @@ class DesktopApi:
             try:
                 turn_on_autostart_once(
                     self._settings, available=self._autostart_exe is not None,
-                    enable=lambda: self._provider.set_autostart(True, self._autostart_exe))
+                    enable=lambda: self._desktop.set_autostart(True, self._autostart_exe))
             except Exception as e:
                 # The VM is installed; an unsaved flag is not a failed install.
                 log.warning("could not record turning on open at login: %r", e)
@@ -395,14 +396,14 @@ class DesktopApi:
 
     def get_settings(self) -> dict:
         available = self._autostart_exe is not None
-        return {"autostart": available and self._provider.autostart_enabled(self._autostart_exe),
+        return {"autostart": available and self._desktop.autostart_enabled(self._autostart_exe),
                 "autostart_available": available}
 
     def set_autostart(self, on: bool) -> dict:
         if self._autostart_exe is None:
             return {"ok": False, "error": "Only an installed Eggie can open when you sign in."}
         try:
-            self._provider.set_autostart(bool(on), self._autostart_exe)
+            self._desktop.set_autostart(bool(on), self._autostart_exe)
         except Exception as e:
             return {"ok": False, "error": str(e)}
         return {"ok": True, "error": ""}

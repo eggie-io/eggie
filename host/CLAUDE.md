@@ -14,7 +14,7 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
   library: the client is stdlib `urllib.request`. FastAPI/uvicorn must never appear.
 - **Never import `eggie_api`** (`tests/host/test_no_api_import.py`). Shared values are duplicated
   in `host/core/constants.py` and held equal by `tests/test_constants_agree.py`.
-- **Platform is resolved only in `host/providers/__init__.py`** (`get_provider()`,
+- **Platform is resolved only in `host/providers/__init__.py`** (`get_provider()`, `get_desktop()`,
   `default_install_dir()`). No `sys.platform` / `os.name` / `platform.system()` anywhere else — add
   a provider method instead (`tests/test_no_platform_leak.py`).
 - **No guest assets.** `host/provision/` holds only the installer's `nginx-hello` smoke-test project
@@ -23,15 +23,17 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
 ## Layers
 
 - `core/provider.py` — the `VmProvider` Protocol plus `Completed` / `CheckResult` / `Diagnosis`
-  value types. Providers are **duck-typed against the Protocol, not subclasses**.
+  value types, and the `DesktopPlatform` Protocol. Both are **duck-typed, not subclassed**.
 - `providers/` — `Wsl2Provider` (shells `wsl.exe`) and `LimaProvider` (shells `limactl`, VM defined
   by `eggie.yaml`). Both take an injectable `runner` callable (default
   `subprocess.run(..., capture_output=True)`) — that is what makes them unit-testable.
   `lima.py` and `eggie.yaml` carry banners saying exactly what has and hasn't been run on a real
   Mac; keep them accurate when you change either.
-  Desktop surface (`autostart_*`, `single_instance`, `watch_login_launch`, `on_window_shown`,
-  `tray`) is pinned by `tests/host/test_provider_surface.py::DESKTOP_SURFACE`. macOS-only and
-  Windows-only imports stay function-local so the suite imports every provider on Linux.
+  `desktop_win.py` / `desktop_mac.py` — `WindowsDesktop` / `MacDesktop`, what the window asks of
+  the OS (`tray`, `single_instance`, `autostart_*`, `watch_login_launch`, `on_window_shown`,
+  `let_session_end_close`); `tests/host/test_provider_surface.py::DESKTOP_SURFACE` pins it there
+  and asserts the VM providers carry none of it. macOS-only and Windows-only imports stay
+  function-local so the suite imports every provider on Linux.
 - `core/bootstrap.py` — the host's entire share of provisioning. Unless
   `/opt/eggie/runtime.version` exists (or `repair=True`) it runs a base64 stub as one `bash -lc`
   argument that downloads `EGGIE_RUNTIME_URL` in full and runs it, forwarding `EGGIE_RUNTIME_REF`

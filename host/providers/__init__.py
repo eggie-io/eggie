@@ -4,6 +4,8 @@ from pathlib import Path
 
 from .wsl2 import Wsl2Provider
 from .lima import LimaProvider, default_data_root, find_limactl
+from .desktop_win import WindowsDesktop
+from .desktop_mac import MacDesktop
 from .lima_install import managed_limactl
 
 
@@ -12,6 +14,16 @@ def default_install_dir() -> Path:
         base = os.environ.get("LOCALAPPDATA", str(Path.home()))
         return Path(base) / "Eggie" / "vm"
     return default_data_root() / "vm"
+
+
+def get_desktop():
+    """The platform the window lives on, as distinct from the VM it drives."""
+    if sys.platform == "win32":
+        return WindowsDesktop()
+    if sys.platform == "darwin":
+        return MacDesktop()
+    raise RuntimeError(f"unsupported host platform: {sys.platform} "
+                       "(only Windows/WSL2 and macOS/Lima are supported)")
 
 
 def get_provider():

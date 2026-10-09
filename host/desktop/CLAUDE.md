@@ -56,7 +56,7 @@ system browser — there is no native menu.
   `applicationShouldTerminate_`, so neither reaches it). `Controller` lets a close through only after
   `exit()` or `allow_exit()`. A new close path must go through one of them or it becomes a hide.
 - **Windows sign-out, restart and installers close the window themselves.** pywebview cancels any
-  close our handler refuses, whatever the reason, so `provider.let_session_end_close` wraps the
+  close our handler refuses, whatever the reason, so `desktop.let_session_end_close` wraps the
   winforms form's `on_closing` before `create()` and calls `Controller.allow_exit()` for
   `WindowsShutDown` / `TaskManagerClosing`.
 - **macOS Dock → Quit, logout and restart do not stop the VM.** `tray_mac` overrides

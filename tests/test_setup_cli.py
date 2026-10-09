@@ -40,6 +40,13 @@ class StubDesktop:
     def set_autostart(self, on, exe): self.autostart_off = (on is False)
 
 
+@pytest.fixture(autouse=True)
+def _never_the_real_desktop(monkeypatch):
+    # uninstall reaches set_autostart on whatever get_desktop() returns: on a
+    # Windows or Mac dev machine that is the real Run value or Login Item.
+    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
+
+
 class FailingDestroyProvider(StubProvider):
     def destroy(self):
         raise RuntimeError("wsl.exe not found")
@@ -285,7 +292,6 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
         return 0
 
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
-    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     monkeypatch.setattr(cli, "_provider_factory", lambda: provider)
     monkeypatch.setattr("host.providers.default_install_dir",
                         lambda: tmp_path / "vm")
@@ -314,7 +320,6 @@ def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
         return 0
 
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
-    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
     monkeypatch.setattr("host.providers.default_install_dir",
                         lambda: tmp_path / "vm")
@@ -354,7 +359,6 @@ def test_setup_background_reaches_the_window(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
     monkeypatch.setattr("host.desktop.__main__.run", fake_run)
-    monkeypatch.setattr(cli, "_desktop_factory", StubDesktop)
     result = runner.invoke(cli.app, ["setup", "--background"])
     assert result.exit_code == 0
     assert captured["background"] is True

@@ -50,6 +50,7 @@
 .card button { margin-top: 2px; }
 
 .form { display: flex; flex-direction: column; gap: 18px; }
+.form p { margin: 0; }
 .formActions { display: flex; gap: 10px; }
 
 .dropZone {

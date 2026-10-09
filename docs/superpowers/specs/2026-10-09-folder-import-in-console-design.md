@@ -48,6 +48,21 @@ runtime: a later change to how import works needs no host release.
 
 One request, no resume: a dropped connection restarts the import, as with the desktop screen.
 
+## Large folders
+
+Measured in Chrome on a folder of 62,000 small files, 42,000 of them kept:
+
+| Step | Time | Who |
+|---|---|---|
+| Browser enumerates the folder before `change` fires | about 12 s | browser, page stays responsive |
+| First `file.size` per file is a blocking disk stat | about 11 s | planner, batched with yields |
+| Reading and packing | 14–26 s (61 s one at a time) | packer, 32 small files read ahead |
+
+So the dialog has two loader steps before the review. "Opening" covers the browser's own
+enumeration, from the click until `change` or the input's `cancel`. "Reading" shows a live count
+while sizes are read, or while a dropped folder is walked. A dropped folder never opens an
+excluded directory; the picker can't skip one, because the browser lists everything first.
+
 ## UI
 
 - Empty state: three cards, "Start from scratch", "From a folder", "From GitHub". The desktop

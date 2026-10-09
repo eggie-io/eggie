@@ -1,11 +1,11 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Modal, Notice, ProgressBar, cx } from "@eggie/ui";
 import { api } from "../../api/client";
 import { createImportApi } from "../../imports/importApi";
 import { fromDrop, fromFileList } from "../../imports/pick";
-import { planImport, type ImportPlan } from "../../imports/plan";
+import { planImport, type ImportPlan, type Picked } from "../../imports/plan";
 import { runImport, type Mode, type Phase } from "../../imports/send";
 import { packGzip } from "../../imports/tar";
 import { size } from "../../projects/format";
@@ -16,6 +16,8 @@ import s from "./ProjectList.module.css";
 
 type Step =
   | { kind: "pick"; problem: string | null }
+  | { kind: "opening" }
+  | { kind: "reading"; done: number; total: number | null }
   | { kind: "review"; plan: ImportPlan; mode: Mode }
   | { kind: "working"; plan: ImportPlan; phase: Phase }
   | { kind: "failed"; plan: ImportPlan; mode: Mode; message: string };
@@ -39,11 +41,43 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
   const navigate = useNavigate();
   const client = useQueryClient();
 
+  // Bumped whenever a pick is abandoned, so a folder the browser or the
+  // planner finishes with afterwards doesn't reappear in a fresh dialog.
+  const pickRun = useRef(0);
+  // The run a click on "Choose a folder…" started; a change event for any other is stale.
+  const opened = useRef(-1);
+
+  const reset = () => {
+    pickRun.current += 1;
+    setStep(PICK);
+  };
+
   const close = () => {
     if (step.kind === "working") return;
-    setStep(PICK);
+    reset();
     onClose();
   };
+
+  // The native picker fires `cancel` when dismissed; React has no prop for it on
+  // an input. It bubbles, and the <dialog> around it closes itself on `cancel`.
+  useEffect(() => {
+    const input = picker.current;
+    if (!input) return;
+    const cancelled = (event: Event) => {
+      event.stopPropagation();
+      setStep((current) => (current.kind === "opening" ? PICK : current));
+    };
+    input.addEventListener("cancel", cancelled);
+    return () => input.removeEventListener("cancel", cancelled);
+  }, [open]);
+
+  async function plan(picked: Picked[], run: number) {
+    setStep({ kind: "reading", done: 0, total: picked.length });
+    const planned = await planImport(picked, (done, total) => {
+      if (pickRun.current === run) setStep({ kind: "reading", done, total });
+    });
+    if (pickRun.current === run) review(planned);
+  }
 
   function review(plan: ImportPlan) {
     if (plan.name === "") {
@@ -54,15 +88,26 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
       setStep({ kind: "pick", problem: `"${plan.name}" has no characters an address can use — rename the folder first.` });
       return;
     }
+    if (plan.entries.length === 0) {
+      setStep({ kind: "pick", problem: `Nothing in "${plan.name}" would go in — everything there is left out (${plan.skipped.join(", ")}).` });
+      return;
+    }
     setStep({ kind: "review", plan, mode: "merge" });
   }
 
   async function onDrop(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
-    const picked = await fromDrop(event.dataTransfer.items);
+    const run = ++pickRun.current;
+    // The item list is only readable inside this handler, so it is read before the first await.
+    const walking = fromDrop(event.dataTransfer.items, (found) => {
+      if (pickRun.current === run) setStep({ kind: "reading", done: found, total: null });
+    });
+    setStep({ kind: "reading", done: 0, total: null });
+    const picked = await walking;
+    if (pickRun.current !== run) return;
     if (picked === null) setStep({ kind: "pick", problem: "Drop a folder, not files — single files go up from a project's Files page." });
-    else review(planImport(picked));
+    else await plan(picked, run);
   }
 
   async function bringIn(plan: ImportPlan, mode: Mode) {
@@ -111,22 +156,47 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
           >
             <span className={s.dropIcon}>{FOLDER}</span>
             <p className={s.dropText}>Drop a folder here, or</p>
-            <Button variant="primary" onClick={() => picker.current?.click()}>Choose a folder…</Button>
-            <input
-              ref={picker}
-              type="file"
-              hidden
-              {...{ webkitdirectory: "" }}
-              onChange={(event) => {
-                // Copied before the reset: clearing the value empties the live FileList.
-                const picked = event.target.files ? fromFileList(event.target.files) : [];
-                event.target.value = "";
-                if (picked.length > 0) review(planImport(picked));
+            <Button
+              variant="primary"
+              onClick={() => {
+                opened.current = ++pickRun.current;
+                setStep({ kind: "opening" });
+                picker.current?.click();
               }}
-            />
+            >
+              Choose a folder…
+            </Button>
           </div>
           <p className={s.quiet}>The original stays exactly where it is. Repositories, dependency trees and caches are left out — your coding agent puts them back.</p>
           {step.problem && <Notice>{step.problem}</Notice>}
+        </>
+      );
+      break;
+    case "opening":
+      body = (
+        <>
+          <ProgressBar label="Opening the folder" />
+          <p>Opening the folder…</p>
+          <p className={s.quiet}>Your browser counts every file in it first, and may ask whether to upload them. A folder with tens of thousands of files can take a minute.</p>
+          <div className={s.formActions}>
+            <Button variant="quiet" onClick={reset}>Cancel</Button>
+          </div>
+        </>
+      );
+      break;
+    case "reading":
+      body = (
+        <>
+          <ProgressBar value={step.total ? step.done / step.total : undefined} label="Reading the folder" />
+          <p>Reading the folder…</p>
+          <p className={s.quiet}>
+            {step.total === null
+              ? `${step.done.toLocaleString()} files found so far`
+              : `${step.done.toLocaleString()} of ${step.total.toLocaleString()} files looked at`}
+          </p>
+          <div className={s.formActions}>
+            <Button variant="quiet" onClick={reset}>Cancel</Button>
+          </div>
         </>
       );
       break;
@@ -166,7 +236,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             <Button variant={mode === "replace" ? "danger" : "primary"} onClick={() => void bringIn(plan, mode)}>
               {mode === "replace" ? "Replace and bring it in" : "Bring it in"}
             </Button>
-            <Button variant="quiet" onClick={() => setStep(PICK)}>Pick another</Button>
+            <Button variant="quiet" onClick={reset}>Pick another</Button>
           </div>
         </>
       );
@@ -187,7 +257,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
           <p className={s.error}>{step.message}</p>
           <div className={s.formActions}>
             <Button variant="primary" onClick={() => void bringIn(step.plan, step.mode)}>Try again</Button>
-            <Button variant="quiet" onClick={() => setStep(PICK)}>Pick another</Button>
+            <Button variant="quiet" onClick={reset}>Pick another</Button>
           </div>
         </>
       );
@@ -199,6 +269,21 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
   return (
     <Modal open={open} onClose={close} title="Bring in a folder">
       <div className={s.form}>{open && body}</div>
+      <input
+        ref={picker}
+        type="file"
+        hidden
+        {...{ webkitdirectory: "" }}
+        onChange={(event) => {
+          // Copied before the reset: clearing the value empties the live FileList.
+          const picked = event.target.files ? fromFileList(event.target.files) : [];
+          event.target.value = "";
+          const run = opened.current;
+          if (run !== pickRun.current) return;
+          if (picked.length > 0) void plan(picked, run);
+          else setStep(PICK);
+        }}
+      />
     </Modal>
   );
 }

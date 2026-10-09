@@ -29,12 +29,27 @@ export const EXCLUDED_DIRS = new Set([".git", "node_modules", ".venv", "__pycach
 // next to it is the user's own configuration and goes in.
 export const EXCLUDED_FILES = new Set([".eggie/overlay.yml"]);
 
-export function planImport(picked: readonly Picked[]): ImportPlan {
+const BATCH = 500;
+const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+// The first `file.size` of a picked file is a blocking disk stat (about half
+// a millisecond each in Chrome), so a big folder is planned in batches that
+// give the page a chance to paint the count.
+export async function planImport(
+  picked: readonly Picked[],
+  onProgress: (done: number, total: number) => void = () => {},
+  pause: () => Promise<void> = nextTask,
+): Promise<ImportPlan> {
   const entries: Entry[] = [];
   const skipped = new Set<string>();
   let name = "";
   let bytes = 0;
-  for (const { path, file } of picked) {
+  for (let i = 0; i < picked.length; i += 1) {
+    if (i > 0 && i % BATCH === 0) {
+      onProgress(i, picked.length);
+      await pause();
+    }
+    const { path, file } = picked[i];
     const parts = path.split("/").filter((part) => part !== "");
     if (parts.length < 2) continue;
     if (name === "") name = parts[0];
@@ -49,5 +64,6 @@ export function planImport(picked: readonly Picked[]): ImportPlan {
     entries.push({ path: rel, size: file.size, file });
     bytes += file.size;
   }
+  onProgress(picked.length, picked.length);
   return { name, id: slugify(name), entries, bytes, skipped: [...skipped].sort() };
 }

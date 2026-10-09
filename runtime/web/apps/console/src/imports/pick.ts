@@ -1,4 +1,4 @@
-import type { Picked } from "./plan";
+import { EXCLUDED_DIRS, type Picked } from "./plan";
 
 // A folder chosen with <input webkitdirectory>: every file carries its path
 // from the chosen folder down, folder name first.
@@ -21,22 +21,33 @@ async function entriesOf(dir: FileSystemDirectoryEntry): Promise<FileSystemEntry
   }
 }
 
-async function walk(entry: FileSystemEntry, into: Picked[]): Promise<void> {
-  if (entry.isFile) {
-    into.push({ path: entry.fullPath, file: await fileOf(entry as FileSystemFileEntry) });
-  } else if (entry.isDirectory) {
-    for (const child of await entriesOf(entry as FileSystemDirectoryEntry)) await walk(child, into);
+// Excluded folders are never opened: a dependency tree can hold most of a
+// project's files, and the planner would drop them anyway. The folder's
+// name is still recorded under the path so the plan reports it as left out.
+async function walk(dir: FileSystemDirectoryEntry, into: Picked[], onFound: (count: number) => void): Promise<void> {
+  const children = await entriesOf(dir);
+  const files = children.filter((child): child is FileSystemFileEntry => child.isFile);
+  const picked = await Promise.all(files.map(async (entry) => ({ path: entry.fullPath, file: await fileOf(entry) })));
+  into.push(...picked);
+  onFound(into.length);
+  for (const child of children) {
+    if (!child.isDirectory) continue;
+    if (EXCLUDED_DIRS.has(child.name)) {
+      into.push({ path: `${child.fullPath}/`, file: new File([], "") });
+      continue;
+    }
+    await walk(child as FileSystemDirectoryEntry, into, onFound);
   }
 }
 
 // The first folder among the dropped items, walked; null when nothing
 // dropped was a folder. Only the entry API tells a folder from a file.
-export async function fromDrop(items: DataTransferItemList): Promise<Picked[] | null> {
+export async function fromDrop(items: DataTransferItemList, onFound: (count: number) => void = () => {}): Promise<Picked[] | null> {
   for (const item of Array.from(items)) {
     const entry = item.kind === "file" ? item.webkitGetAsEntry() : null;
     if (entry?.isDirectory) {
       const picked: Picked[] = [];
-      await walk(entry, picked);
+      await walk(entry as FileSystemDirectoryEntry, picked, onFound);
       return picked;
     }
   }

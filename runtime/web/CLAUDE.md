@@ -72,6 +72,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `runtime/agents/` is outside this workspace: the image needs `--build-context agents=runtime/agents`
   (use `packaging/images/build.sh`), and `content.test.ts` reaches it with five `../`, which
   matches `/runtime/agents` in the image only because `WORKDIR` is `/runtime/web`.
+- The first `file.size` of each picked file is a blocking disk stat (about half a millisecond in
+  Chrome): 40k files freeze the page for 15 s. `imports/plan.ts` reads sizes in batches that yield.
+- A file input's `cancel` event bubbles, and `Modal`'s `<dialog>` closes itself on `cancel`.
+  Stop it at the input, or dismissing the folder picker closes the whole dialog.
 - A file input's `files` is a live list: resetting `value` to let the same pick fire again empties
   it, so copy the files out first. The folder picker in `ImportFolderModal` once lost every pick to this.
 - nginx's `/agent-guides/` location has no SPA fallback, so its path must never be a console route

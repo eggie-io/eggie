@@ -72,10 +72,36 @@ function* headers(path: string, size: number, mtime: number): Generator<Uint8Arr
   yield header(placeholder, size, "0", mtime);
 }
 
+// Each file read is a round trip to the browser process (about 1.7 ms in
+// Chrome), so small files are read this many at a time, ahead of the writer.
+// Large ones are streamed so a video never sits in memory whole.
+const READ_AHEAD = 32;
+const SMALL = 1024 * 1024;
+
 async function* blocks(entries: readonly Entry[], onRead: (bytes: number) => void): AsyncGenerator<Uint8Array> {
   const mtime = Math.floor(Date.now() / 1000);
-  for (const entry of entries) {
+  const ahead = new Map<number, Promise<Uint8Array>>();
+  let queued = 0;
+  for (let i = 0; i < entries.length; i += 1) {
+    for (; queued < entries.length && queued < i + READ_AHEAD; queued += 1) {
+      if (entries[queued].size > SMALL) continue;
+      const read = entries[queued].file.arrayBuffer().then((buffer) => new Uint8Array(buffer));
+      // Awaited in order below; this only stops an early failure from being reported as unhandled.
+      read.catch(() => {});
+      ahead.set(queued, read);
+    }
+    const entry = entries[i];
     yield* headers(entry.path, entry.size, mtime);
+    const small = ahead.get(i);
+    if (small !== undefined) {
+      ahead.delete(i);
+      const bytes = await small;
+      if (bytes.byteLength !== entry.size) throw new FileChanged(entry.path);
+      onRead(bytes.byteLength);
+      yield bytes;
+      yield padding(entry.size);
+      continue;
+    }
     // The header already promised `size` bytes; a file edited since it was
     // picked would corrupt everything after it, so the mismatch is an error.
     let read = 0;

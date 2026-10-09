@@ -18,7 +18,7 @@ from urllib.parse import quote
 from host.core import constants
 from host.core.status import probe
 
-from .jobs import JobRegistry
+from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
 from .view import (inspect_folder, progress_event, route_for, rows_for, screen_for,
@@ -340,8 +340,6 @@ class DesktopApi:
     def start_runtime_update(self) -> dict:
         from host.core import install
 
-        self._runtime_update_tried = True
-
         def work(emit):
             emit({"type": "stage", "stage": "update"})
             try:
@@ -355,7 +353,17 @@ class DesktopApi:
             self._home_seen = False
             return {"type": "done"}
 
-        return {"job": self.jobs.start("runtime_update", work)}
+        # Cleared before the worker can write a new one, so an earlier
+        # attempt's error never outlives a clean retry; put back on JobBusy,
+        # which also leaves `tried` alone so the update stays owed.
+        previous, self._runtime_update_error = self._runtime_update_error, ""
+        try:
+            job = self.jobs.start("runtime_update", work)
+        except JobBusy:
+            self._runtime_update_error = previous
+            raise
+        self._runtime_update_tried = True
+        return {"job": job}
 
     def start_uninstall(self, purge: bool) -> dict:
         from host.core.install import remove_downloads, remove_vm_data

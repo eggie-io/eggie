@@ -46,6 +46,16 @@ def test_a_failed_update_with_no_job_error_shows_the_probe_problem():
                    problem="api 3 not supported").message == "api 3 not supported"
 
 
-def test_home_states_and_other_routes_map_to_their_templates():
-    assert _screen("home", "stopped").name == "home:stopped"
-    assert _screen("unreachable", "").name == "unreachable"
+def test_every_screen_for_result_is_a_name_the_template_check_covers():
+    """SCREENS is what test_ui_assets checks for templates; a name screen_for
+    can return but SCREENS omits is a blank window nothing notices."""
+    from itertools import product
+
+    from host.desktop.view import HOME_STATES, SCREENS
+
+    routes = [("home", state) for state in HOME_STATES] + \
+        [("unreachable", ""), ("unresponsive", ""), ("update_runtime", "")]
+    for (route, state), flag in product(routes, ("", "first_run", "resumed",
+                                                  "enter_console", "update_tried")):
+        name = _screen(route, state, **({flag: True} if flag else {})).name
+        assert name in SCREENS, f"{route}/{state} with {flag or 'no flag'} -> {name}"

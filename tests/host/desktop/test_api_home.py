@@ -5,6 +5,8 @@ piece of routing that is not a function of Readiness alone.
 """
 from __future__ import annotations
 
+import pytest
+
 from host.core.install import InstallState
 from host.core.status import Readiness
 from host.desktop.api import DesktopApi
@@ -150,3 +152,35 @@ def test_a_runtime_update_is_started_once_per_launch_and_then_shows_why_it_faile
     again = api.home()
     assert again["action"] == ""
     assert (again["screen"], again["message"]) == ("runtime-update:failed", "ghcr timed out")
+
+
+def test_a_retry_that_runs_clean_does_not_show_the_earlier_attempts_error(tmp_path, monkeypatch):
+    """The job can finish without raising and still leave an old API behind;
+    the failed screen must then show the probe's sentence, not last time's."""
+    def failing_update(provider):
+        raise RuntimeError("ghcr timed out")
+
+    monkeypatch.setattr("host.core.install.connect_with_updates", failing_update)
+    api = _api(tmp_path, OLD_API)
+    api.start_runtime_update(); api.jobs.join(timeout=5)
+    assert api.home()["message"] == "ghcr timed out"
+    monkeypatch.setattr("host.core.install.connect_with_updates", lambda provider: None)
+    api.start_runtime_update(); api.jobs.join(timeout=5)
+    assert api.home()["message"] == ""
+
+
+def test_an_update_refused_by_a_busy_registry_is_still_owed(tmp_path):
+    import threading
+
+    from host.desktop.jobs import JobBusy
+
+    release = threading.Event()
+    api = _api(tmp_path, OLD_API)
+    api.jobs.start("vm", lambda emit: release.wait(5) and {"type": "done"})
+    try:
+        with pytest.raises(JobBusy):
+            api.start_runtime_update()
+        assert api.home()["action"] == "start_runtime_update"
+    finally:
+        release.set()
+        api.jobs.join(timeout=5)

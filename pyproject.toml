@@ -1,6 +1,6 @@
 [project]
 name = "eggie"
-version = "0.2.2"
+version = "0.2.3"
 requires-python = ">=3.12"
 # The host parses no YAML: compose files are read by the API, and
 # host/providers/eggie.yaml is handed to limactl as a path.

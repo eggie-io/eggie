@@ -1,7 +1,7 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`, `test_agents_run.py`,
+`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
 `tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
@@ -49,7 +49,7 @@ Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 22.20 from NodeSource →
-`/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → per account (root + `lib/login-users.sh`):
+`/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
 (`SKILLS_SOURCE` defaults to `eggie-io/eggie-skills`, unpinned on purpose;
@@ -79,8 +79,9 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
   `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
   for the API token: it must be written after the sweep.
-- Login accounts are never the API's uid 1000: WSL2 has only root, and Lima's user carries the macOS
-  uid. The API writes into projects through the docker group; `/etc/gitconfig` trusts
+- Login accounts are never the API's uid 1000: WSL2's `eggie` is created from 1001 up, and Lima's
+  user carries the macOS uid. The WSL default user is read at boot, so a fresh install still
+  opens `wsl -d` as root until the VM restarts. The API writes into projects through the docker group; `/etc/gitconfig` trusts
   `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
   every session over the ssh control master opened at boot, before step 10's `usermod`, so those
   sessions never get the docker group. Step 11 therefore also grants each account access by uid

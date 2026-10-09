@@ -34,7 +34,9 @@ eggie vm start | vm stop | vm destroy
 eggie port add <guest> <host> | port remove <guest> <host> | port list
 ```
 
-The imported distro runs as root: `vm create` rewrites `/etc/wsl.conf` to `[boot] systemd=true`.
+`vm create` rewrites `/etc/wsl.conf` to `[boot] systemd=true`, so the imported distro starts as root.
+The runtime install then adds the `eggie` account (passwordless `sudo`) and makes it the
+default user from the VM's next start; until then `wsl -d eggie-vm` still opens as root.
 
 ## Where things are inside
 

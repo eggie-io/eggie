@@ -1,5 +1,5 @@
 from pathlib import Path
-from host.providers.lima import LimaProvider, find_limactl
+from host.providers.lima import LimaProvider, find_limactl, vm_size
 import host.providers.lima_install as lima_install
 from host.core.provider import Runtime
 
@@ -43,11 +43,27 @@ def test_exec_root_uses_sudo():
     assert r.calls[-1] == ["limactl", "shell", "eggie-vm", "sudo", "id", "-un"]
 
 
-def test_create_calls_start_with_config():
-    r = FakeRunner()
+def test_create_sizes_the_vm_from_the_macs_memory_and_cores():
+    r = FakeRunner(stdout=b"34359738368\n12\n")
     make(r).create()
-    assert r.calls[-1] == ["limactl", "start", "--name=eggie-vm",
-                           "--tty=false", "/tmp/eggie.yaml"]
+    assert r.calls[0] == ["sysctl", "-n", "hw.memsize", "hw.ncpu"]
+    assert r.calls[-1] == ["limactl", "start", "--name=eggie-vm", "--tty=false",
+                           "--cpus=6", "--memory=16", "/tmp/eggie.yaml"]
+
+
+def test_create_falls_back_to_the_minimum_size_when_sysctl_is_unreadable():
+    r = FakeRunner(stdout=b"not a number\n")
+    make(r).create()
+    assert r.calls[-1][4:6] == ["--cpus=4", "--memory=4"]
+
+
+def test_vm_size_leaves_half_the_mac_and_stays_within_bounds():
+    gib = 1024 ** 3
+    assert vm_size(8 * gib, 8) == (4, 4)
+    assert vm_size(18 * gib, 12) == (6, 9)
+    assert vm_size(128 * gib, 24) == (8, 16)
+    # Never more vCPUs than the Mac has.
+    assert vm_size(8 * gib, 2) == (2, 4)
 
 
 def test_a_failed_vm_command_raises_instead_of_reporting_success():

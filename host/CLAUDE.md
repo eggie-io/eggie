@@ -25,7 +25,8 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
 - `core/provider.py` — the `VmProvider` Protocol plus `Completed` / `CheckResult` / `Diagnosis`
   value types, and the `DesktopPlatform` Protocol. Both are **duck-typed, not subclassed**.
 - `providers/` — `Wsl2Provider` (shells `wsl.exe`) and `LimaProvider` (shells `limactl`, VM defined
-  by `eggie.yaml`). Both take an injectable `runner` callable (default
+  by `eggie.yaml`; its CPUs and memory
+  are not in the file but passed by `create()`, sized from the Mac by `vm_size()`). Both take an injectable `runner` callable (default
   `subprocess.run(..., capture_output=True)`) — that is what makes them unit-testable.
   `lima.py` and `eggie.yaml` carry banners saying exactly what has and hasn't been run on a real
   Mac; keep them accurate when you change either.

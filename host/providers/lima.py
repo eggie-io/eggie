@@ -7,7 +7,8 @@ from __future__ import annotations
 # declared portForwards (39080, 39099) -- confirmed after the fact, not by a
 # controlled session anyone recorded as it happened. See
 # docs/macos-status.md (it points at the full command trail in git history).
-# Still unrun anywhere: `forward()`/`forwards()` and the ssh control master
+# Still unrun anywhere: the `--cpus`/`--memory` flags `create()` passes,
+# `forward()`/`forwards()` and the ssh control master
 # they assume, `stop()`/`destroy()`, the uninstall path, whether
 # eggie.yaml's `ssh.localPort` is honoured by Lima at all (the one VM
 # inspected predates that field), the x86_64 image, and whether Rosetta is
@@ -37,6 +38,20 @@ DECLARED_SSH_PORT = "39022"
 # as a live value a user could `ssh -p` with, and it may not even be the
 # port Lima picks (the inspected VM ended up on a different one).
 _PORT_UNCONFIRMED = "assigned when the virtual machine is created"
+
+GIB = 1024 ** 3
+
+
+def vm_size(mem_bytes: int | None, ncpu: int | None) -> tuple[int, int]:
+    """(cpus, memory GiB) for a new VM. Memory is half the Mac's, 4..16 GiB:
+    two coding agents plus a dev server overflow a fixed 4 GiB. vCPUs reserve
+    nothing under vz, so they get at least 4 when the Mac has them."""
+    mem = max(4, min(16, (mem_bytes or 0) // GIB // 2))
+    cpus = min(8, max(4, (ncpu or 0) // 2))
+    if ncpu:
+        cpus = min(cpus, ncpu)
+    return cpus, mem
+
 
 _SSH_KEYS = {"hostname": "Host", "port": "Port", "user": "User",
              "identityfile": "Identity file"}
@@ -276,9 +291,18 @@ class LimaProvider:
     def create(self) -> None:
         if self.config is None:
             raise ValueError("config path is required to create the VM")
+        cpus, memory = vm_size(*self._host_size())
         self._require(
-            self._cmd(["start", f"--name={self.name}", "--tty=false", str(self.config)]),
+            self._cmd(["start", f"--name={self.name}", "--tty=false",
+                       f"--cpus={cpus}", f"--memory={memory}", str(self.config)]),
             f"the virtual machine '{self.name}' could not be created")
+
+    def _host_size(self) -> tuple[int | None, int | None]:
+        out = self._spawn(["sysctl", "-n", "hw.memsize", "hw.ncpu"])
+        values = out.stdout.split() if out.ok else []
+        if len(values) != 2 or not all(v.isdigit() for v in values):
+            return None, None
+        return int(values[0]), int(values[1])
 
     def start(self) -> None:
         self._require(self._cmd(["start", self.name]),

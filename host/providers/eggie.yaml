@@ -1,7 +1,8 @@
 # CONFIRMED ONCE, then still mostly UNVERIFIED (see lima.py). On 2026-09-15,
 # on macOS 26.6.2 (build 25G83) arm64 with Lima 2.2.0, the pre-33571da
 # revision of exactly this file -- vmType, rosetta.enabled, the aarch64
-# image, cpus/memory/disk, and the two portForwards below -- was what
+# image, cpus/memory (then fixed here at 4 / 4GiB), disk, and the two
+# portForwards below -- was what
 # `limactl start` actually ran; that VM booted, the engine installed, and
 # both ports answered. See docs/macos-status.md.
 # Everything added after that commit has never been passed to `limactl`: the
@@ -23,8 +24,8 @@ images:
   # so an Intel build is a supported artifact and needs an image it can boot.
   - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
     arch: "x86_64"
-cpus: 4
-memory: "4GiB"
+# cpus and memory are not here: create() passes them as --cpus/--memory,
+# sized from this Mac (lima.vm_size). Those flags are not yet run on a Mac.
 ssh:
     localPort: 39022
 disk: "60GiB"

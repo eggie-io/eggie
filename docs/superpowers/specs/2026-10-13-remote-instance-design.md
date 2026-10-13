@@ -28,7 +28,7 @@ Everything here lives in `runtime/`. No host change, no host release, no desktop
 | 4 | Projects are `bar.foo.eggie.space`, nested under the instance, never flat `bar.eggie.space`. | Flat names need a DNS row per project (droplets have different IPs) and a `*.eggie.space` certificate shared by every server. |
 | 5 | DNS rows are DNS-only (grey cloud at Cloudflare). TLS terminates in Traefik on the server. | No plan change at Cloudflare; Let's Encrypt is free at any depth. Gives up the proxy's DDoS shielding, accepted at this stage. |
 | 6 | **One certificate per instance**, three names: `foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`. Issued by the **service** via DNS-01 (Route53 + Cloudflare), fetched by the instance. Never a zone-wide wildcard on a server. | A `*.eggie.io` key on every customer server could impersonate `app.eggie.io`. Per-host issue would hit Let's Encrypt's 50 certificates/week/registered domain; one per instance stays within it. DNS tokens must not live on customer servers. |
-| 7 | Every project host is one label under the project domain: `web--bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. `--` rather than `-` because slugs may contain single hyphens, so `web-bar` could be a project of its own. |
+| 7 | Every project host is one label under the project domain: `web--bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. `--` rather than `-` because slugs may contain single hyphens, so `web-bar` could be a project of its own. A slug never contains `--` itself (every run outside `[a-z0-9]` collapses to one hyphen) and subdomains are slugged the same way, so `api--blog` cannot collide with project `blog`'s `api` service. |
 | 8 | Site mode is switched on by two installer variables, `EGGIE_SITE_HOST` (console) and `EGGIE_SITE_DOMAIN` (projects). The instance pulls everything else (certificate, identity) from the service once signed in. | Smallest cloud-init payload; first issue and renewal of the certificate are one code path. |
 | 9 | The instance boots signed in: the service seeds the account token pair through cloud-init. | Reuses the existing account, refresh and sync code unchanged. |
 | 10 | The browser signs in with a service-minted handoff code that the instance redeems **outbound** with its account token. | Matches how the VM already talks to the service (`infra/cloud.py`); no inbound credential, no second auth scheme on the instance (`docs/security.md`). The console's `#handoff` boot path is reused as is. |
@@ -108,6 +108,15 @@ runcmd:
 
 `root:docker 0640` because the API, not root, imports and deletes the file; the installer reasserts it.
 
+User data stays readable on the droplet for its whole life (`169.254.169.254`, no auth),
+so the seeded pair must be dead the moment it has served its purpose: the API rotates
+it through `POST /v1/auth/token/refresh` at first boot, before any other call, and the
+seeded access token itself is never used for a request (`expires_in` may be anything;
+the API ignores it). The runtime also drops container traffic to `169.254.169.254` on a
+site (section 4). A one-time bootstrap code in user data, exchanged for the pair
+outbound, would keep the tokens out of user data altogether; that is a later contract
+change (section 11).
+
 `EGGIE_RUNTIME_REPAIR=1` keeps the release the snapshot holds and only configures: no
 apt, no image pulls. `cd /` matters: the installer runs per-account steps as that
 account, and root's home is not enterable by other users. Expect the stack to answer
@@ -119,9 +128,11 @@ the instance list in the web app and the handoff check (3.5) read from it.
 ### 3.3 Authentication of instance calls
 
 Every call below carries `Authorization: Bearer <device access token>`, the token
-seeded in 3.2 and refreshed through the existing `POST /v1/auth/token/refresh`. The
-service resolves the instance from the device id behind the token. An instance never
-holds any other credential.
+seeded in 3.2 and refreshed through the existing `POST /v1/auth/token/refresh`. A
+refresh must rotate: the refresh token it consumed and the access token issued with it
+are invalid afterwards, so the pair left in user data cannot be replayed. The service
+resolves the instance from the device id behind the token. An instance never holds any
+other credential.
 
 ### 3.4 `GET /v1/instances/me/certificate` — fetch the certificate
 
@@ -153,15 +164,19 @@ owner and has not been used", and the instance creates a browser session. Anythi
 else is shown to the user as "open the console from the web app again".
 
 Codes must not be reusable, must not be valid on another instance, and must be
-consumed on redemption even when the instance later fails to set a cookie.
+consumed on redemption even when the instance later fails to set a cookie. Codes the
+service mints never start with `lh_`: that prefix marks codes the instance minted for
+itself (desktop handoff, "open in browser"), which it checks locally and never forwards.
 
 ### 3.6 Renewal and lifecycle
 
 - Renew the certificate at least 30 days before `not_after`. The instance picks the new
   one up within a day (3.4).
 - Deleting an instance: revoke its device tokens; the server itself is disposable.
-- Signing out on the instance is hidden in its console but possible through the API; a
-  signed-out instance cannot redeem codes or renew its certificate until re-seeded.
+- The instance refuses to sign out or to start a device-code sign-in (`403
+  site_account`): without its pair it could neither redeem codes nor renew its
+  certificate, and nothing on the instance can re-seed it. Detaching an instance is
+  revoking its device tokens on the service.
 
 ### 3.7 What the web app shows
 
@@ -181,14 +196,20 @@ mode:
 - runs every compose command for the stack with
   `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
 - installs `/opt/eggie/tls/tls.yml`, the Traefik dynamic config naming
-  `site.crt`/`site.key` as the default certificate, with the directory `2770 root:docker`
-  so the API (docker group) can write the files and Traefik (root in its container) read them;
+  `current/site.crt` and `current/site.key` as the default certificate, with the
+  directory `2770 root:docker` so the API (docker group) can write the files and Traefik
+  (root in its container) read them;
+- installs and enables `eggie-metadata-guard.service`, which inserts a `DROP` for
+  `169.254.169.254` into Docker's `DOCKER-USER` chain before dockerd starts, so no
+  container can read the user data that carried the account seed;
 - records `"vm": "site"` in `connect.json` alongside the first login account, as it
   records `wsl`/`lima` today.
 
 `snapshot-prep.sh` (new, `runtime/install/`) stops the stack and removes
-`/opt/eggie/api.token`, `state.db`, `connect.json`, `site.env`, `tls/site.*`, then runs
-`cloud-init clean --logs`. The runtime tree, images, `.env` and `runtime.env` stay.
+`/opt/eggie/api.token`, `state.db`, `connect.json`, `site.env`, `account.json`, the
+`tls/`, `tunnel/`, `uploads/`, `github/`, `projects/` and `agent-status/` trees and root's
+SSH key and history, then runs `cloud-init clean --logs --machine-id`. The runtime tree,
+images, `.env` and `runtime.env` stay.
 On the next boot the installer regenerates the token (it only creates one when absent)
 and the API starts with a fresh `state.db`.
 
@@ -216,6 +237,9 @@ Replaces Traefik's `command` and adds ports and a volume:
 - `--providers.file.directory=/opt/eggie/tls --providers.file.watch=true`;
 - the `readTimeout` and Docker provider flags copied from the base, because compose
   replaces `command` wholesale;
+- entrypoint `probe` on `:${EGGIE_EDGE_PORT}`, plain HTTP and unpublished: the API's
+  readiness probe (`infra/health.py`) dials `traefik:<edge port>` over the `edge`
+  network, and project routers name no entrypoint so they answer on it;
 - `ports: ["80:80", "443:443"]` (appended to the base list; the base `39080` mapping
   then forwards to nothing and is firewalled anyway);
 - `/opt/eggie/tls:/opt/eggie/tls:ro`.
@@ -226,7 +250,9 @@ the file watch reloads the moment the API writes them.
 ### 5.3 Hostnames
 
 `domain/overlay.py::host_for` becomes `f"{sub}--{id}.{domain}"` for a service with a
-subdomain, `f"{id}.{domain}"` otherwise. Locally the `*.local.eggie.space` wildcard
+subdomain, `f"{id}.{domain}"` otherwise. `domain/project.py::_slug` collapses every run
+outside `[a-z0-9]` to one hyphen and `load_project` slugs subdomains too, so neither
+side of `--` ever contains it (decision 7). Locally the `*.local.eggie.space` wildcard
 already resolves both shapes.
 
 ## 6. The API
@@ -250,24 +276,34 @@ changes locally.
 
 On start: if the account row has no refresh token and `/opt/eggie/account.json` exists
 and parses, replace the row's `device_id` with the file's (no records exist yet that
-could be orphaned), store the token pair and expiry, delete the file, run the identity
-load. A malformed file is logged and left alone; an existing signed-in row ignores the
-file. Site mode hides sign-out in the console (section 7) but the API keeps the route.
+could be orphaned), store the pair with its access token already marked expired,
+delete the file, then rotate the pair at once through the existing refresh. If the
+service is unreachable the first authenticated call rotates it instead; if the service
+refuses the pair the row is cleared. A malformed file is logged and left alone; an
+existing signed-in row ignores the file. In site mode `Account` is *managed*:
+`start_sign_in` and `sign_out` raise `403 site_account` (3.6), and the console hides
+the control (section 7).
 
 ### 6.4 Handoff (`services/sessions.py`, `rest/routers/sessions.py`)
 
-`POST /api/session` keeps redeeming local codes first. When that fails and the API is in
-site mode, it calls `POST /v1/instances/handoff/redeem` through `Account.authed()`; a
-`200` creates a session like a local redemption. Every other outcome, including the
-instance not being signed in, is the existing `handoff_invalid` error.
+`POST /api/session` keeps redeeming local codes first. Codes the API mints carry the
+`lh_` prefix; one of those that misses (expired, spent) is refused locally and never
+forwarded. Any other code, in site mode, goes to `POST /v1/instances/handoff/redeem`
+through `Account.authed()`, at most ten a minute per instance; a `200` creates a session
+like a local redemption. Every other outcome, including the instance not being signed
+in, is the existing `handoff_invalid` error.
 
 ### 6.5 Certificate (`services/certificate.py`, new)
 
-Reads `/opt/eggie/tls/site.crt` on start; if missing, fetches now. A pass added to the
-`SyncLoop` re-checks when the last check is older than a day, compares `not_after` with
-the installed certificate's, and on a newer one writes `site.key` (0600) and `site.crt`
-atomically (write to a temp name, rename) so Traefik never reads a half file. Failures
-are logged and keep the current files. Only active in site mode.
+Fetches on start when `/opt/eggie/tls/current` does not resolve to a pair, else once a
+day from a `SyncLoop` pass. Each pair lives in its own directory named by the
+certificate's `not_after` (`/opt/eggie/tls/<epoch>/site.crt`, `site.key` 0600); `current`
+is a symlink to the newest. Traefik watches `/opt/eggie/tls` and inotify reports only
+direct children, so writing inside a new directory causes no reload; replacing the
+symlink is one event and Traefik loads key and certificate together, never a
+mismatched pair. The installed expiry is the link target's name. A newer `not_after`
+installs, an older or equal one is ignored, old directories are removed after the swap.
+Failures are logged and keep the current files. Only active in site mode.
 
 ### 6.6 Surface
 
@@ -281,7 +317,9 @@ are logged and keep the current files. Only active in site mode.
 
 ## 7. The console
 
-Driven by `health.site`:
+Driven by `health.site`, read from the same `/api/health` answer the boot sequence
+already fetches (so it follows every retry); until that answers, a page on
+`localhost`/`127.0.0.1` assumes the usual VM and any other host assumes nothing:
 
 - the signed-out screen says to reopen the console from the Eggie web app, not from
   the desktop app;
@@ -306,8 +344,9 @@ project cannot set cookies the console's origin would read. The bearer API binds
 loopback. Project `ports:` are published by compose and blocked only by the service's
 firewall (decision 14). The certificate key is `0600`, owned by the API's user, written by the API
 through the docker group, mounted read-only into Traefik; it covers only this
-instance's names. `account.json` is deleted after import; tokens live in `state.db` as
-today. The session cookie is `Secure`, `HttpOnly`, `SameSite=Strict`, path `/api`,
+instance's names. `account.json` is deleted after import and its pair rotated at first
+boot; tokens live in `state.db` as today. Containers cannot reach `169.254.169.254`
+(`DOCKER-USER` drop), so user data is readable only by the droplet's own accounts. The session cookie is `Secure`, `HttpOnly`, `SameSite=Strict`, path `/api`,
 unchanged otherwise. A snapshot holds no token, database or key (section 4).
 
 ## 9. Testing
@@ -350,3 +389,6 @@ wild).
   rename them, the instance code is written against whatever is agreed.
 - Whether the service wants a heartbeat from instances (e.g. runtime version) is a
   later addition to the sync pass.
+- A one-time bootstrap code in user data, exchanged outbound for the token pair, would
+  keep tokens out of user data entirely. First-boot rotation plus the metadata guard
+  cover the gap for now; the bootstrap exchange is a contract change for a later round.

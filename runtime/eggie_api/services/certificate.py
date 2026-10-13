@@ -34,8 +34,9 @@ class Certificate:
     Each pair lives in `<dir>/<not_after>/` and `<dir>/current` links to the
     live one. Traefik watches `<dir>` and reloads on every event there:
     renaming key and certificate one after the other would have it load a
-    mismatched pair, while swapping the link is a single event, and files
-    written inside a subdirectory raise none."""
+    mismatched pair. Staging a directory raises events too, but swapping the
+    link is the only one that changes which pair Traefik loads, so it is
+    the last step of an install."""
 
     def __init__(self, directory: Path, account, cloud, *, names: tuple[str, ...],
                  clock=time.time):
@@ -87,6 +88,19 @@ class Certificate:
         except (KeyError, TypeError, ValueError, OSError) as e:
             log.warning("the service's certificate was not installed: %s", e)
 
+    def _drop_old_pairs(self) -> None:
+        # Before staging, never after the swap: a removal right after it
+        # would land while Traefik may still be reloading.
+        try:
+            live = os.readlink(self._current)
+        except OSError:
+            live = None
+        if not self._dir.is_dir():
+            return
+        for entry in self._dir.iterdir():
+            if entry.name != live and entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+
     def _install(self, out: dict, have: bool) -> None:
         certificate, private_key = out["certificate"], out["private_key"]
         for value in (certificate, private_key, out["not_after"]):
@@ -97,6 +111,7 @@ class Certificate:
             raise ValueError(f"it does not cover {sorted(missing)}")
         stamp = str(int(_epoch(out["not_after"])))
         current = self.installed_not_after()
+        self._drop_old_pairs()
         # Compared as the whole-second stamp: a later expiry inside the same
         # second would otherwise delete the live directory to rewrite it.
         if have and current is not None and int(stamp) <= current:
@@ -114,7 +129,4 @@ class Certificate:
         link.unlink(missing_ok=True)
         os.symlink(stamp, link)
         os.replace(link, self._current)
-        for entry in self._dir.iterdir():
-            if entry.name != stamp and entry.is_dir() and not entry.is_symlink():
-                shutil.rmtree(entry, ignore_errors=True)
         log.info("site certificate installed, valid until %s", out["not_after"])

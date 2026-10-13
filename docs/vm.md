@@ -71,7 +71,7 @@ console, e.g. `foo.eggie.io`) and `EGGIE_SITE_DOMAIN` (projects, e.g. `foo.eggie
 | Edge | `http://localhost:39080` | `https://<site host>` (80 redirects) |
 | Project URL | `http://<id>.local.eggie.space:39080` | `https://<id>.<site domain>` (`https://<service>--<id>.<site domain>` for a non-web service) |
 | Compose | `stack.yml` | `stack.yml` + `runtime/stack.site.yml` |
-| Certificate | none | `/opt/eggie/tls/site.{crt,key}`, fetched from the service daily |
+| Certificate | none | the live pair in `/opt/eggie/tls/<not_after>/` behind the `/opt/eggie/tls/current` link, fetched from the service daily |
 | Sign-in | desktop handoff | handoff from the web app, redeemed with the service |
 | Account | device-code sign-in | seeded from `/opt/eggie/account.json` at first boot |
 | Public URLs | optional | not available (everything already is) |

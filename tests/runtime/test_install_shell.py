@@ -515,7 +515,7 @@ def test_install_lets_the_api_read_the_seeded_account_file_before_the_stack_star
 
 def test_install_puts_the_certificate_key_back_to_0600_after_the_sweep():
     # The sweep's g+rwX widens a key the API wrote on an earlier boot.
-    assert _index_of("chmod 600 /opt/eggie/tls/*/site.key") > _index_of("g+rwX")
+    assert _index_of("find /opt/eggie/tls -name site.key -type f -exec chmod 600 {} +") > _index_of("g+rwX")
 
 
 def test_only_a_site_install_enables_the_metadata_guard():

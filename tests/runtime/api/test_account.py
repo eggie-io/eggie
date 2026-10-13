@@ -301,8 +301,9 @@ def test_a_seed_file_signs_the_instance_in_with_a_rotated_pair_and_is_deleted(tm
     assert woken == [True]
 
 
-def test_a_seed_that_cannot_be_rotated_yet_is_rotated_before_its_first_use(tmp_path):
-    cloud = FakeCloud(refresh=[CloudUnavailable("down"), ROTATED])
+@pytest.mark.parametrize("failure", [CloudUnavailable("down"), {}])
+def test_a_seed_that_cannot_be_rotated_yet_is_rotated_before_its_first_use(tmp_path, failure):
+    cloud = FakeCloud(refresh=[failure, ROTATED])
     account, _, _ = make(tmp_path, cloud)
 
     assert account.seed_from(_seed_file(tmp_path)) is True

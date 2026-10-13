@@ -109,8 +109,9 @@ class Account:
         except NotSignedIn:
             log.warning("the service refused the token pair in %s", path)
             return False
-        except (CloudError, CloudUnavailable) as e:
-            log.warning("could not rotate the seeded token pair yet (%s); "
+        except (CloudError, CloudUnavailable, KeyError, TypeError) as e:
+            # KeyError/TypeError: a malformed or empty refresh reply.
+            log.warning("could not rotate the seeded token pair yet (%r); "
                         "it is rotated on the first service call", e)
         self.on_signed_in()
         return True
@@ -118,7 +119,7 @@ class Account:
     def _refuse_if_managed(self) -> None:
         if self._managed:
             raise Forbidden("site_account", "This server is signed in by the Eggie "
-                            "service. Sign out from the web app instead.")
+                            "service from the web app.")
 
     def start_sign_in(self) -> dict:
         self._refuse_if_managed()

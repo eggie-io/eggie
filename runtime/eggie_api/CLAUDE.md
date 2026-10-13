@@ -75,11 +75,13 @@ and a host release. Prefer additive changes.
   fetch when `/opt/eggie/tls/current` (a symlink) is missing, else daily; replace only on a later
   `not_after`. Each pair is written into `/opt/eggie/tls/<not_after>/` and goes live by swapping
   `current` in one rename: Traefik watches the directory, and renaming key and certificate
-  separately would have it load a mismatched pair. `Account.seed_from` imports
-  `/opt/eggie/account.json` once at start (`__main__`) and rotates the pair at once (user data keeps
-  a copy); `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted
-  locally start with `lh_` and are never forwarded to the service. `/health` carries `site`; `connect.facts` knows `"site"`; `Public` reports
-  `not_available`. Browser allowlist and `Secure` cookie: `rest/auth.py::cookie_options`.
+  separately would have it load a mismatched pair. Older pairs are removed at the start of the
+  next install, never right after the swap. `Account.seed_from` imports `/opt/eggie/account.json`
+  once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
+  `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
+  start with `lh_` and are never forwarded to the service. `/health` carries `site`;
+  `connect.facts` knows `"site"`; `Public` reports `not_available`. Browser allowlist and `Secure`
+  cookie: `rest/auth.py::cookie_options`.
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service

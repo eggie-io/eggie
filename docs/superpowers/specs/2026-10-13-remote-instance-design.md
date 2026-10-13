@@ -130,9 +130,14 @@ the instance list in the web app and the handoff check (3.5) read from it.
 Every call below carries `Authorization: Bearer <device access token>`, the token
 seeded in 3.2 and refreshed through the existing `POST /v1/auth/token/refresh`. A
 refresh must rotate: the refresh token it consumed and the access token issued with it
-are invalid afterwards, so the pair left in user data cannot be replayed. The service
-resolves the instance from the device id behind the token. An instance never holds any
-other credential.
+are invalid afterwards, so the pair left in user data cannot be replayed. Rotation must
+survive a lost reply: if the instance retries with the refresh token it just spent
+(because the answer never arrived), the service should return the pair it already
+issued, or accept the spent token for a short grace window. Otherwise the instance's
+stored pair is dead, its next call gets `invalid_grant`, it clears its account, and —
+since 3.6 refuses every way back in — the server is locked out until re-provisioned.
+The service resolves the instance from the device id behind the token. An instance
+never holds any other credential.
 
 ### 3.4 `GET /v1/instances/me/certificate` — fetch the certificate
 
@@ -391,6 +396,8 @@ wild).
   rename them, the instance code is written against whatever is agreed.
 - Whether the service wants a heartbeat from instances (e.g. runtime version) is a
   later addition to the sync pass.
+- The refresh grace window in 3.3 is the one place where a dropped packet can strand an
+  instance; until the service has it, a stranded instance is re-provisioned.
 - A one-time bootstrap code in user data, exchanged outbound for the token pair, would
   keep tokens out of user data entirely. First-boot rotation plus the metadata guard
   cover the gap for now; the bootstrap exchange is a contract change for a later round.

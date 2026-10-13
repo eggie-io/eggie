@@ -304,7 +304,7 @@ New rows for the boundary table in `docs/security.md`:
 The console and the projects live on different registered domains (decision 3), so a
 project cannot set cookies the console's origin would read. The bearer API binds to
 loopback. Project `ports:` are published by compose and blocked only by the service's
-firewall (decision 14). The certificate key is `0600 root` on disk, written by the API
+firewall (decision 14). The certificate key is `0600`, owned by the API's user, written by the API
 through the docker group, mounted read-only into Traefik; it covers only this
 instance's names. `account.json` is deleted after import; tokens live in `state.db` as
 today. The session cookie is `Secure`, `HttpOnly`, `SameSite=Strict`, path `/api`,

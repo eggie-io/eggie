@@ -91,7 +91,7 @@ root-equivalent — plus:
 - Projects are public with whatever auth they have themselves, like public URLs locally.
 - The bearer API binds to loopback (`EGGIE_API_BIND`). Project `ports:` are still published on
   all interfaces; only the firewall blocks them.
-- The certificate key is `0600`, written by the API, mounted read-only into Traefik; it covers
+- The certificate key is `0600`, owned by the API's user, written by the API, mounted read-only into Traefik; it covers
   this instance's three names only. The seeded token file is deleted on import.
 - A snapshot made with `snapshot-prep.sh` holds no token, database or key.
 

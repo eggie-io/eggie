@@ -161,6 +161,9 @@ install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
 if (( SITE )); then
   install -d -m 2770 -o root -g docker /opt/eggie/tls
   install -m 644 "$INSTALL_DIR/site/tls.yml" /opt/eggie/tls/tls.yml
+  if [[ -f /opt/eggie/tls/site.key ]]; then
+    chmod 600 /opt/eggie/tls/site.key
+  fi
 fi
 # A seed the service left before first boot; the API (docker group) imports
 # and deletes it, so it needs the token's permission model, not root's.

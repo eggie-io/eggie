@@ -507,3 +507,8 @@ def test_install_lets_the_api_read_the_seeded_account_file_before_the_stack_star
     assert chgrp > _index_of("g+rwX")
     assert chgrp < _index_of(" up -d")
     assert _index_of("chmod 640 /opt/eggie/account.json") < _index_of(" up -d")
+
+
+def test_install_puts_the_certificate_key_back_to_0600_after_the_sweep():
+    # The sweep's g+rwX widens a key the API wrote on an earlier boot.
+    assert _index_of("chmod 600 /opt/eggie/tls/site.key") > _index_of("g+rwX")

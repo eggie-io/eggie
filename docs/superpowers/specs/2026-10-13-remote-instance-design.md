@@ -178,8 +178,8 @@ mode:
 - runs every compose command for the stack with
   `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
 - installs `/opt/eggie/tls/tls.yml`, the Traefik dynamic config naming
-  `site.crt`/`site.key` as the default certificate, with the directory `0750 root:docker`
-  so the API (docker group) can write the files;
+  `site.crt`/`site.key` as the default certificate, with the directory `2770 root:docker`
+  so the API (docker group) can write the files and Traefik (root in its container) read them;
 - records `"vm": "site"` in `connect.json` alongside the first login account, as it
   records `wsl`/`lima` today.
 
@@ -272,7 +272,7 @@ are logged and keep the current files. Only active in site mode.
   `"vm": "site"`; `"site"` joins the known kinds.
 - `POST /projects/{id}/public` and the `/api` twin answer `409 not_available`
   ("every project on this server already has a public address") in site mode; `GET`
-  reports `off`.
+  reports `unavailable` with that reason, the same shape as "signed out" today.
 
 ## 7. The console
 

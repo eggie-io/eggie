@@ -20,7 +20,7 @@ import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
-import { isLocalHost, SiteContext } from "./site/SiteContext";
+import { isLocalHost, nextSite, SiteContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
@@ -33,8 +33,8 @@ export function App({ handoff, home = null }: { handoff: string | null; home?: s
 
 function Screens({ handoff }: { handoff: string | null }) {
   const [result, setResult] = useState<BootResult | null>(null);
-  // Only a boot result that read /api/health changes it; the others (a lost
-  // session) keep the last known value. A local address needs no answer.
+  // A local address starts as null so localhost doesn't shift layout while
+  // health is pending.
   const [site, setSite] = useState<string | null | undefined>(
     isLocalHost(window.location.hostname) ? null : undefined,
   );
@@ -50,7 +50,7 @@ function Screens({ handoff }: { handoff: string | null }) {
     pendingHandoff.current = null;
     try {
       const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
-      if (next.site !== undefined) setSite(next.site);
+      setSite((prev) => nextSite(prev, next));
       setResult(next);
     } finally {
       running.current = false;

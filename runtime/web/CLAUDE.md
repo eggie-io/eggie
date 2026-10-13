@@ -28,7 +28,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `apps/console` — the app.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
     name rule. Sections: Requested (hint + value), Your secrets (write-only, typed values visible), Add. Mock: `?scenario=secrets`.
-  - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`); on a site the signed-out screen points at the web app, the public-address tile and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`.
+  - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`; the initial state comes from the page address via `isLocalHost`, so `undefined` occurs only on a non-local address before the first boot answer); on a site the signed-out screen points at the web app, the public-address tile and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run as root before imaging a server. Strips what makes an installed runtime
 # this machine's: every droplet made from the image must start with its own
-# API token, database, certificate and cloud-init run. The runtime tree,
+# API token, database, certificate, GitHub token, projects and cloud-init run.
+# install.sh recreates github/, projects/ and agent-status/. The runtime tree,
 # the images, .env and runtime.env stay; the next boot's get.sh (repair mode,
 # with the site names) finishes the job.
 set -euo pipefail
@@ -16,7 +17,8 @@ if [[ -f "$ROOT/stack.yml" ]]; then
 fi
 rm -f "$ROOT/api.token" "$ROOT/state.db" "$ROOT/state.db-wal" "$ROOT/state.db-shm" \
       "$ROOT/connect.json" "$ROOT/site.env" "$ROOT/account.json"
-rm -rf "$ROOT/tls" "$ROOT/tunnel" "$ROOT/uploads"
+rm -rf "$ROOT/tls" "$ROOT/tunnel" "$ROOT/uploads" \
+      "$ROOT/github" "$ROOT/projects" "$ROOT/agent-status"
 # The image builder's key and history must not reach every customer's server;
 # the service installs the user's key on the new droplet.
 rm -f "$ROOT_HOME/.ssh/authorized_keys" "$ROOT_HOME/.bash_history"

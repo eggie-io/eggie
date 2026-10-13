@@ -10,9 +10,11 @@ SCRIPT = ROOT / "runtime" / "install" / "snapshot-prep.sh"
 
 PER_INSTANCE = ["api.token", "state.db", "state.db-wal", "state.db-shm", "connect.json", "site.env",
                 "account.json", "tls/site.crt", "tls/site.key", "tls/tls.yml",
-                "tunnel/token", "uploads/partial"]
+                "tunnel/token", "uploads/partial", "github/token", "github/desired.json",
+                "github/applied.json", "projects/blog/docker-compose.yml",
+                "agent-status/status.json"]
 KEPT = ["runtime/install/install.sh", ".env", "runtime.env", "runtime.version",
-        "stack.yml", "projects/blog/docker-compose.yml"]
+        "stack.yml"]
 BUILDER_ONLY = [".ssh/authorized_keys", ".bash_history"]
 
 

@@ -281,19 +281,48 @@ def _seed_file(tmp_path, **fields):
     return path
 
 
-def test_a_seed_file_signs_the_instance_in_as_that_device_and_is_deleted(tmp_path):
-    account, clock, _ = make(tmp_path, FakeCloud())
+ROTATED = {"access_token": "at-r", "refresh_token": "rt-r", "expires_in": 900}
+
+
+def test_a_seed_file_signs_the_instance_in_with_a_rotated_pair_and_is_deleted(tmp_path):
+    cloud = FakeCloud(refresh=[ROTATED])
+    account, clock, _ = make(tmp_path, cloud)
     woken = []
     account.on_signed_in = lambda: woken.append(True)
     path = _seed_file(tmp_path)
 
     assert account.seed_from(path) is True
+    assert cloud.calls == [("refresh", "rt-s")]
     row = account._account.get()
-    assert (row["device_id"], row["access_token"], row["refresh_token"]) == ("dev-9", "at-s", "rt-s")
-    assert row["access_expires_at"] == clock.now + 3600
+    assert (row["device_id"], row["access_token"], row["refresh_token"]) == ("dev-9", "at-r", "rt-r")
+    assert row["access_expires_at"] == clock.now + 900
     assert account.signed_in and account.device_id == "dev-9"
     assert not path.exists()
     assert woken == [True]
+
+
+def test_a_seed_that_cannot_be_rotated_yet_is_rotated_before_its_first_use(tmp_path):
+    cloud = FakeCloud(refresh=[CloudUnavailable("down"), ROTATED])
+    account, _, _ = make(tmp_path, cloud)
+
+    assert account.seed_from(_seed_file(tmp_path)) is True
+    row = account._account.get()
+    assert (row["access_token"], row["refresh_token"]) == ("at-s", "rt-s")
+
+    seen = []
+    account.authed(seen.append)
+    assert seen == ["at-r"]
+    assert cloud.calls == [("refresh", "rt-s"), ("refresh", "rt-s")]
+
+
+def test_a_seed_the_service_refuses_leaves_the_instance_signed_out(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[err("invalid_grant")]))
+    woken = []
+    account.on_signed_in = lambda: woken.append(True)
+
+    assert account.seed_from(_seed_file(tmp_path)) is False
+    assert not account.signed_in
+    assert woken == []
 
 
 def test_a_signed_in_instance_ignores_a_seed_file_and_leaves_it(tmp_path):
@@ -321,7 +350,7 @@ def test_no_seed_file_is_the_ordinary_case(tmp_path):
 
 
 def test_a_seed_supersedes_a_pending_sign_in_code(tmp_path):
-    account, _, _ = make(tmp_path, FakeCloud())
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[ROTATED]))
     account._account.update(device_code="dc", user_code="UC", verification_url="u",
                             code_expires_at=9e9, poll_interval=5.0)
 
@@ -333,7 +362,7 @@ def test_a_seed_supersedes_a_pending_sign_in_code(tmp_path):
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory modes")
 def test_a_seed_that_cannot_be_deleted_is_still_imported(tmp_path):
-    account, _, _ = make(tmp_path, FakeCloud())
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[ROTATED]))
     folder = tmp_path / "seed"
     folder.mkdir()
     path = _seed_file(folder)

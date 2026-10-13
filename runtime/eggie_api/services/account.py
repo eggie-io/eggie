@@ -80,7 +80,6 @@ class Account:
         try:
             raw = json.loads(path.read_text())
             device_id, access, refresh = raw["device_id"], raw["access_token"], raw["refresh_token"]
-            expires_in = float(raw["expires_in"])
             if not all(isinstance(v, str) and v for v in (device_id, access, refresh)):
                 raise ValueError("a token field is empty")
         except FileNotFoundError:
@@ -92,15 +91,27 @@ class Account:
             if self._account.get()["access_token"]:
                 log.warning("ignoring %s: this machine is already signed in", path)
                 return False
+            # Stamped already expired: the seeded access token is never used
+            # for a request, whatever happens to the rotation below.
             self._account.seed(device_id=device_id, access_token=access,
                                refresh_token=refresh,
-                               access_expires_at=self._clock() + expires_in)
+                               access_expires_at=self._clock())
         try:
             path.unlink(missing_ok=True)
         except OSError as e:
             # Imported all the same; the next start sees a signed-in row and
             # leaves the file, so say now that a credential is still on disk.
             log.warning("imported %s but could not delete it: %s", path, e)
+        # The pair also sits in cloud-init user data, readable from the
+        # metadata service for the droplet's life; spending it now kills that copy.
+        try:
+            self._refresh(access)
+        except NotSignedIn:
+            log.warning("the service refused the token pair in %s", path)
+            return False
+        except (CloudError, CloudUnavailable) as e:
+            log.warning("could not rotate the seeded token pair yet (%s); "
+                        "it is rotated on the first service call", e)
         self.on_signed_in()
         return True
 

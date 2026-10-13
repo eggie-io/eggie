@@ -54,6 +54,9 @@ class Sessions:
             expires = self._codes.pop(code, None)
         if expires is None or expires <= self._clock():
             return None
+        return self.start()
+
+    def start(self) -> str:
         session_id = secrets.token_urlsafe(32)
         self._sessions.add(_hash(session_id), self._clock() + SESSION_TTL)
         return session_id

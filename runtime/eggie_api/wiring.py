@@ -26,6 +26,7 @@ from .services.projects import ProjectService
 from .services.public import Public
 from .services.secrets import SecretService
 from .services.sessions import Sessions
+from .services.site import SiteSignIn
 from .services.sync import SyncLoop, run_pass
 from .services.system import SystemService
 from .services.uploads import UploadService
@@ -49,6 +50,7 @@ class Services:
     public: Public
     github_link: GitHubLink
     sessions: Sessions
+    site: SiteSignIn
     agents: AgentStatus
     sync: SyncLoop
     system: SystemService
@@ -81,6 +83,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         token_path=config.tunnel_token_path,
         origin=f"http://{config.traefik_host}:{config.edge_port}",
         hosts_for=loader.public_hosts)
+    site = SiteSignIn(sessions, account, cloud, remote=config.site_host is not None)
     account.on_forget = public.forget_local
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
@@ -104,6 +107,6 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, github_link=github_link,
-        sessions=sessions,
+        sessions=sessions, site=site,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         sync=sync, system=SystemService(config, runner))

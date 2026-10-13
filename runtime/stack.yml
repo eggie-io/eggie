@@ -57,8 +57,9 @@ services:
     # Equal on both sides of the colon, and handed to the process as well: the
     # host dials 127.0.0.1:<same port> through the VM's forward, and a mapping
     # the api service does not bind forwards to nothing.
+    # EGGIE_API_BIND: a site keeps this on 127.0.0.1; the guest CLI dials loopback either way.
     ports:
-      - "${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
+      - "${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
     environment:
       - EGGIE_API_PORT=${EGGIE_API_PORT:-39099}
       - EGGIE_DOMAIN=${EGGIE_DOMAIN:-local.eggie.space}
@@ -82,7 +83,7 @@ services:
     # page's catch-all route; project hosts never match these two names.
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)) && PathPrefix(`/api`)"
       - "traefik.http.routers.eggie-api.entrypoints=web"
       - "traefik.http.routers.eggie-api.priority=1000"
       - "traefik.http.services.eggie-api.loadbalancer.server.port=${EGGIE_API_PORT:-39099}"
@@ -97,7 +98,7 @@ services:
       - edge
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)"
       - "traefik.http.routers.eggie-web.entrypoints=web"
       - "traefik.http.routers.eggie-web.priority=10"
       - "traefik.http.services.eggie-web.loadbalancer.server.port=8080"

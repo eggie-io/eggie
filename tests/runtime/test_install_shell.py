@@ -497,3 +497,13 @@ def test_install_records_a_site_as_its_own_vm_kind():
     text = INSTALL.read_text()
     assert "vm=site" in text
     assert text.index("vm=site") < text.index("/opt/eggie/connect.json")
+
+
+def test_install_lets_the_api_read_the_seeded_account_file_before_the_stack_starts():
+    # cloud-init writes it as root; the API runs as a docker-group user and
+    # must both read and delete it.
+    commands = _commands()
+    chgrp = _index_of("chgrp docker /opt/eggie/account.json")
+    assert chgrp > _index_of("g+rwX")
+    assert chgrp < _index_of(" up -d")
+    assert _index_of("chmod 640 /opt/eggie/account.json") < _index_of(" up -d")

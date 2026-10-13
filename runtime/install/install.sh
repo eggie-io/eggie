@@ -162,6 +162,12 @@ if (( SITE )); then
   install -d -m 2770 -o root -g docker /opt/eggie/tls
   install -m 644 "$INSTALL_DIR/site/tls.yml" /opt/eggie/tls/tls.yml
 fi
+# A seed the service left before first boot; the API (docker group) imports
+# and deletes it, so it needs the token's permission model, not root's.
+if (( SITE )) && [[ -f /opt/eggie/account.json ]]; then
+  chgrp docker /opt/eggie/account.json
+  chmod 640 /opt/eggie/account.json
+fi
 # The output is kept as well as shown. An image with no build for this VM's
 # architecture and a registry that cannot be reached fail the same way here and
 # differ only in the daemon's wording -- and the two need opposite things from

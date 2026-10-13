@@ -96,14 +96,16 @@ users:
       - ssh-ed25519 AAAA… the user's key
 write_files:
   - path: /opt/eggie/account.json
-    permissions: "0600"
-    owner: root:root
+    permissions: "0640"
+    owner: root:docker
     content: |
       {"device_id": "…", "access_token": "…", "refresh_token": "…", "expires_in": 3600}
 runcmd:
   - cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh
       | EGGIE_RUNTIME_REPAIR=1 EGGIE_SITE_HOST=foo.eggie.io EGGIE_SITE_DOMAIN=foo.eggie.space bash
 ```
+
+`root:docker 0640` because the API, not root, imports and deletes the file; the installer reasserts it.
 
 `EGGIE_RUNTIME_REPAIR=1` keeps the release the snapshot holds and only configures: no
 apt, no image pulls. `cd /` matters: the installer runs per-account steps as that

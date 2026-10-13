@@ -26,12 +26,15 @@ class SiteSignIn:
         if session_id is not None or not self._remote:
             return session_id
         try:
-            self._account.authed(
+            out = self._account.authed(
                 lambda token: self._cloud.redeem_instance_handoff(token, code))
         except NotSignedIn:
             log.warning("a sign-in link arrived but this server is not signed in")
             return None
         except (CloudError, CloudUnavailable) as e:
             log.info("the service did not accept a sign-in link: %s", e)
+            return None
+        if not (isinstance(out, dict) and out.get("ok") is True):
+            log.info("the service answered a sign-in link without ok: %r", out)
             return None
         return self._sessions.start()

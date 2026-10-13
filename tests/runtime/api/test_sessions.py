@@ -1,3 +1,4 @@
+import pytest
 import hashlib
 
 from fastapi.testclient import TestClient
@@ -214,10 +215,11 @@ from tests.runtime.api.conftest import FakeRunner
 from tests.runtime.api.fake_cloud import FakeCloud
 
 
-def _site_app(env, cloud, *, site=True):
+def _site_app(env, cloud, *, site=True, signed_in=True):
     repos = Repos.open(Database(env.config.state_db.with_name("site.db")))
-    repos.account.update(access_token="at", refresh_token="rt",
-                         access_expires_at=10**12, org_id="org-1")
+    if signed_in:
+        repos.account.update(access_token="at", refresh_token="rt",
+                             access_expires_at=10**12, org_id="org-1")
     account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
     config = dataclasses.replace(env.config, site_host="foo.eggie.io",
                                  domain="foo.eggie.space") if site else env.config
@@ -261,4 +263,28 @@ def test_an_unknown_code_is_not_sent_to_the_service_outside_a_site(env):
     cloud = FakeCloud()
     _, browser, _ = _site_app(env, cloud, site=False)
     assert browser.post("/api/session", json={"code": "x"}).status_code == 401
+    assert cloud.calls == []
+
+
+@pytest.mark.parametrize("answer", [{"ok": False}, None, {}])
+def test_a_service_answer_without_ok_true_does_not_sign_the_browser_in(env, answer):
+    _, browser, _ = _site_app(env, FakeCloud(redeem_instance_handoff=[answer]))
+    resp = browser.post("/api/session", json={"code": "c"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert browser.get("/api/projects").status_code == 401
+
+
+def test_a_site_that_is_not_signed_in_refuses_a_code_without_calling_the_service(env):
+    cloud = FakeCloud(redeem_instance_handoff=[{"ok": True}])
+    _, browser, _ = _site_app(env, cloud, signed_in=False)
+    resp = browser.post("/api/session", json={"code": "c"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert cloud.calls == []
+
+
+def test_a_code_over_256_characters_is_rejected_as_invalid_request(env):
+    cloud = FakeCloud()
+    _, browser, _ = _site_app(env, cloud)
+    resp = browser.post("/api/session", json={"code": "x" * 257})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (422, "invalid_request")
     assert cloud.calls == []

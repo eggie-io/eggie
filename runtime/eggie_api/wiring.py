@@ -15,6 +15,7 @@ from .infra.tunnel import TunnelClient
 from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
+from .services.certificate import Certificate
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
@@ -52,6 +53,7 @@ class Services:
     sessions: Sessions
     site: SiteSignIn
     agents: AgentStatus
+    certificate: Certificate | None
     sync: SyncLoop
     system: SystemService
 
@@ -88,7 +90,15 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    sync = SyncLoop([public.reconcile, lambda: run_pass(account, cloud, repos)])
+    certificate = None
+    if config.site_host:
+        certificate = Certificate(
+            config.tls_dir, account, cloud,
+            names=(config.site_host, config.domain, f"*.{config.domain}"))
+    passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
+    if certificate is not None:
+        passes.append(certificate.refresh)
+    sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
     github_link = github_link or GitHubLink(
@@ -109,4 +119,4 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         account=account, public=public, github_link=github_link,
         sessions=sessions, site=site,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
-        sync=sync, system=SystemService(config, runner))
+        certificate=certificate, sync=sync, system=SystemService(config, runner))

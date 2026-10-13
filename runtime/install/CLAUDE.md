@@ -69,6 +69,16 @@ above the one it last handled, into `status.json`. systemd drops triggers that a
 so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
 meanwhile.
 
+## Site mode
+
+`get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
+bare lowercase hostnames); a run without them keeps the file. `install.sh` sources it: appends
+`EGGIE_SITE_HOST`, `EGGIE_DOMAIN` and `EGGIE_API_BIND=127.0.0.1` to `.env`, adds
+`-f $RUNTIME_DIR/stack.site.yml` (`$SITE_STACK`, unquoted on purpose) to the stack's compose
+commands, installs `site/tls.yml` into `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik
+reads) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
+imaged (`tests/runtime/test_snapshot_prep.py`).
+
 ## Testing
 
 `bash -n` plus text assertions over `install.sh`; `resolve_ref` sourced from `get.sh` with a fake

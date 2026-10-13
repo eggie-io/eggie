@@ -13,6 +13,9 @@ user's machine can reach in, so read this before adding any way in.
 | Edge, port `39080` | Traefik: the console, the API at `/api`, project URLs | Host loopback only |
 | SSH, port `39022` (Lima) | A login account in the VM | Host loopback only |
 | Public URL (optional) | One project, through the Eggie service's Cloudflare tunnel | Outbound from the `tunnel` container |
+| Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
+| Site, port `80` | A redirect to 443 | The internet (site mode only) |
+| Site, port `22` | The login account | Whoever holds the SSH key the service installed (site mode only) |
 
 The host-side forwards are loopback-only: WSL2's `localhostForwarding` puts guest ports onto the
 Windows host's `127.0.0.1`, and Lima's `portForwards` (`host/providers/eggie.yaml`) default to
@@ -72,6 +75,24 @@ Two things hold that up, and neither is enforced inside the VM:
   `tunnel` network with Traefik, not on `edge`, but that does not keep it off published ports.
 
 A project shared by public URL is exposed to the internet with whatever auth it has itself.
+
+## Site mode (a server the service provisions)
+
+On a site the boundary is the server's firewall, which the service manages: 22, 80 and 443
+only. Inside it, everything above still holds — every login account, project and container is
+root-equivalent — plus:
+
+- The console and `/api` are on the internet. A session comes only from a handoff code the
+  service minted for this instance's owner and the instance redeemed with the service
+  (`services/site.py`); the cookie is `Secure`. The console and the projects sit on different
+  registered domains (`eggie.io` / `eggie.space`), so a project cannot set a cookie the console's
+  origin would read.
+- Projects are public with whatever auth they have themselves, like public URLs locally.
+- The bearer API binds to loopback (`EGGIE_API_BIND`). Project `ports:` are still published on
+  all interfaces; only the firewall blocks them.
+- The certificate key is `0600`, written by the API, mounted read-only into Traefik; it covers
+  this instance's three names only. The seeded token file is deleted on import.
+- A snapshot made with `snapshot-prep.sh` holds no token, database or key.
 
 ## Before adding a way in
 

@@ -114,6 +114,17 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.
 
+### Site mode
+
+The runtime also runs on a server the Eggie service provisions. Nothing in the host changes: the
+service creates the droplet from a snapshot, its DNS rows and its certificate, seeds the account
+token through cloud-init, and runs `get.sh` with `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN`. Inside the
+VM, `stack.site.yml` puts Traefik on 443 with the certificate from `/opt/eggie/tls`
+(`services/certificate.py` keeps it current), `rest/auth.py` admits the site host, and
+`services/site.py` redeems web-app handoff codes with the service. A non-web service of a project
+gets `<service>--<id>.<site domain>`. Design:
+`docs/superpowers/specs/2026-10-13-remote-instance-design.md`.
+
 ### Root-side helpers
 
 The API never writes into a user's home. When it needs root work done it writes a request file
@@ -176,6 +187,10 @@ host/              desktop app: providers, setup, ApiClient, desktop window
 packaging/         Windows installer, macOS pkg, image build script
 runtime/install/   get.sh, install.sh, boot updater, root helpers, systemd units
 runtime/stack.yml  the compose stack inside the VM
+runtime/stack.site.yml  the override for a site: Traefik on 443 with TLS from /opt/eggie/tls
+runtime/install/snapshot-prep.sh  strips per-instance state before a server is imaged
+runtime/eggie_api/services/site.py  site sign-in: redeems web-app handoff codes with the service
+runtime/eggie_api/services/certificate.py  fetches and renews the site certificate
 runtime/eggie_api/ the API
 runtime/web/       the browser console
 runtime/cli/       the in-VM `eggie` command

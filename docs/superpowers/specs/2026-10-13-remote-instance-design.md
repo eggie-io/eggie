@@ -1,7 +1,7 @@
 # Remote instance: the runtime on a service-provisioned server
 
 Date: 2026-10-13
-Status: design agreed, not implemented
+Status: implemented on feature/73-remote-instance (PR pending); service side not yet live
 Issue: eggie-io/eggie-resources#73
 
 ## 1. Problem
@@ -28,7 +28,7 @@ Everything here lives in `runtime/`. No host change, no host release, no desktop
 | 4 | Projects are `bar.foo.eggie.space`, nested under the instance, never flat `bar.eggie.space`. | Flat names need a DNS row per project (droplets have different IPs) and a `*.eggie.space` certificate shared by every server. |
 | 5 | DNS rows are DNS-only (grey cloud at Cloudflare). TLS terminates in Traefik on the server. | No plan change at Cloudflare; Let's Encrypt is free at any depth. Gives up the proxy's DDoS shielding, accepted at this stage. |
 | 6 | **One certificate per instance**, three names: `foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`. Issued by the **service** via DNS-01 (Route53 + Cloudflare), fetched by the instance. Never a zone-wide wildcard on a server. | A `*.eggie.io` key on every customer server could impersonate `app.eggie.io`. Per-host issue would hit Let's Encrypt's 50 certificates/week/registered domain; one per instance stays within it. DNS tokens must not live on customer servers. |
-| 7 | Every project host is one label under the project domain: `web-bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. |
+| 7 | Every project host is one label under the project domain: `web--bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. `--` rather than `-` because slugs may contain single hyphens, so `web-bar` could be a project of its own. |
 | 8 | Site mode is switched on by two installer variables, `EGGIE_SITE_HOST` (console) and `EGGIE_SITE_DOMAIN` (projects). The instance pulls everything else (certificate, identity) from the service once signed in. | Smallest cloud-init payload; first issue and renewal of the certificate are one code path. |
 | 9 | The instance boots signed in: the service seeds the account token pair through cloud-init. | Reuses the existing account, refresh and sync code unchanged. |
 | 10 | The browser signs in with a service-minted handoff code that the instance redeems **outbound** with its account token. | Matches how the VM already talks to the service (`infra/cloud.py`); no inbound credential, no second auth scheme on the instance (`docs/security.md`). The console's `#handoff` boot path is reused as is. |
@@ -222,7 +222,7 @@ the file watch reloads the moment the API writes them.
 
 ### 5.3 Hostnames
 
-`domain/overlay.py::host_for` becomes `f"{sub}-{id}.{domain}"` for a service with a
+`domain/overlay.py::host_for` becomes `f"{sub}--{id}.{domain}"` for a service with a
 subdomain, `f"{id}.{domain}"` otherwise. Locally the `*.local.eggie.space` wildcard
 already resolves both shapes.
 

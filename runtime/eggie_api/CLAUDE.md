@@ -69,6 +69,13 @@ and a host release. Prefer additive changes.
 
 ## Feature areas
 
+- **Site** (`services/site.py`, `services/certificate.py`) — `ApiConfig.site_host` (from
+  `EGGIE_SITE_HOST`) switches it on. `SiteSignIn.redeem` tries local handoff codes first, then
+  `POST /v1/instances/handoff/redeem` with the account token. `Certificate.refresh` is a sync pass:
+  fetch when `/opt/eggie/tls/site.crt` is missing, else daily; replace only on a later `not_after`;
+  temp-file-and-rename. `Account.seed_from` imports `/opt/eggie/account.json` once at start
+  (`__main__`). `/health` carries `site`; `connect.facts` knows `"site"`; `Public` reports
+  `not_available`. Browser allowlist and `Secure` cookie: `rest/auth.py::cookie_options`.
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service

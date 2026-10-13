@@ -48,6 +48,12 @@ class FakeCloud:
     def release_public_url(self, token, cloud_id):
         return self._next("release_public_url", token, cloud_id)
 
+    def instance_certificate(self, token):
+        return self._next("instance_certificate", token)
+
+    def redeem_instance_handoff(self, token, code):
+        return self._next("redeem_instance_handoff", token, code)
+
 
 CODE = {"device_code": "dc-1", "user_code": "ABCD-EFGH",
         "verification_uri": "https://svc/device",

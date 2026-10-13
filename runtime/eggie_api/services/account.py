@@ -91,7 +91,12 @@ class Account:
             self._account.seed(device_id=device_id, access_token=access,
                                refresh_token=refresh,
                                access_expires_at=self._clock() + expires_in)
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            # Imported all the same; the next start sees a signed-in row and
+            # leaves the file, so say now that a credential is still on disk.
+            log.warning("imported %s but could not delete it: %s", path, e)
         self.on_signed_in()
         return True
 

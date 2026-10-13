@@ -1,3 +1,6 @@
+import os
+import stat
+
 import pytest
 
 from eggie_api.services.account import Account, NotSignedIn
@@ -326,3 +329,18 @@ def test_a_seed_supersedes_a_pending_sign_in_code(tmp_path):
     row = account._account.get()
     assert row["device_code"] is None and row["user_code"] is None
     assert account.status()["state"] == "signed_in"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory modes")
+def test_a_seed_that_cannot_be_deleted_is_still_imported(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    folder = tmp_path / "seed"
+    folder.mkdir()
+    path = _seed_file(folder)
+    folder.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        assert account.seed_from(path) is True
+        assert account.signed_in
+        assert path.exists()
+    finally:
+        folder.chmod(stat.S_IRWXU)

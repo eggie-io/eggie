@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from ..errors import Unavailable, Upstream
+from ..errors import Forbidden, Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.repos.account import AccountRepo
 from ..infra.repos.cloud_projects import CloudProjectRepo
@@ -32,8 +32,12 @@ def _daemon(fn) -> None:
 
 class Account:
     def __init__(self, account: AccountRepo, cloud_projects: CloudProjectRepo, cloud,
-                 *, clock=time.time, sleep=time.sleep, spawn=_daemon):
+                 *, managed: bool = False, clock=time.time, sleep=time.sleep,
+                 spawn=_daemon):
         self._account = account
+        # The service owns this machine's sign-in: a local sign-out would
+        # leave it with no way to sign in again.
+        self._managed = managed
         self._cloud_projects = cloud_projects
         self._cloud = cloud
         self._clock = clock
@@ -100,7 +104,13 @@ class Account:
         self.on_signed_in()
         return True
 
+    def _refuse_if_managed(self) -> None:
+        if self._managed:
+            raise Forbidden("site_account", "This server is signed in by the Eggie "
+                            "service. Sign out from the web app instead.")
+
     def start_sign_in(self) -> dict:
+        self._refuse_if_managed()
         row = self._account.get()
         if row["access_token"]:
             return self.status()
@@ -288,6 +298,7 @@ class Account:
             self._account.update(**fields)
 
     def sign_out(self) -> dict:
+        self._refuse_if_managed()
         try:
             self.before_sign_out()
         except Exception:

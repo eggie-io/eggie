@@ -1,6 +1,8 @@
 """What changes when the API runs on a site (a server with its own hostnames)."""
+from fastapi.testclient import TestClient
+
 from eggie_api.config import ApiConfig
-from tests.runtime.api.conftest import COMPOSE_ONE_WEB, _write_compose
+from tests.runtime.api.conftest import COMPOSE_ONE_WEB, SITE_BROWSER, SITE_ORIGIN, _write_compose
 
 
 def test_site_host_comes_from_the_environment_and_is_absent_locally():
@@ -66,3 +68,27 @@ def test_remote_redemptions_resume_once_the_minute_has_moved_on(tmp_path):
     clock.now += 60 - REMOTE_PER_MINUTE + 1
     assert site.redeem("real") is not None
     assert len(cloud.calls) == REMOTE_PER_MINUTE + 1
+
+
+def _site_browser(site_env):
+    code = site_env.client.post("/sessions/handoff").json()["code"]
+    headers = {**SITE_BROWSER, **SITE_ORIGIN}
+    resp = TestClient(site_env.app, headers=headers).post("/api/session", json={"code": code})
+    # The cookie is Secure and the test client speaks http: send it by hand.
+    cookie = resp.headers["set-cookie"].split(";", 1)[0]
+    return TestClient(site_env.app, headers={**headers, "Cookie": cookie})
+
+
+def test_a_site_refuses_sign_out_and_stays_signed_in(site_env):
+    site_env.repos.account.update(access_token="at", refresh_token="rt",
+                                  access_expires_at=10**12)
+    resp = _site_browser(site_env).post("/api/account/sign-out")
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "site_account"
+    assert site_env.client.get("/account").json()["state"] == "signed_in"
+
+
+def test_a_site_refuses_to_start_a_device_code_sign_in(site_env):
+    resp = _site_browser(site_env).post("/api/account/sign-in")
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "site_account"

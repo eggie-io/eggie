@@ -77,7 +77,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     uploads = UploadService(store, loader, locks)
     secrets = SecretService(repos.secrets, loader)
     cloud = cloud or Cloud(config.cloud_url)
-    account = account or Account(repos.account, repos.cloud_projects, cloud)
+    account = account or Account(repos.account, repos.cloud_projects, cloud,
+                                 managed=config.site_host is not None)
     public = public or Public(
         projects=repos.projects, cloud_projects=repos.cloud_projects,
         account=account, cloud=cloud,

@@ -14,6 +14,9 @@ HANDOFF_TTL = 60
 # under an hour of the last extension has passed, so an active browser
 # polling every few seconds doesn't write to sqlite on every request.
 SLIDE_WINDOW = SESSION_TTL - 3600
+# Marks codes minted here, so a site never forwards a stale one to the
+# service. The service's codes never start with it.
+LOCAL_CODE_PREFIX = "lh_"
 
 
 def _hash(session_id: str) -> str:
@@ -42,12 +45,15 @@ class Sessions:
         self._lock = threading.Lock()
 
     def issue_handoff(self) -> str:
-        code = secrets.token_urlsafe(32)
+        code = LOCAL_CODE_PREFIX + secrets.token_urlsafe(32)
         now = self._clock()
         with self._lock:
             self._codes = {c: t for c, t in self._codes.items() if t > now}
             self._codes[code] = now + HANDOFF_TTL
         return code
+
+    def is_local(self, code: str) -> bool:
+        return code.startswith(LOCAL_CODE_PREFIX)
 
     def redeem(self, code: str) -> str | None:
         with self._lock:

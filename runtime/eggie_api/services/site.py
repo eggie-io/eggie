@@ -52,7 +52,7 @@ class SiteSignIn:
 
     def redeem(self, code: str) -> str | None:
         session_id = self._sessions.redeem(code)
-        if session_id is not None or not self._remote:
+        if session_id is not None or not self._remote or self._sessions.is_local(code):
             return session_id
         if not self._take_remote_slot():
             return None

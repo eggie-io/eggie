@@ -259,6 +259,20 @@ def test_a_locally_minted_code_never_goes_to_the_service_on_a_site(env):
     assert cloud.calls == []
 
 
+def test_a_spent_or_unknown_local_code_on_a_site_never_uses_the_service_budget(env):
+    cloud = FakeCloud(redeem_instance_handoff=[{"ok": True}])
+    _, browser, bearer = _site_app(env, cloud)
+    code = bearer.post("/sessions/handoff").json()["code"]
+    assert browser.post("/api/session", json={"code": code}).status_code == 200
+    stale = [code] + [f"lh_unknown-{n}" for n in range(10)]
+    for c in stale:
+        resp = browser.post("/api/session", json={"code": c})
+        assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert cloud.calls == []
+    assert browser.post("/api/session", json={"code": "from-web-app"}).status_code == 200
+    assert cloud.calls == [("redeem_instance_handoff", "at", "from-web-app")]
+
+
 def test_an_unknown_code_is_not_sent_to_the_service_outside_a_site(env):
     cloud = FakeCloud()
     _, browser, _ = _site_app(env, cloud, site=False)

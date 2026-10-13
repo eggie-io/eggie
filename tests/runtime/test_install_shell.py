@@ -110,7 +110,7 @@ def test_the_pull_still_shows_its_progress_while_being_recorded():
 def test_install_always_pulls_before_bringing_the_stack_up():
     # Always pulling is the delivery decision: it is how an API update reaches
     # an already-bootstrapped VM. `up -d` alone would keep running a stale image.
-    assert _index_of(f"compose -f {STACK} --profile tunnel pull") < _index_of(" up -d")
+    assert _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull") < _index_of(" up -d")
 
 
 def test_the_stack_comes_up_without_the_tunnel_profile():
@@ -449,3 +449,51 @@ def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
     assert build < installed
     assert commands[installed].startswith("install -m 755 ")
     assert not any("cli/eggie.py" in l for l in commands)
+
+
+SITE_ENV = f"{constants.GUEST_ROOT}/site.env"
+
+
+def test_install_reads_site_env_before_writing_the_compose_env():
+    commands = _commands()
+    assert _index_of(f"source {SITE_ENV}") < _index_of(f"{constants.GUEST_ROOT}/.env")
+
+
+def test_install_appends_the_site_lines_after_writing_env():
+    # .env is rewritten on every run (the docker GID and image version); the
+    # site lines must follow in the same run or a repair drops site mode.
+    commands = _commands()
+    write = _index_of(f"EGGIE_VERSION=%s")
+    append = _index_of("EGGIE_API_BIND=127.0.0.1")
+    assert write < append < _index_of(" up -d")
+    assert any("EGGIE_DOMAIN=%s" in l and ">> " in l for l in commands), \
+        "the site domain becomes EGGIE_DOMAIN by appending, never by rewriting"
+
+
+def test_every_stack_compose_command_carries_the_site_override():
+    stack_lines = [l for l in _commands() if f"compose -f {STACK}" in l]
+    assert len(stack_lines) >= 3, stack_lines
+    assert all("$SITE_STACK" in l for l in stack_lines), stack_lines
+
+
+def test_the_site_override_is_the_one_shipped_next_to_stack_yml():
+    (line,) = [l for l in _commands() if 'SITE_STACK="-f' in l]
+    assert line.endswith('stack.site.yml"')
+    assert (STACK_YML.parent / "stack.site.yml").is_file()
+
+
+def test_install_ships_traefik_a_default_certificate_config_in_site_mode():
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /opt/eggie/tls/tls\.yml',
+                      INSTALL.read_text())
+    assert match, "install.sh does not install /opt/eggie/tls/tls.yml"
+    doc = yaml.safe_load((INSTALL.parent / match.group(1)).read_text())
+    cert = doc["tls"]["stores"]["default"]["defaultCertificate"]
+    assert cert == {"certFile": "/opt/eggie/tls/site.crt", "keyFile": "/opt/eggie/tls/site.key"}
+    # The API (docker group) writes the files; Traefik reads the directory.
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/tls" in INSTALL.read_text()
+
+
+def test_install_records_a_site_as_its_own_vm_kind():
+    text = INSTALL.read_text()
+    assert "vm=site" in text
+    assert text.index("vm=site") < text.index("/opt/eggie/connect.json")

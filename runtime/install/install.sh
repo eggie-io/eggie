@@ -11,6 +11,17 @@ REPAIR=0
 if [[ "${2:-}" == --repair ]]; then
   REPAIR=1
 fi
+
+# Site mode: a server with its own hostnames; get.sh wrote the file. The
+# override puts Traefik on 443 with TLS; $SITE_STACK is expanded unquoted on
+# purpose so an empty value adds nothing.
+SITE=0
+SITE_STACK=""
+if [[ -s /opt/eggie/site.env ]]; then
+  source /opt/eggie/site.env
+  SITE=1
+  SITE_STACK="-f $RUNTIME_DIR/stack.site.yml"
+fi
 SKILLS_CLI=skills@1.5.26
 # Unpinned on purpose: pinning a tag here is a value change, not a code change.
 # Until it is pinned, a box's skills are not identifiable from runtime.version.
@@ -108,6 +119,11 @@ if ! IMAGE_VERSION="$(bash "$INSTALL_DIR/lib/image-version.sh" "$REF" "${EGGIE_R
   exit 1
 fi
 printf 'EGGIE_DOCKER_GID=%s\nEGGIE_VERSION=%s\n' "$DOCKER_GID" "$IMAGE_VERSION" > /opt/eggie/.env
+if (( SITE )); then
+  # The console answers on the site host, projects live under the site
+  # domain, and the bearer port stays off the public interface.
+  printf 'EGGIE_SITE_HOST=%s\nEGGIE_DOMAIN=%s\nEGGIE_API_BIND=127.0.0.1\n' "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" >> /opt/eggie/.env
+fi
 
 # 6. the shared secret between the host and the API.
 # Only if absent: bootstrap re-runs are normal, and regenerating it every
@@ -140,6 +156,12 @@ chmod 640 /opt/eggie/api.token
 # so both the first install and every update need the network.
 # --profile tunnel: the first public URL must not wait on an image download.
 install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
+
+# 7a. site mode: where the API puts the certificate and Traefik reads it.
+if (( SITE )); then
+  install -d -m 2770 -o root -g docker /opt/eggie/tls
+  install -m 644 "$INSTALL_DIR/site/tls.yml" /opt/eggie/tls/tls.yml
+fi
 # The output is kept as well as shown. An image with no build for this VM's
 # architecture and a registry that cannot be reached fail the same way here and
 # differ only in the daemon's wording -- and the two need opposite things from
@@ -148,7 +170,7 @@ install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
 # Apple Silicon, where an amd64-only image is the common case, that is the first
 # thing they hit.
 PULL_LOG="$(mktemp)"
-if ! /usr/bin/docker compose -f /opt/eggie/stack.yml --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
+if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
   if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
     echo "could not pull the Eggie images: one of them is not published for" >&2
     echo "this machine's architecture ($(uname -m)). The registry answered" >&2
@@ -161,11 +183,11 @@ if ! /usr/bin/docker compose -f /opt/eggie/stack.yml --profile tunnel pull 2>&1 
   exit 1
 fi
 rm -f "$PULL_LOG"
-/usr/bin/docker compose -f /opt/eggie/stack.yml up -d
+/usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d
 # The API reads its token once, at startup, and `up -d` leaves an unchanged
 # container running.
 if (( TOKEN_CREATED || REPAIR )); then
-  /usr/bin/docker compose -f /opt/eggie/stack.yml up -d --force-recreate api
+  /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d --force-recreate api
 fi
 
 # 8. git for `eggie clone`, gh for GitHub work, Node for `npx skills`.
@@ -319,7 +341,8 @@ systemctl enable --now eggie-agents.path
 systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
 
 # 12. what the console's "Connect an agent" guide needs to know.
-if grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
+if (( SITE )); then vm=site
+elif grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
 elif [[ -d /mnt/lima-cidata ]]; then vm=lima
 else vm=other
 fi

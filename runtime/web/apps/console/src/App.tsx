@@ -20,7 +20,7 @@ import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
-import { SiteContext } from "./site/SiteContext";
+import { isLocalHost, SiteContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
@@ -34,8 +34,10 @@ export function App({ handoff, home = null }: { handoff: string | null; home?: s
 function Screens({ handoff }: { handoff: string | null }) {
   const [result, setResult] = useState<BootResult | null>(null);
   // Only a boot result that read /api/health changes it; the others (a lost
-  // session) keep the last known value.
-  const [site, setSite] = useState<string | null | undefined>(undefined);
+  // session) keep the last known value. A local address needs no answer.
+  const [site, setSite] = useState<string | null | undefined>(
+    isLocalHost(window.location.hostname) ? null : undefined,
+  );
   const pendingHandoff = useRef(handoff);
   const running = useRef(false);
 

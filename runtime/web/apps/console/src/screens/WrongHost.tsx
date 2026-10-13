@@ -1,13 +1,12 @@
 import { Button, Egg } from "@eggie/ui";
 import { StatusScreen } from "./StatusScreen";
+import { isLocalHost } from "../site/SiteContext";
 import s from "./StatusScreen.module.css";
 
-// The API refused this host, so /api/health can't say whether this is a site;
-// the page's own address can.
-const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
-
 export function WrongHost({ onRetry }: { onRetry: () => void }) {
-  const local = LOCAL_HOSTS.includes(window.location.hostname);
+  // The API refused this host, so /api/health can't say whether this is a site;
+  // the page's own address can.
+  const local = isLocalHost(window.location.hostname);
   return (
     <StatusScreen
       art={<Egg tone="cold" size={96} />}

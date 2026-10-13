@@ -288,3 +288,13 @@ def test_a_code_over_256_characters_is_rejected_as_invalid_request(env):
     resp = browser.post("/api/session", json={"code": "x" * 257})
     assert (resp.status_code, resp.json()["error"]["code"]) == (422, "invalid_request")
     assert cloud.calls == []
+
+
+def test_a_site_redeems_at_most_ten_unknown_codes_a_minute_with_the_service(env):
+    cloud = FakeCloud(redeem_instance_handoff=[CloudError("handoff_invalid", "no", 404)] * 11)
+    _, browser, _ = _site_app(env, cloud)
+    for n in range(10):
+        assert browser.post("/api/session", json={"code": f"guess-{n}"}).status_code == 401
+    resp = browser.post("/api/session", json={"code": "guess-10"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert len(cloud.calls) == 10

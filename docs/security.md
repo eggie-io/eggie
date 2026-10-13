@@ -86,7 +86,8 @@ root-equivalent — plus:
   service minted for this instance's owner and the instance redeemed with the service
   (`services/site.py`); the cookie is `Secure`. The console and the projects sit on different
   registered domains (`eggie.io` / `eggie.space`), so a project cannot set a cookie the console's
-  origin would read.
+  origin would read. The instance redeems at most ten codes a minute with the service; the
+  service owns single use and expiry.
 - Projects are public with whatever auth they have themselves, like public URLs locally.
 - The bearer API binds to loopback (`EGGIE_API_BIND`). Project `ports:` are still published on
   all interfaces; only the firewall blocks them.

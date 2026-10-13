@@ -91,5 +91,5 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | S3 | Add a project and start it | Its URL is `https://<id>.<site domain>` and answers with the same certificate | |
 | S4 | SSH in as the login account; `eggie status` | The CLI works over loopback; the agents card in the console shows the site host, port 22, no key file | |
 | S5 | Reboot the droplet | The stack comes back on 443; the boot update moves `runtime.version` if a newer release exists; projects resume | |
-| S6 | Renew the certificate on the service side; wait a day or restart the api container | `site.not_after` moves; Traefik serves the new certificate without a restart | |
+| S6 | Renew the certificate on the service side; wait a day or restart the api container | `/opt/eggie/tls/current` points at a new directory; Traefik serves the new certificate without a restart | |
 | S7 | `curl http://<ip>:39099/health` and `:39080` from outside | Both refused by the firewall; `curl 127.0.0.1:39099/health` inside works | |

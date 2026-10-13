@@ -161,9 +161,7 @@ install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
 if (( SITE )); then
   install -d -m 2770 -o root -g docker /opt/eggie/tls
   install -m 644 "$INSTALL_DIR/site/tls.yml" /opt/eggie/tls/tls.yml
-  if [[ -f /opt/eggie/tls/site.key ]]; then
-    chmod 600 /opt/eggie/tls/site.key
-  fi
+  chmod 600 /opt/eggie/tls/*/site.key 2>/dev/null || true
 fi
 
 # 7b. site mode: project containers must not read the droplet's metadata service.

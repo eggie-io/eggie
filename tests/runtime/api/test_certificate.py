@@ -35,15 +35,17 @@ def make(tmp_path, cloud, *, signed_in=True):
     return cert, clock
 
 
-def test_a_missing_certificate_is_fetched_and_written_with_a_private_key(tmp_path):
+def test_a_first_install_puts_the_pair_in_one_directory_behind_current(tmp_path):
     cloud = FakeCloud(instance_certificate=[issued()])
     cert, _ = make(tmp_path, cloud)
     cert.refresh()
-    assert cert.cert_path.read_text() == "CERT-2027-01-11T10:00:00Z"
-    assert cert.key_path.read_text() == "KEY-2027-01-11T10:00:00Z"
-    assert stat.S_IMODE(os.stat(cert.key_path).st_mode) == 0o600
+    tls = tmp_path / "tls"
+    assert os.readlink(tls / "current") == "1799661600"
+    assert (tls / "1799661600" / "site.crt").read_text() == "CERT-2027-01-11T10:00:00Z"
+    assert (tls / "1799661600" / "site.key").read_text() == "KEY-2027-01-11T10:00:00Z"
+    assert stat.S_IMODE(os.stat(tls / "1799661600" / "site.key").st_mode) == 0o600
     assert cert.installed_not_after() == 1799661600.0
-    assert not list(cert.cert_path.parent.glob("*.tmp"))
+    assert sorted(p.name for p in tls.iterdir()) == ["1799661600", "current"]
 
 
 def test_an_installed_certificate_is_rechecked_once_a_day(tmp_path):
@@ -58,18 +60,32 @@ def test_an_installed_certificate_is_rechecked_once_a_day(tmp_path):
     assert len(cloud.calls) == 2
 
 
-def test_the_same_expiry_leaves_the_files_alone_a_later_one_replaces_them(tmp_path):
+def test_an_earlier_or_equal_expiry_changes_nothing(tmp_path):
     cloud = FakeCloud(instance_certificate=[
-        issued(), issued(certificate="CERT-rewritten"), issued("2027-03-01T00:00:00Z")])
+        issued(), issued(certificate="CERT-rewritten"),
+        issued("2026-12-01T00:00:00Z")])
+    cert, clock = make(tmp_path, cloud)
+    cert.refresh()
+    for _ in range(2):
+        clock.now += CHECK_EVERY + 1
+        cert.refresh()
+        assert os.readlink(tmp_path / "tls" / "current") == "1799661600"
+        assert cert.cert_path.read_text() == "CERT-2027-01-11T10:00:00Z"
+    assert len(cloud.calls) == 3
+
+
+def test_a_renewal_swaps_certificate_and_key_together_and_drops_the_old_pair(tmp_path):
+    cloud = FakeCloud(instance_certificate=[issued(), issued("2027-03-01T00:00:00Z")])
     cert, clock = make(tmp_path, cloud)
     cert.refresh()
     clock.now += CHECK_EVERY + 1
     cert.refresh()
-    assert cert.cert_path.read_text() == "CERT-2027-01-11T10:00:00Z"
-    clock.now += CHECK_EVERY + 1
-    cert.refresh()
-    assert cert.cert_path.read_text() == "CERT-2027-03-01T00:00:00Z"
-    assert cert.key_path.read_text() == "KEY-2027-03-01T00:00:00Z"
+    tls = tmp_path / "tls"
+    live = tls / os.readlink(tls / "current")
+    assert (live / "site.crt").read_text() == "CERT-2027-03-01T00:00:00Z"
+    assert (live / "site.key").read_text() == "KEY-2027-03-01T00:00:00Z"
+    assert not (tls / "1799661600").exists()
+    assert sorted(p.name for p in tls.iterdir()) == [live.name, "current"]
 
 
 def test_a_failed_fetch_is_retried_on_the_next_pass(tmp_path):

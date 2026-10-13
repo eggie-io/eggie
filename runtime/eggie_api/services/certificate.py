@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,18 +22,20 @@ def _epoch(value: str) -> float:
 
 
 def _write(path: Path, text: str, mode: int) -> None:
-    # Temp name then rename: Traefik watches the directory and must never
-    # read a half-written file.
-    tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     with os.fdopen(fd, "w") as f:
         f.write(text)
-    os.replace(tmp, path)
 
 
 class Certificate:
     """The site's TLS certificate. The service issues and renews it; this
-    keeps the files Traefik reads current, as one pass of the sync loop."""
+    keeps the files Traefik reads current, as one pass of the sync loop.
+
+    Each pair lives in `<dir>/<not_after>/` and `<dir>/current` links to the
+    live one. Traefik watches `<dir>` and reloads on every event there:
+    renaming key and certificate one after the other would have it load a
+    mismatched pair, while swapping the link is a single event, and files
+    written inside a subdirectory raise none."""
 
     def __init__(self, directory: Path, account, cloud, *, names: tuple[str, ...],
                  clock=time.time):
@@ -44,20 +47,20 @@ class Certificate:
         self._checked_at: float | None = None
 
     @property
+    def _current(self) -> Path:
+        return self._dir / "current"
+
+    @property
     def cert_path(self) -> Path:
-        return self._dir / "site.crt"
+        return self._current / "site.crt"
 
     @property
     def key_path(self) -> Path:
-        return self._dir / "site.key"
-
-    @property
-    def _expiry_path(self) -> Path:
-        return self._dir / "site.not_after"
+        return self._current / "site.key"
 
     def installed_not_after(self) -> float | None:
         try:
-            return float(self._expiry_path.read_text())
+            return float(int(os.readlink(self._current)))
         except (OSError, ValueError):
             return None
 
@@ -92,12 +95,26 @@ class Certificate:
         missing = self._names - set(out["names"])
         if missing:
             raise ValueError(f"it does not cover {sorted(missing)}")
-        not_after = _epoch(out["not_after"])
+        stamp = str(int(_epoch(out["not_after"])))
         current = self.installed_not_after()
-        if have and current is not None and not_after <= current:
+        # Compared as the whole-second stamp: a later expiry inside the same
+        # second would otherwise delete the live directory to rewrite it.
+        if have and current is not None and int(stamp) <= current:
             return
-        self._dir.mkdir(parents=True, exist_ok=True)
-        _write(self.key_path, private_key, 0o600)
-        _write(self.cert_path, certificate, 0o644)
-        _write(self._expiry_path, repr(not_after), 0o644)
+        # No .yml/.yaml/.toml suffix on anything staged here: Traefik would
+        # parse it as dynamic config.
+        staging = self._dir / f"{stamp}.tmp"
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True)
+        _write(staging / "site.key", private_key, 0o600)
+        _write(staging / "site.crt", certificate, 0o644)
+        shutil.rmtree(self._dir / stamp, ignore_errors=True)
+        os.replace(staging, self._dir / stamp)
+        link = self._dir / "current.tmp"
+        link.unlink(missing_ok=True)
+        os.symlink(stamp, link)
+        os.replace(link, self._current)
+        for entry in self._dir.iterdir():
+            if entry.name != stamp and entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
         log.info("site certificate installed, valid until %s", out["not_after"])

@@ -96,7 +96,8 @@ root-equivalent — plus:
 - A snapshot made with `snapshot-prep.sh` holds no token, database or key.
 - Containers cannot reach the cloud metadata service (`169.254.169.254`): it serves the user
   data that seeded the account token, and a project's code would otherwise read it. A droplet-only
-  `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts.
+  `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts. It covers bridged
+  containers only; a project with `network_mode: host` sits on the host's network and is outside it, as it is outside every container boundary already.
 
 ## Before adding a way in
 

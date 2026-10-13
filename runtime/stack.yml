@@ -34,8 +34,9 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"
+    # EGGIE_EDGE_BIND: a site keeps this on 127.0.0.1; the probe entrypoint must not face the internet.
     ports:
-      - "${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"
+      - "${EGGIE_EDGE_BIND:-0.0.0.0}:${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:

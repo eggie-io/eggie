@@ -52,6 +52,14 @@ def test_the_api_service_binds_the_port_it_is_published_on():
     assert "EGGIE_API_PORT=${EGGIE_API_PORT:-39099}" in api["environment"]
 
 
+def test_the_edge_port_bind_address_is_a_variable_so_a_site_can_keep_it_on_loopback():
+    # The site's plain-HTTP probe entrypoint answers on this port; published on
+    # all interfaces it would bypass TLS for every project host.
+    traefik = yaml.safe_load(_text())["services"]["traefik"]
+    assert traefik["ports"] == ["${EGGIE_EDGE_BIND:-0.0.0.0}:${EGGIE_EDGE_PORT:-39080}:"
+                                "${EGGIE_EDGE_PORT:-39080}"]
+
+
 def test_stack_yml_parses_and_has_no_version_key():
     doc = yaml.safe_load(_text())
     assert "version" not in doc
@@ -199,7 +207,7 @@ def test_the_probe_port_stays_reachable_on_a_site_and_unpublished():
 def test_the_merged_site_stack_publishes_only_the_edge_ports_to_the_world(tmp_path):
     env = tmp_path / ".env"
     env.write_text("EGGIE_DOCKER_GID=999\nEGGIE_VERSION=0.0.0\nEGGIE_SITE_HOST=foo.eggie.io\n"
-                   "EGGIE_DOMAIN=foo.eggie.space\nEGGIE_API_BIND=127.0.0.1\n")
+                   "EGGIE_DOMAIN=foo.eggie.space\nEGGIE_API_BIND=127.0.0.1\nEGGIE_EDGE_BIND=127.0.0.1\n")
     result = subprocess.run(
         ["docker", "compose", "--env-file", str(env), "-f", str(STACK), "-f", str(SITE_STACK),
          "config", "--format", "json"], capture_output=True, text=True)
@@ -208,6 +216,7 @@ def test_the_merged_site_stack_publishes_only_the_edge_ports_to_the_world(tmp_pa
     services = json.loads(result.stdout)["services"]
     published = {(p.get("host_ip", ""), p["published"]) for p in services["traefik"]["ports"]}
     assert {("", "80"), ("", "443")} <= published
+    assert ("", "39080") not in published and ("0.0.0.0", "39080") not in published
     (api_port,) = services["api"]["ports"]
     assert api_port["host_ip"] == "127.0.0.1"
     rule = services["web"]["labels"]["traefik.http.routers.eggie-web.rule"]

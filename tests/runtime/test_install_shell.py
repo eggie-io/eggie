@@ -466,6 +466,9 @@ def test_install_appends_the_site_lines_after_writing_env():
     write = _index_of(f"EGGIE_VERSION=%s")
     append = _index_of("EGGIE_API_BIND=127.0.0.1")
     assert write < append < _index_of(" up -d")
+    (line,) = [l for l in commands if "EGGIE_DOMAIN=%s" in l]
+    assert "EGGIE_EDGE_BIND=127.0.0.1" in line, "the plain-HTTP probe port must stay on loopback on a site"
+    assert sum("EGGIE_EDGE_BIND" in l for l in commands) == 1, "a local install must not write it"
     assert any("EGGIE_DOMAIN=%s" in l and ">> " in l for l in commands), \
         "the site domain becomes EGGIE_DOMAIN by appending, never by rewriting"
 

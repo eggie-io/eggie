@@ -122,7 +122,7 @@ printf 'EGGIE_DOCKER_GID=%s\nEGGIE_VERSION=%s\n' "$DOCKER_GID" "$IMAGE_VERSION" 
 if (( SITE )); then
   # The console answers on the site host, projects live under the site
   # domain, and the bearer port stays off the public interface.
-  printf 'EGGIE_SITE_HOST=%s\nEGGIE_DOMAIN=%s\nEGGIE_API_BIND=127.0.0.1\n' "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" >> /opt/eggie/.env
+  printf 'EGGIE_SITE_HOST=%s\nEGGIE_DOMAIN=%s\nEGGIE_API_BIND=127.0.0.1\nEGGIE_EDGE_BIND=127.0.0.1\n' "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" >> /opt/eggie/.env
 fi
 
 # 6. the shared secret between the host and the API.
@@ -170,6 +170,7 @@ if (( SITE )); then
   systemctl daemon-reload
   systemctl enable --now eggie-metadata-guard.service
 fi
+
 # A seed the service left before first boot; the API (docker group) imports
 # and deletes it, so it needs the token's permission model, not root's.
 if (( SITE )) && [[ -f /opt/eggie/account.json ]]; then

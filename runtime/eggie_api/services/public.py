@@ -36,6 +36,7 @@ MESSAGES = {
                              "Try again in a few minutes.",
     "public_urls_disabled": "Public addresses are switched off on the Eggie "
                             "service right now.",
+    "not_available": "Every project on this server already has a public address.",
     "validation_error": "The Eggie service couldn't accept this project's addresses.",
 }
 
@@ -89,6 +90,7 @@ class Public:
                  cloud_projects: CloudProjectRepo, account, cloud, client: TunnelClient,
                  token_path: Path, origin: str,
                  hosts_for: Callable[[str], list[dict]],
+                 site: bool = False,
                  clock=time.time, spawn=_daemon):
         self._projects = projects
         self._cloud_projects = cloud_projects
@@ -98,6 +100,7 @@ class Public:
         self._token_path = Path(token_path)
         self._origin = origin
         self._hosts_for = hosts_for
+        self._site = site
         self._clock = clock
         self._spawn = spawn
         # Guards the dicts below. _client_lock may take it, never the reverse.
@@ -112,6 +115,8 @@ class Public:
     # --- reading ---------------------------------------------------------
 
     def _blocked(self, local_id: str) -> str | None:
+        if self._site:
+            return "not_available"
         if not self._account.signed_in:
             return "signed_out"
         if local_id not in self._cloud_projects.mapping():

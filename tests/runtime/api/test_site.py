@@ -21,3 +21,11 @@ def test_project_urls_on_a_site_are_https_under_the_site_domain(site_env):
     _write_compose(site_env, "blog", COMPOSE_ONE_WEB)
     project = site_env.client.get("/projects/blog").json()
     assert project["urls"] == ["https://blog.foo.eggie.space"]
+
+
+def test_health_has_no_site_locally(env):
+    assert env.client.get("/health").json()["site"] is None
+
+
+def test_health_names_the_site(site_env):
+    assert site_env.client.get("/health").json()["site"] == "foo.eggie.io"

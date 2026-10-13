@@ -38,3 +38,13 @@ def test_an_unknown_vm_kind_is_not_passed_through(tmp_path):
 def test_the_route_is_reachable_on_the_token_mount(env):
     env.config.connect_path.write_text(json.dumps({"vm": "wsl", "user": "ada"}))
     assert env.client.get("/connect").json() == {"vm": "wsl", "ssh": None}
+
+
+def test_a_site_tells_agents_its_host_on_the_standard_ssh_port_with_no_key_file(tmp_path):
+    facts = connect.facts(_write(tmp_path, {"vm": "site", "user": "ada"}), site_host="foo.eggie.io")
+    assert facts == {"vm": "site", "ssh": {"host": "foo.eggie.io", "port": 22,
+                                           "user": "ada", "key_file": None}}
+
+
+def test_a_site_record_without_a_site_host_has_no_ssh_facts(tmp_path):
+    assert connect.facts(_write(tmp_path, {"vm": "site", "user": "ada"})) == {"vm": "site", "ssh": None}

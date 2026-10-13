@@ -84,7 +84,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         client=TunnelClient(runner, config.stack_file),
         token_path=config.tunnel_token_path,
         origin=f"http://{config.traefik_host}:{config.edge_port}",
-        hosts_for=loader.public_hosts)
+        hosts_for=loader.public_hosts,
+        site=config.site_host is not None)
     site = SiteSignIn(sessions, account, cloud, remote=config.site_host is not None)
     account.on_forget = public.forget_local
     # Looked up at sign-out, not bound now: a public double without

@@ -191,8 +191,9 @@ id, so nothing new is needed for them.
 keep them. Both or neither must be set. `install.sh` sources `site.env` and, in site
 mode:
 
-- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>` and `EGGIE_API_BIND=127.0.0.1`
-  to `/opt/eggie/.env` (written fresh on every run, as today);
+- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1`
+  and `EGGIE_EDGE_BIND=127.0.0.1` to `/opt/eggie/.env` (written fresh on every run, as
+  today);
 - runs every compose command for the stack with
   `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
 - installs `/opt/eggie/tls/tls.yml`, the Traefik dynamic config naming
@@ -240,8 +241,9 @@ Replaces Traefik's `command` and adds ports and a volume:
 - entrypoint `probe` on `:${EGGIE_EDGE_PORT}`, plain HTTP and unpublished: the API's
   readiness probe (`infra/health.py`) dials `traefik:<edge port>` over the `edge`
   network, and project routers name no entrypoint so they answer on it;
-- `ports: ["80:80", "443:443"]` (appended to the base list; the base `39080` mapping
-  then forwards to nothing and is firewalled anyway);
+- `ports: ["80:80", "443:443"]`, appended to the base list; compose merges `ports`, so
+  the base `39080` mapping stays and `EGGIE_EDGE_BIND=127.0.0.1` pins it to loopback,
+  where the probe entrypoint is reachable only by the server's own accounts;
 - `/opt/eggie/tls:/opt/eggie/tls:ro`.
 
 Until the certificate files exist Traefik serves its default self-signed certificate;

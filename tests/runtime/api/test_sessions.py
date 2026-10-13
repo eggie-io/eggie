@@ -185,3 +185,22 @@ def test_signing_out_ends_the_session(env):
     assert browser.delete("/api/session").status_code == 200
     resp = browser.get("/api/projects")
     assert resp.json()["error"]["code"] == "not_signed_in"
+
+
+from tests.runtime.api.conftest import SITE_BROWSER, SITE_ORIGIN
+
+
+def _cookie_header(env, headers):
+    code = env.client.post("/sessions/handoff").json()["code"]
+    resp = TestClient(env.app, headers=headers).post("/api/session", json={"code": code})
+    assert resp.status_code == 200
+    return resp.headers["set-cookie"]
+
+
+def test_the_cookie_is_not_secure_locally(env):
+    # The local console is plain http: a Secure cookie would never come back.
+    assert "Secure" not in _cookie_header(env, {**BROWSER, **ORIGIN})
+
+
+def test_the_cookie_is_secure_on_a_site(site_env):
+    assert "Secure" in _cookie_header(site_env, {**SITE_BROWSER, **SITE_ORIGIN})

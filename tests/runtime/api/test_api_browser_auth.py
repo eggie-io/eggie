@@ -83,3 +83,30 @@ def test_every_api_route_requires_a_session_except_the_open_ones(env):
             assert resp.status_code == 401, (
                 f"{method} {concrete} answered {resp.status_code} without a session")
     assert checked >= 15, "the sweep found fewer routes than this app actually has"
+
+
+from tests.runtime.api.conftest import SITE_BROWSER, SITE_ORIGIN
+
+
+def test_a_site_accepts_its_own_host_without_a_port(site_env):
+    # On 443 the browser sends no port in Host.
+    resp = TestClient(site_env.app, headers=SITE_BROWSER).get("/api/health")
+    assert resp.status_code == 200
+
+
+def test_a_site_accepts_writes_from_its_https_origin(site_env):
+    resp = TestClient(site_env.app, headers={**SITE_BROWSER, **SITE_ORIGIN}).post(
+        "/api/session", json={"code": "nope"})
+    # Past the host and origin checks: the code itself is what's refused.
+    assert resp.json()["error"]["code"] == "handoff_invalid"
+
+
+def test_a_site_still_accepts_localhost_and_refuses_other_hosts(site_env):
+    assert _browser(site_env).get("/api/health").status_code == 200
+    resp = _browser(site_env, Host="bar.foo.eggie.space").get("/api/health")
+    assert resp.json()["error"]["code"] == "forbidden_host"
+
+
+def test_the_site_host_is_not_accepted_locally(env):
+    resp = TestClient(env.app, headers=SITE_BROWSER).get("/api/health")
+    assert resp.json()["error"]["code"] == "forbidden_host"

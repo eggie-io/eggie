@@ -23,11 +23,22 @@ def read_token(path: Path) -> str:
         return ""
 
 
+def cookie_options(config: ApiConfig) -> dict:
+    # Secure only on a site: the local console is plain http on loopback.
+    return {"max_age": SESSION_TTL, "httponly": True, "samesite": "strict",
+            "path": "/api", "secure": config.site_host is not None}
+
+
 def install(app: FastAPI, *, token: str, sessions: Sessions,
             config: ApiConfig) -> None:
     allowed_hosts = {f"localhost:{config.edge_port}",
                      f"127.0.0.1:{config.edge_port}"}
     allowed_origins = {f"http://{host}" for host in allowed_hosts}
+    if config.site_host:
+        # The site's edge is 443, so Host carries no port.
+        allowed_hosts.add(config.site_host)
+        allowed_origins.add(f"https://{config.site_host}")
+    cookie = cookie_options(config)
     # Reachable before sign-in: checking the API version, and trading a
     # handoff code for a cookie. GET/DELETE /api/session must still go
     # through the session check below -- only the exchange itself is open.
@@ -70,9 +81,7 @@ def install(app: FastAPI, *, token: str, sessions: Sessions,
             if verdict == "ok":
                 response = await call_next(request)
                 if verdict.extended:
-                    response.set_cookie(COOKIE, session_id, max_age=SESSION_TTL,
-                                        httponly=True, samesite="strict",
-                                        path="/api")
+                    response.set_cookie(COOKIE, session_id, **cookie)
                 return response
             if verdict == "expired":
                 return error_body("session_expired", "your sign-in ran out; open "

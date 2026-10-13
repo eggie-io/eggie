@@ -6,7 +6,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ...errors import Unauthorized
-from ...services.sessions import COOKIE, HANDOFF_TTL, SESSION_TTL
+from ...services.sessions import COOKIE, HANDOFF_TTL
+from ..auth import cookie_options
 from ..schemas import Handoff
 
 if TYPE_CHECKING:
@@ -33,8 +34,7 @@ def build(s: Services) -> APIRouter:
             raise Unauthorized("handoff_invalid", "that sign-in link has already "
                             "been used or has run out; open Eggie from the "
                             "desktop app again")
-        response.set_cookie(COOKIE, session_id, max_age=SESSION_TTL,
-                            httponly=True, samesite="strict", path="/api")
+        response.set_cookie(COOKIE, session_id, **cookie_options(s.config))
         return {"signed_in": True}
 
     @router.get("/api/session")

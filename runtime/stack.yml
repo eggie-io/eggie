@@ -65,6 +65,7 @@ services:
       - EGGIE_DOMAIN=${EGGIE_DOMAIN:-local.eggie.space}
       - EGGIE_EDGE_PORT=${EGGIE_EDGE_PORT:-39080}
       - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
+      - EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same path on both sides, not negotiable: the api service parses

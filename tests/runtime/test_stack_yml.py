@@ -148,6 +148,12 @@ def test_the_api_receives_the_github_client_id_with_the_same_default():
             in api["environment"])
 
 
+def test_the_api_receives_the_site_host():
+    # .env interpolates the stack but is never injected into containers.
+    api = _services()["api"]
+    assert "EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}" in api["environment"]
+
+
 SITE_STACK = STACK.with_name("stack.site.yml")
 
 
@@ -198,3 +204,4 @@ def test_the_merged_site_stack_publishes_only_the_edge_ports_to_the_world(tmp_pa
     assert api_port["host_ip"] == "127.0.0.1"
     rule = services["web"]["labels"]["traefik.http.routers.eggie-web.rule"]
     assert "Host(`foo.eggie.io`)" in rule
+    assert services["api"]["environment"]["EGGIE_SITE_HOST"] == "foo.eggie.io"

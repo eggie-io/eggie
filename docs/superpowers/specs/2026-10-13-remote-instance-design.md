@@ -202,6 +202,8 @@ Account seeding is the API's job, not the installer's (section 6.3).
 - The api service's port mapping becomes
   `"${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"`.
   WSL2 keeps the all-interfaces default; site sets loopback.
+- The api service's `environment` also carries `EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}`; `.env`
+  interpolates the stack but is not injected into containers.
 
 ### 5.2 `stack.site.yml` (override, next to `stack.debug.yml`)
 

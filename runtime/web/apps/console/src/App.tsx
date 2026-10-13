@@ -21,25 +21,21 @@ import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
 import { SiteContext } from "./site/SiteContext";
-import { fetchSite } from "./site/site";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
-  const [site, setSite] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    void fetchSite((input, init) => fetch(input, init)).then(setSite);
-  }, []);
   return (
     <DesktopHome.Provider value={home}>
-      <SiteContext.Provider value={site}>
-        <Screens handoff={handoff} />
-      </SiteContext.Provider>
+      <Screens handoff={handoff} />
     </DesktopHome.Provider>
   );
 }
 
 function Screens({ handoff }: { handoff: string | null }) {
   const [result, setResult] = useState<BootResult | null>(null);
+  // Only a boot result that read /api/health changes it; the others (a lost
+  // session) keep the last known value.
+  const [site, setSite] = useState<string | null | undefined>(undefined);
   const pendingHandoff = useRef(handoff);
   const running = useRef(false);
 
@@ -51,7 +47,9 @@ function Screens({ handoff }: { handoff: string | null }) {
     const code = pendingHandoff.current;
     pendingHandoff.current = null;
     try {
-      setResult(await boot({ fetch: (input, init) => fetch(input, init), handoff: code }));
+      const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
+      if (next.site !== undefined) setSite(next.site);
+      setResult(next);
     } finally {
       running.current = false;
     }
@@ -67,31 +65,38 @@ function Screens({ handoff }: { handoff: string | null }) {
 
   const needAccount = useCallback(() => setResult({ kind: "needsAccount" }), []);
 
-  if (result === null) return <Shell />;
+  return <SiteContext.Provider value={site}>{screen()}</SiteContext.Provider>;
 
-  switch (result.kind) {
-    case "signedIn":
-      return (
-        <QueryClientProvider client={queryClient}>
-          <QueueProvider onSessionLost={(reason) => setResult({ kind: "signedOut", reason })}>
-            <BrowserRouter>
-              <OnboardingProvider>
-                <Console onSignedOut={needAccount} />
-              </OnboardingProvider>
-            </BrowserRouter>
-          </QueueProvider>
-        </QueryClientProvider>
-      );
-    case "needsAccount":
-      return <SignIn onSignedIn={run} onSessionLost={(reason) => setResult({ kind: "signedOut", reason })} />;
-    case "signedOut":
-      return <SignedOut reason={result.reason} onRetry={run} />;
-    case "needsUpdate":
-      return <NeedsUpdate apiVersion={result.apiVersion} onRetry={run} />;
-    case "notAnswering":
-      return <NotAnswering onRetry={run} />;
-    case "wrongHost":
-      return <WrongHost onRetry={run} />;
+  function screen() {
+    if (result === null) return <Shell />;
+    return renderResult(result);
+  }
+
+  function renderResult(result: BootResult) {
+    switch (result.kind) {
+      case "signedIn":
+        return (
+          <QueryClientProvider client={queryClient}>
+            <QueueProvider onSessionLost={(reason) => setResult({ kind: "signedOut", reason })}>
+              <BrowserRouter>
+                <OnboardingProvider>
+                  <Console onSignedOut={needAccount} />
+                </OnboardingProvider>
+              </BrowserRouter>
+            </QueueProvider>
+          </QueryClientProvider>
+        );
+      case "needsAccount":
+        return <SignIn onSignedIn={run} onSessionLost={(reason) => setResult({ kind: "signedOut", reason })} />;
+      case "signedOut":
+        return <SignedOut reason={result.reason} onRetry={run} />;
+      case "needsUpdate":
+        return <NeedsUpdate apiVersion={result.apiVersion} onRetry={run} />;
+      case "notAnswering":
+        return <NotAnswering onRetry={run} />;
+      case "wrongHost":
+        return <WrongHost onRetry={run} />;
+    }
   }
 }
 

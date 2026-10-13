@@ -569,3 +569,13 @@ def test_on_a_site_public_urls_are_unavailable_because_every_project_already_has
     with pytest.raises(PublicUnavailable) as caught:
         public.enable("blog")
     assert caught.value.code == "not_available"
+
+
+def test_on_a_site_reconcile_neither_asks_the_service_nor_touches_the_client(tmp_path):
+    cloud = FakeCloud(active_public_url=[CloudError("not_found", "none", 404)])
+    public, _, runner, _ = make(tmp_path, cloud, site=True)
+    runner.up = True
+
+    public.reconcile()
+
+    assert cloud.calls == [] and runner.calls == []

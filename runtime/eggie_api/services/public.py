@@ -326,7 +326,9 @@ class Public:
     # --- keeping it true -------------------------------------------------
 
     def reconcile(self) -> None:
-        if not self._account.signed_in:
+        # A site has no tunnel: nothing to reconcile, and no reason to poll
+        # the service's public-URL state with this instance's token.
+        if self._site or not self._account.signed_in:
             return
         with self._lock:
             pending = set(self._releasing)

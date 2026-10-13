@@ -30,7 +30,7 @@ Everything here lives in `runtime/`. No host change, no host release, no desktop
 | 6 | **One certificate per instance**, three names: `foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`. Issued by the **service** via DNS-01 (Route53 + Cloudflare), fetched by the instance. Never a zone-wide wildcard on a server. | A `*.eggie.io` key on every customer server could impersonate `app.eggie.io`. Per-host issue would hit Let's Encrypt's 50 certificates/week/registered domain; one per instance stays within it. DNS tokens must not live on customer servers. |
 | 7 | Every project host is one label under the project domain: `web--bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. `--` rather than `-` because slugs may contain single hyphens, so `web-bar` could be a project of its own. A slug never contains `--` itself (every run outside `[a-z0-9]` collapses to one hyphen) and subdomains are slugged the same way, so `api--blog` cannot collide with project `blog`'s `api` service. |
 | 8 | Site mode is switched on by two installer variables, `EGGIE_SITE_HOST` (console) and `EGGIE_SITE_DOMAIN` (projects). The instance pulls everything else (certificate, identity) from the service once signed in. | Smallest cloud-init payload; first issue and renewal of the certificate are one code path. |
-| 9 | The instance boots signed in: the service seeds the account token pair through cloud-init. | Reuses the existing account, refresh and sync code unchanged. |
+| 9 | The instance boots signed in: the service seeds the account token pair through cloud-init. | Reuses the existing account, refresh and sync code; the only additions are the one-time import with first-boot rotation and the *managed* guard (6.3). |
 | 10 | The browser signs in with a service-minted handoff code that the instance redeems **outbound** with its account token. | Matches how the VM already talks to the service (`infra/cloud.py`); no inbound credential, no second auth scheme on the instance (`docs/security.md`). The console's `#handoff` boot path is reused as is. |
 | 11 | The bearer API port is bound to loopback on an instance. | Nothing outside the server may reach `/` routes; the guest CLI dials loopback and keeps working. |
 | 12 | The public URL (tunnel) feature is refused in site mode; the tunnel profile is never started. | Every project on an instance already has a public address. |
@@ -61,7 +61,8 @@ bash /opt/eggie/runtime/install/snapshot-prep.sh
 ```
 
    It stops the stack and removes the API token, `state.db`, `connect.json`,
-   `site.env`, the `tls` files and cloud-init's instance state. It also removes root's
+   `site.env`, `account.json`, the `tls`, `tunnel`, `uploads`, `github`, `projects` and
+   `agent-status` trees and cloud-init's instance state. It also removes root's
    `authorized_keys` and shell history and resets the machine id. Then power off and take
    the snapshot.
 
@@ -228,8 +229,9 @@ Account seeding is the API's job, not the installer's (section 6.3).
 - Console and `/api` router rules become
   ``Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)``.
 - The api service's port mapping becomes
-  `"${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"`.
-  WSL2 keeps the all-interfaces default; site sets loopback.
+  `"${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"`,
+  and traefik's `"${EGGIE_EDGE_BIND:-0.0.0.0}:${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"`.
+  WSL2 keeps the all-interfaces default; site sets both to loopback.
 - The api service's `environment` also carries `EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}`; `.env`
   interpolates the stack but is not injected into containers.
 
@@ -309,7 +311,8 @@ is a symlink to the newest. Traefik watches `/opt/eggie/tls` and inotify reports
 direct children, so writing inside a new directory causes no reload; replacing the
 symlink is one event and Traefik loads key and certificate together, never a
 mismatched pair. The installed expiry is the link target's name. A newer `not_after`
-installs, an older or equal one is ignored, old directories are removed after the swap.
+installs, an older or equal one is ignored. Old directories are removed at the start of
+the next check, never right after a swap Traefik may still be reloading.
 Failures are logged and keep the current files. Only active in site mode.
 
 ### 6.6 Surface
@@ -368,7 +371,7 @@ Only where a wrong answer is plausible:
 - `test_account.py`: seed imported once and file deleted; ignored when signed in;
   malformed file leaves the row untouched.
 - new `test_certificate.py`: fetch on missing, daily re-check, replace only on a later
-  `not_after`, atomic write, failure keeps files.
+  `not_after`, key and certificate live together behind `current`, failure keeps files.
 - loader: `local_url` is `https://<host>` without a port in site mode.
 - `test_get_sh.py` / `test_install_shell.py` (real bash, fakes on PATH): `site.env`
   survives a repair, one site variable without the other is refused, the compose

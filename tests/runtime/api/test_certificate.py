@@ -96,6 +96,7 @@ def test_a_certificate_that_misses_a_name_is_refused(tmp_path):
     cloud = FakeCloud(instance_certificate=[issued(names=["foo.eggie.io", "foo.eggie.space"])])
     cert, _ = make(tmp_path, cloud)
     cert.refresh()
+    assert len(cloud.calls) == 1
     assert not cert.cert_path.exists() and not cert.key_path.exists()
 
 
@@ -104,3 +105,20 @@ def test_nothing_is_fetched_while_not_signed_in(tmp_path):
     cert, _ = make(tmp_path, cloud, signed_in=False)
     cert.refresh()
     assert cloud.calls == []
+
+
+def test_an_incomplete_payload_leaves_the_pair_untouched_and_is_retried(tmp_path):
+    later = issued("2027-03-01T00:00:00Z")
+    no_cert = {k: v for k, v in later.items() if k != "certificate"}
+    cloud = FakeCloud(instance_certificate=[
+        issued(), no_cert, {**later, "certificate": None}, later])
+    cert, clock = make(tmp_path, cloud)
+    cert.refresh()
+    before = (cert.cert_path.read_bytes(), cert.key_path.read_bytes())
+    clock.now += CHECK_EVERY + 1
+    for expected_calls in (2, 3):
+        cert.refresh()
+        assert (cert.cert_path.read_bytes(), cert.key_path.read_bytes()) == before
+        assert len(cloud.calls) == expected_calls
+    cert.refresh()
+    assert cert.key_path.read_text() == "KEY-2027-03-01T00:00:00Z"

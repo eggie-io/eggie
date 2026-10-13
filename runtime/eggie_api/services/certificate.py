@@ -78,13 +78,17 @@ class Certificate:
         except (CloudError, CloudUnavailable) as e:
             log.warning("could not fetch the site certificate: %s", e)
             return
-        self._checked_at = now
         try:
             self._install(out, have)
+            self._checked_at = now
         except (KeyError, TypeError, ValueError, OSError) as e:
             log.warning("the service's certificate was not installed: %s", e)
 
     def _install(self, out: dict, have: bool) -> None:
+        certificate, private_key = out["certificate"], out["private_key"]
+        for value in (certificate, private_key, out["not_after"]):
+            if not isinstance(value, str) or not value:
+                raise TypeError("the payload is incomplete")
         missing = self._names - set(out["names"])
         if missing:
             raise ValueError(f"it does not cover {sorted(missing)}")
@@ -93,7 +97,7 @@ class Certificate:
         if have and current is not None and not_after <= current:
             return
         self._dir.mkdir(parents=True, exist_ok=True)
-        _write(self.key_path, out["private_key"], 0o600)
-        _write(self.cert_path, out["certificate"], 0o644)
+        _write(self.key_path, private_key, 0o600)
+        _write(self.cert_path, certificate, 0o644)
         _write(self._expiry_path, repr(not_after), 0o644)
         log.info("site certificate installed, valid until %s", out["not_after"])

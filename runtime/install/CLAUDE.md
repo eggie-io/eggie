@@ -8,7 +8,8 @@ Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test
 
 Hosts fetch it from **`main`**, not from a tag, so an edit here reaches every installed host at once.
 Keep backward compatible: its env vars (`EGGIE_RUNTIME_REPO`, `EGGIE_RUNTIME_REF`,
-`EGGIE_RUNTIME_REPAIR`, `EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`), the marker path
+`EGGIE_RUNTIME_REPAIR`, `EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`, `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (site mode, both or neither,
+persisted to `/opt/eggie/site.env`)), the marker path
 `/opt/eggie/runtime.version`, and its exit semantics.
 
 Flow: `resolve_ref` (explicit `EGGIE_RUNTIME_REF` → installed ref on repair → highest `runtime-v*`

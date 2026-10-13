@@ -447,3 +447,63 @@ def test_every_install_records_where_the_runtime_came_from(tmp_path):
 
 def test_get_sh_holds_the_update_lock():
     assert "flock" in GET.read_text() and "/opt/eggie/update.lock" in GET.read_text()
+
+
+def _run_main(tmp_path, root, **env):
+    # The whole script with /opt/eggie pointed at a temp root, a fake install.sh
+    # that only echoes, and no network: enough to see what main() writes.
+    ref = "runtime-v0.1.0"
+    tar_path = _archive_with_install_sh(
+        tmp_path, ref, '#!/usr/bin/env bash\necho "install.sh args: $*"\n')
+    environ = _bin(tmp_path, dpkg="exit 0\n", curl=f"cp '{tar_path}' \"$4\"\n",
+                   git=_git_listing(tmp_path, [ref]))
+    for name in ("EGGIE_RUNTIME_REF", "EGGIE_RUNTIME_REPAIR", "EGGIE_RUNTIME_API",
+                 "EGGIE_RUNTIME_UPDATE", "EGGIE_SITE_HOST", "EGGIE_SITE_DOMAIN"):
+        environ.pop(name, None)
+    environ.update(env)
+    script = GET.read_text().replace("/opt/eggie", str(root))
+    return subprocess.run(["bash", "-c", script], env=environ,
+                          capture_output=True, text=True)
+
+
+def test_both_site_names_are_written_to_site_env(tmp_path):
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    result = _run_main(tmp_path, root, EGGIE_SITE_HOST="foo.eggie.io",
+                       EGGIE_SITE_DOMAIN="foo.eggie.space")
+    assert result.returncode == 0, result.stderr
+    assert (root / "site.env").read_text() == (
+        "EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n")
+
+
+def test_one_site_name_without_the_other_is_refused_before_installing(tmp_path):
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    result = _run_main(tmp_path, root, EGGIE_SITE_HOST="foo.eggie.io")
+    assert result.returncode != 0
+    assert "EGGIE_SITE_HOST and EGGIE_SITE_DOMAIN" in result.stderr
+    assert not (root / "site.env").exists()
+    assert "install.sh args" not in result.stdout
+
+
+@pytest.mark.parametrize("bad", ["https://foo.eggie.io", "foo.eggie.io:443",
+                                 "Foo.Eggie.IO", "foo eggie io", "foo"])
+def test_site_names_must_be_bare_lowercase_hostnames(tmp_path, bad):
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    result = _run_main(tmp_path, root, EGGIE_SITE_HOST=bad,
+                       EGGIE_SITE_DOMAIN="foo.eggie.space")
+    assert result.returncode != 0
+    assert "bare hostnames" in result.stderr
+    assert not (root / "site.env").exists()
+
+
+def test_a_run_without_site_variables_keeps_an_existing_site_env(tmp_path):
+    # The boot update and a plain repair run get.sh with no site variables.
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    (root / "site.env").write_text("EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n")
+    result = _run_main(tmp_path, root)
+    assert result.returncode == 0, result.stderr
+    assert (root / "site.env").read_text() == (
+        "EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n")

@@ -315,3 +315,14 @@ def test_a_malformed_seed_file_changes_nothing_and_stays(tmp_path):
 def test_no_seed_file_is_the_ordinary_case(tmp_path):
     account, _, _ = make(tmp_path, FakeCloud())
     assert account.seed_from(tmp_path / "absent.json") is False
+
+
+def test_a_seed_supersedes_a_pending_sign_in_code(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    account._account.update(device_code="dc", user_code="UC", verification_url="u",
+                            code_expires_at=9e9, poll_interval=5.0)
+
+    assert account.seed_from(_seed_file(tmp_path)) is True
+    row = account._account.get()
+    assert row["device_code"] is None and row["user_code"] is None
+    assert account.status()["state"] == "signed_in"

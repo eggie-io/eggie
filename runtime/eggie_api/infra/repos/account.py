@@ -31,8 +31,10 @@ class AccountRepo:
              access_expires_at: float) -> None:
         # The one write allowed to change device_id: the service minted this
         # device before first boot, and nothing has been recorded under the
-        # placeholder id yet.
+        # placeholder id yet. A seed supersedes any sign-in still pending.
         with self._db.tx() as conn:
             conn.execute("UPDATE account SET device_id=?, access_token=?, refresh_token=?, "
-                         "access_expires_at=?, last_error=NULL WHERE id=1",
+                         "access_expires_at=?, last_error=NULL, device_code=NULL, user_code=NULL, "
+                         "verification_url=NULL, code_expires_at=NULL, poll_interval=NULL "
+                         "WHERE id=1",
                          (device_id, access_token, refresh_token, access_expires_at))

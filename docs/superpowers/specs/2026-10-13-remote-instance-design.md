@@ -61,7 +61,8 @@ bash /opt/eggie/runtime/install/snapshot-prep.sh
 ```
 
    It stops the stack and removes the API token, `state.db`, `connect.json`,
-   `site.env`, the `tls` files and cloud-init's instance state. Then power off and take
+   `site.env`, the `tls` files and cloud-init's instance state. It also removes root's
+   `authorized_keys` and shell history and resets the machine id. Then power off and take
    the snapshot.
 
 A snapshot does not need rebuilding on every runtime release: the boot update unit

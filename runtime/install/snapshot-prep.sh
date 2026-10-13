@@ -7,6 +7,7 @@
 set -euo pipefail
 
 ROOT=/opt/eggie
+ROOT_HOME=/root
 
 # `down`, not `stop`: a stopped container with `restart: always` is restarted
 # by dockerd at boot, before cloud-init has configured anything.
@@ -16,5 +17,8 @@ fi
 rm -f "$ROOT/api.token" "$ROOT/state.db" "$ROOT/state.db-wal" "$ROOT/state.db-shm" \
       "$ROOT/connect.json" "$ROOT/site.env" "$ROOT/account.json"
 rm -rf "$ROOT/tls" "$ROOT/tunnel" "$ROOT/uploads"
-cloud-init clean --logs
+# The image builder's key and history must not reach every customer's server;
+# the service installs the user's key on the new droplet.
+rm -f "$ROOT_HOME/.ssh/authorized_keys" "$ROOT_HOME/.bash_history"
+cloud-init clean --logs --machine-id
 echo "ready to snapshot: power off and take the image"

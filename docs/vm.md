@@ -76,8 +76,8 @@ console, e.g. `foo.eggie.io`) and `EGGIE_SITE_DOMAIN` (projects, e.g. `foo.eggie
 | Account | device-code sign-in | seeded from `/opt/eggie/account.json` at first boot |
 | Public URLs | optional | not available (everything already is) |
 
-Build a snapshot: install with no site variables, run `bash /opt/eggie/runtime/install/snapshot-prep.sh`,
-image. First boot of a droplet from it: cloud-init writes `account.json`, creates the login user,
+Build a snapshot: install with no site variables, run `bash /opt/eggie/runtime/install/snapshot-prep.sh`
+(it also drops root's key and shell history and resets the machine id), image. First boot of a droplet from it: cloud-init writes `account.json`, creates the login user,
 and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names (spec §3.2).
 
 ## Troubleshooting

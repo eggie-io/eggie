@@ -187,6 +187,14 @@ def test_the_site_override_moves_the_web_entrypoint_to_443_with_tls():
     assert set(yaml.safe_load(SITE_STACK.read_text())["services"]) == {"traefik"}
 
 
+def test_the_probe_port_stays_reachable_on_a_site_and_unpublished():
+    # The API's readiness probe dials Traefik on the edge port; a site that
+    # drops the entrypoint makes every project start wait out the timeout.
+    traefik = yaml.safe_load(SITE_STACK.read_text())["services"]["traefik"]
+    assert "--entryPoints.probe.address=:${EGGIE_EDGE_PORT:-39080}" in traefik["command"]
+    assert not any("39080" in p or "EGGIE_EDGE_PORT" in p for p in traefik["ports"])
+
+
 @pytest.mark.skipif(shutil.which("docker") is None, reason="docker compose not installed")
 def test_the_merged_site_stack_publishes_only_the_edge_ports_to_the_world(tmp_path):
     env = tmp_path / ".env"

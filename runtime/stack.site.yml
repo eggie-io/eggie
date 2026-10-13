@@ -18,6 +18,9 @@ services:
       - "--entryPoints.web.address=:443"
       - "--entryPoints.web.http.tls=true"
       - "--entryPoints.web.transport.respondingTimeouts.readTimeout=30m"
+      # The API's readiness probe dials Traefik on the edge port over the edge
+      # network; this entrypoint is reachable only from containers on it.
+      - "--entryPoints.probe.address=:${EGGIE_EDGE_PORT:-39080}"
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"

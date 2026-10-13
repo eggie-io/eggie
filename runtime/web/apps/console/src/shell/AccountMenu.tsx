@@ -94,12 +94,14 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
         <span className={s.rule} aria-hidden="true" />
         <GitHubLine onConnect={() => { setOpen(false); setGitHub(true); }} />
         {home && <OpenInBrowser />}
-        <span className={s.rule} aria-hidden="true" />
-        {error && <span className={s.menuError} role="alert">{error}</span>}
         {site === null && (
-          <button type="button" className={cx(s.item, s.itemQuiet)} onClick={signOut} disabled={leaving}>
-            {SIGN_OUT}<span className={s.itemLabel}>Sign out</span>
-          </button>
+          <>
+            <span className={s.rule} aria-hidden="true" />
+            {error && <span className={s.menuError} role="alert">{error}</span>}
+            <button type="button" className={cx(s.item, s.itemQuiet)} onClick={signOut} disabled={leaving}>
+              {SIGN_OUT}<span className={s.itemLabel}>Sign out</span>
+            </button>
+          </>
         )}
       </div>
       <GitHubModal open={github} onClose={() => setGitHub(false)} />

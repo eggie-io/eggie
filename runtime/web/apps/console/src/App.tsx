@@ -25,7 +25,7 @@ import { fetchSite } from "./site/site";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
-  const [site, setSite] = useState<string | null>(null);
+  const [site, setSite] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     void fetchSite((input, init) => fetch(input, init)).then(setSite);
   }, []);

@@ -101,7 +101,7 @@ def project_id_for(name: str) -> str:
     Duplicated rather than imported (nothing under `host/` imports
     `eggie_api/`) and held equal by a test: the host needs the id before it
     can ask for the project it just tried to create."""
-    return re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")
+    return re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
 
 
 # Two of the API's error codes have a known real-world cause the API cannot

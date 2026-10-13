@@ -21,7 +21,9 @@ class Project:
 
 
 def _slug(name: str) -> str:
-    return re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")
+    # Hyphens are folded with everything else, so no slug contains `--`:
+    # host_for reserves it as the subdomain/project separator.
+    return re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
 
 
 def load_project(compose_dict: dict, project_yml: dict | None, dir_name: str) -> Project:
@@ -29,13 +31,14 @@ def load_project(compose_dict: dict, project_yml: dict | None, dir_name: str) ->
     pid = _slug(project_yml["id"]) if project_yml.get("id") else _slug(dir_name)
     if project_yml.get("web"):
         webs = [WebSpec(service=w["service"], port=int(w["port"]),
-                        subdomain=w.get("subdomain"))
+                        subdomain=_slug(w["subdomain"]) or None
+                        if w.get("subdomain") else None)
                 for w in project_yml["web"]]
     else:
         webs = detect_web(compose_dict)
     if len(webs) > 1:
         webs = [webs[0]] + [
-            replace(w, subdomain=w.subdomain or w.service) for w in webs[1:]
+            replace(w, subdomain=_slug(w.subdomain or w.service)) for w in webs[1:]
         ]
     return Project(id=pid, webs=webs)
 

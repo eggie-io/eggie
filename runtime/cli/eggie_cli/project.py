@@ -10,7 +10,7 @@ from .errors import EggieError
 
 
 def project_id_for(name: str) -> str:
-    return re.sub(r"[^a-z0-9-]+", "-", name.strip().lower()).strip("-")
+    return re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
 
 
 def project_of(directory: Path, root: Path) -> Path | None:

@@ -9,7 +9,8 @@ from .. import constants
 def host_for(project_id: str, web: WebSpec, domain: str) -> str:
     # One label under the domain: a site's wildcard certificate covers
     # `*.<domain>` only. `--` rather than `-`: slugs can contain single
-    # hyphens, so `web-bar` could be a project of its own.
+    # hyphens, so `web-bar` could be a project of its own. Project ids and
+    # subdomains are both slugs, which never contain `--`.
     if web.subdomain:
         return f"{web.subdomain}--{project_id}.{domain}"
     return f"{project_id}.{domain}"

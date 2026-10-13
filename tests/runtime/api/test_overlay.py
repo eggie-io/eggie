@@ -2,9 +2,11 @@ from eggie_api.domain.overlay import build_overlay, host_for
 from eggie_api.domain.detect import WebSpec
 
 
-def test_host_primary_is_bare_id_additional_prefixed():
+def test_host_primary_is_bare_id_additional_prefixed_one_label_deep():
+    # A site's wildcard certificate covers `*.<domain>` only; `api.myproj.d.io`
+    # would fall outside it, so additional services share the label.
     assert host_for("myproj", WebSpec("app", 80), "d.io") == "myproj.d.io"
-    assert host_for("myproj", WebSpec("api", 4000, subdomain="api"), "d.io") == "api.myproj.d.io"
+    assert host_for("myproj", WebSpec("api", 4000, subdomain="api"), "d.io") == "api--myproj.d.io"
 
 
 def test_overlay_attaches_edge_network_and_router_labels():
@@ -32,7 +34,7 @@ def test_two_web_services_get_distinct_hosts_and_routers():
     fe = ov["services"]["frontend"]["labels"]
     api = ov["services"]["api"]["labels"]
     assert fe["traefik.http.routers.shop-frontend.rule"] == "Host(`shop.d.io`)"
-    assert api["traefik.http.routers.shop-api.rule"] == "Host(`api.shop.d.io`)"
+    assert api["traefik.http.routers.shop-api.rule"] == "Host(`api--shop.d.io`)"
 
 
 def test_every_service_gets_the_secret_names_and_web_routing_is_kept():

@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
+import { useSite } from "../site/SiteContext";
 import { SleepyEgg } from "./SleepyEgg";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
 
 export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetry: () => void }) {
+  const site = useSite();
   useEffect(() => {
     // "Open Eggie" opens a new tab; this one catches up when it's looked at again.
     const onVisible = () => {
@@ -28,7 +30,11 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
           : "This page can't tell who you are any more — that happens after a while."}
       </p>
       <p className={s.lead}>
-        Open the Eggie app on your desktop and press <strong>Open Eggie</strong>. It'll hand the keys back.
+        {site ? (
+          <>Go back to the Eggie web app and open this console from there again.</>
+        ) : (
+          <>Open the Eggie app on your desktop and press <strong>Open Eggie</strong>. It'll hand the keys back.</>
+        )}
       </p>
     </StatusScreen>
   );

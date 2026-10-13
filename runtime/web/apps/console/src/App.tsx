@@ -20,12 +20,20 @@ import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
+import { SiteContext } from "./site/SiteContext";
+import { fetchSite } from "./site/site";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
+  const [site, setSite] = useState<string | null>(null);
+  useEffect(() => {
+    void fetchSite((input, init) => fetch(input, init)).then(setSite);
+  }, []);
   return (
     <DesktopHome.Provider value={home}>
-      <Screens handoff={handoff} />
+      <SiteContext.Provider value={site}>
+        <Screens handoff={handoff} />
+      </SiteContext.Provider>
     </DesktopHome.Provider>
   );
 }

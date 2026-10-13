@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
+from pathlib import Path
 
 from ..errors import Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
@@ -66,6 +68,32 @@ class Account:
                     "url": row["verification_url"],
                     "expires_at": row["code_expires_at"]}
         return {"state": "signed_out", "error": row["last_error"]}
+
+    def seed_from(self, path: Path) -> bool:
+        """A token pair the service left for this machine before first boot.
+        Imported once, only while nothing is signed in; the file is deleted
+        only on import, so a stray one stays visible to whoever looks."""
+        try:
+            raw = json.loads(path.read_text())
+            device_id, access, refresh = raw["device_id"], raw["access_token"], raw["refresh_token"]
+            expires_in = float(raw["expires_in"])
+            if not all(isinstance(v, str) and v for v in (device_id, access, refresh)):
+                raise ValueError("a token field is empty")
+        except FileNotFoundError:
+            return False
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            log.warning("ignoring %s: %s", path, e)
+            return False
+        with self._write_lock:
+            if self._account.get()["access_token"]:
+                log.warning("ignoring %s: this machine is already signed in", path)
+                return False
+            self._account.seed(device_id=device_id, access_token=access,
+                               refresh_token=refresh,
+                               access_expires_at=self._clock() + expires_in)
+        path.unlink(missing_ok=True)
+        self.on_signed_in()
+        return True
 
     def start_sign_in(self) -> dict:
         row = self._account.get()

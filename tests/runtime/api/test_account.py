@@ -265,3 +265,53 @@ def test_a_refresh_finding_the_token_already_replaced_does_not_spend_it_again(tm
 
     assert account._refresh("at-1") == "at-new"
     assert "refresh" not in cloud.names()
+
+
+import json
+
+
+def _seed_file(tmp_path, **fields):
+    body = {"device_id": "dev-9", "access_token": "at-s", "refresh_token": "rt-s",
+            "expires_in": 3600, **fields}
+    path = tmp_path / "account.json"
+    path.write_text(json.dumps(body))
+    return path
+
+
+def test_a_seed_file_signs_the_instance_in_as_that_device_and_is_deleted(tmp_path):
+    account, clock, _ = make(tmp_path, FakeCloud())
+    woken = []
+    account.on_signed_in = lambda: woken.append(True)
+    path = _seed_file(tmp_path)
+
+    assert account.seed_from(path) is True
+    row = account._account.get()
+    assert (row["device_id"], row["access_token"], row["refresh_token"]) == ("dev-9", "at-s", "rt-s")
+    assert row["access_expires_at"] == clock.now + 3600
+    assert account.signed_in and account.device_id == "dev-9"
+    assert not path.exists()
+    assert woken == [True]
+
+
+def test_a_signed_in_instance_ignores_a_seed_file_and_leaves_it(tmp_path):
+    account, _ = signed_in(tmp_path, FakeCloud())
+    path = _seed_file(tmp_path)
+
+    assert account.seed_from(path) is False
+    assert account._account.get()["access_token"] == "at-1"
+    assert path.exists()
+
+
+def test_a_malformed_seed_file_changes_nothing_and_stays(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    path = tmp_path / "account.json"
+    path.write_text('{"device_id": "dev-9", "access_token": ""}')
+
+    assert account.seed_from(path) is False
+    assert not account.signed_in
+    assert path.exists()
+
+
+def test_no_seed_file_is_the_ordinary_case(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    assert account.seed_from(tmp_path / "absent.json") is False

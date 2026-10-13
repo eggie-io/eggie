@@ -7,7 +7,7 @@ held equal by tests/test_constants_agree.py.
 """
 from __future__ import annotations
 
-from .api import START_STACK, RESTART_API, ApiClient, default_client, read_token
+from .api import ApiClient, default_client, read_token, restart_api, start_stack
 from .cli import main
 from .constants import (ALT_COMPOSE_FILES, API_PORT, API_UNCONFIGURED, COMPOSE_FILE,
                         DOCKER_GROUP, GUEST_PROJECTS, GUEST_ROOT, GUEST_STACK,

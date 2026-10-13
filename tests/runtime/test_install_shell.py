@@ -220,7 +220,7 @@ def test_a_repair_or_a_new_token_recreates_the_api():
     # The API reads its token once at startup; `up -d` leaves it running.
     # The service key is derived from stack.yml, not hardcoded "api" here too
     # -- the same way tests/runtime/cli/test_boundaries.py derives the CLI's
-    # RESTART_API -- so a rename of stack.yml's service key alone fails this
+    # restart_api() -- so a rename of stack.yml's service key alone fails this
     # test instead of leaving install.sh silently recreating a service that
     # no longer exists.
     services = yaml.safe_load(STACK_YML.read_text())["services"]

@@ -165,6 +165,13 @@ if (( SITE )); then
     chmod 600 /opt/eggie/tls/site.key
   fi
 fi
+
+# 7b. site mode: project containers must not read the droplet's metadata service.
+if (( SITE )); then
+  install -m 644 "$INSTALL_DIR/systemd/eggie-metadata-guard.service" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now eggie-metadata-guard.service
+fi
 # A seed the service left before first boot; the API (docker group) imports
 # and deletes it, so it needs the token's permission model, not root's.
 if (( SITE )) && [[ -f /opt/eggie/account.json ]]; then

@@ -44,6 +44,12 @@ branch), reads the accepted API from `/opt/eggie/host.json` (falling back to the
 release's own `api` when the host never wrote one), retries fetching `get.sh` a few times in case
 the network comes up after the unit starts, then runs it with `EGGIE_RUNTIME_UPDATE=1`.
 
+### `lib/metadata-guard.sh` + `systemd/eggie-metadata-guard.service`
+
+Site mode only (step 7b): a oneshot unit ordered before `docker.service` that adds an idempotent
+`DROP` for `169.254.169.254` to the `DOCKER-USER` chain, so containers cannot read the droplet's
+user data (which seeded `account.json`).
+
 ## `install.sh` — numbered steps, order matters
 
 Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →

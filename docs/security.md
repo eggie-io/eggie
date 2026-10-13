@@ -94,6 +94,9 @@ root-equivalent — plus:
 - The certificate key is `0600`, owned by the API's user, written by the API, mounted read-only into Traefik; it covers
   this instance's three names only. The seeded token file is deleted on import.
 - A snapshot made with `snapshot-prep.sh` holds no token, database or key.
+- Containers cannot reach the cloud metadata service (`169.254.169.254`): it serves the user
+  data that seeded the account token, and a project's code would otherwise read it. A droplet-only
+  `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts.
 
 ## Before adding a way in
 

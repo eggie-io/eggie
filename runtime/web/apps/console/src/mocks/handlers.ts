@@ -39,6 +39,7 @@ export const SCENARIOS = [
   "agents-failed",
   "windows",
   "secrets",
+  "site",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -329,6 +330,7 @@ export function handlersFor(scenario: Scenario) {
         status: "ok",
         version: "0.2.0",
         api: scenario === "old-api" ? 2 : 1,
+        site: scenario === "site" ? "foo.eggie.io" : null,
         docker: { reachable: true, version: "29.0.0", detail: "" },
       });
     }),
@@ -582,6 +584,7 @@ export function handlersFor(scenario: Scenario) {
       const denied = guard();
       if (denied) return denied;
       if (scenario === "windows") return HttpResponse.json({ vm: "wsl", ssh: null });
+      if (scenario === "site") return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
       return HttpResponse.json({ vm: "lima", ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/.lima/_config/user" } });
     }),
     http.get("/api/disk", () => {

@@ -17,15 +17,24 @@ export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] 
   const facts: Record<Fact, string | null> = ssh
     ? { host: ssh.host, port: String(ssh.port), user: ssh.user, key_file: ssh.key_file }
     : FALLBACK;
-  return guide.card.map(({ label, value }) => {
+  const rows: CardRow[] = [];
+  for (const { label, value } of guide.card) {
     let known = true;
+    let applies = true;
     const filled = value.replace(/\{([^}]*)\}/g, (_, name: Fact) => {
       const fact = facts[name];
       if (fact !== null) return fact;
-      known = false;
-      return UNKNOWN_USER;
+      // Only the user may be unknown yet still worth a row; a fact that does
+      // not exist here (a site has no key file) drops the whole row.
+      if (name === "user") {
+        known = false;
+        return UNKNOWN_USER;
+      }
+      applies = false;
+      return "";
     });
     // Copying "your Mac user name@127.0.0.1" would paste a broken address.
-    return { label, value: filled, copy: known };
-  });
+    if (applies) rows.push({ label, value: filled, copy: known });
+  }
+  return rows;
 }

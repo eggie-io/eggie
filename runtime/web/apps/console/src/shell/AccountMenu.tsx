@@ -9,6 +9,7 @@ import { REVOKE_URL, useDisconnectGitHub, useGitHub } from "../github/github";
 import { githubView } from "../github/view";
 import { GitHubModal } from "../screens/github/GitHubModal";
 import { CHEVRON_DOWN, EXTERNAL, GITHUB, SIGN_OUT } from "../screens/icons";
+import { useSite } from "../site/SiteContext";
 import s from "./Shell.module.css";
 
 const api = createApi((input, init) => fetch(input, init));
@@ -21,6 +22,7 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const home = useDesktopHome();
+  const site = useSite();
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["account"],
@@ -94,9 +96,11 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
         {home && <OpenInBrowser />}
         <span className={s.rule} aria-hidden="true" />
         {error && <span className={s.menuError} role="alert">{error}</span>}
-        <button type="button" className={cx(s.item, s.itemQuiet)} onClick={signOut} disabled={leaving}>
-          {SIGN_OUT}<span className={s.itemLabel}>Sign out</span>
-        </button>
+        {site === null && (
+          <button type="button" className={cx(s.item, s.itemQuiet)} onClick={signOut} disabled={leaving}>
+            {SIGN_OUT}<span className={s.itemLabel}>Sign out</span>
+          </button>
+        )}
       </div>
       <GitHubModal open={github} onClose={() => setGitHub(false)} />
     </div>

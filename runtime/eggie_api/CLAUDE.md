@@ -76,7 +76,7 @@ and a host release. Prefer additive changes.
   `not_after`. Each pair is written into `/opt/eggie/tls/<not_after>/` and goes live by swapping
   `current` in one rename: Traefik watches the directory, and renaming key and certificate
   separately would have it load a mismatched pair. Older pairs are removed at the start of the
-  next install, never right after the swap. `Account.seed_from` imports `/opt/eggie/account.json`
+  next check, never right after the swap. `Account.seed_from` imports `/opt/eggie/account.json`
   once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;

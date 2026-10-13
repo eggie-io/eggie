@@ -22,7 +22,7 @@ def build_overlay(project_id: str, webs: list[WebSpec], domain: str, *,
                   declared: Mapping[str, set[str]] | None = None) -> dict:
     overlay_services: dict = {}
     for web in webs:
-        router = f"{project_id}-{web.service}"
+        router = f"{project_id}--{web.service}"
         host = host_for(project_id, web, domain)
         overlay_services[web.service] = {
             "networks": ["default", constants.EDGE_NETWORK],

@@ -228,7 +228,9 @@ def test_a_repair_or_a_new_token_recreates_the_api():
                   if "eggie-api" in svc.get("image", "")]
     commands = _commands()
     recreate = _index_of(f"--force-recreate {api_key}")
-    assert recreate > _index_of(" up -d")
+    # The API must start exactly once: the plain `up -d` that follows leaves it alone.
+    (plain,) = [i for i, l in enumerate(commands) if l.endswith("$SITE_STACK up -d")]
+    assert recreate < plain
     condition = commands[recreate - 1]
     assert "TOKEN_CREATED" in condition and "REPAIR" in condition, condition
 

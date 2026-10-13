@@ -2,7 +2,7 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -79,10 +79,10 @@ meanwhile.
 
 `get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
 bare lowercase hostnames); a run without them keeps the file. `install.sh` sources it: appends
-`EGGIE_SITE_HOST`, `EGGIE_DOMAIN` and `EGGIE_API_BIND=127.0.0.1` to `.env`, adds
+`EGGIE_SITE_HOST`, `EGGIE_DOMAIN`, `EGGIE_API_BIND=127.0.0.1` and `EGGIE_EDGE_BIND=127.0.0.1` to `.env`, adds
 `-f $RUNTIME_DIR/stack.site.yml` (`$SITE_STACK`, unquoted on purpose) to the stack's compose
 commands, installs `site/tls.yml` into `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik
-reads) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
+reads), enables the metadata guard unit (step 7b) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
 imaged (`tests/runtime/test_snapshot_prep.py`).
 
 ## Testing

@@ -95,6 +95,6 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | S7 | `curl http://<ip>:39099/health` and `:39080` from outside | Both refused by the firewall; `curl 127.0.0.1:39099/health` inside works | |
 | S8 | Inside the droplet: `ss -ltn | grep 39080` | Listens on `127.0.0.1` only; `curl -H 'Host: <id>.<site domain>' http://127.0.0.1:39080/` answers the project | |
 | S9 | Start a project, then `docker exec <its container> curl -m 3 http://169.254.169.254/metadata/v1/user-data` | Times out; the same curl from the droplet shell answers | |
-| S10 | `curl -X POST https://<site host>/api/account/sign-out -b <console cookie>` (or the bearer route on loopback) | `403` with code `site_account`; the console stays signed in | |
-| S11 | Open the console from the web app a second time with the first link (already used) | "Open the console from the web app again"; `docker logs` of the api shows one service redemption per link, none for `lh_` codes | |
+| S10 | `curl -X POST -H 'Origin: https://<site host>' https://<site host>/api/account/sign-out -b <console cookie>` (or the bearer route on loopback) | `403` with code `site_account`; the console stays signed in | |
+| S11 | Open the console from the web app a second time with the first link (already used) | "Open the console from the web app again"; the service records one redemption for the first open and refuses the second | |
 | S12 | On the service, confirm the device pair seeded in user data was rotated at first boot | The seeded refresh token is spent; `curl 169.254.169.254/metadata/v1/user-data` from the droplet shell still shows it, and it no longer works | |

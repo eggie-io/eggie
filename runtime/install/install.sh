@@ -198,12 +198,14 @@ if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunne
   exit 1
 fi
 rm -f "$PULL_LOG"
-/usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d
 # The API reads its token once, at startup, and `up -d` leaves an unchanged
-# container running.
+# container running, so a new token or a repair recreates it. That must be
+# its only start: on a site it rotates its account seed at once, and a restart
+# a second later can drop the reply to a rotation the service already made.
 if (( TOKEN_CREATED || REPAIR )); then
   /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d --force-recreate api
 fi
+/usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d
 
 # 8. git for `eggie clone`, gh for GitHub work, Node for `npx skills`.
 if ! dpkg -s git >/dev/null 2>&1; then

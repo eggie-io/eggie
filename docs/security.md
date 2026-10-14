@@ -32,8 +32,8 @@ Each of these is root-equivalent in the VM:
   mounting the Docker socket, running `privileged`, or using the host network, and the API does
   not inspect or refuse any of these.
 - **Every login account.** `install.sh` puts each login account in the `docker` group and gives it
-  ACLs on `/opt/eggie/projects` and read access to `api.token`. On Lima, `sudo` needs no password;
-  on WSL2, the account is root. Whoever holds an SSH key into the VM holds the VM.
+  ACLs on `/opt/eggie/projects` and read access to `api.token`. `sudo` needs no password (on WSL2
+  the account is `eggie`, and `wsl -d ... -u root` needs nothing at all). Whoever holds an SSH key into the VM holds the VM.
 - **Coding agents.** They run as a login account, so they have everything above.
 
 ## What each secret protects, and what it doesn't

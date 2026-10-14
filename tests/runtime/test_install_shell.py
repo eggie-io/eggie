@@ -449,3 +449,9 @@ def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
     assert build < installed
     assert commands[installed].startswith("install -m 755 ")
     assert not any("cli/eggie.py" in l for l in commands)
+
+
+def test_the_wsl_account_exists_before_accounts_are_provisioned():
+    # Created after step 10, the account would miss the docker group, its
+    # ACLs and the skills until the next install.
+    assert _index_of("lib/wsl-user.sh") < _index_of("done < <(accounts)")

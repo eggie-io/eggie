@@ -24,6 +24,10 @@ rm -f /opt/eggie/runtime.version
 
 export DEBIAN_FRONTEND=noninteractive
 
+# 0. swap first, so the installs below already have it. Not fatal: the VM runs
+# without it, only worse under memory pressure.
+bash "$INSTALL_DIR/lib/swap.sh" /swapfile /etc/fstab || echo "could not add swap to this machine" >&2
+
 # 1. docker-ce from the official repo.
 # Guard on the package, not on `command -v docker`: Docker Desktop's WSL
 # integration puts its own docker CLI on PATH, which made this skip the install

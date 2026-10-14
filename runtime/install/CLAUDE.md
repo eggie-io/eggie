@@ -1,7 +1,7 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
+`test_install_shell.py`, test_swap.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
 `tests/runtime/test_boot_update.py`, `test_image_version.py`.
 
 ## `get.sh` is a live contract for every shipped host
@@ -45,7 +45,8 @@ the network comes up after the unit starts, then runs it with `EGGIE_RUNTIME_UPD
 
 ## `install.sh` — numbered steps, order matters
 
-Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
+a 4 GiB `/swapfile` when the VM has no swap (`lib/swap.sh`; Lima and cloud images ship none, WSL
+has its own; not fatal) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
 any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 22.20 from NodeSource →

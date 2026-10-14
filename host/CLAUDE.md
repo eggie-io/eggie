@@ -25,7 +25,8 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
 - `core/provider.py` — the `VmProvider` Protocol plus `Completed` / `CheckResult` / `Diagnosis`
   value types, and the `DesktopPlatform` Protocol. Both are **duck-typed, not subclassed**.
 - `providers/` — `Wsl2Provider` (shells `wsl.exe`) and `LimaProvider` (shells `limactl`, VM defined
-  by `eggie.yaml`). Both take an injectable `runner` callable (default
+  by `eggie.yaml`; its CPUs and memory
+  are not in the file but passed by `create()`, sized from the Mac by `vm_size()`). Both take an injectable `runner` callable (default
   `subprocess.run(..., capture_output=True)`) — that is what makes them unit-testable.
   `lima.py` and `eggie.yaml` carry banners saying exactly what has and hasn't been run on a real
   Mac; keep them accurate when you change either.
@@ -74,7 +75,9 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   tries `--terminate` first. Only `--shutdown` is sure to clear it, and that stops every distro and
   Docker Desktop, so the desktop app asks before using it.
 - The imported WSL distro runs as root: `create()` replaces `/etc/wsl.conf` with a
-  `[boot] systemd=true` stanza, dropping the image's default user.
+  `[boot] systemd=true` stanza, dropping the image's default user. The runtime appends
+  `[user] default=eggie` later (`runtime/install/lib/wsl-user.sh`); keep `create()` the only
+  writer that truncates the file.
 - Lima gives cloud-init a new `instance-id` on every `limactl start`, and cloud-init regenerates the
   SSH host keys on a new instance, so a stale `~/.ssh/known_hosts` entry blocks SSH after a restart
   or reinstall. Turning off host-key checking does not help: Cursor's Remote-SSH reads known_hosts

@@ -35,6 +35,10 @@ rm -f /opt/eggie/runtime.version
 
 export DEBIAN_FRONTEND=noninteractive
 
+# 0. swap first, so the installs below already have it. Not fatal: the VM runs
+# without it, only worse under memory pressure.
+bash "$INSTALL_DIR/lib/swap.sh" /swapfile /etc/fstab || echo "could not add swap to this machine" >&2
+
 # 1. docker-ce from the official repo.
 # Guard on the package, not on `command -v docker`: Docker Desktop's WSL
 # integration puts its own docker CLI on PATH, which made this skip the install
@@ -295,10 +299,21 @@ while IFS= read -r target; do
 done <<< "$system_instructions"
 install -m 644 "$INSTALL_DIR/profile/eggie-cwd.sh" /etc/profile.d/eggie-cwd.sh
 # SSH host keys that survive a reboot (see the file). Lima only, detected the
-# same way as step 12: on a cloud VM, a disk image cloned from this one must
+# same way as step 9b: on a cloud VM, a disk image cloned from this one must
 # still get keys of its own, which is what cloud-init's default is for.
 if [[ -d /mnt/lima-cidata && -d /etc/cloud/cloud.cfg.d ]]; then
     install -m 644 "$INSTALL_DIR/cloud/99-eggie-keep-ssh-host-keys.cfg" /etc/cloud/cloud.cfg.d/
+fi
+
+# 9b. WSL comes with root only: add the login account step 10 provisions.
+# A site is a cloud server whatever kernel it runs; the service made its account.
+if (( SITE )); then vm=site
+elif grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
+elif [[ -d /mnt/lima-cidata ]]; then vm=lima
+else vm=other
+fi
+if [[ "$vm" == wsl ]]; then
+  bash "$INSTALL_DIR/lib/wsl-user.sh" /etc/wsl.conf /etc/sudoers.d
 fi
 
 # 10. per account: docker group, agent instructions, ~/projects, skills.
@@ -358,11 +373,6 @@ systemctl enable --now eggie-agents.path
 systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
 
 # 12. what the console's "Connect an agent" guide needs to know.
-if (( SITE )); then vm=site
-elif grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
-elif [[ -d /mnt/lima-cidata ]]; then vm=lima
-else vm=other
-fi
 # sed, not head: head exiting early would SIGPIPE the pipeline under pipefail.
 agent_user=$(getent passwd | bash "$INSTALL_DIR/lib/login-users.sh" /etc/shells | cut -d: -f1 | sed -n 1p)
 printf '{"vm": "%s", "user": "%s"}\n' "$vm" "$agent_user" > /opt/eggie/connect.json

@@ -527,3 +527,9 @@ def test_only_a_site_install_enables_the_metadata_guard():
     assert "systemctl enable --now eggie-metadata-guard.service" in block
     assert block.index("if (( SITE ))") < block.index("eggie-metadata-guard")
     assert text.count("eggie-metadata-guard") == block.count("eggie-metadata-guard")
+
+
+def test_the_wsl_account_exists_before_accounts_are_provisioned():
+    # Created after step 10, the account would miss the docker group, its
+    # ACLs and the skills until the next install.
+    assert _index_of("lib/wsl-user.sh") < _index_of("done < <(accounts)")

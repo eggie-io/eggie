@@ -64,7 +64,7 @@ class ProjectLoader:
                           f"the project definition cannot be read: {e}") from e
 
     def urls_for(self, project: Project, domain: str) -> list[str]:
-        return [f"http://{host_for(project.id, web, domain)}:{self._config.edge_port}"
+        return [self._config.public_url(host_for(project.id, web, domain))
                 for web in project.webs]
 
     def public_hosts(self, project_id: str) -> list[dict]:
@@ -77,5 +77,5 @@ class ProjectLoader:
             return []
         hosts = [host_for(project.id, web, row["domain"]) for web in project.webs]
         return [{"service": web.service, "hostname": host,
-                 "local_url": f"http://{host}:{self._config.edge_port}"}
+                 "local_url": self._config.public_url(host)}
                 for web, host in zip(project.webs, hosts)]

@@ -1,3 +1,4 @@
+import pytest
 import hashlib
 
 from fastapi.testclient import TestClient
@@ -185,3 +186,129 @@ def test_signing_out_ends_the_session(env):
     assert browser.delete("/api/session").status_code == 200
     resp = browser.get("/api/projects")
     assert resp.json()["error"]["code"] == "not_signed_in"
+
+
+from tests.runtime.api.conftest import SITE_BROWSER, SITE_ORIGIN
+
+
+def _cookie_header(env, headers):
+    code = env.client.post("/sessions/handoff").json()["code"]
+    resp = TestClient(env.app, headers=headers).post("/api/session", json={"code": code})
+    assert resp.status_code == 200
+    return resp.headers["set-cookie"]
+
+
+def test_the_cookie_is_not_secure_locally(env):
+    # The local console is plain http: a Secure cookie would never come back.
+    assert "Secure" not in _cookie_header(env, {**BROWSER, **ORIGIN})
+
+
+def test_the_cookie_is_secure_on_a_site(site_env):
+    assert "Secure" in _cookie_header(site_env, {**SITE_BROWSER, **SITE_ORIGIN})
+
+
+import dataclasses
+
+from eggie_api.services.account import Account
+from eggie_api.infra.cloud import CloudError, CloudUnavailable
+from tests.runtime.api.conftest import FakeRunner
+from tests.runtime.api.fake_cloud import FakeCloud
+
+
+def _site_app(env, cloud, *, site=True, signed_in=True):
+    repos = Repos.open(Database(env.config.state_db.with_name("site.db")))
+    if signed_in:
+        repos.account.update(access_token="at", refresh_token="rt",
+                             access_expires_at=10**12, org_id="org-1")
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
+    config = dataclasses.replace(env.config, site_host="foo.eggie.io",
+                                 domain="foo.eggie.space") if site else env.config
+    app = create_app(config=config, runner=FakeRunner(), repos=repos,
+                     account=account, cloud=cloud)
+    headers = {**SITE_BROWSER, **SITE_ORIGIN} if site else {**BROWSER, **ORIGIN}
+    # The site cookie is Secure: the client must be https to send it back.
+    base = "https://foo.eggie.io" if site else "http://testserver"
+    return app, TestClient(app, base_url=base, headers=headers), TestClient(app, headers=AUTH)
+
+
+def test_a_code_the_service_vouches_for_signs_the_browser_in_on_a_site(env):
+    cloud = FakeCloud(redeem_instance_handoff=[{"ok": True}])
+    _, browser, _ = _site_app(env, cloud)
+    assert browser.post("/api/session", json={"code": "from-web-app"}).status_code == 200
+    assert browser.get("/api/projects").status_code == 200
+    assert cloud.calls == [("redeem_instance_handoff", "at", "from-web-app")]
+
+
+def test_a_code_the_service_refuses_is_handoff_invalid(env):
+    cloud = FakeCloud(redeem_instance_handoff=[CloudError("handoff_invalid", "no", 404)])
+    _, browser, _ = _site_app(env, cloud)
+    resp = browser.post("/api/session", json={"code": "stale"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+
+
+def test_an_unreachable_service_is_handoff_invalid_too(env):
+    _, browser, _ = _site_app(env, FakeCloud(redeem_instance_handoff=[CloudUnavailable("down")]))
+    assert browser.post("/api/session", json={"code": "x"}).status_code == 401
+
+
+def test_a_locally_minted_code_never_goes_to_the_service_on_a_site(env):
+    cloud = FakeCloud()
+    _, browser, bearer = _site_app(env, cloud)
+    code = bearer.post("/sessions/handoff").json()["code"]
+    assert browser.post("/api/session", json={"code": code}).status_code == 200
+    assert cloud.calls == []
+
+
+def test_a_spent_or_unknown_local_code_on_a_site_never_uses_the_service_budget(env):
+    cloud = FakeCloud(redeem_instance_handoff=[{"ok": True}])
+    _, browser, bearer = _site_app(env, cloud)
+    code = bearer.post("/sessions/handoff").json()["code"]
+    assert browser.post("/api/session", json={"code": code}).status_code == 200
+    stale = [code] + [f"lh_unknown-{n}" for n in range(10)]
+    for c in stale:
+        resp = browser.post("/api/session", json={"code": c})
+        assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert cloud.calls == []
+    assert browser.post("/api/session", json={"code": "from-web-app"}).status_code == 200
+    assert cloud.calls == [("redeem_instance_handoff", "at", "from-web-app")]
+
+
+def test_an_unknown_code_is_not_sent_to_the_service_outside_a_site(env):
+    cloud = FakeCloud()
+    _, browser, _ = _site_app(env, cloud, site=False)
+    assert browser.post("/api/session", json={"code": "x"}).status_code == 401
+    assert cloud.calls == []
+
+
+@pytest.mark.parametrize("answer", [{"ok": False}, None, {}])
+def test_a_service_answer_without_ok_true_does_not_sign_the_browser_in(env, answer):
+    _, browser, _ = _site_app(env, FakeCloud(redeem_instance_handoff=[answer]))
+    resp = browser.post("/api/session", json={"code": "c"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert browser.get("/api/projects").status_code == 401
+
+
+def test_a_site_that_is_not_signed_in_refuses_a_code_without_calling_the_service(env):
+    cloud = FakeCloud(redeem_instance_handoff=[{"ok": True}])
+    _, browser, _ = _site_app(env, cloud, signed_in=False)
+    resp = browser.post("/api/session", json={"code": "c"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert cloud.calls == []
+
+
+def test_a_code_over_256_characters_is_rejected_as_invalid_request(env):
+    cloud = FakeCloud()
+    _, browser, _ = _site_app(env, cloud)
+    resp = browser.post("/api/session", json={"code": "x" * 257})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (422, "invalid_request")
+    assert cloud.calls == []
+
+
+def test_a_site_redeems_at_most_ten_unknown_codes_a_minute_with_the_service(env):
+    cloud = FakeCloud(redeem_instance_handoff=[CloudError("handoff_invalid", "no", 404)] * 11)
+    _, browser, _ = _site_app(env, cloud)
+    for n in range(10):
+        assert browser.post("/api/session", json={"code": f"guess-{n}"}).status_code == 401
+    resp = browser.post("/api/session", json={"code": "guess-10"})
+    assert (resp.status_code, resp.json()["error"]["code"]) == (401, "handoff_invalid")
+    assert len(cloud.calls) == 10

@@ -1,0 +1,406 @@
+# Remote instance: the runtime on a service-provisioned server
+
+Date: 2026-10-13
+Status: implemented on feature/73-remote-instance (PR pending); service side not yet live
+Issue: eggie-io/eggie-resources#73
+
+## 1. Problem
+
+Today the runtime only runs in a VM on the user's own computer, reached over loopback
+forwards from the desktop app. We want the same runtime on a server the Eggie service
+provisions for the user (a DigitalOcean droplet to start), with the user opening its
+console from the service's web application and landing there signed in.
+
+This spec covers the runtime side ("site mode") and the contract the instance needs
+from the service. The service side — the snapshot, creating the droplet, DNS, the
+certificate, minting sign-in codes, SSH keys — is the service developer's; section 3 is
+written for them.
+
+Everything here lives in `runtime/`. No host change, no host release, no desktop change.
+
+## 2. Decisions
+
+| # | Decision | Why |
+|---|----------|-----|
+| 1 | Instances are service-provisioned only, from a **snapshot** that already holds the installed runtime. No "install on my own box and sign in" path in this version. | The service already has the account, DNS zones and credentials; the user never touches the server. A snapshot turns first boot into configuration, not installation. |
+| 2 | Direct access over DNS + TLS on the server, not the Cloudflare tunnel. | A tunnel needs a route per project and Cloudflare's free certificate stops one label below the zone. Two DNS rows per instance cover every project forever. |
+| 3 | Console on `foo.eggie.io`, projects on `*.foo.eggie.space`. Control plane and user apps on different registered domains. | A project is arbitrary code and a subdomain can set cookies for its parent; on a separate domain it cannot touch the console's origin. Same split as github.com / github.io. |
+| 4 | Projects are `bar.foo.eggie.space`, nested under the instance, never flat `bar.eggie.space`. | Flat names need a DNS row per project (droplets have different IPs) and a `*.eggie.space` certificate shared by every server. |
+| 5 | DNS rows are DNS-only (grey cloud at Cloudflare). TLS terminates in Traefik on the server. | No plan change at Cloudflare; Let's Encrypt is free at any depth. Gives up the proxy's DDoS shielding, accepted at this stage. |
+| 6 | **One certificate per instance**, three names: `foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`. Issued by the **service** via DNS-01 (Route53 + Cloudflare), fetched by the instance. Never a zone-wide wildcard on a server. | A `*.eggie.io` key on every customer server could impersonate `app.eggie.io`. Per-host issue would hit Let's Encrypt's 50 certificates/week/registered domain; one per instance stays within it. DNS tokens must not live on customer servers. |
+| 7 | Every project host is one label under the project domain: `web--bar.<domain>`, not `web.bar.<domain>`. Applies locally too. | So the single wildcard matches all project hosts. One hostname shape in both modes. `--` rather than `-` because slugs may contain single hyphens, so `web-bar` could be a project of its own. A slug never contains `--` itself (every run outside `[a-z0-9]` collapses to one hyphen) and subdomains are slugged the same way, so `api--blog` cannot collide with project `blog`'s `api` service. |
+| 8 | Site mode is switched on by two installer variables, `EGGIE_SITE_HOST` (console) and `EGGIE_SITE_DOMAIN` (projects). The instance pulls everything else (certificate, identity) from the service once signed in. | Smallest cloud-init payload; first issue and renewal of the certificate are one code path. |
+| 9 | The instance boots signed in: the service seeds the account token pair through cloud-init. | Reuses the existing account, refresh and sync code; the only additions are the one-time import with first-boot rotation and the *managed* guard (6.3). |
+| 10 | The browser signs in with a service-minted handoff code that the instance redeems **outbound** with its account token. | Matches how the VM already talks to the service (`infra/cloud.py`); no inbound credential, no second auth scheme on the instance (`docs/security.md`). The console's `#handoff` boot path is reused as is. |
+| 11 | The bearer API port is bound to loopback on an instance. | Nothing outside the server may reach `/` routes; the guest CLI dials loopback and keeps working. |
+| 12 | The public URL (tunnel) feature is refused in site mode; the tunnel profile is never started. | Every project on an instance already has a public address. |
+| 13 | The instance switcher (console and desktop) is deferred. | Not needed to "install on a server and connect"; designed once remote instances are in use. |
+| 14 | Project `ports:` published by compose stay published; the service-managed firewall blocks them. | Same stance as the public URL spec. Stated in `docs/security.md`, not fixed here. |
+
+## 3. Service contract (for the service developer)
+
+This section is self-contained: everything the instance needs from the service, and
+what the service must do before and after creating a server.
+
+### 3.1 Building the snapshot (once per runtime release you want baked in)
+
+1. Create a droplet from Ubuntu 24.04 (x86_64 or arm64; the runtime images are
+   multi-arch).
+2. As root, from `/`:
+
+```bash
+cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | bash
+```
+
+   No site variables: this installs Docker, pulls the images, installs the stack. Add
+   `EGGIE_RUNTIME_REF=<tag>` to pin a release.
+3. Scrub per-instance state and cloud-init so the image is reusable:
+
+```bash
+bash /opt/eggie/runtime/install/snapshot-prep.sh
+```
+
+   It stops the stack and removes the API token, `state.db`, `connect.json`,
+   `site.env`, `account.json`, the `tls`, `tunnel`, `uploads`, `github`, `projects` and
+   `agent-status` trees and cloud-init's instance state. It also removes root's
+   `authorized_keys` and shell history and resets the machine id. Then power off and take
+   the snapshot.
+
+A snapshot does not need rebuilding on every runtime release: the boot update unit
+moves each instance to the newest release on its first boot. Rebuild when first boot
+gets slow.
+
+### 3.2 Provisioning a server
+
+1. Create the droplet from the snapshot. Attach a cloud firewall allowing inbound
+   **22, 80, 443** only. Nothing else must be reachable: the runtime publishes other
+   ports on all interfaces and relies on this firewall.
+2. Choose the instance name, e.g. `foo`. Create DNS records pointing at the droplet's
+   IP: `foo.eggie.io` in Route53; `foo` and `*.foo` under `eggie.space` in Cloudflare,
+   **DNS-only** (grey cloud).
+3. Issue one Let's Encrypt certificate for `foo.eggie.io`, `foo.eggie.space` and
+   `*.foo.eggie.space` (DNS-01 on both zones). Keep it; the instance fetches it (3.4)
+   and the service renews it (3.6).
+4. Mint a **device** for the owner's account for this instance, with a device id and a
+   token pair, the same objects the device-code flow issues to a desktop VM today.
+5. Pass the following cloud-init user data. The login account must exist before the
+   installer runs: the runtime provisions every login account present at that moment
+   (docker group, project ACLs, agent files, skills).
+
+```yaml
+#cloud-config
+users:
+  - name: ihor
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA… the user's key
+write_files:
+  - path: /opt/eggie/account.json
+    permissions: "0640"
+    owner: root:docker
+    content: |
+      {"device_id": "…", "access_token": "…", "refresh_token": "…", "expires_in": 3600}
+runcmd:
+  - cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh
+      | EGGIE_RUNTIME_REPAIR=1 EGGIE_SITE_HOST=foo.eggie.io EGGIE_SITE_DOMAIN=foo.eggie.space bash
+```
+
+`root:docker 0640` because the API, not root, imports and deletes the file; the installer reasserts it.
+
+User data stays readable on the droplet for its whole life (`169.254.169.254`, no auth),
+so the seeded pair must be dead the moment it has served its purpose: the API rotates
+it through `POST /v1/auth/token/refresh` at first boot, before any other call, and the
+seeded access token itself is never used for a request (`expires_in` may be anything;
+the API ignores it). The runtime also drops container traffic to `169.254.169.254` on a
+site (section 4). A one-time bootstrap code in user data, exchanged for the pair
+outbound, would keep the tokens out of user data altogether; that is a later contract
+change (section 11).
+
+`EGGIE_RUNTIME_REPAIR=1` keeps the release the snapshot holds and only configures: no
+apt, no image pulls. `cd /` matters: the installer runs per-account steps as that
+account, and root's home is not enterable by other users. Expect the stack to answer
+on 443 within a minute or two of boot (skills for the login account install from npm).
+
+Record the instance (name, hostnames, device id, droplet id, owner) on the service;
+the instance list in the web app and the handoff check (3.5) read from it.
+
+### 3.3 Authentication of instance calls
+
+Every call below carries `Authorization: Bearer <device access token>`, the token
+seeded in 3.2 and refreshed through the existing `POST /v1/auth/token/refresh`. A
+refresh must rotate: the refresh token it consumed and the access token issued with it
+are invalid afterwards, so the pair left in user data cannot be replayed. Rotation must
+survive a lost reply: if the instance retries with the refresh token it just spent
+(because the answer never arrived), the service should return the pair it already
+issued, or accept the spent token for a short grace window. Otherwise the instance's
+stored pair is dead, its next call gets `invalid_grant`, it clears its account, and —
+since 3.6 refuses every way back in — the server is locked out until re-provisioned.
+The service resolves the instance from the device id behind the token. An instance
+never holds any other credential.
+
+### 3.4 `GET /v1/instances/me/certificate` — fetch the certificate
+
+```json
+200: {"names": ["foo.eggie.io", "foo.eggie.space", "*.foo.eggie.space"],
+      "certificate": "-----BEGIN CERTIFICATE-----\n…(full chain)…",
+      "private_key": "-----BEGIN PRIVATE KEY-----\n…",
+      "not_after": "2027-01-11T10:00:00Z"}
+404: {"error": {"code": "no_certificate", "message": "…"}}   // not issued yet
+```
+
+The instance calls this on start when it has no certificate files, then once a day. It
+replaces its files only when `not_after` is later than the one it holds. A 404 or any
+failure leaves the current files in place.
+
+### 3.5 `POST /v1/instances/handoff/redeem` — sign a browser in
+
+```json
+request: {"code": "k3x9m2p7qa…"}
+200:     {"ok": true}
+401/403/404/409: {"error": {"code": "handoff_invalid", "message": "…"}}
+```
+
+The web app's "open console" button mints a **single-use** code bound to the owner and
+to one instance, with a short lifetime (a minute is plenty), then redirects the browser
+to `https://foo.eggie.io/#handoff=<code>`. The instance's API receives the code from
+the page and calls this endpoint; `200` means "this code was minted for this instance's
+owner and has not been used", and the instance creates a browser session. Anything
+else is shown to the user as "open the console from the web app again".
+
+Codes must not be reusable, must not be valid on another instance, and must be
+consumed on redemption even when the instance later fails to set a cookie. Codes the
+service mints never start with `lh_`: that prefix marks codes the instance minted for
+itself (desktop handoff, "open in browser"), which it checks locally and never forwards.
+
+### 3.6 Renewal and lifecycle
+
+- Renew the certificate at least 30 days before `not_after`. The instance picks the new
+  one up within a day (3.4).
+- Deleting an instance: revoke its device tokens; the server itself is disposable.
+- The instance refuses to sign out or to start a device-code sign-in (`403
+  site_account`): without its pair it could neither redeem codes nor renew its
+  certificate, and nothing on the instance can re-seed it. Detaching an instance is
+  revoking its device tokens on the service.
+
+### 3.7 What the web app shows
+
+Each instance: its console hostname and an "open console" action (3.5). Projects on an
+instance are listed by the existing project registry sync under the instance's device
+id, so nothing new is needed for them.
+
+## 4. Provisioning as seen from the runtime
+
+`get.sh` learns `EGGIE_SITE_HOST` and `EGGIE_SITE_DOMAIN` and persists them to
+`/opt/eggie/site.env` next to `runtime.env`, so repairs, boot updates and manual reruns
+keep them. Both or neither must be set. `install.sh` sources `site.env` and, in site
+mode:
+
+- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1`
+  and `EGGIE_EDGE_BIND=127.0.0.1` to `/opt/eggie/.env` (written fresh on every run, as
+  today);
+- runs every compose command for the stack with
+  `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
+- installs `/opt/eggie/tls/tls.yml`, the Traefik dynamic config naming
+  `current/site.crt` and `current/site.key` as the default certificate, with the
+  directory `2770 root:docker` so the API (docker group) can write the files and Traefik
+  (root in its container) read them;
+- installs and enables `eggie-metadata-guard.service`, which inserts a `DROP` for
+  `169.254.169.254` into Docker's `DOCKER-USER` chain before dockerd starts, so no
+  container can read the user data that carried the account seed;
+- records `"vm": "site"` in `connect.json` alongside the first login account, as it
+  records `wsl`/`lima` today.
+
+`snapshot-prep.sh` (new, `runtime/install/`) stops the stack and removes
+`/opt/eggie/api.token`, `state.db`, `connect.json`, `site.env`, `account.json`, the
+`tls/`, `tunnel/`, `uploads/`, `github/`, `projects/` and `agent-status/` trees and root's
+SSH key and history, then runs `cloud-init clean --logs --machine-id`. The runtime tree,
+images, `.env` and `runtime.env` stay.
+On the next boot the installer regenerates the token (it only creates one when absent)
+and the API starts with a fresh `state.db`.
+
+Account seeding is the API's job, not the installer's (section 6.3).
+
+## 5. The edge
+
+### 5.1 `stack.yml` (identical in both modes, env-driven)
+
+- Console and `/api` router rules become
+  ``Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)``.
+- The api service's port mapping becomes
+  `"${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"`,
+  and traefik's `"${EGGIE_EDGE_BIND:-0.0.0.0}:${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"`.
+  WSL2 keeps the all-interfaces default; site sets both to loopback.
+- The api service's `environment` also carries `EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}`; `.env`
+  interpolates the stack but is not injected into containers.
+
+### 5.2 `stack.site.yml` (override, next to `stack.debug.yml`)
+
+Replaces Traefik's `command` and adds ports and a volume:
+
+- entrypoint `web` on `:443` with `http.tls=true` — keeping the name `web` means every
+  router label in the stack and in the project overlay stays as it is;
+- entrypoint `http` on `:80` with a permanent redirect to `web`;
+- `--providers.file.directory=/opt/eggie/tls --providers.file.watch=true`;
+- the `readTimeout` and Docker provider flags copied from the base, because compose
+  replaces `command` wholesale;
+- entrypoint `probe` on `:${EGGIE_EDGE_PORT}`, plain HTTP and unpublished: the API's
+  readiness probe (`infra/health.py`) dials `traefik:<edge port>` over the `edge`
+  network, and project routers name no entrypoint so they answer on it;
+- `ports: ["80:80", "443:443"]`, appended to the base list; compose merges `ports`, so
+  the base `39080` mapping stays and `EGGIE_EDGE_BIND=127.0.0.1` pins it to loopback,
+  where the probe entrypoint is reachable only by the server's own accounts;
+- `/opt/eggie/tls:/opt/eggie/tls:ro`.
+
+Until the certificate files exist Traefik serves its default self-signed certificate;
+the file watch reloads the moment the API writes them.
+
+### 5.3 Hostnames
+
+`domain/overlay.py::host_for` becomes `f"{sub}--{id}.{domain}"` for a service with a
+subdomain, `f"{id}.{domain}"` otherwise. `domain/project.py::_slug` collapses every run
+outside `[a-z0-9]` to one hyphen and `load_project` slugs subdomains too, so neither
+side of `--` ever contains it (decision 7). Locally the `*.local.eggie.space` wildcard
+already resolves both shapes.
+
+## 6. The API
+
+### 6.1 Config
+
+`ApiConfig.site_host: str | None` from `EGGIE_SITE_HOST` (the console's hostname).
+`domain` stays `EGGIE_DOMAIN`, which the installer sets to the site domain. Derived:
+
+- `public_url(host)`: `https://{host}` when `site_host` is set, else
+  `http://{host}:{edge_port}` as today. `services/loader.py` uses it for `local_url`
+  (field name kept; the console reads it unchanged).
+
+### 6.2 Browser auth (`rest/auth.py`)
+
+With `site_host` set, `allowed_hosts` also contains `site_host` and `allowed_origins`
+also contains `https://{site_host}`. The session cookie gets `secure=True`. Nothing
+changes locally.
+
+### 6.3 Account seeding (`services/account.py`)
+
+On start: if the account row has no refresh token and `/opt/eggie/account.json` exists
+and parses, replace the row's `device_id` with the file's (no records exist yet that
+could be orphaned), store the pair with its access token already marked expired,
+delete the file, then rotate the pair at once through the existing refresh. If the
+service is unreachable the first authenticated call rotates it instead; if the service
+refuses the pair the row is cleared. A malformed file is logged and left alone; an
+existing signed-in row ignores the file. In site mode `Account` is *managed*:
+`start_sign_in` and `sign_out` raise `403 site_account` (3.6), and the console hides
+the control (section 7).
+
+### 6.4 Handoff (`services/sessions.py`, `rest/routers/sessions.py`)
+
+`POST /api/session` keeps redeeming local codes first. Codes the API mints carry the
+`lh_` prefix; one of those that misses (expired, spent) is refused locally and never
+forwarded. Any other code, in site mode, goes to `POST /v1/instances/handoff/redeem`
+through `Account.authed()`, at most ten a minute per instance; a `200` creates a session
+like a local redemption. Every other outcome, including the instance not being signed
+in, is the existing `handoff_invalid` error.
+
+### 6.5 Certificate (`services/certificate.py`, new)
+
+Fetches on start when `/opt/eggie/tls/current` does not resolve to a pair, else once a
+day from a `SyncLoop` pass. Each pair lives in its own directory named by the
+certificate's `not_after` (`/opt/eggie/tls/<epoch>/site.crt`, `site.key` 0600); `current`
+is a symlink to the newest. Traefik watches `/opt/eggie/tls` and inotify reports only
+direct children, so writing inside a new directory causes no reload; replacing the
+symlink is one event and Traefik loads key and certificate together, never a
+mismatched pair. The installed expiry is the link target's name. A newer `not_after`
+installs, an older or equal one is ignored. Old directories are removed at the start of
+the next check, never right after a swap Traefik may still be reloading.
+Failures are logged and keep the current files. Only active in site mode.
+
+### 6.6 Surface
+
+- `GET /api/health` and `GET /health` gain `"site": "<console hostname>" | null`.
+- `GET /api/connect` (`infra/connect.py::facts`) returns `ssh: {host: <site host>,
+  port: 22, user: <first login account>, key_file: null}` when `connect.json` says
+  `"vm": "site"`; `"site"` joins the known kinds.
+- `POST /projects/{id}/public` and the `/api` twin answer `409 not_available`
+  ("every project on this server already has a public address") in site mode; `GET`
+  reports `unavailable` with that reason, the same shape as "signed out" today.
+
+## 7. The console
+
+Driven by `health.site`, read from the same `/api/health` answer the boot sequence
+already fetches (so it follows every retry); until that answers, a page on
+`localhost`/`127.0.0.1` assumes the usual VM and any other host assumes nothing:
+
+- the signed-out screen says to reopen the console from the Eggie web app, not from
+  the desktop app;
+- the public URL control is absent from the project row and page;
+- the agents card shows the instance's SSH host and port 22 and no key file;
+- sign-out is absent from the account menu.
+
+Nothing else changes; project URLs come from the API.
+
+## 8. Security
+
+New rows for the boundary table in `docs/security.md`:
+
+| Way in | What it reaches | Who may use it |
+|---|---|---|
+| 443 | Traefik: console on the site host, `/api`, every project host under the site domain | Anyone on the internet; console and `/api` need a session from a service-minted handoff; projects have only their own auth |
+| 80 | Redirect to 443 | Anyone |
+| 22 | The login account | Holders of the SSH key the service installed |
+
+The console and the projects live on different registered domains (decision 3), so a
+project cannot set cookies the console's origin would read. The bearer API binds to
+loopback. Project `ports:` are published by compose and blocked only by the service's
+firewall (decision 14). The certificate key is `0600`, owned by the API's user, written by the API
+through the docker group, mounted read-only into Traefik; it covers only this
+instance's names. `account.json` is deleted after import and its pair rotated at first
+boot; tokens live in `state.db` as today. Containers cannot reach `169.254.169.254`
+(`DOCKER-USER` drop), so user data is readable only by the droplet's own accounts. The session cookie is `Secure`, `HttpOnly`, `SameSite=Strict`, path `/api`,
+unchanged otherwise. A snapshot holds no token, database or key (section 4).
+
+## 9. Testing
+
+Only where a wrong answer is plausible:
+
+- `test_overlay.py`: flattened hosts for a service with a subdomain.
+- `test_api_browser_auth.py`: site host and `https` origin accepted, local still
+  accepted, `Secure` on the cookie only in site mode.
+- `test_sessions.py` / `test_api_auth.py`: service fallback on an unknown code, refusal
+  mapped to `handoff_invalid`, no service call when not in site mode.
+- `test_account.py`: seed imported once and file deleted; ignored when signed in;
+  malformed file leaves the row untouched.
+- new `test_certificate.py`: fetch on missing, daily re-check, replace only on a later
+  `not_after`, key and certificate live together behind `current`, failure keeps files.
+- loader: `local_url` is `https://<host>` without a port in site mode.
+- `test_get_sh.py` / `test_install_shell.py` (real bash, fakes on PATH): `site.env`
+  survives a repair, one site variable without the other is refused, the compose
+  commands carry the override only in site mode, `.env` carries the loopback bind and
+  the site domain, `tls.yml` installed.
+- new `test_snapshot_prep.py` (real bash): the listed files go, the runtime tree,
+  `.env` and `runtime.env` stay.
+- `test_stack_yml.py`: with `docker compose config` available, the merged site config
+  publishes 80 and 443 and binds 39099 to loopback; skipped otherwise.
+- console (Vitest): signed-out copy and public control depend on `health.site`.
+- `docs/release-testing.md`: a manual "site" gate — build a snapshot, provision from
+  it, open the console from the web app, start a project, reach it over `https` on
+  `eggie.space`, reboot, confirm the certificate reload.
+
+## 10. Out of scope
+
+Instance switcher (console and desktop), user-attached custom domains, Cloudflare
+proxying, forward-auth in front of projects, desktop app changes, service-side
+implementation beyond section 3, migration of existing local VMs (none exist in the
+wild).
+
+## 11. Open points
+
+- The exact endpoint paths in section 3 are proposals; the service developer may
+  rename them, the instance code is written against whatever is agreed.
+- Whether the service wants a heartbeat from instances (e.g. runtime version) is a
+  later addition to the sync pass.
+- The refresh grace window in 3.3 is the one place where a dropped packet can strand an
+  instance; until the service has it, a stranded instance is re-provisioned.
+- A one-time bootstrap code in user data, exchanged outbound for the token pair, would
+  keep tokens out of user data entirely. First-boot rotation plus the metadata guard
+  cover the gap for now; the bootstrap exchange is a contract change for a later round.

@@ -110,7 +110,7 @@ def test_the_pull_still_shows_its_progress_while_being_recorded():
 def test_install_always_pulls_before_bringing_the_stack_up():
     # Always pulling is the delivery decision: it is how an API update reaches
     # an already-bootstrapped VM. `up -d` alone would keep running a stale image.
-    assert _index_of(f"compose -f {STACK} --profile tunnel pull") < _index_of(" up -d")
+    assert _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull") < _index_of(" up -d")
 
 
 def test_the_stack_comes_up_without_the_tunnel_profile():
@@ -220,7 +220,7 @@ def test_a_repair_or_a_new_token_recreates_the_api():
     # The API reads its token once at startup; `up -d` leaves it running.
     # The service key is derived from stack.yml, not hardcoded "api" here too
     # -- the same way tests/runtime/cli/test_boundaries.py derives the CLI's
-    # RESTART_API -- so a rename of stack.yml's service key alone fails this
+    # restart_api() -- so a rename of stack.yml's service key alone fails this
     # test instead of leaving install.sh silently recreating a service that
     # no longer exists.
     services = yaml.safe_load(STACK_YML.read_text())["services"]
@@ -228,7 +228,9 @@ def test_a_repair_or_a_new_token_recreates_the_api():
                   if "eggie-api" in svc.get("image", "")]
     commands = _commands()
     recreate = _index_of(f"--force-recreate {api_key}")
-    assert recreate > _index_of(" up -d")
+    # The API must start exactly once: the plain `up -d` that follows leaves it alone.
+    (plain,) = [i for i, l in enumerate(commands) if l.endswith("$SITE_STACK up -d")]
+    assert recreate < plain
     condition = commands[recreate - 1]
     assert "TOKEN_CREATED" in condition and "REPAIR" in condition, condition
 
@@ -449,6 +451,82 @@ def test_install_builds_the_guest_cli_from_its_package_before_installing_it():
     assert build < installed
     assert commands[installed].startswith("install -m 755 ")
     assert not any("cli/eggie.py" in l for l in commands)
+
+
+SITE_ENV = f"{constants.GUEST_ROOT}/site.env"
+
+
+def test_install_reads_site_env_before_writing_the_compose_env():
+    commands = _commands()
+    assert _index_of(f"source {SITE_ENV}") < _index_of(f"{constants.GUEST_ROOT}/.env")
+
+
+def test_install_appends_the_site_lines_after_writing_env():
+    # .env is rewritten on every run (the docker GID and image version); the
+    # site lines must follow in the same run or a repair drops site mode.
+    commands = _commands()
+    write = _index_of(f"EGGIE_VERSION=%s")
+    append = _index_of("EGGIE_API_BIND=127.0.0.1")
+    assert write < append < _index_of(" up -d")
+    (line,) = [l for l in commands if "EGGIE_DOMAIN=%s" in l]
+    assert "EGGIE_EDGE_BIND=127.0.0.1" in line, "the plain-HTTP probe port must stay on loopback on a site"
+    assert sum("EGGIE_EDGE_BIND" in l for l in commands) == 1, "a local install must not write it"
+    assert any("EGGIE_DOMAIN=%s" in l and ">> " in l for l in commands), \
+        "the site domain becomes EGGIE_DOMAIN by appending, never by rewriting"
+
+
+def test_every_stack_compose_command_carries_the_site_override():
+    stack_lines = [l for l in _commands() if f"compose -f {STACK}" in l]
+    assert len(stack_lines) >= 3, stack_lines
+    assert all("$SITE_STACK" in l for l in stack_lines), stack_lines
+
+
+def test_the_site_override_is_the_one_shipped_next_to_stack_yml():
+    (line,) = [l for l in _commands() if 'SITE_STACK="-f' in l]
+    assert line.endswith('stack.site.yml"')
+    assert (STACK_YML.parent / "stack.site.yml").is_file()
+
+
+def test_install_ships_traefik_a_default_certificate_config_in_site_mode():
+    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /opt/eggie/tls/tls\.yml',
+                      INSTALL.read_text())
+    assert match, "install.sh does not install /opt/eggie/tls/tls.yml"
+    doc = yaml.safe_load((INSTALL.parent / match.group(1)).read_text())
+    cert = doc["tls"]["stores"]["default"]["defaultCertificate"]
+    assert cert == {"certFile": "/opt/eggie/tls/current/site.crt",
+                    "keyFile": "/opt/eggie/tls/current/site.key"}
+    # The API (docker group) writes the files; Traefik reads the directory.
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/tls" in INSTALL.read_text()
+
+
+def test_install_records_a_site_as_its_own_vm_kind():
+    text = INSTALL.read_text()
+    assert "vm=site" in text
+    assert text.index("vm=site") < text.index("/opt/eggie/connect.json")
+
+
+def test_install_lets_the_api_read_the_seeded_account_file_before_the_stack_starts():
+    # cloud-init writes it as root; the API runs as a docker-group user and
+    # must both read and delete it.
+    commands = _commands()
+    chgrp = _index_of("chgrp docker /opt/eggie/account.json")
+    assert chgrp > _index_of("g+rwX")
+    assert chgrp < _index_of(" up -d")
+    assert _index_of("chmod 640 /opt/eggie/account.json") < _index_of(" up -d")
+
+
+def test_install_puts_the_certificate_key_back_to_0600_after_the_sweep():
+    # The sweep's g+rwX widens a key the API wrote on an earlier boot.
+    assert _index_of("find /opt/eggie/tls -name site.key -type f -exec chmod 600 {} +") > _index_of("g+rwX")
+
+
+def test_only_a_site_install_enables_the_metadata_guard():
+    # The local VM has no metadata service; a droplet's serves the account token's user data.
+    text = INSTALL.read_text()
+    (block,) = re.findall(r"# 7b\..*?\nfi\n", text, re.S)
+    assert "systemctl enable --now eggie-metadata-guard.service" in block
+    assert block.index("if (( SITE ))") < block.index("eggie-metadata-guard")
+    assert text.count("eggie-metadata-guard") == block.count("eggie-metadata-guard")
 
 
 def test_the_wsl_account_exists_before_accounts_are_provisioned():

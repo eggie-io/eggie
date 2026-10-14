@@ -2,9 +2,11 @@ from eggie_api.domain.overlay import build_overlay, host_for
 from eggie_api.domain.detect import WebSpec
 
 
-def test_host_primary_is_bare_id_additional_prefixed():
+def test_host_primary_is_bare_id_additional_prefixed_one_label_deep():
+    # A site's wildcard certificate covers `*.<domain>` only; `api.myproj.d.io`
+    # would fall outside it, so additional services share the label.
     assert host_for("myproj", WebSpec("app", 80), "d.io") == "myproj.d.io"
-    assert host_for("myproj", WebSpec("api", 4000, subdomain="api"), "d.io") == "api.myproj.d.io"
+    assert host_for("myproj", WebSpec("api", 4000, subdomain="api"), "d.io") == "api--myproj.d.io"
 
 
 def test_overlay_attaches_edge_network_and_router_labels():
@@ -13,8 +15,8 @@ def test_overlay_attaches_edge_network_and_router_labels():
     assert svc["networks"] == ["default", "edge"]
     labels = svc["labels"]
     assert labels["traefik.enable"] == "true"
-    assert labels["traefik.http.routers.myproj-app.rule"] == "Host(`myproj.d.io`)"
-    assert labels["traefik.http.services.myproj-app.loadbalancer.server.port"] == "8080"
+    assert labels["traefik.http.routers.myproj--app.rule"] == "Host(`myproj.d.io`)"
+    assert labels["traefik.http.services.myproj--app.loadbalancer.server.port"] == "8080"
     assert ov["networks"]["edge"] == {"external": True}
 
 
@@ -31,8 +33,8 @@ def test_two_web_services_get_distinct_hosts_and_routers():
     ], "d.io")
     fe = ov["services"]["frontend"]["labels"]
     api = ov["services"]["api"]["labels"]
-    assert fe["traefik.http.routers.shop-frontend.rule"] == "Host(`shop.d.io`)"
-    assert api["traefik.http.routers.shop-api.rule"] == "Host(`api.shop.d.io`)"
+    assert fe["traefik.http.routers.shop--frontend.rule"] == "Host(`shop.d.io`)"
+    assert api["traefik.http.routers.shop--api.rule"] == "Host(`api--shop.d.io`)"
 
 
 def test_every_service_gets_the_secret_names_and_web_routing_is_kept():
@@ -68,3 +70,10 @@ def test_a_service_that_declares_every_name_gets_no_environment_entry():
     ov = build_overlay("p", [], "d.io", services=["db"], secret_names=["A"],
                        declared={"db": {"A"}})
     assert "db" not in ov["services"]
+
+
+def test_a_project_and_service_name_cannot_collide_across_projects():
+    # Traefik drops a router defined twice: blog-api + web vs blog + api-web.
+    a = build_overlay("blog-api", [WebSpec("web", 80)], "d.io")["services"]["web"]["labels"]
+    b = build_overlay("blog", [WebSpec("api-web", 80)], "d.io")["services"]["api-web"]["labels"]
+    assert not (set(a) & set(b)) - {"traefik.enable"}

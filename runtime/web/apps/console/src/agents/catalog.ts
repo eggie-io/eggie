@@ -12,8 +12,8 @@ export interface CardField { label: string; value: string }
 export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
 export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
-  vm: "wsl" | "lima" | "other";
-  ssh: { host: string; port: number; user: string; key_file: string } | null;
+  vm: "wsl" | "lima" | "site" | "other";
+  ssh: { host: string; port: number; user: string; key_file: string | null } | null;
 }
 
 const ID = /^[a-z0-9][a-z0-9-]*$/;

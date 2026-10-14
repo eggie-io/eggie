@@ -1,0 +1,10 @@
+# Traefik dynamic config for a site: the certificate the API fetches from the
+# service. Until `current` exists Traefik serves its own self-signed one. The
+# directory is watched: the API swaps the `current` link to a directory holding
+# a new key and certificate in one step, so Traefik never loads half a pair.
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /opt/eggie/tls/current/site.crt
+        keyFile: /opt/eggie/tls/current/site.key

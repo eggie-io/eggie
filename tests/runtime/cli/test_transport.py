@@ -14,7 +14,7 @@ class _Refused:
         raise urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
 
 
-def test_a_stopped_service_is_named_with_the_command_that_starts_it(tmp_path):
+def _status_error(tmp_path) -> str:
     root = tmp_path / "projects"
     (root / "blog").mkdir(parents=True)
     out, err = io.StringIO(), io.StringIO()
@@ -23,7 +23,27 @@ def test_a_stopped_service_is_named_with_the_command_that_starts_it(tmp_path):
                   out=out, err=err)
     assert cli.main(["status"], env) == 1
     assert "not answering" in err.getvalue()
-    assert cli.START_STACK in err.getvalue()
+    return err.getvalue()
+
+
+SITE_OVERRIDE = "-f /opt/eggie/runtime/stack.site.yml"
+
+
+def test_a_stopped_service_is_named_with_the_command_that_starts_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli.api, "GUEST_SITE_ENV", str(tmp_path / "site.env"))
+    message = _status_error(tmp_path)
+    assert "sudo /usr/bin/docker compose -f /opt/eggie/stack.yml up -d" in message
+    assert SITE_OVERRIDE not in cli.restart_api()
+
+
+def test_on_a_site_the_compose_hint_keeps_the_site_override(tmp_path, monkeypatch):
+    # Without it compose recreates Traefik off 80/443 and TLS.
+    site_env = tmp_path / "site.env"
+    site_env.write_text("EGGIE_SITE_HOST=foo.eggie.io\n")
+    monkeypatch.setattr(cli.api, "GUEST_SITE_ENV", str(site_env))
+    expected = f"sudo /usr/bin/docker compose -f /opt/eggie/stack.yml {SITE_OVERRIDE} up -d"
+    assert expected in _status_error(tmp_path)
+    assert cli.restart_api() == f"{expected} --force-recreate api"
 
 
 def test_a_vm_without_a_token_says_eggie_is_not_set_up(tmp_path):

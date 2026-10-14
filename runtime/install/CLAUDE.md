@@ -1,14 +1,15 @@
 # runtime/install/ — provisioning scripts
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
-`test_install_shell.py`, test_swap.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`.
+`test_install_shell.py`, `test_swap.py`, `test_install_agents.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
 Hosts fetch it from **`main`**, not from a tag, so an edit here reaches every installed host at once.
 Keep backward compatible: its env vars (`EGGIE_RUNTIME_REPO`, `EGGIE_RUNTIME_REF`,
-`EGGIE_RUNTIME_REPAIR`, `EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`), the marker path
+`EGGIE_RUNTIME_REPAIR`, `EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`, `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (site mode, both or neither,
+persisted to `/opt/eggie/site.env`)), the marker path
 `/opt/eggie/runtime.version`, and its exit semantics.
 
 Flow: `resolve_ref` (explicit `EGGIE_RUNTIME_REF` → installed ref on repair → highest `runtime-v*`
@@ -43,6 +44,12 @@ branch), reads the accepted API from `/opt/eggie/host.json` (falling back to the
 release's own `api` when the host never wrote one), retries fetching `get.sh` a few times in case
 the network comes up after the unit starts, then runs it with `EGGIE_RUNTIME_UPDATE=1`.
 
+### `lib/metadata-guard.sh` + `systemd/eggie-metadata-guard.service`
+
+Site mode only (step 7b): a oneshot unit ordered before `docker.service` that adds an idempotent
+`DROP` for `169.254.169.254` to the `DOCKER-USER` chain, so containers cannot read the droplet's
+user data (which seeded `account.json`).
+
 ## `install.sh` — numbered steps, order matters
 
 a 4 GiB `/swapfile` when the VM has no swap (`lib/swap.sh`; Lima and cloud images ship none, WSL
@@ -68,6 +75,16 @@ read them before reordering.
 above the one it last handled, into `status.json`. systemd drops triggers that arrive during a pass,
 so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
 meanwhile.
+
+## Site mode
+
+`get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
+bare lowercase hostnames); a run without them keeps the file. `install.sh` sources it: appends
+`EGGIE_SITE_HOST`, `EGGIE_DOMAIN`, `EGGIE_API_BIND=127.0.0.1` and `EGGIE_EDGE_BIND=127.0.0.1` to `.env`, adds
+`-f $RUNTIME_DIR/stack.site.yml` (`$SITE_STACK`, unquoted on purpose) to the stack's compose
+commands, installs `site/tls.yml` into `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik
+reads), enables the metadata guard unit (step 7b) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
+imaged (`tests/runtime/test_snapshot_prep.py`).
 
 ## Testing
 

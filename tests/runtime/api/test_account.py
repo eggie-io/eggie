@@ -1,3 +1,6 @@
+import os
+import stat
+
 import pytest
 
 from eggie_api.services.account import Account, NotSignedIn
@@ -265,3 +268,109 @@ def test_a_refresh_finding_the_token_already_replaced_does_not_spend_it_again(tm
 
     assert account._refresh("at-1") == "at-new"
     assert "refresh" not in cloud.names()
+
+
+import json
+
+
+def _seed_file(tmp_path, **fields):
+    body = {"device_id": "dev-9", "access_token": "at-s", "refresh_token": "rt-s",
+            "expires_in": 3600, **fields}
+    path = tmp_path / "account.json"
+    path.write_text(json.dumps(body))
+    return path
+
+
+ROTATED = {"access_token": "at-r", "refresh_token": "rt-r", "expires_in": 900}
+
+
+def test_a_seed_file_signs_the_instance_in_with_a_rotated_pair_and_is_deleted(tmp_path):
+    cloud = FakeCloud(refresh=[ROTATED])
+    account, clock, _ = make(tmp_path, cloud)
+    woken = []
+    account.on_signed_in = lambda: woken.append(True)
+    path = _seed_file(tmp_path)
+
+    assert account.seed_from(path) is True
+    assert cloud.calls == [("refresh", "rt-s")]
+    row = account._account.get()
+    assert (row["device_id"], row["access_token"], row["refresh_token"]) == ("dev-9", "at-r", "rt-r")
+    assert row["access_expires_at"] == clock.now + 900
+    assert account.signed_in and account.device_id == "dev-9"
+    assert not path.exists()
+    assert woken == [True]
+
+
+@pytest.mark.parametrize("failure", [CloudUnavailable("down"), {}])
+def test_a_seed_that_cannot_be_rotated_yet_is_rotated_before_its_first_use(tmp_path, failure):
+    cloud = FakeCloud(refresh=[failure, ROTATED])
+    account, _, _ = make(tmp_path, cloud)
+
+    assert account.seed_from(_seed_file(tmp_path)) is True
+    row = account._account.get()
+    assert (row["access_token"], row["refresh_token"]) == ("at-s", "rt-s")
+
+    seen = []
+    account.authed(seen.append)
+    assert seen == ["at-r"]
+    assert cloud.calls == [("refresh", "rt-s"), ("refresh", "rt-s")]
+
+
+def test_a_seed_the_service_refuses_leaves_the_instance_signed_out(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[err("invalid_grant")]))
+    woken = []
+    account.on_signed_in = lambda: woken.append(True)
+
+    assert account.seed_from(_seed_file(tmp_path)) is False
+    assert not account.signed_in
+    assert woken == []
+
+
+def test_a_signed_in_instance_ignores_a_seed_file_and_leaves_it(tmp_path):
+    account, _ = signed_in(tmp_path, FakeCloud())
+    path = _seed_file(tmp_path)
+
+    assert account.seed_from(path) is False
+    assert account._account.get()["access_token"] == "at-1"
+    assert path.exists()
+
+
+def test_a_malformed_seed_file_changes_nothing_and_stays(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    path = tmp_path / "account.json"
+    path.write_text('{"device_id": "dev-9", "access_token": ""}')
+
+    assert account.seed_from(path) is False
+    assert not account.signed_in
+    assert path.exists()
+
+
+def test_no_seed_file_is_the_ordinary_case(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud())
+    assert account.seed_from(tmp_path / "absent.json") is False
+
+
+def test_a_seed_supersedes_a_pending_sign_in_code(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[ROTATED]))
+    account._account.update(device_code="dc", user_code="UC", verification_url="u",
+                            code_expires_at=9e9, poll_interval=5.0)
+
+    assert account.seed_from(_seed_file(tmp_path)) is True
+    row = account._account.get()
+    assert row["device_code"] is None and row["user_code"] is None
+    assert account.status()["state"] == "signed_in"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory modes")
+def test_a_seed_that_cannot_be_deleted_is_still_imported(tmp_path):
+    account, _, _ = make(tmp_path, FakeCloud(refresh=[ROTATED]))
+    folder = tmp_path / "seed"
+    folder.mkdir()
+    path = _seed_file(folder)
+    folder.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        assert account.seed_from(path) is True
+        assert account.signed_in
+        assert path.exists()
+    finally:
+        folder.chmod(stat.S_IRWXU)

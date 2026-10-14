@@ -110,3 +110,13 @@ class Cloud:
 
     def release_public_url(self, token: str, cloud_id: str):
         return self.call("DELETE", self._public_url_path(cloud_id), token=token)
+
+    def instance_certificate(self, token: str):
+        """The site's certificate, issued and renewed by the service."""
+        return self.call("GET", "/v1/instances/me/certificate", token=token)
+
+    def redeem_instance_handoff(self, token: str, code: str):
+        """Whether a sign-in code the web app minted belongs to this
+        instance's owner; the service consumes it either way."""
+        return self.call("POST", "/v1/instances/handoff/redeem", token=token,
+                         body={"code": code})

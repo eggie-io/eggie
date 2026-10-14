@@ -15,6 +15,7 @@ from .infra.tunnel import TunnelClient
 from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
+from .services.certificate import Certificate
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
@@ -26,6 +27,7 @@ from .services.projects import ProjectService
 from .services.public import Public
 from .services.secrets import SecretService
 from .services.sessions import Sessions
+from .services.site import SiteSignIn
 from .services.sync import SyncLoop, run_pass
 from .services.system import SystemService
 from .services.uploads import UploadService
@@ -49,7 +51,9 @@ class Services:
     public: Public
     github_link: GitHubLink
     sessions: Sessions
+    site: SiteSignIn
     agents: AgentStatus
+    certificate: Certificate | None
     sync: SyncLoop
     system: SystemService
 
@@ -73,19 +77,30 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     uploads = UploadService(store, loader, locks)
     secrets = SecretService(repos.secrets, loader)
     cloud = cloud or Cloud(config.cloud_url)
-    account = account or Account(repos.account, repos.cloud_projects, cloud)
+    account = account or Account(repos.account, repos.cloud_projects, cloud,
+                                 managed=config.site_host is not None)
     public = public or Public(
         projects=repos.projects, cloud_projects=repos.cloud_projects,
         account=account, cloud=cloud,
         client=TunnelClient(runner, config.stack_file),
         token_path=config.tunnel_token_path,
         origin=f"http://{config.traefik_host}:{config.edge_port}",
-        hosts_for=loader.public_hosts)
+        hosts_for=loader.public_hosts,
+        site=config.site_host is not None)
+    site = SiteSignIn(sessions, account, cloud, remote=config.site_host is not None)
     account.on_forget = public.forget_local
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    sync = SyncLoop([public.reconcile, lambda: run_pass(account, cloud, repos)])
+    certificate = None
+    if config.site_host:
+        certificate = Certificate(
+            config.tls_dir, account, cloud,
+            names=(config.site_host, config.domain, f"*.{config.domain}"))
+    passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
+    if certificate is not None:
+        passes.append(certificate.refresh)
+    sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
     github_link = github_link or GitHubLink(
@@ -104,6 +119,6 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, github_link=github_link,
-        sessions=sessions,
+        sessions=sessions, site=site,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
-        sync=sync, system=SystemService(config, runner))
+        certificate=certificate, sync=sync, system=SystemService(config, runner))

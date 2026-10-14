@@ -5,6 +5,9 @@ GUEST_ROOT = "/opt/eggie"
 GUEST_PROJECTS = f"{GUEST_ROOT}/projects"
 GUEST_TOKEN = f"{GUEST_ROOT}/api.token"
 GUEST_STACK = f"{GUEST_ROOT}/stack.yml"
+# Present only on a site; the override puts Traefik on 80/443 with TLS.
+GUEST_SITE_ENV = f"{GUEST_ROOT}/site.env"
+GUEST_SITE_STACK = f"{GUEST_ROOT}/runtime/stack.site.yml"
 COMPOSE_FILE = "docker-compose.yml"
 # The code the API answers when it has no usable token of its own.
 API_UNCONFIGURED = "api_unconfigured"

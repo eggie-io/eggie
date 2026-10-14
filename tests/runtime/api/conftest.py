@@ -118,27 +118,34 @@ class FakeProbe:
 AUTH = {"Authorization": "Bearer test-token"}
 
 
-@pytest.fixture
-def env(tmp_path):
+SITE_BROWSER = {"Host": "foo.eggie.io"}
+SITE_ORIGIN = {"Origin": "https://foo.eggie.io"}
+
+
+def _make_env(tmp_path, **overrides):
     token_path = tmp_path / "api.token"
     token_path.write_text("test-token")
     config = ApiConfig(
-        domain="test.local",
-        edge_port=41080,
-        projects_root=tmp_path / "projects",
-        state_db=tmp_path / "state.db",
-        version="9.9.9",
-        token_path=token_path,
-        connect_path=tmp_path / "connect.json",
-        uploads_root=tmp_path / "uploads",
-        agent_status_dir=tmp_path / "agent-status",
-        agents_dir=tmp_path / "agents",
-        # No retry window: these tests assert on the verdict, and the window
-        # itself is covered against a fake clock in test_health.py.
-        ready_timeout=0.0,
-        stack_file=tmp_path / "stack.yml",
-        tunnel_token_path=tmp_path / "tunnel.token",
-    )
+        **{
+            "domain": "test.local",
+            "edge_port": 41080,
+            "projects_root": tmp_path / "projects",
+            "state_db": tmp_path / "state.db",
+            "version": "9.9.9",
+            "token_path": token_path,
+            "connect_path": tmp_path / "connect.json",
+            "uploads_root": tmp_path / "uploads",
+            "agent_status_dir": tmp_path / "agent-status",
+            "agents_dir": tmp_path / "agents",
+            # No retry window: these tests assert on the verdict, and the window
+            # itself is covered against a fake clock in test_health.py.
+            "ready_timeout": 0.0,
+            "stack_file": tmp_path / "stack.yml",
+            "tunnel_token_path": tmp_path / "tunnel.token",
+            "tls_dir": tmp_path / "tls",
+            "account_seed": tmp_path / "account.json",
+            **overrides,
+        })
     runner = FakeRunner()
     probe = FakeProbe()
     app = create_app(config=config, runner=runner, http_probe=probe)
@@ -150,6 +157,17 @@ def env(tmp_path):
                               raw_client=TestClient(app, raise_server_exceptions=False,
                                                     headers=AUTH),
                               app=app)
+
+
+@pytest.fixture
+def env(tmp_path):
+    yield from _make_env(tmp_path)
+
+
+@pytest.fixture
+def site_env(tmp_path):
+    # A server with its own hostnames: console on site_host, projects under domain.
+    yield from _make_env(tmp_path, site_host="foo.eggie.io", domain="foo.eggie.space")
 
 
 def _create(env, pid="blog", **body):

@@ -20,6 +20,7 @@ import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
+import { isLocalHost, nextSite, SiteContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
@@ -32,6 +33,11 @@ export function App({ handoff, home = null }: { handoff: string | null; home?: s
 
 function Screens({ handoff }: { handoff: string | null }) {
   const [result, setResult] = useState<BootResult | null>(null);
+  // A local address starts as null so localhost doesn't shift layout while
+  // health is pending.
+  const [site, setSite] = useState<string | null | undefined>(
+    isLocalHost(window.location.hostname) ? null : undefined,
+  );
   const pendingHandoff = useRef(handoff);
   const running = useRef(false);
 
@@ -43,7 +49,9 @@ function Screens({ handoff }: { handoff: string | null }) {
     const code = pendingHandoff.current;
     pendingHandoff.current = null;
     try {
-      setResult(await boot({ fetch: (input, init) => fetch(input, init), handoff: code }));
+      const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
+      setSite((prev) => nextSite(prev, next));
+      setResult(next);
     } finally {
       running.current = false;
     }
@@ -59,31 +67,38 @@ function Screens({ handoff }: { handoff: string | null }) {
 
   const needAccount = useCallback(() => setResult({ kind: "needsAccount" }), []);
 
-  if (result === null) return <Shell />;
+  return <SiteContext.Provider value={site}>{screen()}</SiteContext.Provider>;
 
-  switch (result.kind) {
-    case "signedIn":
-      return (
-        <QueryClientProvider client={queryClient}>
-          <QueueProvider onSessionLost={(reason) => setResult({ kind: "signedOut", reason })}>
-            <BrowserRouter>
-              <OnboardingProvider>
-                <Console onSignedOut={needAccount} />
-              </OnboardingProvider>
-            </BrowserRouter>
-          </QueueProvider>
-        </QueryClientProvider>
-      );
-    case "needsAccount":
-      return <SignIn onSignedIn={run} onSessionLost={(reason) => setResult({ kind: "signedOut", reason })} />;
-    case "signedOut":
-      return <SignedOut reason={result.reason} onRetry={run} />;
-    case "needsUpdate":
-      return <NeedsUpdate apiVersion={result.apiVersion} onRetry={run} />;
-    case "notAnswering":
-      return <NotAnswering onRetry={run} />;
-    case "wrongHost":
-      return <WrongHost onRetry={run} />;
+  function screen() {
+    if (result === null) return <Shell />;
+    return renderResult(result);
+  }
+
+  function renderResult(result: BootResult) {
+    switch (result.kind) {
+      case "signedIn":
+        return (
+          <QueryClientProvider client={queryClient}>
+            <QueueProvider onSessionLost={(reason) => setResult({ kind: "signedOut", reason })}>
+              <BrowserRouter>
+                <OnboardingProvider>
+                  <Console onSignedOut={needAccount} />
+                </OnboardingProvider>
+              </BrowserRouter>
+            </QueueProvider>
+          </QueryClientProvider>
+        );
+      case "needsAccount":
+        return <SignIn onSignedIn={run} onSessionLost={(reason) => setResult({ kind: "signedOut", reason })} />;
+      case "signedOut":
+        return <SignedOut reason={result.reason} onRetry={run} />;
+      case "needsUpdate":
+        return <NeedsUpdate apiVersion={result.apiVersion} onRetry={run} />;
+      case "notAnswering":
+        return <NotAnswering onRetry={run} />;
+      case "wrongHost":
+        return <WrongHost onRetry={run} />;
+    }
   }
 }
 

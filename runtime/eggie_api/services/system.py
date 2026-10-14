@@ -19,6 +19,7 @@ class SystemService:
             "status": "ok",
             "version": self._config.version,
             "api": constants.API_VERSION,
+            "site": self._config.site_host,
             "docker": {
                 "reachable": probe.ok,
                 "version": probe.stdout.strip() if probe.ok else "",
@@ -33,4 +34,5 @@ class SystemService:
         return disk.usage(Path(self._config.projects_root))
 
     def connect(self) -> dict:
-        return connect.facts(Path(self._config.connect_path))
+        return connect.facts(Path(self._config.connect_path),
+                             site_host=self._config.site_host)

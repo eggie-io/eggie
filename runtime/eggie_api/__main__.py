@@ -17,6 +17,7 @@ def main() -> None:
         # to go on: one line that says what to do, not a traceback.
         raise SystemExit(f"eggie-api will not start: {e}") from None
     app = create_app(config=config, services=services)
+    services.account.seed_from(config.account_seed)
     services.account.resume()
     services.sync.start()
     services.lifecycle.resume_all()

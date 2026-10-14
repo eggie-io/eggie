@@ -34,8 +34,9 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"
+    # EGGIE_EDGE_BIND: a site keeps this on 127.0.0.1; the probe entrypoint must not face the internet.
     ports:
-      - "${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"
+      - "${EGGIE_EDGE_BIND:-0.0.0.0}:${EGGIE_EDGE_PORT:-39080}:${EGGIE_EDGE_PORT:-39080}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -57,13 +58,15 @@ services:
     # Equal on both sides of the colon, and handed to the process as well: the
     # host dials 127.0.0.1:<same port> through the VM's forward, and a mapping
     # the api service does not bind forwards to nothing.
+    # EGGIE_API_BIND: a site keeps this on 127.0.0.1; the guest CLI dials loopback either way.
     ports:
-      - "${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
+      - "${EGGIE_API_BIND:-0.0.0.0}:${EGGIE_API_PORT:-39099}:${EGGIE_API_PORT:-39099}"
     environment:
       - EGGIE_API_PORT=${EGGIE_API_PORT:-39099}
       - EGGIE_DOMAIN=${EGGIE_DOMAIN:-local.eggie.space}
       - EGGIE_EDGE_PORT=${EGGIE_EDGE_PORT:-39080}
       - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
+      - EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same path on both sides, not negotiable: the api service parses
@@ -82,7 +85,7 @@ services:
     # page's catch-all route; project hosts never match these two names.
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.eggie-api.rule=(Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)) && PathPrefix(`/api`)"
       - "traefik.http.routers.eggie-api.entrypoints=web"
       - "traefik.http.routers.eggie-api.priority=1000"
       - "traefik.http.services.eggie-api.loadbalancer.server.port=${EGGIE_API_PORT:-39099}"
@@ -97,7 +100,7 @@ services:
       - edge
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.eggie-web.rule=Host(`localhost`) || Host(`127.0.0.1`) || Host(`${EGGIE_SITE_HOST:-localhost}`)"
       - "traefik.http.routers.eggie-web.entrypoints=web"
       - "traefik.http.routers.eggie-web.priority=10"
       - "traefik.http.services.eggie-web.loadbalancer.server.port=8080"

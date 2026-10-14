@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
+from pathlib import Path
 
-from ..errors import Unavailable, Upstream
+from ..errors import Forbidden, Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.repos.account import AccountRepo
 from ..infra.repos.cloud_projects import CloudProjectRepo
@@ -30,8 +32,12 @@ def _daemon(fn) -> None:
 
 class Account:
     def __init__(self, account: AccountRepo, cloud_projects: CloudProjectRepo, cloud,
-                 *, clock=time.time, sleep=time.sleep, spawn=_daemon):
+                 *, managed: bool = False, clock=time.time, sleep=time.sleep,
+                 spawn=_daemon):
         self._account = account
+        # The service owns this machine's sign-in: a local sign-out would
+        # leave it with no way to sign in again.
+        self._managed = managed
         self._cloud_projects = cloud_projects
         self._cloud = cloud
         self._clock = clock
@@ -67,7 +73,56 @@ class Account:
                     "expires_at": row["code_expires_at"]}
         return {"state": "signed_out", "error": row["last_error"]}
 
+    def seed_from(self, path: Path) -> bool:
+        """A token pair the service left for this machine before first boot.
+        Imported once, only while nothing is signed in; the file is deleted
+        only on import, so a stray one stays visible to whoever looks."""
+        try:
+            raw = json.loads(path.read_text())
+            device_id, access, refresh = raw["device_id"], raw["access_token"], raw["refresh_token"]
+            if not all(isinstance(v, str) and v for v in (device_id, access, refresh)):
+                raise ValueError("a token field is empty")
+        except FileNotFoundError:
+            return False
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            log.warning("ignoring %s: %s", path, e)
+            return False
+        with self._write_lock:
+            if self._account.get()["access_token"]:
+                log.warning("ignoring %s: this machine is already signed in", path)
+                return False
+            # Stamped already expired: the seeded access token is never used
+            # for a request, whatever happens to the rotation below.
+            self._account.seed(device_id=device_id, access_token=access,
+                               refresh_token=refresh,
+                               access_expires_at=self._clock())
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            # Imported all the same; the next start sees a signed-in row and
+            # leaves the file, so say now that a credential is still on disk.
+            log.warning("imported %s but could not delete it: %s", path, e)
+        # The pair also sits in cloud-init user data, readable from the
+        # metadata service for the droplet's life; spending it now kills that copy.
+        try:
+            self._refresh(access)
+        except NotSignedIn:
+            log.warning("the service refused the token pair in %s", path)
+            return False
+        except (CloudError, CloudUnavailable, KeyError, TypeError) as e:
+            # KeyError/TypeError: a malformed or empty refresh reply.
+            log.warning("could not rotate the seeded token pair yet (%r); "
+                        "it is rotated on the first service call", e)
+        self.on_signed_in()
+        return True
+
+    def _refuse_if_managed(self) -> None:
+        if self._managed:
+            raise Forbidden("site_account", "This server is signed in by the Eggie "
+                            "service from the web app.")
+
     def start_sign_in(self) -> dict:
+        self._refuse_if_managed()
         row = self._account.get()
         if row["access_token"]:
             return self.status()
@@ -255,6 +310,7 @@ class Account:
             self._account.update(**fields)
 
     def sign_out(self) -> dict:
+        self._refuse_if_managed()
         try:
             self.before_sign_out()
         except Exception:

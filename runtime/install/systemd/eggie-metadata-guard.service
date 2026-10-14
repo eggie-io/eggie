@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep containers away from the cloud metadata service
+# Before dockerd: it adopts an existing DOCKER-USER chain and adds the jump.
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/metadata-guard.sh
+
+[Install]
+WantedBy=multi-user.target

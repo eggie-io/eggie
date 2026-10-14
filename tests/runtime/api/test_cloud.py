@@ -156,3 +156,21 @@ def test_releasing_a_public_url_accepts_an_empty_204():
 
     assert cloud.release_public_url("t", "c1") is None
     assert opener.requests[0].get_method() == "DELETE"
+
+
+def test_the_certificate_is_fetched_from_the_instance_route_with_the_token():
+    opener = Opener((200, b'{"names": [], "certificate": "c", "private_key": "k", "not_after": "x"}'))
+    out = Cloud("https://svc/api", opener=opener).instance_certificate("at-1")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/instances/me/certificate")
+    assert request.get_header("Authorization") == "Bearer at-1"
+    assert out["private_key"] == "k"
+
+
+def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():
+    opener = Opener((200, b'{"ok": true}'))
+    Cloud("https://svc/api", opener=opener).redeem_instance_handoff("at-1", "k3x9")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("POST", "https://svc/api/v1/instances/handoff/redeem")
+    assert json.loads(request.data) == {"code": "k3x9"}
+    assert request.get_header("Authorization") == "Bearer at-1"

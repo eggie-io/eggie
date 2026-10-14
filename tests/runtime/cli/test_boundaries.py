@@ -70,14 +70,14 @@ def test_the_built_executable_reports_a_handled_error_with_exit_1(tmp_path):
 
 
 def test_start_stack_is_built_from_the_declared_stack_path():
-    # A second literal here would let the two drift the way START_STACK's
+    # A second literal here would let the two drift the way start_stack's
     # hardcoded path used to risk against GUEST_ROOT/GUEST_STACK elsewhere.
     cli = load()
-    assert cli.GUEST_STACK in cli.START_STACK
+    assert cli.GUEST_STACK in cli.start_stack()
 
 
 def test_restart_api_recreates_the_compose_service_stack_yml_defines():
-    # RESTART_API is the one guidance printed for a stale token
+    # restart_api() is the one guidance printed for a stale token
     # (unauthorized / api_unconfigured); if the service key it recreates
     # drifts from stack.yml's own key, compose answers "no such service" and
     # the one documented recovery is a dead end. Derived from stack.yml's
@@ -86,7 +86,7 @@ def test_restart_api_recreates_the_compose_service_stack_yml_defines():
     services = yaml.safe_load(STACK.read_text())["services"]
     (api_key,) = [name for name, svc in services.items()
                   if "eggie-api" in svc.get("image", "")]
-    assert f"--force-recreate {api_key}" in load().RESTART_API
+    assert f"--force-recreate {api_key}" in load().restart_api()
 
 
 def test_the_guest_cli_slugs_project_names_the_way_the_api_does():

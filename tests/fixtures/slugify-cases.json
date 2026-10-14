@@ -4,7 +4,8 @@
   {"name": "  My App  ", "slug": "my-app"},
   {"name": "tax_stuff 2024", "slug": "tax-stuff-2024"},
   {"name": "--hello--", "slug": "hello"},
-  {"name": "a  --  b", "slug": "a----b"},
+  {"name": "a  --  b", "slug": "a-b"},
+  {"name": "api--blog", "slug": "api-blog"},
   {"name": "Émile's Café", "slug": "mile-s-caf"},
   {"name": "!!!", "slug": ""}
 ]

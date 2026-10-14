@@ -9,6 +9,7 @@ import { publicView, tileLine } from "../../projects/public";
 import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
+import { useSite } from "../../site/SiteContext";
 import { ARROW } from "../icons";
 import { AddressRows } from "./AddressRows";
 import { AnalyzeModal } from "./AnalyzeModal";
@@ -27,6 +28,7 @@ export function ProjectPage() {
   const forget = useDeleteProject(id);
   const navigate = useNavigate();
   const now = useNow();
+  const site = useSite();
   const [modal, setModal] = useState<"analyze" | "delete" | "public" | null>(null);
   const view = query.data ? projectView(query.data) : null;
   const pub = query.data ? publicView(query.data.public, now) : null;
@@ -70,6 +72,7 @@ export function ProjectPage() {
       id={project.id}
       publicLine={tileLine(pub!)}
       publicDisabled={pub!.kind === "unavailable"}
+      showPublic={site === null}
       secretsLine={project.secrets_requested > 0 ? `${project.secrets_requested} requested` : "Keep API keys and passwords here, not in project files."}
       onPublic={() => setModal("public")}
       onAnalyze={() => setModal("analyze")}

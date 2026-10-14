@@ -1,0 +1,33 @@
+# Compose override for a site (a server with its own hostnames). The base
+# stack.yml is unchanged; install.sh adds this file to every compose command
+# when /opt/eggie/site.env exists:
+#
+#   docker compose -f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml up -d
+#
+# The `web` entrypoint keeps its name and moves to 443 with TLS, so no router
+# label in the stack or in a project overlay changes. `command` is replaced
+# wholesale by compose, hence the repeated base flags; `ports` and `volumes`
+# are appended. The certificate comes from the API (services/certificate.py)
+# into /opt/eggie/tls, which Traefik watches; tls.yml there names the files.
+services:
+  traefik:
+    command:
+      - "--entryPoints.http.address=:80"
+      - "--entryPoints.http.http.redirections.entryPoint.to=web"
+      - "--entryPoints.http.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.web.address=:443"
+      - "--entryPoints.web.http.tls=true"
+      - "--entryPoints.web.transport.respondingTimeouts.readTimeout=30m"
+      # The API's readiness probe dials Traefik on the edge port over the edge
+      # network. Plain HTTP: stack.yml publishes it on loopback only (EGGIE_EDGE_BIND).
+      - "--entryPoints.probe.address=:${EGGIE_EDGE_PORT:-39080}"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network=edge"
+      - "--providers.file.directory=/opt/eggie/tls"
+      - "--providers.file.watch=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/eggie/tls:/opt/eggie/tls:ro

@@ -4,13 +4,16 @@ import { SUPPORTED_API } from "../api/version";
 
 export type SignedOutReason = "not_signed_in" | "session_expired" | "handoff_spent";
 
-export type BootResult =
+// site is set once /api/health has answered: the host name on a site, null on
+// the usual VM. Results that never reached the health answer leave it unset.
+export type BootResult = { site?: string | null } & (
   | { kind: "signedIn" }
   | { kind: "needsAccount" }
   | { kind: "signedOut"; reason: SignedOutReason }
   | { kind: "needsUpdate"; apiVersion: number | null }
   | { kind: "notAnswering" }
-  | { kind: "wrongHost" };
+  | { kind: "wrongHost" }
+);
 
 function isWrongHost(error: unknown): boolean {
   return (
@@ -49,13 +52,18 @@ export async function boot({
 }): Promise<BootResult> {
   const api = createApi(fetch);
 
-  let health: { api?: unknown } | undefined;
+  let health: { api?: unknown; site?: unknown } | undefined;
   try {
-    health = await api.get<{ api?: unknown }>("/api/health");
+    health = await api.get<{ api?: unknown; site?: unknown }>("/api/health");
   } catch (error) {
     return isWrongHost(error) ? { kind: "wrongHost" } : { kind: "notAnswering" };
   }
-  const apiVersion = typeof health?.api === "number" ? health.api : null;
+  const site = typeof health?.site === "string" && health.site !== "" ? health.site : null;
+  return { ...(await signIn(api, health?.api, handoff)), site };
+}
+
+async function signIn(api: Api, healthApi: unknown, handoff: string | null): Promise<BootResult> {
+  const apiVersion = typeof healthApi === "number" ? healthApi : null;
   if (apiVersion === null || !SUPPORTED_API.includes(apiVersion)) {
     return { kind: "needsUpdate", apiVersion };
   }

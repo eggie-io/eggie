@@ -7,7 +7,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .constants import API_PORT, API_UNCONFIGURED, GUEST_STACK, GUEST_TOKEN
+from .constants import (API_PORT, API_UNCONFIGURED, GUEST_SITE_ENV, GUEST_SITE_STACK,
+                        GUEST_STACK, GUEST_TOKEN)
 from .errors import ApiError, EggieError, JobFailed
 
 REQUEST_TIMEOUT = 30.0
@@ -18,13 +19,24 @@ JOB_POLL_INTERVAL = 1.0
 BUSY_RETRY_TIMEOUT = 60.0
 BUSY_RETRY_INTERVAL = 1.0
 
-START_STACK = f"sudo /usr/bin/docker compose -f {GUEST_STACK} up -d"
-# The API reads its token once, at startup, so only a recreate picks up a new one.
-RESTART_API = f"{START_STACK} --force-recreate api"
-_GUIDANCE = {
-    "unauthorized": f"The Eggie service needs a restart. Run: {RESTART_API}",
-    API_UNCONFIGURED: f"The Eggie service needs a restart. Run: {RESTART_API}",
-}
+
+def start_stack() -> str:
+    # The same test install.sh makes: on a site, the base file alone would
+    # recreate Traefik without 80/443 and TLS.
+    try:
+        site = Path(GUEST_SITE_ENV).stat().st_size > 0
+    except OSError:
+        site = False
+    files = f"-f {GUEST_STACK}" + (f" -f {GUEST_SITE_STACK}" if site else "")
+    return f"sudo /usr/bin/docker compose {files} up -d"
+
+
+def restart_api() -> str:
+    # The API reads its token once, at startup, so only a recreate picks up a new one.
+    return f"{start_stack()} --force-recreate api"
+
+
+_RESTART_CODES = frozenset({"unauthorized", API_UNCONFIGURED})
 
 
 def read_token(path: Path) -> str:
@@ -51,7 +63,8 @@ def _api_error(exc: urllib.error.HTTPError) -> ApiError:
     except (OSError, ValueError, KeyError, TypeError):
         return ApiError("http_error", f"The Eggie service answered HTTP "
                                         f"{exc.code} ({exc.reason}).")
-    guidance = _GUIDANCE.get(code)
+    guidance = (f"The Eggie service needs a restart. Run: {restart_api()}"
+                if code in _RESTART_CODES else None)
     return ApiError(code, f"{guidance} (the service said: {message})"
                       if guidance else message)
 
@@ -81,7 +94,7 @@ class ApiClient:
             raise _api_error(e) from None
         except (urllib.error.URLError, OSError):
             raise EggieError("The Eggie service in this VM is not answering. "
-                              f"Start it with: {START_STACK}") from None
+                              f"Start it with: {start_stack()}") from None
 
     def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
         body = self._open(method, path, payload=payload)

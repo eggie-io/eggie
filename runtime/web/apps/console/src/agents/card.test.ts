@@ -44,4 +44,14 @@ describe("cardRows", () => {
     expect(rows?.find((row) => row.label === "Port")).toEqual({ label: "Port", value: "39022", copy: true });
     expect(cardRows(userAtHost, undefined)?.[0]).toEqual({ label: "SSH Host", value: "your Mac user name@127.0.0.1", copy: false });
   });
+
+  it("drops the key-file row on a site, where the user's own key is installed", () => {
+    const site = { vm: "site" as const, ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } };
+    expect(cardRows(fourFields, site)).toEqual([
+      { label: "Host", value: "foo.eggie.io", copy: true },
+      { label: "Port", value: "22", copy: true },
+      { label: "User", value: "ada", copy: true },
+    ]);
+    expect(cardRows(userAtHost, site)?.[0]).toEqual({ label: "SSH Host", value: "ada@foo.eggie.io", copy: true });
+  });
 });

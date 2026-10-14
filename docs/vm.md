@@ -62,6 +62,26 @@ bash /opt/eggie/runtime/install/install.sh "$(cat /opt/eggie/runtime.version)" -
 Ports: the API listens on `39099`, and all project and console traffic enters through Traefik on
 `39080`. Project URLs look like `http://<name>.local.eggie.space:39080`.
 
+## Site mode (a server)
+
+The same runtime on a server the Eggie service provisions. `get.sh` with `EGGIE_SITE_HOST` (the
+console, e.g. `foo.eggie.io`) and `EGGIE_SITE_DOMAIN` (projects, e.g. `foo.eggie.space`) writes
+`/opt/eggie/site.env`; every later run reads it. Differences from a local VM:
+
+| | Local VM | Site |
+|---|---|---|
+| Edge | `http://localhost:39080` | `https://<site host>` (80 redirects) |
+| Project URL | `http://<id>.local.eggie.space:39080` | `https://<id>.<site domain>` (`https://<service>--<id>.<site domain>` for a non-web service) |
+| Compose | `stack.yml` | `stack.yml` + `runtime/stack.site.yml` |
+| Certificate | none | the live pair in `/opt/eggie/tls/<not_after>/` behind the `/opt/eggie/tls/current` link, fetched from the service daily |
+| Sign-in | desktop handoff | handoff from the web app, redeemed with the service |
+| Account | device-code sign-in | seeded from `/opt/eggie/account.json` at first boot |
+| Public URLs | optional | not available (everything already is) |
+
+Build a snapshot: install with no site variables, run `bash /opt/eggie/runtime/install/snapshot-prep.sh`
+(it also drops root's key and shell history and resets the machine id), image. First boot of a droplet from it: cloud-init writes `account.json`, creates the login user,
+and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names (spec §3.2).
+
 ## Troubleshooting
 
 - **WSL says the VM is running but nothing answers.** WSL's service can hang, often after sleep,

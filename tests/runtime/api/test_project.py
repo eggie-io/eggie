@@ -2,6 +2,7 @@ from eggie_api.domain.project import (
     load_project, classify, overlay_yaml,
     STARTED_OK, FAILED_TO_START, CRASH_LOOPING,
 )
+from eggie_api.domain.overlay import host_for
 from host.core.provider import Completed
 import yaml
 
@@ -90,3 +91,21 @@ def test_load_project_slugs_explicit_id():
     compose = {"services": {"a": {"image": "x", "ports": ["1:2"]}}}
     proj = load_project(compose, {"id": "My Proj!", "web": [{"service": "a", "port": 80}]}, "dir")
     assert proj.id == "my-proj"
+
+
+def test_a_project_named_with_the_separator_never_shares_a_host_with_another():
+    two_webs = {"services": {"web": {"image": "x", "ports": ["3000:3000"]},
+                             "api": {"image": "y", "ports": ["4000:4000"]}}}
+    one_web = {"services": {"web": {"image": "x", "ports": ["3000:3000"]}}}
+    blog = load_project(two_webs, None, "blog")
+    lookalike = load_project(one_web, None, "api--blog")
+    blog_hosts = {host_for(blog.id, w, "d.io") for w in blog.webs}
+    assert host_for(lookalike.id, lookalike.webs[0], "d.io") not in blog_hosts
+
+
+def test_a_project_yml_subdomain_is_slugged_into_one_label():
+    compose = {"services": {"app": {"image": "x"}, "admin": {"image": "y"}}}
+    proj = load_project(compose, {"id": "shop", "web": [
+        {"service": "app", "port": 80},
+        {"service": "admin", "port": 81, "subdomain": "Admin_UI"}]}, "shop")
+    assert host_for(proj.id, proj.webs[1], "d.io") == "admin-ui--shop.d.io"

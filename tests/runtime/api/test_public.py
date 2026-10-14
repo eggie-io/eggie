@@ -51,7 +51,7 @@ class TunnelRunner:
 
 
 def make(tmp_path, cloud, *, hosts=HOSTS, start_ok=True, projects=("blog",),
-         signed_in=True, mapped=("blog",)):
+         signed_in=True, mapped=("blog",), site=False):
     repos = Repos.open(Database(tmp_path / "state.db"))
     for pid in projects:
         repos.projects.add(pid, f"/p/{pid}", "d.io")
@@ -67,7 +67,7 @@ def make(tmp_path, cloud, *, hosts=HOSTS, start_ok=True, projects=("blog",),
                     client=TunnelClient(runner, tmp_path / "stack.yml"),
                     token_path=tmp_path / "tunnel.token", origin="http://traefik:39080",
                     hosts_for=lambda pid: list(hosts), clock=clock,
-                    spawn=lambda fn: fn())
+                    spawn=lambda fn: fn(), site=site)
     return public, repos, runner, clock
 
 
@@ -559,3 +559,23 @@ def test_a_stale_turn_on_leaves_a_newer_one_of_the_same_project_alone(tmp_path):
     assert public.status("blog")["state"] == "on"
     assert runner.up and (tmp_path / "tunnel.token").exists()
     assert "release_public_url" not in cloud.names()
+
+
+def test_on_a_site_public_urls_are_unavailable_because_every_project_already_has_one(tmp_path):
+    public, _, _, _ = make(tmp_path, FakeCloud(), site=True)
+    assert public.status("blog") == {"state": "unavailable",
+                                     "reason": {"code": "not_available",
+                                                "message": MESSAGES["not_available"]}}
+    with pytest.raises(PublicUnavailable) as caught:
+        public.enable("blog")
+    assert caught.value.code == "not_available"
+
+
+def test_on_a_site_reconcile_neither_asks_the_service_nor_touches_the_client(tmp_path):
+    cloud = FakeCloud(active_public_url=[CloudError("not_found", "none", 404)])
+    public, _, runner, _ = make(tmp_path, cloud, site=True)
+    runner.up = True
+
+    public.reconcile()
+
+    assert cloud.calls == [] and runner.calls == []

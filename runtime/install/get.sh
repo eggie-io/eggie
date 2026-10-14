@@ -81,6 +81,21 @@ main() {
   # The boot unit and a host-started update may run at the same moment.
   exec 9>/opt/eggie/update.lock
   flock 9
+  # Site mode: a server with its own hostnames. Both names or neither; a run
+  # with neither (a repair, the boot update) keeps the site.env an earlier run
+  # wrote. Bare lowercase hostnames only -- these land in a Traefik Host rule.
+  if [[ -n "${EGGIE_SITE_HOST:-}" || -n "${EGGIE_SITE_DOMAIN:-}" ]]; then
+    local site_name
+    for site_name in "${EGGIE_SITE_HOST:-}" "${EGGIE_SITE_DOMAIN:-}"; do
+      if [[ ! "$site_name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+        echo "EGGIE_SITE_HOST and EGGIE_SITE_DOMAIN must both be set, as bare hostnames" \
+             "(got '${EGGIE_SITE_HOST:-}' and '${EGGIE_SITE_DOMAIN:-}')" >&2
+        exit 1
+      fi
+    done
+    printf 'EGGIE_SITE_HOST=%q\nEGGIE_SITE_DOMAIN=%q\n' \
+      "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" > /opt/eggie/site.env
+  fi
   # An update killed after the swap but before install.sh wrote its marker
   # leaves no marker; the working release is runtime.prev. Put it back first.
   if [[ -d "$RUNTIME_DIR.prev" && ! -s "$MARKER" && -s "$RUNTIME_DIR.prev.version" ]]; then

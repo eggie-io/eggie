@@ -122,8 +122,8 @@ token through cloud-init, and runs `get.sh` with `EGGIE_SITE_HOST`/`EGGIE_SITE_D
 VM, `stack.site.yml` puts Traefik on 443 with the certificate from `/opt/eggie/tls`
 (`services/certificate.py` keeps it current), `rest/auth.py` admits the site host, and
 `services/site.py` redeems web-app handoff codes with the service. A non-web service of a project
-gets `<service>--<id>.<site domain>`. Design:
-`docs/superpowers/specs/2026-10-13-remote-instance-design.md`.
+gets `<service>--<id>.<site domain>`. The full picture, including the contract with the
+service, is `site-mode.md`.
 
 ### Root-side helpers
 

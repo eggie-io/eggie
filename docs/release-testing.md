@@ -82,7 +82,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B4 | Inside the VM, `eggie new` / `eggie up` from a coding agent | The project shows up in the console | |
 | B5 | In a running project: `eggie secret set API_KEY` (pipe a value), put `API_KEY=other` in the project's `.env`, then restart it | `docker exec <container> env` shows the secret's value, not the `.env` one; a compose `${KEY:?}` reference still lets `eggie logs` and stop/down work | |
 
-## Site mode (a droplet from the snapshot)
+## Site mode (a droplet from the snapshot; see `site-mode.md`)
 
 | # | Action | Pass when | Result |
 |---|---|---|---|

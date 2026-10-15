@@ -337,11 +337,7 @@ while IFS=: read -r name uid gid home; do
     setfacl -m "u:$name:r" /opt/eggie/api.token
   fi
   bash "$INSTALL_DIR/lib/install-agents.sh" "$RUNTIME_DIR" "$home" "$uid:$gid"
-  # stdin is the account list this loop is reading.
-  if ! runuser -u "$name" -- env HOME="$home" DISABLE_TELEMETRY=1 npx -y "$SKILLS_CLI" add "$SKILLS_SOURCE" -s '*' -g -a "${skill_agents[@]}" -y </dev/null; then
-    echo "could not install Eggie's skills for $name: the npm registry or GitHub may be unreachable" >&2
-    exit 1
-  fi
+  bash "$INSTALL_DIR/lib/install-skills.sh" "$name" "$home" "$SKILLS_CLI" "$SKILLS_SOURCE" "${skill_agents[@]}"
 done < <(accounts)
 
 # 11. GitHub: apply on every change of the API's desired state, and once now

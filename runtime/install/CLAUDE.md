@@ -60,7 +60,9 @@ any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` 
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
-(`SKILLS_SOURCE` defaults to `eggie-io/eggie-skills`, unpinned on purpose;
+via `lib/install-skills.sh`, which retries up to three times with `npm cache clean --force` as
+that user in between (one truncated tarball otherwise sticks in `~/.npm` and fails every new VM;
+`SKILLS_SOURCE` defaults to `eggie-io/eggie-skills`, unpinned on purpose;
 `EGGIE_SKILLS_SOURCE` overrides) → the VM kind (`wsl`/`lima`/`other`) and first login user into
 `/opt/eggie/connect.json` (read by `GET /connect`) → **`runtime.version` last**, so a failed
 install never looks installed. Re-running is safe; the comments in the script explain each guard —
@@ -89,7 +91,8 @@ imaged (`tests/runtime/test_snapshot_prep.py`).
 ## Testing
 
 `bash -n` plus text assertions over `install.sh`; `resolve_ref` sourced from `get.sh` with a fake
-`git` on `PATH`; `install-agents.sh`/`login-users.sh` run against temporary homes. Nothing touches
+`git` on `PATH`; `install-agents.sh`/`login-users.sh` run against temporary homes;
+`install-skills.sh` against a fake `runuser` on `PATH`. Nothing touches
 the network — apt, NodeSource, npm and ghcr are covered only by the live-VM acceptance run.
 
 ## Things that will bite you

@@ -167,7 +167,7 @@ def test_each_login_account_gets_access_by_uid_not_only_by_group():
 def test_install_writes_the_marker_last():
     commands = _commands()
     marker = _index_of(f"> {constants.RUNTIME_MARKER}")
-    assert marker > _index_of('"$SKILLS_CLI" add')
+    assert marker > _index_of('lib/install-skills.sh')
     assert marker >= len(commands) - 2, "nothing that can fail may run after the marker"
 
 
@@ -208,12 +208,12 @@ def test_the_skills_source_is_overridable():
     assert "${EGGIE_SKILLS_SOURCE:-" in script
 
 
-def test_npx_in_the_account_loop_cannot_swallow_the_account_list():
-    # The loop reads accounts from stdin; a command inside it that reads stdin
-    # consumes the remaining accounts, and only the first user gets skills.
-    runuser = [l for l in _commands() if "runuser" in l]
-    assert runuser, "skills are installed per account"
-    assert all("</dev/null" in l for l in runuser)
+def test_skills_are_installed_per_account_by_the_retrying_helper():
+    # A single npx call here is what failed installs on one bad npm download;
+    # the helper retries and is the only place that may run npx.
+    script = INSTALL.read_text()
+    assert 'bash "$INSTALL_DIR/lib/install-skills.sh" "$name" "$home" "$SKILLS_CLI" "$SKILLS_SOURCE"' in script
+    assert "npx" not in "\n".join(_commands())
 
 
 def test_a_repair_or_a_new_token_recreates_the_api():

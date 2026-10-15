@@ -8,6 +8,34 @@ contract the server needs from the service. The dated design spec it grew from i
 
 Nothing in the host or the desktop app changes for site mode. Everything lives in `runtime/`.
 
+## Build a snapshot
+
+Run as root on a fresh Ubuntu 24.04 droplet, from `/`, with no site variables. The prep script
+strips what is this machine's; power off and take the image.
+
+Production — the newest `runtime-v*` tag; the boot update keeps every droplet made from it current:
+
+```bash
+cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | bash \
+  && bash /opt/eggie/runtime/install/snapshot-prep.sh \
+  && poweroff
+```
+
+Development — pinned to the `dev` branch. `EGGIE_RUNTIME_URL` is persisted to `runtime.env`,
+so the repair that cloud-init runs at provision time fetches the `dev` installer, not `main`'s:
+
+```bash
+cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/dev/runtime/install/get.sh \
+  | EGGIE_RUNTIME_URL=https://raw.githubusercontent.com/eggie-io/eggie/dev/runtime/install/get.sh \
+    EGGIE_RUNTIME_REF=dev bash \
+  && bash /opt/eggie/runtime/install/snapshot-prep.sh \
+  && poweroff
+```
+
+A branch ref runs the images pushed under its name (`build.sh --push --tag dev`) when ghcr has
+both, the newest release's otherwise; `EGGIE_IMAGE_VERSION` overrides either. The boot update skips a branch-pinned install, so a
+dev droplet stays on the commit baked in until `get.sh` is rerun with `EGGIE_RUNTIME_REF=dev`.
+
 ## Shape
 
 | | Local VM | Site |

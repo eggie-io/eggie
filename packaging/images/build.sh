@@ -6,7 +6,9 @@
 #
 #   packaging/images/build.sh                              # native arch, loaded into local docker
 #   packaging/images/build.sh --push --version 0.4.0       # amd64 + arm64, pushed to ghcr
-#   packaging/images/build.sh --push --tag dev --only web  # throwaway tag to try in a VM
+#   packaging/images/build.sh --push --tag dev             # what EGGIE_RUNTIME_REF=dev runs
+#   packaging/images/build.sh --push --tag dev --only web  # one of the pair; a VM only picks
+#                                                          # the tag up once both carry it
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -41,7 +43,7 @@ if [[ -n "$version" && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "--version must be X.Y.Z, not '$version'" >&2
   exit 2
 fi
-# A pushed image needs a name a runtime tag or a VM override will ask for.
+# A pushed image needs a name a runtime ref or a VM override will ask for.
 if (( push )) && [[ -z "$version" && -z "$tag" ]]; then
   echo "--push needs --version (a release) or --tag (a throwaway image)" >&2
   exit 2

@@ -58,7 +58,9 @@ install: it finds a Python, builds `.venv`, downloads the Ubuntu rootfs into
 `%LOCALAPPDATA%\Eggie\cache`, creates the VM and drops an `eggie.cmd` shim in the repo. Flags:
 `-Rootfs <path>` reuses a rootfs you already have; `-NoCreate` skips creating the VM.
 
-To install a runtime other than the latest release, set `EGGIE_RUNTIME_REF=<branch|tag>`. To
+To install a runtime other than the latest release, set `EGGIE_RUNTIME_REF=<branch|tag>`. A branch
+runs the images pushed under its name (`packaging/images/build.sh --push --tag <branch>`) when ghcr
+has both, the newest release's otherwise; `EGGIE_IMAGE_VERSION=<tag>` overrides either. To
 fetch the installer from somewhere else, set `EGGIE_RUNTIME_URL`.
 
 ## Web console (`runtime/web/`)

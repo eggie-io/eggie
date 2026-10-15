@@ -62,6 +62,64 @@ hyphen, for project ids and for service subdomains alike), so the two sides cann
 5. **The API starts**, imports the seed, rotates the token pair, fetches the certificate, and the
    server answers on 443 within a minute or two of boot.
 
+## Building the snapshot by hand
+
+What the service developer (or you) runs once per runtime release worth baking in.
+
+1. **Droplet.** Ubuntu 24.04, 2 GB RAM or more (the installer adds a swapfile, but npm and the
+   image pulls want headroom), your SSH key. Any region; amd64 or arm64 both work. SSH in as root.
+2. **Install, with no site variables.** The names come later, from cloud-init on each droplet.
+
+   ```bash
+   cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | bash
+   ```
+
+   `cd /` is required: the installer runs per-account steps as that account, and root's home is
+   not enterable by other users (npm fails with `EACCES` otherwise). The run takes a few minutes
+   (Docker, the two images, Node, the skills) and ends with `Eggie runtime runtime-vX.Y.Z installed`.
+   `EGGIE_RUNTIME_REF=runtime-vX.Y.Z` pins a release instead of the newest.
+3. **Check it before scrubbing.** `docker ps` shows `traefik`, `api` and `web`;
+   `curl -s http://127.0.0.1:39080/ | head -c 200` returns the console's HTML.
+4. **Scrub.** This stops the stack and removes everything that makes the install this machine's
+   (token, database, projects, GitHub token, cloud-init state, root's key and history):
+
+   ```bash
+   bash /opt/eggie/runtime/install/snapshot-prep.sh
+   ```
+
+   It ends with `ready to snapshot: power off and take the image`. Nothing on the droplet is
+   usable after this; do not reboot it.
+5. **Image.** Power the droplet off from the DigitalOcean panel (not `shutdown`, which can race
+   the snapshot) and take the snapshot. Delete the droplet.
+
+### Before the site-mode release is tagged
+
+Site mode ships on `feature/73-remote-instance` until PR #75 merges and a `runtime-v*` tag with
+it exists. Until then a snapshot has to come from the branch, and a branch ref runs the newest
+*release's* images, which do not contain the site-mode API and console. So:
+
+1. Build and push throwaway images from the branch on a dev machine (arm64 needs the qemu binfmt
+   handler registered first on WSL2: `docker run --privileged --rm tonistiigi/binfmt --install arm64`):
+
+   ```bash
+   packaging/images/build.sh --push --tag dev
+   ```
+
+2. Install from the branch, naming those images and the branch's own `get.sh` (so repairs and the
+   provisioning `runcmd` fetch one that knows the site variables):
+
+   ```bash
+   BR=feature/73-remote-instance
+   cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/$BR/runtime/install/get.sh \
+     | EGGIE_RUNTIME_REF=$BR EGGIE_IMAGE_VERSION=dev \
+       EGGIE_RUNTIME_URL=https://raw.githubusercontent.com/eggie-io/eggie/$BR/runtime/install/get.sh bash
+   ```
+
+   A commit SHA works in place of the branch name. The boot updater skips a machine installed
+   from anything but a `runtime-v*` tag, so such a snapshot stays on the branch until re-imaged.
+3. The provisioning user data must then fetch `get.sh` from the branch URL too (the `runcmd` in
+   the contract below names `main`).
+
 ## The edge
 
 `stack.yml` is the same file in both modes; only the environment around it differs. Its router

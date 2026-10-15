@@ -14,9 +14,9 @@ as_user() {
   runuser -u "$NAME" -- env HOME="$HOME_DIR" "$@"
 }
 
-# Every new VM depends on a clean download from the npm registry, and a
-# truncated or corrupt tarball stays in the user's ~/.npm cache: a plain
-# retry would just unpack the same bad file again.
+# Every new VM depends on a clean download from the npm registry. A failed
+# download leaves a half-installed package under the user's ~/.npm/_npx,
+# which npx reuses as is; `npm cache clean` does not touch that directory.
 for attempt in 1 2 3; do
   # stdin is install.sh's account list: npx must not get to read it.
   if as_user DISABLE_TELEMETRY=1 npx -y "$CLI" add "$SOURCE" -s '*' -g -a "$@" -y </dev/null; then
@@ -24,7 +24,7 @@ for attempt in 1 2 3; do
   fi
   if (( attempt < 3 )); then
     echo "installing Eggie's skills for $NAME failed (attempt $attempt of 3); retrying" >&2
-    as_user npm cache clean --force </dev/null || true
+    as_user rm -rf -- "$HOME_DIR/.npm/_npx" </dev/null || true
     sleep 5
   fi
 done

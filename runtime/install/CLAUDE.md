@@ -60,8 +60,9 @@ any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` 
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
-via `lib/install-skills.sh`, which retries up to three times with `npm cache clean --force` as
-that user in between (one truncated tarball otherwise sticks in `~/.npm` and fails every new VM;
+via `lib/install-skills.sh`, which retries up to three times, removing that user's `~/.npm/_npx`
+in between (a failed download leaves a half-installed package there that npx reuses as is;
+`npm cache clean` does not help;
 `SKILLS_SOURCE` defaults to `eggie-io/eggie-skills`, unpinned on purpose;
 `EGGIE_SKILLS_SOURCE` overrides) → the VM kind (`wsl`/`lima`/`other`) and first login user into
 `/opt/eggie/connect.json` (read by `GET /connect`) → **`runtime.version` last**, so a failed

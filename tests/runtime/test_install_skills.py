@@ -40,11 +40,11 @@ def _run(tmp_path, fail_until):
     return result, log.read_text().splitlines(), stdin.read_text()
 
 
-def test_a_transient_npm_failure_is_retried_with_a_clean_cache(tmp_path):
+def test_a_transient_npm_failure_is_retried_from_a_fresh_npx_dir(tmp_path):
     result, log, _ = _run(tmp_path, fail_until=2)
     assert result.returncode == 0, result.stderr
-    kinds = ["npx" if " npx " in l else "clean" if "cache clean" in l else l for l in log]
-    assert kinds == ["npx", "clean", "sleep 5", "npx", "clean", "sleep 5", "npx"]
+    kinds = ["npx" if " npx " in l else "rm" if " rm -rf " in l else l for l in log]
+    assert kinds == ["npx", "rm", "sleep 5", "npx", "rm", "sleep 5", "npx"]
 
 
 def test_the_npx_call_runs_as_the_account_with_its_home(tmp_path):
@@ -53,11 +53,11 @@ def test_the_npx_call_runs_as_the_account_with_its_home(tmp_path):
                    " add eggie-io/eggie-skills -s * -g -a claude-code codex -y"]
 
 
-def test_the_cache_is_cleaned_as_the_account_not_as_root(tmp_path):
-    # npm's cache is ~/.npm of the user running npx; root's cache is not the
-    # one that holds the bad tarball.
+def test_the_npx_dir_removed_is_the_accounts_and_removed_as_the_account(tmp_path):
+    # npx unpacks into ~/.npm/_npx of the user running it, so root's is not
+    # the broken one; and root must not rm -rf through a link in a user's home.
     _, log, _ = _run(tmp_path, fail_until=1)
-    assert "-u ada -- env HOME=/home/ada npm cache clean --force" in log
+    assert "-u ada -- env HOME=/home/ada rm -rf -- /home/ada/.npm/_npx" in log
 
 
 def test_it_gives_up_after_three_attempts(tmp_path):

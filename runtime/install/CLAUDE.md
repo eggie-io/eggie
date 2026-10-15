@@ -54,8 +54,11 @@ user data (which seeded `account.json`).
 
 a 4 GiB `/swapfile` when the VM has no swap (`lib/swap.sh`; Lima and cloud images ship none, WSL
 has its own; not fatal) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
-docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`,
-any other ref the newest release's images or `EGGIE_IMAGE_VERSION`) into `.env` for `stack.yml` → token (only if absent) → the compose stack
+docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`;
+any other ref runs `EGGIE_IMAGE_VERSION` when set, else the images ghcr holds under the ref's own
+name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=dev` runs the `dev`
+images `build.sh --push --tag dev` pushed — else the newest release's; a private package reads as
+absent, and ghcr not answering at all is a failure, not a silent release) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 22.20 from NodeSource →
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and

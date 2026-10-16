@@ -345,6 +345,12 @@ async function fromTray(go) {
 const ROUTES = {
   'settings': () => fromTray(ACTIONS.settings),
   'quit': () => fromTray(() => startQuit(false)),
+  'console': async () => {
+    const result = await api().enter_console();
+    if (result.ok) return window.location.assign(result.url);
+    await refresh();
+    showNotice(result.message);
+  },
 };
 
 window.eggie.route = (name) => {

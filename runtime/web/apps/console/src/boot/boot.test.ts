@@ -37,6 +37,13 @@ describe("boot", () => {
     }
   });
 
+  it("carries the web app address the health answer reports, null when absent", async () => {
+    const reported = api({ "GET /api/health": { status: 200, body: { api: 1, web_app: "https://app.eggie.io" } } });
+    expect((await boot({ fetch: reported.fetch, handoff: null })).webApp).toBe("https://app.eggie.io");
+    const absent = api({ "GET /api/health": { status: 200, body: { api: 1 } } });
+    expect((await boot({ fetch: absent.fetch, handoff: null })).webApp).toBeNull();
+  });
+
   it("carries no site when the health request itself fails", async () => {
     const { fetch } = api({ "GET /api/health": "refused" });
     expect((await boot({ fetch, handoff: null })).site).toBeUndefined();
@@ -58,13 +65,13 @@ describe("boot", () => {
 
   it("stops at needsUpdate for an api number the page doesn't speak, before any session call", async () => {
     const { fetch, calls } = api({ "GET /api/health": { status: 200, body: { api: 2 } } });
-    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "needsUpdate", apiVersion: 2, site: null });
+    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "needsUpdate", apiVersion: 2, site: null, webApp: null });
     expect(calls).toEqual(["GET /api/health"]);
   });
 
   it("treats a health answer without an api number as needing an update", async () => {
     const { fetch } = api({ "GET /api/health": { status: 200, body: { status: "ok" } } });
-    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsUpdate", apiVersion: null, site: null });
+    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsUpdate", apiVersion: null, site: null, webApp: null });
   });
 
   it("signs in with a fresh handoff code without asking for the session again", async () => {
@@ -73,7 +80,7 @@ describe("boot", () => {
       "POST /api/session": OK,
       "GET /api/account": ACCOUNT("signed_in"),
     });
-    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "signedIn", site: null });
+    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "signedIn", site: null, webApp: null });
     expect(calls).toEqual(["GET /api/health", "POST /api/session", "GET /api/account"]);
   });
 
@@ -84,7 +91,7 @@ describe("boot", () => {
       "GET /api/session": OK,
       "GET /api/account": ACCOUNT("signed_in"),
     });
-    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedIn", site: null });
+    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedIn", site: null, webApp: null });
   });
 
   it("says the link was spent when the handoff fails and there is no session", async () => {
@@ -93,19 +100,19 @@ describe("boot", () => {
       "POST /api/session": refusal(401, "handoff_invalid"),
       "GET /api/session": refusal(401, "not_signed_in"),
     });
-    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedOut", reason: "handoff_spent", site: null });
+    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedOut", reason: "handoff_spent", site: null, webApp: null });
   });
 
   it("passes on why the session is gone", async () => {
     for (const code of ["not_signed_in", "session_expired"] as const) {
       const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": refusal(401, code) });
-      expect(await boot({ fetch, handoff: null })).toEqual({ kind: "signedOut", reason: code, site: null });
+      expect(await boot({ fetch, handoff: null })).toEqual({ kind: "signedOut", reason: code, site: null, webApp: null });
     }
   });
 
   it("is notAnswering for any other refusal of the session check", async () => {
     const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": refusal(500, "internal_error") });
-    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "notAnswering", site: null });
+    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "notAnswering", site: null, webApp: null });
   });
 
   it("is wrongHost when the API refuses the page's address", async () => {
@@ -117,23 +124,23 @@ describe("boot", () => {
 
   it("is wrongHost when the API refuses the page's origin on sign-in", async () => {
     const { fetch } = api({ "GET /api/health": HEALTHY, "POST /api/session": refusal(403, "forbidden_origin") });
-    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "wrongHost", site: null });
+    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "wrongHost", site: null, webApp: null });
   });
 
   it("is wrongHost when the session check is refused for the address", async () => {
     const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": refusal(403, "forbidden_host") });
-    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "wrongHost", site: null });
+    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "wrongHost", site: null, webApp: null });
   });
 
   it("is notAnswering when the handoff fails for a reason other than a spent code", async () => {
     const { fetch } = api({ "GET /api/health": HEALTHY, "POST /api/session": refusal(500, "internal") });
-    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "notAnswering", site: null });
+    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "notAnswering", site: null, webApp: null });
   });
 
   it("needs an account until the Eggie sign-in has finished", async () => {
     for (const state of ["signed_out", "pending"]) {
       const { fetch } = api({ "GET /api/health": HEALTHY, "GET /api/session": OK, "GET /api/account": ACCOUNT(state) });
-      expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsAccount", site: null });
+      expect(await boot({ fetch, handoff: null })).toEqual({ kind: "needsAccount", site: null, webApp: null });
     }
   });
 
@@ -143,7 +150,7 @@ describe("boot", () => {
       "GET /api/session": OK,
       "GET /api/account": refusal(500, "internal_error"),
     });
-    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "notAnswering", site: null });
+    expect(await boot({ fetch, handoff: null })).toEqual({ kind: "notAnswering", site: null, webApp: null });
   });
 });
 

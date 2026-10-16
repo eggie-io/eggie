@@ -6,7 +6,8 @@ export type SignedOutReason = "not_signed_in" | "session_expired" | "handoff_spe
 
 // site is set once /api/health has answered: the host name on a site, null on
 // the usual VM. Results that never reached the health answer leave it unset.
-export type BootResult = { site?: string | null } & (
+// webApp is the Eggie web app address from the same answer, same rules.
+export type BootResult = { site?: string | null; webApp?: string | null } & (
   | { kind: "signedIn" }
   | { kind: "needsAccount" }
   | { kind: "signedOut"; reason: SignedOutReason }
@@ -52,14 +53,15 @@ export async function boot({
 }): Promise<BootResult> {
   const api = createApi(fetch);
 
-  let health: { api?: unknown; site?: unknown } | undefined;
+  let health: { api?: unknown; site?: unknown; web_app?: unknown } | undefined;
   try {
-    health = await api.get<{ api?: unknown; site?: unknown }>("/api/health");
+    health = await api.get<{ api?: unknown; site?: unknown; web_app?: unknown }>("/api/health");
   } catch (error) {
     return isWrongHost(error) ? { kind: "wrongHost" } : { kind: "notAnswering" };
   }
   const site = typeof health?.site === "string" && health.site !== "" ? health.site : null;
-  return { ...(await signIn(api, health?.api, handoff)), site };
+  const webApp = typeof health?.web_app === "string" && health.web_app !== "" ? health.web_app : null;
+  return { ...(await signIn(api, health?.api, handoff)), site, webApp };
 }
 
 async function signIn(api: Api, healthApi: unknown, handoff: string | null): Promise<BootResult> {

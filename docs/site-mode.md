@@ -143,17 +143,28 @@ existing `#handoff` boot path posts it to `/api/session`. `SiteSignIn.redeem` fi
 codes the API minted itself (desktop handoff, "open in browser"), which carry the `lh_` prefix and
 are never forwarded; any other code goes outbound to `POST /v1/instances/handoff/redeem` with
 the server's own token, at most ten a minute. A `200` creates a session like a local redemption;
-anything else is the usual `handoff_invalid`, shown as "open the console from the web app again".
+anything else is the usual `handoff_invalid`, shown as a **Sign in** button.
+
+**Direct visit.** A browser that opens `https://foo.eggie.io` with no session is sent to the web
+app. `GET /api/health` carries `"web_app"` (the web app's address, from `EGGIE_WEB_URL`, default
+`https://app.eggie.io`), and the console navigates to
+`<web_app>/kitchens/open?host=foo.eggie.io`, adding `&home=<desktop home>` inside the desktop
+app. That page asks for a web app login if there is none, calls
+`POST /v1/instances/{id}/console` with the web session, and redirects back with
+`#handoff=<code>`. The console only follows `web_app` when it is `https`, or `http` on
+`localhost`.
 
 ## What the console shows
 
 `GET /api/health` carries `"site": "<console host>" | null`, read from the same health answer
 the boot sequence already fetches. Until it answers, a page on `localhost` assumes the usual VM
-and any other address assumes nothing. On a site: the signed-out screen says to reopen the
-console from the Eggie web app; the public URL control is absent; the agents card shows the
+and any other address assumes nothing. On a site: a signed-out console goes
+straight to the web app page above, with no screen to click through. After a code the server
+refused it does not redirect again (that would loop) and shows a **Sign in** button instead,
+with Try again beside it. The public URL control is absent; the agents card shows the
 server's SSH host and port 22 with no key file; the account menu has no sign-out; and a server
-whose account the service revoked gets a terminal "set it up again from the web app" screen
-instead of a sign-in button that cannot work.
+whose account the service revoked gets a terminal "set it up again from the web app" screen,
+with a link to the web app's kitchens list, instead of a sign-in button that cannot work.
 
 ## Security
 
@@ -262,6 +273,11 @@ even if the server then fails to set a cookie. Codes the service mints never sta
 
 - Renew the certificate at least 30 days before `not_after`.
 - Deleting an instance: revoke its device tokens; the server is disposable.
+- The web app serves `/kitchens/open?host=<console host>[&home=<desktop home>]`. It checks that
+  the logged-in owner has an instance with that console hostname, mints the console code with
+  `POST /v1/instances/{id}/console`, and redirects to `https://<host>/#handoff=<code>` (or, with
+  `home`, through the desktop app's own address). Its own address is the server's
+  `EGGIE_WEB_URL`.
 - The web app shows each instance's console hostname and an "open console" action. Projects on
   an instance appear through the existing project registry sync under the instance's device id.
 

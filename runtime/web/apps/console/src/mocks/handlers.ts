@@ -40,6 +40,7 @@ export const SCENARIOS = [
   "windows",
   "secrets",
   "site",
+  "site-signed-out",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -92,7 +93,7 @@ const notFound = (id: string) => refuse("project_not_found", `no project called 
 const busy = () => refuse("project_busy", "this project is busy with another job", 409);
 
 export function handlersFor(scenario: Scenario) {
-  let signedIn = !["expired", "handoff-spent", "down", "wrong-host"].includes(scenario);
+  let signedIn = !["expired", "handoff-spent", "site-signed-out", "down", "wrong-host"].includes(scenario);
   const MOCK_CODE = "WDJB-MJHT";
   const pendingAccount = () => ({
     state: "pending" as const,
@@ -331,7 +332,8 @@ export function handlersFor(scenario: Scenario) {
         status: "ok",
         version: "0.2.0",
         api: scenario === "old-api" ? 2 : 1,
-        site: scenario === "site" ? "foo.eggie.io" : null,
+        site: scenario.startsWith("site") ? "foo.eggie.io" : null,
+        web_app: "https://app.eggie.io",
         docker: { reachable: true, version: "29.0.0", detail: "" },
       });
     }),
@@ -597,7 +599,7 @@ export function handlersFor(scenario: Scenario) {
       const denied = guard();
       if (denied) return denied;
       if (scenario === "windows") return HttpResponse.json({ vm: "wsl", ssh: null });
-      if (scenario === "site") return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
+      if (scenario.startsWith("site")) return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
       return HttpResponse.json({ vm: "lima", ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/.lima/_config/user" } });
     }),
     http.get("/api/disk", () => {

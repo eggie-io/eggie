@@ -20,7 +20,7 @@ import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
-import { isLocalHost, nextSite, SiteContext } from "./site/SiteContext";
+import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
@@ -38,6 +38,7 @@ function Screens({ handoff }: { handoff: string | null }) {
   const [site, setSite] = useState<string | null | undefined>(
     isLocalHost(window.location.hostname) ? null : undefined,
   );
+  const [webApp, setWebApp] = useState<string | null | undefined>(undefined);
   const pendingHandoff = useRef(handoff);
   const running = useRef(false);
 
@@ -51,6 +52,7 @@ function Screens({ handoff }: { handoff: string | null }) {
     try {
       const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
       setSite((prev) => nextSite(prev, next));
+      setWebApp((prev) => nextWebApp(prev, next));
       setResult(next);
     } finally {
       running.current = false;
@@ -67,7 +69,11 @@ function Screens({ handoff }: { handoff: string | null }) {
 
   const needAccount = useCallback(() => setResult({ kind: "needsAccount" }), []);
 
-  return <SiteContext.Provider value={site}>{screen()}</SiteContext.Provider>;
+  return (
+    <SiteContext.Provider value={site}>
+      <WebAppContext.Provider value={webApp}>{screen()}</WebAppContext.Provider>
+    </SiteContext.Provider>
+  );
 
   function screen() {
     if (result === null) return <Shell />;

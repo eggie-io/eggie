@@ -1,13 +1,25 @@
 import { useEffect } from "react";
 import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
-import { useSite } from "../site/SiteContext";
+import { useDesktopHome } from "../desktop/DesktopContext";
+import { openKitchenUrl, siteSignedOutAction } from "../site/signIn";
+import { useSite, useWebApp } from "../site/SiteContext";
 import { SleepyEgg } from "./SleepyEgg";
 import { StatusScreen } from "./StatusScreen";
 import s from "./StatusScreen.module.css";
 
 export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetry: () => void }) {
   const site = useSite();
+  const webApp = useWebApp();
+  const home = useDesktopHome();
+  const link =
+    typeof site === "string" && typeof webApp === "string" ? openKitchenUrl(webApp, site, home) : null;
+  const redirecting = link !== null && siteSignedOutAction(reason) === "redirect";
+
+  useEffect(() => {
+    if (redirecting) window.location.replace(link);
+  }, [redirecting, link]);
+
   useEffect(() => {
     // "Open Eggie" opens a new tab; this one catches up when it's looked at again.
     const onVisible = () => {
@@ -17,11 +29,28 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [onRetry]);
 
+  if (redirecting) {
+    return (
+      <StatusScreen art={<SleepyEgg />} title="Signing you in" actions={null}>
+        <p className={s.lead}>Taking you to the Eggie web app to sign in…</p>
+      </StatusScreen>
+    );
+  }
+
   return (
     <StatusScreen
       art={<SleepyEgg />}
       title="We've lost track of you"
-      actions={<Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>}
+      actions={
+        link !== null ? (
+          <>
+            <Button variant="primary" size="lg" onClick={() => window.location.assign(link)}>Sign in</Button>
+            <Button variant="secondary" size="lg" onClick={onRetry}>Try again</Button>
+          </>
+        ) : (
+          <Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>
+        )
+      }
       footer="Your projects carried on the whole time. Nothing stopped, nothing was lost."
     >
       <p className={s.lead}>

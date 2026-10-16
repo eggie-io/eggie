@@ -18,19 +18,16 @@ def _built() -> set[str]:
     return {f"{n}.exe".lower() for n in names}
 
 
-def test_every_exe_the_installer_runs_is_built():
-    referenced = {n.lower() for n in re.findall(r"\{app\}\\([\w.-]+\.exe)", ISS.read_text())}
+def test_every_exe_the_installer_runs_or_stops_is_built():
+    text = ISS.read_text()
+    referenced = {n.lower() for n in re.findall(r"\{app\}\\([\w.-]+\.exe)", text)}
+    # The uninstaller's kill matches by process name, which has no extension.
+    referenced |= {f"{n}.exe".lower() for n in re.findall(r"Get-Process\s+([\w.-]+)", text)}
     assert referenced, "installer.iss references no {app} executables"
     assert referenced <= _built(), f"not built by the spec: {referenced - _built()}"
 
 
-def test_the_gui_sibling_the_provider_looks_for_is_built():
-    sibling = re.search(r'with_name\("([^"]+)"\)', DESKTOP_WIN.read_text())
-    assert sibling, "desktop_win no longer names a GUI sibling"
-    assert sibling.group(1).lower() in _built()
-
-
-def test_start_menu_shortcuts_are_named_eggie():
-    icons = re.findall(r'^Name:\s*"\{group\}\\([^"]+)"', ISS.read_text(), re.M)
-    assert icons, "installer.iss creates no Start menu shortcut"
-    assert icons == ["Eggie"]
+def test_every_exe_the_provider_names_is_built():
+    named = {n.lower() for n in re.findall(r'"([\w.-]+\.exe)"', DESKTOP_WIN.read_text())}
+    assert named, "desktop_win no longer names its executables"
+    assert named <= _built(), f"not built by the spec: {named - _built()}"

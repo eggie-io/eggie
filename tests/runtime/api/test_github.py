@@ -8,7 +8,8 @@ import pytest
 
 from eggie_api.infra.github import (GitHub, GitHubError, GitHubUnavailable,
                                     auth_failed, clone_argv, identity_from,
-                                    redact, valid_repo)
+                                    origin_repo, redact, repo_from_url,
+                                    valid_repo)
 
 
 class Reply:
@@ -111,3 +112,43 @@ def test_redact_and_auth_failed():
     assert redact("nothing", "") == "nothing"
     assert auth_failed("fatal: Authentication failed for 'https://github.com/a/b.git/'")
     assert not auth_failed("fatal: repository 'x' not found")
+
+
+@pytest.mark.parametrize("url", [
+    "https://github.com/Octo/App.git",
+    "https://github.com/octo/app",
+    "https://github.com/octo/app/",
+    "https://x-access-token:secret@github.com/octo/app.git",
+    "git@github.com:octo/app.git",
+    "ssh://git@github.com/octo/app.git",
+])
+def test_github_remote_urls_resolve_to_lower_case_owner_slash_name(url):
+    assert repo_from_url(url) == "octo/app"
+
+
+@pytest.mark.parametrize("url", [
+    "https://gitlab.com/octo/app.git",
+    "https://github.com/octo",
+    "https://github.com/octo/app/tree/main",
+    "/srv/git/app.git",
+    "",
+])
+def test_anything_but_a_github_repo_url_is_not_a_repo(url):
+    assert repo_from_url(url) is None
+
+
+def test_origin_is_read_from_the_origin_section_only(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text(
+        '[core]\n\tbare = false\n'
+        '[remote "upstream"]\n\turl = https://github.com/someone/else.git\n'
+        '[remote "origin"]\n\turl = https://github.com/Octo/App.git\n'
+        '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
+    assert origin_repo(tmp_path) == "octo/app"
+
+
+def test_a_folder_without_a_readable_origin_has_none(tmp_path):
+    assert origin_repo(tmp_path) is None
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_bytes(b"\xff\xfe[remote")
+    assert origin_repo(tmp_path) is None

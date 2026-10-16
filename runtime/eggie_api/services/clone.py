@@ -10,7 +10,8 @@ from .. import constants
 from ..config import ApiConfig
 from ..domain.project import _slug
 from ..errors import Conflict, EggieError, Invalid
-from ..infra.github import auth_failed, clone_argv, redact, valid_repo
+from ..infra.github import (auth_failed, clone_argv, origin_repo, redact,
+                            valid_repo)
 from ..infra.repos.projects import ProjectRepo
 from .github_link import GitHubLink
 from .jobs import JobFailed
@@ -33,6 +34,31 @@ class CloneService:
         self._lifecycle = lifecycle
         self._wake = wake
 
+    def annotate(self, repos: list[dict]) -> list[dict]:
+        linked: dict[str, str] = {}
+        for row in self._projects.list():
+            origin = origin_repo(self._loader.dir(row["id"]))
+            if origin is not None:
+                linked.setdefault(origin, row["id"])
+        out = []
+        for repo in repos:
+            base = _slug(repo["full_name"].split("/")[1])
+            out.append({**repo, "project": linked.get(repo["full_name"].lower()),
+                        "name_taken": bool(base) and self._taken(base),
+                        "suggested_id": self._free_id(base) if base else None})
+        return out
+
+    def _taken(self, project_id: str) -> bool:
+        return (self._projects.get(project_id) is not None
+                or self._loader.dir(project_id).exists())
+
+    def _free_id(self, base: str) -> str:
+        candidate, n = base, 1
+        while self._taken(candidate):
+            n += 1
+            candidate = f"{base}-{n}"
+        return candidate
+
     def clone(self, repo: str, id: str | None) -> dict:
         if not valid_repo(repo):
             raise Invalid("invalid_repo",
@@ -42,7 +68,7 @@ class CloneService:
             raise Invalid("invalid_project",
                           f"'{repo}' has no usable project name")
         directory = self._loader.dir(project_id)
-        if self._projects.get(project_id) is not None or directory.exists():
+        if self._taken(project_id):
             raise Conflict("project_exists",
                            f"project '{project_id}' already exists")
         token = self._github_link.require_token()

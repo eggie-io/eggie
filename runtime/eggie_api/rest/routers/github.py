@@ -32,7 +32,8 @@ def build(s: Services) -> APIRouter:
 
     @router.get("/github/repos")
     def github_repos(page: int = 1) -> dict:
-        return s.github_link.repos(page)
+        listed = s.github_link.repos(page)
+        return {**listed, "repos": s.clone.annotate(listed["repos"])}
 
     @router.post("/github/clone", status_code=202)
     def github_clone(body: CloneRepo) -> dict:

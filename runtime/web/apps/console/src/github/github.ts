@@ -14,7 +14,15 @@ export type GitHubStatus =
   | { state: "connected"; login: string; name: string; email: string; setup: SetupState; setup_error: string | null }
   | { state: "needs_reconnect"; login: string };
 
-export type Repo = { full_name: string; private: boolean; description: string | null; updated_at: number | null };
+export type Repo = {
+  full_name: string;
+  private: boolean;
+  description: string | null;
+  updated_at: number | null;
+  project: string | null;
+  name_taken: boolean;
+  suggested_id: string | null;
+};
 export type RepoPage = { repos: Repo[]; has_more: boolean };
 
 export function polling(status?: GitHubStatus): boolean {
@@ -25,6 +33,11 @@ export function polling(status?: GitHubStatus): boolean {
 // revoked token) would otherwise stay hidden behind the last-fetched status.
 export function invalidateGitHub(client: QueryClient) {
   return client.invalidateQueries({ queryKey: GITHUB });
+}
+
+// The list marks repos that already are projects, so a landed clone changes it.
+export function invalidateRepos(client: QueryClient) {
+  return client.invalidateQueries({ queryKey: [...GITHUB, "repos"] });
 }
 
 export function useGitHub() {
@@ -71,7 +84,8 @@ export function useRepos(enabled: boolean) {
 export function useCloneRepo() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (repo: string) => api.post<{ job_id: string; id: string }>("/api/github/clone", { repo }),
+    mutationFn: ({ repo, id }: { repo: string; id?: string }) =>
+      api.post<{ job_id: string; id: string }>("/api/github/clone", id ? { repo, id } : { repo }),
     // A revoked token turns the status to needs_reconnect server-side.
     onError: () => void client.invalidateQueries({ queryKey: GITHUB }),
   });

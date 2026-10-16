@@ -1,16 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@eggie/ui";
-import { invalidateGitHub, useCloneRepo, useRepos } from "../../github/github";
+import { Button, TextField } from "@eggie/ui";
+import { ApiError } from "../../api/client";
+import { invalidateGitHub, invalidateRepos, useCloneRepo, useRepos, type Repo } from "../../github/github";
+import { repoRow } from "../../github/view";
 import { relativeTime } from "../../projects/format";
 import { useJob } from "../../projects/queries";
+import { slugify } from "../../projects/slugify";
 import s from "./GitHubModal.module.css";
+
+// id stays null until the user types, so the field follows the row's
+// suggestion as the list refetches.
+type Naming = { repo: string; id: string | null; error: string | null };
 
 export function RepoPicker({ login, onDone }: { login: string; onDone: () => void }) {
   const repos = useRepos(true);
   const clone = useCloneRepo();
+  const navigate = useNavigate();
+  const client = useQueryClient();
   const [started, setStarted] = useState<{ job_id: string; id: string } | null>(null);
+  const [naming, setNaming] = useState<Naming | null>(null);
 
   if (started) {
     return (
@@ -23,28 +33,103 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
     );
   }
 
+  const start = (repo: Repo, id?: string) => {
+    // A direct click leaves no name field open to hide its error.
+    if (id === undefined) setNaming(null);
+    clone.mutate(
+      { repo: repo.full_name, id },
+      {
+        onSuccess: setStarted,
+        onError: (error) => {
+          // Another project took the name after this list was fetched.
+          if (error instanceof ApiError && error.code === "project_exists") {
+            setNaming({ repo: repo.full_name, id: id ?? null, error: error.message });
+            void invalidateRepos(client);
+          } else if (id !== undefined) {
+            // The generic error line is hidden while the name field is open.
+            setNaming({ repo: repo.full_name, id, error: error.message });
+          }
+        },
+      },
+    );
+  };
+  const open = (projectId: string) => {
+    onDone();
+    navigate(`/p/${encodeURIComponent(projectId)}`);
+  };
+  const cancelNaming = () => {
+    setNaming(null);
+    clone.reset();
+  };
+
   const all = repos.data?.pages.flatMap((page) => page.repos) ?? [];
   return (
     <>
       <p>Connected as @{login}. Pick a repository to make it a project:</p>
       {repos.isError && <p className={s.error}>{repos.error.message}</p>}
-      {clone.error && <p className={s.error}>{clone.error.message}</p>}
+      {clone.error && !naming && <p className={s.error}>{clone.error.message}</p>}
       <ul className={s.repos}>
-        {all.map((repo) => (
-          <li key={repo.full_name}>
-            <button
-              className={s.repo}
-              disabled={clone.isPending}
-              onClick={() => clone.mutate(repo.full_name, { onSuccess: setStarted })}
-            >
+        {all.map((repo) => {
+          const row = repoRow(repo);
+          const name = naming?.repo === repo.full_name ? naming.id ?? repo.suggested_id ?? "" : "";
+          const details = (
+            <>
               <span className={s.repoName}>{repo.full_name}</span>
               {repo.private && <span className={s.badge}>Private</span>}
+              {row.kind === "linked" && <span className={s.badge}>Already a project</span>}
+              {row.kind === "nameTaken" && <span className={s.badge}>Name taken</span>}
               {repo.updated_at !== null && (
                 <span className={s.muted}>updated {relativeTime(repo.updated_at, Date.now())}</span>
               )}
-            </button>
-          </li>
-        ))}
+            </>
+          );
+          return (
+            <li key={repo.full_name}>
+              {row.kind === "linked" ? (
+                <div className={s.repo}>
+                  {details}
+                  <Button variant="quiet" className={s.open} onClick={() => open(row.projectId)}>Open</Button>
+                </div>
+              ) : (
+                <button
+                  className={s.repo}
+                  disabled={clone.isPending}
+                  onClick={() =>
+                    row.kind === "nameTaken"
+                      ? setNaming({ repo: repo.full_name, id: null, error: null })
+                      : start(repo)
+                  }
+                >
+                  {details}
+                </button>
+              )}
+              {naming?.repo === repo.full_name && row.kind !== "linked" && (
+                <form
+                  className={s.rename}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    start(repo, name);
+                  }}
+                >
+                  <TextField
+                    label="Name the new project"
+                    value={name}
+                    onChange={(id) => setNaming({ ...naming, id, error: null })}
+                    autoFocus
+                    error={naming.error ?? undefined}
+                    hint={slugify(name) ? <>It'll be called <strong>{slugify(name)}</strong></> : undefined}
+                  />
+                  <div className={s.actions}>
+                    <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(name)}>
+                      Import
+                    </Button>
+                    <Button variant="quiet" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
+                  </div>
+                </form>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {repos.isLoading && <p className={s.muted}>Fetching your repositories…</p>}
       {repos.hasNextPage && (
@@ -80,6 +165,7 @@ function Cloning({
   useEffect(() => {
     if (cloned && !fired.current) {
       fired.current = true;
+      void invalidateRepos(client);
       onDone();
       navigate(`/p/${encodeURIComponent(id)}`);
     }

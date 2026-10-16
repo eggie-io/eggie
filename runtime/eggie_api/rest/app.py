@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from ..config import ApiConfig
 from ..wiring import Services, build
 from . import auth, errors
-from .routers import (account, files, github, jobs, lifecycle, projects, public,
+from .routers import (account, files, github, instances, jobs, lifecycle, projects, public,
                       secrets, sessions, system, uploads)
 
 FEATURES = (system, account, github, projects, lifecycle, files, uploads,
@@ -39,5 +39,6 @@ def create_app(*, config: ApiConfig | None = None, services: Services | None = N
         app.include_router(router)
         app.include_router(router, prefix="/api")
     app.include_router(public.build_console(services), prefix="/api")
+    app.include_router(instances.build_console(services), prefix="/api")
     app.include_router(sessions.build(services))
     return app

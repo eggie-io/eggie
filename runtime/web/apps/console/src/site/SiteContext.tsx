@@ -6,6 +6,11 @@ export const SiteContext = createContext<string | null | undefined>(undefined);
 
 export const useSite = () => useContext(SiteContext);
 
+// The Eggie web app address; null until known or when the server reports none.
+export const WebAppContext = createContext<string | null | undefined>(undefined);
+
+export const useWebApp = () => useContext(WebAppContext);
+
 export const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
 
 export function isLocalHost(hostname: string): boolean {
@@ -18,4 +23,11 @@ export function nextSite(
   result: { site?: string | null },
 ): string | null | undefined {
   return result.site !== undefined ? result.site : prev;
+}
+
+export function nextWebApp(
+  prev: string | null | undefined,
+  result: { webApp?: string | null },
+): string | null | undefined {
+  return result.webApp !== undefined ? result.webApp : prev;
 }

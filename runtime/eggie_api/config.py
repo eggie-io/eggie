@@ -58,6 +58,7 @@ class ApiConfig:
     # A server with its own hostnames ("site mode"): the console's host.
     # Projects live under `domain`, which the installer sets alongside it.
     site_host: str | None = None
+    web_url: str = "https://app.eggie.io"
     # Where the service-issued certificate lands; Traefik watches it.
     tls_dir: Path = Path(f"{constants.GUEST_ROOT}/tls")
     # A token pair the service leaves before first boot, imported once.
@@ -103,6 +104,7 @@ class ApiConfig:
             agent_status_dir=Path(env.get("EGGIE_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
             agents_dir=Path(env.get("EGGIE_AGENTS_DIR", constants.AGENTS_DIR)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
+            web_url=env.get("EGGIE_WEB_URL", "https://app.eggie.io"),
             tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",
                                       f"{constants.GUEST_ROOT}/account.json")),

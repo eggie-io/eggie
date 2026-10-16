@@ -4,7 +4,8 @@ import { type Account, type StartOutcome, signInError, signInLink, startError } 
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
 import { useNow } from "../../projects/useNow";
-import { useSite } from "../../site/SiteContext";
+import { webAppKitchens } from "../../site/signIn";
+import { useSite, useWebApp } from "../../site/SiteContext";
 import { SleepyEgg } from "../SleepyEgg";
 import { StatusScreen } from "../StatusScreen";
 import s from "../StatusScreen.module.css";
@@ -25,6 +26,7 @@ export function SignIn({
   onSessionLost: (reason: SessionLoss) => void;
 }) {
   const site = useSite();
+  const webApp = useWebApp();
   const [view, setView] = useState<View>({ account: null, outcome: null, starting: false });
 
   const refresh = useCallback(async () => {
@@ -59,10 +61,20 @@ export function SignIn({
     }
   };
 
+  const kitchens = webAppKitchens(webApp);
+
   // A site refuses sign-in from the console, so the button would only dead-end.
   if (typeof site === "string") {
     return (
-      <StatusScreen art={<SleepyEgg />} title="This server lost its Eggie sign-in" actions={null}>
+      <StatusScreen
+        art={<SleepyEgg />}
+        title="This server lost its Eggie sign-in"
+        actions={
+          kitchens !== null && (
+            <a className={own.link} href={kitchens}>Open the Eggie web app</a>
+          )
+        }
+      >
         <p className={s.lead}>It can't sign in again from here. Set it up again from the Eggie web app.</p>
       </StatusScreen>
     );

@@ -67,7 +67,9 @@ def test_repos_are_mapped_and_never_carry_the_token(env):
     assert body["has_more"] is True
     assert body["repos"] == [{"full_name": "octo/app", "private": True,
                               "description": "An app",
-                              "updated_at": 1789898400.0}]
+                              "updated_at": 1789898400.0,
+                              "project": None, "name_taken": False,
+                              "suggested_id": "app"}]
     assert TOKEN not in resp.text
     assert TOKEN not in client.get("/github").text
 
@@ -87,6 +89,36 @@ def test_a_401_on_repos_racing_a_disconnect_does_not_mark_anything(env):
     holder["link"] = link
     client.get("/github/repos")
     assert client.get("/github").json() == {"state": "disconnected", "error": None}
+
+
+def _project(app, env, pid, origin=None):
+    folder = env.config.projects_root / pid
+    folder.mkdir(parents=True)
+    if origin is not None:
+        (folder / ".git").mkdir()
+        (folder / ".git" / "config").write_text(f'[remote "origin"]\n\turl = {origin}\n')
+    app.state.services.repos.projects.add(pid, str(folder), env.config.domain)
+
+
+def test_a_repo_some_project_was_cloned_from_is_marked_with_that_project(env):
+    client, _, app, _ = make(env, connected_github(
+        repos=[([{**REPO, "full_name": "Octo/App"}], False)]))
+    _project(app, env, "renamed", origin="https://github.com/octo/app.git")
+    _project(app, env, "unrelated", origin="git@gitlab.com:octo/app.git")
+    _project(app, env, "no-git")
+    [repo] = client.get("/github/repos").json()["repos"]
+    assert repo["project"] == "renamed"
+    assert (repo["name_taken"], repo["suggested_id"]) == (False, "app")
+
+
+def test_a_taken_name_suggests_the_first_free_suffix(env):
+    client, _, app, _ = make(env, connected_github(repos=[([REPO], False)]))
+    _project(app, env, "app")
+    _project(app, env, "app-2")
+    (env.config.projects_root / "app-3").mkdir()
+    [repo] = client.get("/github/repos").json()["repos"]
+    assert repo["project"] is None
+    assert (repo["name_taken"], repo["suggested_id"]) == (True, "app-4")
 
 
 @pytest.mark.parametrize("repo", ["../x", "a/b/c", "https://github.com/a/b"])

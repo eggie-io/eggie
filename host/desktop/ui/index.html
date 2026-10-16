@@ -25,6 +25,7 @@
 <aside id="notice" hidden>
   <p class="notice-head">Something went wrong.</p>
   <pre class="notice-detail" id="notice-detail"></pre>
+  <button class="btn-secondary" data-action="copy-log">Copy log</button>
   <button class="btn-secondary" data-action="dismiss-notice">Dismiss</button>
 </aside>
 
@@ -39,7 +40,7 @@
       <h1 class="display">Welcome to Eggie</h1>
     </div>
     <p class="lede">Eggie sets up a tiny private computer inside your computer,
-      so you can build real, working apps just by chatting with it.</p>
+      so you can build real, working web apps just by chatting with it.</p>
     <ol class="steps">
       <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
         Your own files stay exactly where they are.</span></li>
@@ -172,7 +173,8 @@
       <button class="btn-secondary" data-action="restart-vm">Restart the kitchen</button>
     </div>
     <details class="log"><summary>Show the log</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
@@ -199,7 +201,8 @@
       <span class="hint">Repair restarts the link. Your projects stay put.</span>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -215,7 +218,8 @@
       <button class="btn-secondary" data-action="go-home">Try again</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -239,7 +243,8 @@
       <button class="btn-secondary" data-action="doctor">Run Doctor</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="message"></pre></details>
+      <pre data-field="message"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -253,7 +258,8 @@
       <button class="btn-secondary" data-action="go-home">Not now</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="message"></pre></details>
+      <pre data-field="message"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -357,7 +363,8 @@
       <button class="btn-primary" data-retry data-action="start-install">Try this step again</button>
       <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
       <details class="log" data-when="message"><summary>Show the log</summary>
-        <pre data-field="message"></pre></details>
+        <pre data-field="message"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     </div>
     <div class="rows-col"><ol class="rows" data-rows></ol></div>
   </section>
@@ -367,7 +374,8 @@
   <section class="pad">
     <h2 class="title">Doctor</h2>
     <pre class="log" data-field="text"></pre>
-    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button></div>
+    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button>
+      <button class="btn-secondary" data-action="copy-log">Copy log</button></div>
   </section>
 </template>
 

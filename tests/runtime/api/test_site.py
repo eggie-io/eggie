@@ -92,3 +92,11 @@ def test_a_site_refuses_to_start_a_device_code_sign_in(site_env):
     resp = _site_browser(site_env).post("/api/account/sign-in")
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "site_account"
+
+
+def test_health_names_the_web_app(env):
+    assert env.client.get("/health").json()["web_app"] == "https://app.eggie.io"
+
+
+def test_web_app_comes_from_the_environment():
+    assert ApiConfig.from_env({"EGGIE_WEB_URL": "http://localhost:5173"}).web_url == "http://localhost:5173"

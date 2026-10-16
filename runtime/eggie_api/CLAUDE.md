@@ -69,6 +69,10 @@ and a host release. Prefer additive changes.
 
 ## Feature areas
 
+- **Instances** (`services/instances.py`) — `GET /api/instances` (console only) lists the account's
+  kitchens from `GET /v1/instances`, trimmed to what the switcher shows; `current` is the row whose
+  `console_hostname` equals `site_host`. Health names the web app (`ApiConfig.web_url`, env
+  `EGGIE_WEB_URL`) so the console knows where to send the user.
 - **Site** (`services/site.py`, `services/certificate.py`) — `ApiConfig.site_host` (from
   `EGGIE_SITE_HOST`) switches it on. `SiteSignIn.redeem` tries local handoff codes first, then
   `POST /v1/instances/handoff/redeem` with the account token. `Certificate.refresh` is a sync pass:

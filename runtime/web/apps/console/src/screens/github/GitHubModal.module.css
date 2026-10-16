@@ -11,3 +11,4 @@
 .badge { font-size: 12px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); }
 div.repo { cursor: default; }
 .rename { display: grid; gap: 8px; padding: 8px 10px 4px; }
+.open { margin-left: auto; }

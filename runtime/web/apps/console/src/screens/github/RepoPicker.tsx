@@ -10,7 +10,9 @@ import { useJob } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
 import s from "./GitHubModal.module.css";
 
-type Naming = { repo: string; id: string; error: string | null };
+// id stays null until the user types, so the field follows the row's
+// suggestion as the list refetches.
+type Naming = { repo: string; id: string | null; error: string | null };
 
 export function RepoPicker({ login, onDone }: { login: string; onDone: () => void }) {
   const repos = useRepos(true);
@@ -41,7 +43,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
         onError: (error) => {
           // Another project took the name after this list was fetched.
           if (error instanceof ApiError && error.code === "project_exists") {
-            setNaming({ repo: repo.full_name, id: id ?? repo.suggested_id ?? "", error: error.message });
+            setNaming({ repo: repo.full_name, id: id ?? null, error: error.message });
             void invalidateRepos(client);
           } else if (id !== undefined) {
             // The generic error line is hidden while the name field is open.
@@ -69,6 +71,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
       <ul className={s.repos}>
         {all.map((repo) => {
           const row = repoRow(repo);
+          const name = naming?.repo === repo.full_name ? naming.id ?? repo.suggested_id ?? "" : "";
           const details = (
             <>
               <span className={s.repoName}>{repo.full_name}</span>
@@ -85,7 +88,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
               {row.kind === "linked" ? (
                 <div className={s.repo}>
                   {details}
-                  <Button variant="quiet" onClick={() => open(row.projectId)}>Open</Button>
+                  <Button variant="quiet" className={s.open} onClick={() => open(row.projectId)}>Open</Button>
                 </div>
               ) : (
                 <button
@@ -93,7 +96,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                   disabled={clone.isPending}
                   onClick={() =>
                     row.kind === "nameTaken"
-                      ? setNaming({ repo: repo.full_name, id: row.suggestion, error: null })
+                      ? setNaming({ repo: repo.full_name, id: null, error: null })
                       : start(repo)
                   }
                 >
@@ -105,19 +108,19 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                   className={s.rename}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    start(repo, naming.id);
+                    start(repo, name);
                   }}
                 >
                   <TextField
                     label="Name the new project"
-                    value={naming.id}
+                    value={name}
                     onChange={(id) => setNaming({ ...naming, id, error: null })}
                     autoFocus
                     error={naming.error ?? undefined}
-                    hint={slugify(naming.id) ? <>It'll be called <strong>{slugify(naming.id)}</strong></> : undefined}
+                    hint={slugify(name) ? <>It'll be called <strong>{slugify(name)}</strong></> : undefined}
                   />
                   <div className={s.actions}>
-                    <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(naming.id)}>
+                    <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(name)}>
                       Import
                     </Button>
                     <Button variant="quiet" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>

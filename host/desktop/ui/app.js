@@ -119,12 +119,10 @@ const ACTIONS = {
   'dismiss-notice': () => { document.getElementById('notice').hidden = true; },
 };
 
-// #notice lives outside #screen, so wire() -- which only ever runs against
-// the freshly-swapped-in screen root -- never reaches it. Wired once, here,
-// since the script tag runs after the body has parsed.
-document.getElementById('notice')
-  .querySelector('[data-action="dismiss-notice"]')
-  .addEventListener('click', () => ACTIONS['dismiss-notice']());
+// #notice lives outside #screen, so show()'s wire() -- which only ever runs
+// against the freshly-swapped-in screen root -- never reaches it. Wired once,
+// here, since the script tag runs after the body has parsed.
+wire(document.getElementById('notice'));
 
 ACTIONS['check-updates'] = async () => {
   const result = await api().check_app_update();
@@ -360,7 +358,7 @@ ACTIONS['doctor'] = async () => show('doctor', await api().doctor());
 
 // Returns nothing so wire() doesn't put the busy spinner over a copy.
 ACTIONS['copy-log'] = (node) => {
-  const pre = node.closest('details.log, section').querySelector('pre');
+  const pre = node.closest('details.log, section, #notice').querySelector('pre');
   const label = (text) => {
     node.textContent = text;
     clearTimeout(node.resetTimer);

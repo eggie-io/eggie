@@ -415,7 +415,7 @@ pre.log {
 
 /* pywebview injects body { user-select:none } unless the window is created
    with text_select=True; the logs opt back in so they can be copied. */
-.log pre, pre.log { -webkit-user-select:text; user-select:text; cursor:text; }
+.log pre, pre.log, .notice-detail { -webkit-user-select:text; user-select:text; cursor:text; }
 .btn-copy {
   cursor:pointer; margin-top:10px; padding:7px 14px; border-radius:var(--r-sm);
   background:var(--surface); border:1px solid var(--line-2); color:var(--ink-2);

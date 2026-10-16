@@ -25,6 +25,7 @@
 <aside id="notice" hidden>
   <p class="notice-head">Something went wrong.</p>
   <pre class="notice-detail" id="notice-detail"></pre>
+  <button class="btn-secondary" data-action="copy-log">Copy log</button>
   <button class="btn-secondary" data-action="dismiss-notice">Dismiss</button>
 </aside>
 
@@ -200,7 +201,8 @@
       <span class="hint">Repair restarts the link. Your projects stay put.</span>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -216,7 +218,8 @@
       <button class="btn-secondary" data-action="go-home">Try again</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -240,7 +243,8 @@
       <button class="btn-secondary" data-action="doctor">Run Doctor</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="message"></pre></details>
+      <pre data-field="message"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -254,7 +258,8 @@
       <button class="btn-secondary" data-action="go-home">Not now</button>
     </div>
     <details class="log"><summary>Show logs</summary>
-      <pre data-field="message"></pre></details>
+      <pre data-field="message"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 

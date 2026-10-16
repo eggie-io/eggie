@@ -419,13 +419,13 @@ _ACTIONS = {
     "bootstrap": "Eggie could not be installed inside the virtual machine. "
                  "The error came from inside it; open the log for the exact "
                  "text. Run setup again; if it fails the same way twice, "
-                 "send us that text.",
+                 "use Copy log and send us that text.",
     "connect": "The Eggie service inside the virtual machine would not work "
                "with this app, or would not accept this computer. Open the "
                "log to see which. Run setup again; if it fails the same way "
-               "twice, use Copy diagnostics and send us the text.",
+               "twice, use Copy log and send us the text.",
     "verify": "The test project did not answer. Run setup again; if it fails a "
-              "second time, use Copy diagnostics and send us the text.",
+              "second time, open the log, use Copy log and send us the text.",
 }
 
 

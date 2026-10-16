@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Egg, cx } from "@eggie/ui";
 import { useDesktopHome } from "../desktop/DesktopContext";
 import { BACK } from "../screens/icons";
+import { InstanceSwitcher } from "./InstanceSwitcher";
 import s from "./Shell.module.css";
 
 export function Shell({
@@ -26,7 +27,7 @@ export function Shell({
         )}
         <div className={s.place}>
           <Egg tone={tone} size={22} />
-          <span className={s.brand}>{signedIn ? "Kitchen" : "Eggie"}</span>
+          {signedIn ? <InstanceSwitcher /> : <span className={s.brand}>Eggie</span>}
           {signedIn && <span className={s.open}><span className={s.dot} aria-hidden="true" />Open</span>}
         </div>
         {nav && (

@@ -41,6 +41,9 @@ export const SCENARIOS = [
   "secrets",
   "site",
   "site-signed-out",
+  "kitchens",
+  "no-kitchens",
+  "kitchens-down",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -335,6 +338,26 @@ export function handlersFor(scenario: Scenario) {
         site: scenario.startsWith("site") ? "foo.eggie.io" : null,
         web_app: "https://app.eggie.io",
         docker: { reachable: true, version: "29.0.0", detail: "" },
+      });
+    }),
+    http.get("/api/instances", () => {
+      if (scenario === "kitchens-down") {
+        return refuse("cloud_unavailable", "The Eggie service can't be reached. Check the internet connection and try again.", 503);
+      }
+      if (scenario === "no-kitchens") return HttpResponse.json({ instances: [] });
+      const row = (id: string, name: string, over: Record<string, unknown> = {}) => ({
+        id, display_name: name, console_hostname: `${id}.eggie.io`, status: "running",
+        signed_out: false, is_owner: true, current: false, ...over,
+      });
+      return HttpResponse.json({
+        instances: [
+          row("foo", "Foo", { current: scenario === "site" }),
+          row("bar", "Bar"),
+          row("team", "Team box", { is_owner: false }),
+          row("new", "Fresh one", { status: "provisioning" }),
+          row("broken", "Broken", { status: "failed" }),
+          row("lost", "Lost login", { signed_out: true }),
+        ],
       });
     }),
     http.post("/api/session", () => {

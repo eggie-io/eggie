@@ -244,6 +244,13 @@ Every call carries `Authorization: Bearer <device access token>`, refreshed thro
   `invalid_grant`, it clears its account, and since sign-in is refused on a site, the server is
   locked out until re-provisioned.
 
+### `GET /v1/instances`
+
+Called with the device token for the console's instance switcher (through `GET /api/instances`).
+Returns the account's instances: id, display name, console hostname, status, owner flag and whether
+this device's instance is the caller. It lists only; opening a kitchen's console still needs
+`POST /v1/instances/{id}/console` with a web session.
+
 ### `GET /v1/instances/me/certificate`
 
 ```json
@@ -287,7 +294,7 @@ even if the server then fails to set a cookie. Codes the service mints never sta
   tokens out of user data entirely. First-boot rotation plus the metadata guard cover the gap for
   now; the exchange is a contract change for a later round.
 - Until the refresh grace window exists on the service, a stranded server is re-provisioned.
-- The instance switcher (console and desktop), user-attached custom domains, Cloudflare proxying
-  and forward-auth in front of projects are out of scope for this version.
+- User-attached custom domains, Cloudflare proxying and forward-auth in front of projects are out
+  of scope for this version.
 - The live gates for a site are `release-testing.md` S1–S12; the branch that built site mode had
   not run on a real droplet when this was written.

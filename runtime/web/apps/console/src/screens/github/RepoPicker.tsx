@@ -39,6 +39,9 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
           // Another project took the name after this list was fetched.
           if (error instanceof ApiError && error.code === "project_exists") {
             setNaming({ repo: repo.full_name, id: id ?? repo.suggested_id ?? "", error: error.message });
+          } else if (id !== undefined) {
+            // The generic error line is hidden while the name field is open.
+            setNaming({ repo: repo.full_name, id, error: error.message });
           }
         },
       },

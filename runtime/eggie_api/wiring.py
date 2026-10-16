@@ -19,6 +19,7 @@ from .services.certificate import Certificate
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
+from .services.instances import Instances
 from .services.jobs import JobRegistry
 from .services.lifecycle import LifecycleService
 from .services.loader import ProjectLoader
@@ -52,6 +53,7 @@ class Services:
     github_link: GitHubLink
     sessions: Sessions
     site: SiteSignIn
+    instances: Instances
     agents: AgentStatus
     certificate: Certificate | None
     sync: SyncLoop
@@ -120,5 +122,6 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, github_link=github_link,
         sessions=sessions, site=site,
+        instances=Instances(account, cloud, config.site_host),
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         certificate=certificate, sync=sync, system=SystemService(config, runner))

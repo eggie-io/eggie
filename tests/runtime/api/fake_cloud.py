@@ -48,6 +48,9 @@ class FakeCloud:
     def release_public_url(self, token, cloud_id):
         return self._next("release_public_url", token, cloud_id)
 
+    def list_instances(self, token):
+        return self._next("list_instances", token)
+
     def instance_certificate(self, token):
         return self._next("instance_certificate", token)
 

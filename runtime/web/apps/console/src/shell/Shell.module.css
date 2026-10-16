@@ -83,7 +83,7 @@
 .itemHint { font: 400 12px var(--font-mono); color: var(--ink-3); }
 .menuError { padding: 4px 10px; font-size: 13px; color: var(--paprika); }
 
-.home:focus-visible, .tab:focus-visible, .avatarButton:focus-visible, .item:focus-visible, .chip:focus-visible {
+.home:focus-visible, .switcherButton:focus-visible, .tab:focus-visible, .avatarButton:focus-visible, .item:focus-visible, .chip:focus-visible {
   outline: 2px solid var(--yolk-deep); outline-offset: 2px;
 }
 
@@ -94,3 +94,20 @@
   .tabLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .menu { width: min(300px, calc(100vw - 20px)); }
 }
+
+.switcher { position: relative; }
+.switcherButton {
+  cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 8px; border-radius: 10px;
+  border: 0; background: transparent; color: var(--ink-2);
+}
+.switcherButton:hover { background: var(--surface-2); }
+.switcherMenu {
+  position: absolute; left: 0; top: calc(100% + 8px); width: 280px; display: flex; flex-direction: column; gap: 2px;
+  padding: 8px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 24px 44px -20px var(--shadow);
+}
+.switcherMenu[hidden] { display: none; }
+.switcherMenu .itemLabel { display: flex; flex-direction: column; gap: 1px; }
+.switcherMenu .item:disabled { cursor: default; }
+.switcherCurrent:disabled { opacity: 1; cursor: default; }
+.switcherNote { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; font: 400 13px/1.4 var(--font-body); color: var(--ink-3); }

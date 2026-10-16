@@ -20,6 +20,7 @@ class SystemService:
             "version": self._config.version,
             "api": constants.API_VERSION,
             "site": self._config.site_host,
+            "web_app": self._config.web_url,
             "docker": {
                 "reachable": probe.ok,
                 "version": probe.stdout.strip() if probe.ok else "",

@@ -30,7 +30,9 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
     );
   }
 
-  const start = (repo: Repo, id?: string) =>
+  const start = (repo: Repo, id?: string) => {
+    // A direct click leaves no name field open to hide its error.
+    if (id === undefined) setNaming(null);
     clone.mutate(
       { repo: repo.full_name, id },
       {
@@ -46,6 +48,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
         },
       },
     );
+  };
   const open = (projectId: string) => {
     onDone();
     navigate(`/p/${encodeURIComponent(projectId)}`);

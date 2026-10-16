@@ -22,12 +22,14 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
 
   useEffect(() => {
     // "Open Eggie" opens a new tab; this one catches up when it's looked at again.
+    // Not on a site: a retry there boots without a code and would redirect past the Sign in button.
+    if (typeof site === "string") return;
     const onVisible = () => {
       if (document.visibilityState === "visible") onRetry();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [onRetry]);
+  }, [onRetry, site]);
 
   if (redirecting) {
     return (

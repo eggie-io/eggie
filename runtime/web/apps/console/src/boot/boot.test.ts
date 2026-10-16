@@ -44,6 +44,15 @@ describe("boot", () => {
     expect((await boot({ fetch: absent.fetch, handoff: null })).webApp).toBeNull();
   });
 
+  it("says the link was spent when a code is accepted but the session does not stick", async () => {
+    const { fetch } = api({
+      "GET /api/health": { status: 200, body: { api: 1 } },
+      "POST /api/session": OK,
+      "GET /api/account": refusal(401, "not_signed_in"),
+    });
+    expect(await boot({ fetch, handoff: "code" })).toMatchObject({ kind: "signedOut", reason: "handoff_spent" });
+  });
+
   it("carries no site when the health request itself fails", async () => {
     const { fetch } = api({ "GET /api/health": "refused" });
     expect((await boot({ fetch, handoff: null })).site).toBeUndefined();

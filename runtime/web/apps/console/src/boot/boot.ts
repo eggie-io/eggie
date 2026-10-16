@@ -61,7 +61,11 @@ export async function boot({
   }
   const site = typeof health?.site === "string" && health.site !== "" ? health.site : null;
   const webApp = typeof health?.web_app === "string" && health.web_app !== "" ? health.web_app : null;
-  return { ...(await signIn(api, health?.api, handoff)), site, webApp };
+  const result = await signIn(api, health?.api, handoff);
+  // After a presented code, a lost session means the code did not take (e.g.
+  // cookies blocked); the site must not redirect to the web app again.
+  const signedOut = handoff !== null && result.kind === "signedOut";
+  return { ...(signedOut ? { ...result, reason: "handoff_spent" as const } : result), site, webApp };
 }
 
 async function signIn(api: Api, healthApi: unknown, handoff: string | null): Promise<BootResult> {

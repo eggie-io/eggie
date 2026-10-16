@@ -21,8 +21,8 @@ function kitchenEntry(kitchen: Kitchen): SwitcherEntry {
   if (kitchen.current) return { ...base, note: null, target: null };
   const closed = (note: string): SwitcherEntry => ({ ...base, note, target: null });
   if (!kitchen.is_owner) return closed("Owned by a teammate");
-  if (kitchen.status === "provisioning" || kitchen.status === "booting") return closed("Starting…");
   if (kitchen.status === "failed") return closed("Failed, see the web app");
+  if (kitchen.status !== "running") return closed("Starting…");
   if (kitchen.signed_out) return closed("Set up again in the web app");
   return { ...base, note: null, target: { kind: "kitchen", host: kitchen.console_hostname } };
 }

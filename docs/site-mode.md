@@ -247,9 +247,12 @@ Every call carries `Authorization: Bearer <device access token>`, refreshed thro
 ### `GET /v1/instances`
 
 Called with the device token for the console's instance switcher (through `GET /api/instances`).
-Returns the account's instances: id, display name, console hostname, status, owner flag and whether
-this device's instance is the caller. It lists only; opening a kitchen's console still needs
+Returns the account's instances. The runtime reads `id`, `display_name`, `console_hostname`,
+`status`, `signed_out` and `is_owner`, and computes `current` itself from its own site host. It lists only; opening a kitchen's console still needs
 `POST /v1/instances/{id}/console` with a web session.
+
+The desktop window keeps the web app sign-in only for the current run (pywebview's private mode),
+so the first switch after each launch shows the web app login.
 
 ### `GET /v1/instances/me/certificate`
 
@@ -282,8 +285,8 @@ even if the server then fails to set a cookie. Codes the service mints never sta
 - Deleting an instance: revoke its device tokens; the server is disposable.
 - The web app serves `/kitchens/open?host=<console host>[&home=<desktop home>]`. It checks that
   the logged-in owner has an instance with that console hostname, mints the console code with
-  `POST /v1/instances/{id}/console`, and redirects to `https://<host>/#handoff=<code>` (or, with
-  `home`, through the desktop app's own address). Its own address is the server's
+  `POST /v1/instances/{id}/console`, and redirects to `https://<host>/#handoff=<code>`, with
+  `&home=<desktop home>` appended to the fragment when it is `http://127.0.0.1:<port>`. Its own address is the server's
   `EGGIE_WEB_URL`.
 - The web app shows each instance's console hostname and an "open console" action. Projects on
   an instance appear through the existing project registry sync under the instance's device id.

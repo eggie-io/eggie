@@ -20,6 +20,8 @@ describe("switcherEntries", () => {
     [{ status: "provisioning" }, "Starting…"],
     [{ status: "booting" }, "Starting…"],
     [{ status: "failed" }, "Failed, see the web app"],
+    [{ is_owner: false, status: "failed" }, "Owned by a teammate"],
+    [{ status: "deleting" }, "Starting…"],
     [{ signed_out: true }, "Set up again in the web app"],
   ])("a kitchen %o is shown with %s and cannot be opened", (over, note) =>
     expect(switcherEntries({ kitchens: [k(over)], site: null, desktopHome: null })[1]).toMatchObject({ note, target: null }));

@@ -83,7 +83,7 @@
 .itemHint { font: 400 12px var(--font-mono); color: var(--ink-3); }
 .menuError { padding: 4px 10px; font-size: 13px; color: var(--paprika); }
 
-.home:focus-visible, .tab:focus-visible, .avatarButton:focus-visible, .item:focus-visible, .chip:focus-visible {
+.home:focus-visible, .switcherButton:focus-visible, .tab:focus-visible, .avatarButton:focus-visible, .item:focus-visible, .chip:focus-visible {
   outline: 2px solid var(--yolk-deep); outline-offset: 2px;
 }
 

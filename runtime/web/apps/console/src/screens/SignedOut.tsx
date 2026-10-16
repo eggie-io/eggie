@@ -60,7 +60,7 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
       </p>
       <p className={s.lead}>
         {site ? (
-          <>Go back to the Eggie web app and open this console from there again.</>
+          <>Sign in again through the Eggie web app.</>
         ) : (
           <>Open the Eggie app on your desktop and press <strong>Open Eggie</strong>. It'll hand the keys back.</>
         )}

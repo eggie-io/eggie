@@ -1,4 +1,4 @@
-import type { GitHubStatus } from "./github";
+import type { GitHubStatus, Repo } from "./github";
 
 export type GitHubView =
   | { kind: "connect"; problem: string | null; action: string }
@@ -40,4 +40,15 @@ export function githubView(status: GitHubStatus): GitHubView {
           : `GitHub setup inside Eggie failed: ${status.setup_error ?? "no reason given"}`,
       };
   }
+}
+
+export type RepoRow =
+  | { kind: "linked"; projectId: string }
+  | { kind: "nameTaken"; suggestion: string }
+  | { kind: "free" };
+
+export function repoRow(repo: Repo): RepoRow {
+  if (repo.project) return { kind: "linked", projectId: repo.project };
+  if (repo.name_taken && repo.suggested_id) return { kind: "nameTaken", suggestion: repo.suggested_id };
+  return { kind: "free" };
 }

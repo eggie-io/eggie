@@ -113,6 +113,38 @@ def valid_repo(full_name: str) -> bool:
             and ".." not in full_name.split("/"))
 
 
+# Credentials in an https remote are skipped, not rejected: a hand-run clone
+# may have baked a token into the URL.
+_GITHUB_REMOTE = re.compile(
+    r"(?:https://(?:[^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)"
+    r"([^/]+/[^/]+?)(?:\.git)?/?", re.IGNORECASE)
+
+
+def repo_from_url(url: str) -> str | None:
+    match = _GITHUB_REMOTE.fullmatch(url.strip())
+    if not match or not valid_repo(match.group(1)):
+        return None
+    return match.group(1).lower()
+
+
+def origin_repo(directory: Path) -> str | None:
+    """The GitHub owner/name `directory`'s origin points at, lower-cased."""
+    try:
+        lines = (directory / ".git" / "config").read_text().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    section = None
+    for line in lines:
+        line = line.strip()
+        if line.startswith("["):
+            section = line
+        elif section == '[remote "origin"]':
+            key, _, value = line.partition("=")
+            if key.strip().lower() == "url":
+                return repo_from_url(value.strip().strip('"'))
+    return None
+
+
 def clone_argv(full_name: str, dest: Path) -> list[str]:
     # umask 002 + sharedRepository=group: the agent's account is root on WSL2
     # and the macOS uid on Lima, never this API's uid 1000 -- it writes

@@ -9,7 +9,7 @@ DefaultGroupName={#AppName}
 OutputDir=..\..\dist
 OutputBaseFilename=EggieSetup-{#AppVersion}
 SetupIconFile=..\..\host\desktop\resources\icon.ico
-UninstallDisplayIcon={app}\setup.exe
+UninstallDisplayIcon={app}\eggie-app.exe
 ; Per-user install: no admin for the install itself. The only UAC prompt in
 ; the whole experience is the scoped one for enabling WSL2.
 PrivilegesRequired=lowest
@@ -28,16 +28,16 @@ Source: "..\..\dist\Eggie\*"; DestDir: "{app}"; Flags: recursesubdirs ignorevers
 Source: "MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\Eggie Setup"; Filename: "{app}\setup.exe"; Parameters: "setup"
+Name: "{group}\Eggie"; Filename: "{app}\eggie-app.exe"; Parameters: "setup"
 
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; \
   StatusMsg: "Installing Microsoft Edge WebView2 runtime..."; Flags: waituntilterminated
-Filename: "{app}\setup.exe"; Parameters: "setup"; \
-  Description: "Set up Eggie now"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\eggie-app.exe"; Parameters: "setup"; \
+  Description: "Open Eggie"; Flags: postinstall nowait skipifsilent
 ; A silent run is the app's own Update button: reopen it when done. The entry
 ; above is skipifsilent, so it never covers this.
-Filename: "{app}\setup.exe"; Parameters: "setup"; Flags: nowait runasoriginaluser; Check: WizardSilent
+Filename: "{app}\eggie-app.exe"; Parameters: "setup"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallRun]
 ; Destroys the VM and every project inside it before files are removed.
@@ -74,10 +74,10 @@ begin
     // locked and outlive the VM. The purge destroys the VM right after, so a
     // hard stop is fine. Done here, not in [UninstallRun], because Inno runs
     // those entries in reverse order and the kill must come first.
-    // Matched by full path: setup.exe is a common installer name.
+    // Matched by full path: another Eggie install may be running elsewhere.
     Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-         '-NoProfile -Command "Get-Process setup -ErrorAction SilentlyContinue | ' +
-         'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\setup.exe') + ''' } | ' +
+         '-NoProfile -Command "Get-Process eggie-app -ErrorAction SilentlyContinue | ' +
+         'Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\eggie-app.exe') + ''' } | ' +
          'Stop-Process -Force"',
          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

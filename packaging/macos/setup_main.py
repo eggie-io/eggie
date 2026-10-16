@@ -1,7 +1,7 @@
 """Entry point for the Eggie.app bundle.
 
 The CLI and the setup window are one program with two front doors, exactly as
-on Windows — where the installer's shortcut runs `setup.exe setup`, passing the
+on Windows — where the installer's shortcut runs `eggie-app.exe setup`, passing the
 subcommand itself. Finder passes no arguments at all, so a bundle whose main
 executable were the bare CLI would open, print its help to a console nobody is
 watching, and exit. This adds the missing word.

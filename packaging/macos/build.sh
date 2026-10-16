@@ -39,7 +39,7 @@ export EGGIE_VERSION="$version"
 
 cli="$app/Contents/MacOS/eggie"
 [ -x "$cli" ] || { echo "$cli was not built." >&2; exit 1; }
-gui="$app/Contents/MacOS/eggie-setup"
+gui="$app/Contents/MacOS/eggie-app"
 [ -x "$gui" ] || { echo "$gui was not built." >&2; exit 1; }
 # Both executables live in one directory on a case-insensitive filesystem, where
 # two names differing only in case are one file. Counting them is what catches
@@ -72,8 +72,8 @@ count="$(ls -1 "$app/Contents/MacOS" | wc -l | tr -d ' ')"
 # spec), so the corrections are asserted rather than trusted.
 main_exe="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" \
     "$app/Contents/Info.plist")"
-[ "$main_exe" = "eggie-setup" ] || {
-    echo "Eggie.app would launch '$main_exe', not the setup window." >&2; exit 1; }
+[ "$main_exe" = "eggie-app" ] || {
+    echo "Eggie.app would launch '$main_exe', not the app window." >&2; exit 1; }
 if /usr/libexec/PlistBuddy -c "Print :LSBackgroundOnly" \
        "$app/Contents/Info.plist" 2>/dev/null | grep -q true; then
     echo "Eggie.app is marked background-only; its window cannot come forward." >&2

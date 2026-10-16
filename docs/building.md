@@ -21,13 +21,13 @@ powershell -ExecutionPolicy Bypass -File .\packaging\windows\build.ps1
 # → dist\EggieSetup-<version>.exe
 ```
 
-`build.ps1` freezes `eggie.exe` and `setup.exe` from `packaging\windows\eggie.spec`,
+`build.ps1` freezes `eggie.exe` (the CLI) and `eggie-app.exe` (the window) from `packaging\windows\eggie.spec`,
 smoke-tests them, downloads Microsoft's WebView2 bootstrapper (so the build needs network access),
 and packages everything with Inno Setup (`installer.iss`). If `ISCC.exe` isn't found, pass
 `-InnoSetup "C:\Path\To\ISCC.exe"`. The installer is unsigned.
 
-The installer also installs WebView2. On its last page it offers a "Set up Eggie now" checkbox,
-which runs `setup.exe setup`. The uninstaller runs
+The installer also installs WebView2 and adds an "Eggie" Start menu entry. On its last page it
+offers an "Open Eggie" checkbox, which runs `eggie-app.exe setup`. The uninstaller runs
 `eggie.exe uninstall --purge`, which destroys the VM and every project in it.
 
 ## macOS package

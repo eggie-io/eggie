@@ -36,7 +36,7 @@ def _gui_exe(exe_path: str) -> str:
     # eggie.exe is the console build; at login it would flash a window.
     path = Path(exe_path)
     if path.name.lower() == "eggie.exe":
-        sibling = path.with_name("setup.exe")
+        sibling = path.with_name("eggie-app.exe")
         if sibling.exists():
             return str(sibling)
     return exe_path

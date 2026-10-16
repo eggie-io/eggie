@@ -43,7 +43,7 @@ gui = Analysis(["setup_main.py"], pathex=["../.."], datas=DATAS,
 
 # The GUI executable comes first on purpose: BUNDLE takes CFBundleExecutable
 # from the first EXECUTABLE in the COLLECT, and double-clicking Eggie.app must
-# open the setup window, not a CLI with nothing to do. `eggie` lands beside it
+# open the app window, not a CLI with nothing to do. `eggie` lands beside it
 # in Contents/MacOS, which is what the installer symlinks onto PATH.
 #
 # The name is not "Eggie": both executables share one directory, and a Mac
@@ -51,12 +51,12 @@ gui = Analysis(["setup_main.py"], pathex=["../.."], datas=DATAS,
 # file. COLLECT wrote them in order and the second silently replaced the first
 # -- the built app launched the CLI, printed its help to a console nobody was
 # watching, and quit. Nothing about the build said so.
-setup_exe = EXE(PYZ(gui.pure), gui.scripts, exclude_binaries=True,
-                name="eggie-setup", console=False)
+app_exe = EXE(PYZ(gui.pure), gui.scripts, exclude_binaries=True,
+              name="eggie-app", console=False)
 cli_exe = EXE(PYZ(cli.pure), cli.scripts, exclude_binaries=True,
               name="eggie", console=True)
 
-coll = COLLECT(setup_exe, cli_exe,
+coll = COLLECT(app_exe, cli_exe,
                gui.binaries, gui.datas, cli.binaries, cli.datas,
                name="Eggie")
 
@@ -76,7 +76,7 @@ app = BUNDLE(
         # so a double-click ran the CLI. LSBackgroundOnly is set from the
         # collection's console flag, and an app marked background-only has no
         # Dock icon and cannot bring its window forward.
-        "CFBundleExecutable": "eggie-setup",
+        "CFBundleExecutable": "eggie-app",
         "LSBackgroundOnly": False,
         # vz — the VM type eggie.yaml asks Lima for — is macOS 13+.
         "LSMinimumSystemVersion": "13.0",

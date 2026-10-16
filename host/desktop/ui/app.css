@@ -413,6 +413,17 @@ pre.log {
   padding:12px 14px; color:var(--ink-2); max-height:340px; overflow:auto;
 }
 
+/* pywebview injects body { user-select:none } unless the window is created
+   with text_select=True; the logs opt back in so they can be copied. */
+.log pre, pre.log { -webkit-user-select:text; user-select:text; cursor:text; }
+.btn-copy {
+  cursor:pointer; margin-top:10px; padding:7px 14px; border-radius:var(--r-sm);
+  background:var(--surface); border:1px solid var(--line-2); color:var(--ink-2);
+  font:600 13.5px 'Hanken Grotesk', sans-serif;
+  transition:background 120ms var(--ease), color 120ms var(--ease);
+}
+.btn-copy:hover { background:var(--surface-2); color:var(--ink); }
+
 /* A crashed job's notice. Fixed to the bottom edge, above the content rather
    than inside it, so it survives show()'s screen swap without competing with
    a screen's own primary row -- every .row in this app sits above the fold,

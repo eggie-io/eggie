@@ -172,7 +172,8 @@
       <button class="btn-secondary" data-action="restart-vm">Restart the kitchen</button>
     </div>
     <details class="log"><summary>Show the log</summary>
-      <pre data-field="problem"></pre></details>
+      <pre data-field="problem"></pre>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     <footer class="odds">
       <span class="overline">Odds and ends</span>
       <div class="tiles">
@@ -357,7 +358,8 @@
       <button class="btn-primary" data-retry data-action="start-install">Try this step again</button>
       <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
       <details class="log" data-when="message"><summary>Show the log</summary>
-        <pre data-field="message"></pre></details>
+        <pre data-field="message"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     </div>
     <div class="rows-col"><ol class="rows" data-rows></ol></div>
   </section>
@@ -367,7 +369,8 @@
   <section class="pad">
     <h2 class="title">Doctor</h2>
     <pre class="log" data-field="text"></pre>
-    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button></div>
+    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button>
+      <button class="btn-secondary" data-action="copy-log">Copy log</button></div>
   </section>
 </template>
 

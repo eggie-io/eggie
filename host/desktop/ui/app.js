@@ -357,6 +357,31 @@ window.eggie.route = (name) => {
 // --- Doctor, repair, VM lifecycle, uninstall --------------------------
 
 ACTIONS['doctor'] = async () => show('doctor', await api().doctor());
+
+// Returns nothing so wire() doesn't put the busy spinner over a copy.
+ACTIONS['copy-log'] = (node) => {
+  const pre = node.closest('details.log, section').querySelector('pre');
+  const label = (text) => {
+    node.textContent = text;
+    clearTimeout(node.resetTimer);
+    node.resetTimer = setTimeout(() => { node.textContent = 'Copy log'; }, 2500);
+  };
+  // execCommand is the fallback for a webview that refuses the async
+  // clipboard; if both fail the text stays selected for a keyboard copy.
+  const fallback = () => {
+    const range = document.createRange();
+    range.selectNodeContents(pre);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
+    label(copied ? 'Copied' : 'Selected \u2014 copy it with your keyboard');
+  };
+  const text = pre.textContent;
+  if (!navigator.clipboard) return fallback();
+  navigator.clipboard.writeText(text).then(() => label('Copied'), fallback);
+};
 ACTIONS['repair'] = async () => { await api().start_repair(); };
 ACTIONS['start-vm'] = async () => { await api().start_vm(); };
 ACTIONS['stop-vm'] = async () => { await api().stop_vm(); };

@@ -63,7 +63,7 @@ def build(provider, tmp_path, **overrides):
         cache_dir=tmp_path / "cache",
         template_dir=tmp_path / "template",
         domain="local.eggie.space",
-        exe_path=r"C:\Apps\Eggie\setup.exe",
+        exe_path=r"C:\Apps\Eggie\eggie-app.exe",
     )
     return default_steps(provider, **{**kwargs, **overrides})
 
@@ -229,7 +229,7 @@ def test_the_gate_registers_resume_before_asking_for_a_restart(tmp_path):
     state = InstallState(tmp_path / "state.json")
     with pytest.raises(RebootRequired):
         run(build(provider, tmp_path), state, {})
-    assert provider.resumed_with == r"C:\Apps\Eggie\setup.exe"
+    assert provider.resumed_with == r"C:\Apps\Eggie\eggie-app.exe"
 
 
 def test_create_vm_starts_an_existing_but_stopped_vm(tmp_path):

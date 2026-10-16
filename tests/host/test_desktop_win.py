@@ -4,7 +4,7 @@ from host.providers.desktop_win import (AUTOSTART_VALUE_NAME, RUN_KEY, STARTUP_A
 
 
 def test_run_value_quotes_a_path_with_spaces():
-    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Eggie\setup.exe"
+    exe = r"C:\Users\Jane Doe\AppData\Local\Programs\Eggie\eggie-app.exe"
     assert run_value(exe) == f'"{exe}" setup --background'
 
 
@@ -26,7 +26,7 @@ def _autostart(store):
                           registry_deleter=deleter, registry_binary_reader=binary_reader)
 
 
-EXE = r"C:\Program Files\Eggie\setup.exe"
+EXE = r"C:\Program Files\Eggie\eggie-app.exe"
 
 
 def test_set_autostart_on_writes_the_run_value():
@@ -42,7 +42,7 @@ def test_set_autostart_off_deletes_the_run_value():
 
 
 def test_autostart_reads_enabled_only_for_this_exe():
-    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(r"C:\old\setup.exe")}
+    store = {(RUN_KEY, AUTOSTART_VALUE_NAME): run_value(r"C:\old\eggie-app.exe")}
     desktop = _autostart(store)
     assert desktop.autostart_enabled(EXE) is False
     desktop.set_autostart(True, EXE)
@@ -83,8 +83,8 @@ def test_autostart_registers_the_gui_exe_when_given_the_console_exe(tmp_path):
     """`eggie setup` runs the window from eggie.exe; a login entry pointing
     there flashes a console at every sign-in."""
     (tmp_path / "eggie.exe").write_bytes(b"")
-    (tmp_path / "setup.exe").write_bytes(b"")
-    console, gui = str(tmp_path / "EGGIE.EXE"), str(tmp_path / "setup.exe")
+    (tmp_path / "eggie-app.exe").write_bytes(b"")
+    console, gui = str(tmp_path / "EGGIE.EXE"), str(tmp_path / "eggie-app.exe")
     store = {}
     desktop = _autostart(store)
     desktop.set_autostart(True, console)

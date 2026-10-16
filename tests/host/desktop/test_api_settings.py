@@ -7,7 +7,7 @@ from host.core.status import Readiness
 from host.desktop.api import DesktopApi
 from host.desktop.settings import Settings
 
-EXE = r"C:\Eggie\setup.exe"
+EXE = r"C:\Eggie\eggie-app.exe"
 
 
 class FakeDesktop:

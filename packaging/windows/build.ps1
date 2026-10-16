@@ -9,7 +9,7 @@ $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
 # parsed as a module name, not a program. Every invocation below is absolute.
 $venvPython = Join-Path $repo '.venv\Scripts\python.exe'
 $cliExe     = Join-Path $repo 'dist\Eggie\eggie.exe'
-$setupExe   = Join-Path $repo 'dist\Eggie\setup.exe'
+$appExe     = Join-Path $repo 'dist\Eggie\eggie-app.exe'
 $specFile   = Join-Path $repo 'packaging\windows\eggie.spec'
 $issFile    = Join-Path $repo 'packaging\windows\installer.iss'
 $webview2   = Join-Path $repo 'packaging\windows\MicrosoftEdgeWebView2Setup.exe'
@@ -64,13 +64,15 @@ try {
     $version = (Select-String -Path (Join-Path $repo 'pyproject.toml') `
         -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
     Write-Host "==> Building Eggie $version"
+    # eggie.spec stamps it into both executables' version resource.
+    $env:EGGIE_VERSION = $version
 
     & $venvPython -m PyInstaller --noconfirm --clean $specFile
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
 
-    # Only eggie.exe is smoke-tested: setup.exe is the same code frozen for the
-    # GUI subsystem, which PowerShell neither waits on nor reads output from.
-    if (-not (Test-Path $setupExe)) { throw "setup.exe was not built." }
+    # Only eggie.exe is smoke-tested: eggie-app.exe is the same code frozen for
+    # the GUI subsystem, which PowerShell neither waits on nor reads output from.
+    if (-not (Test-Path $appExe)) { throw "eggie-app.exe was not built." }
 
     & $cliExe version
     if ($LASTEXITCODE -ne 0) { throw "Smoke test failed: eggie.exe version." }
@@ -99,7 +101,6 @@ try {
                "%LOCALAPPDATA%\Programs, and PATH.")
     }
     Write-Host "==> ISCC: $InnoSetup"
-    $env:EGGIE_VERSION = $version
     & $InnoSetup $issFile
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 

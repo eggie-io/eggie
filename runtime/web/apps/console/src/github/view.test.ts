@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { polling, type GitHubStatus, type SetupState } from "./github";
-import { githubView } from "./view";
+import { polling, type GitHubStatus, type Repo, type SetupState } from "./github";
+import { githubView, repoRow } from "./view";
 
 const connected = (setup: SetupState, setup_error: string | null = null): GitHubStatus =>
   ({ state: "connected", login: "octo", name: "Octo", email: "e", setup, setup_error }) as const;
@@ -61,5 +61,27 @@ describe("polling", () => {
     expect(polling(connected("ready"))).toBe(false);
     expect(polling({ state: "disconnected", error: null })).toBe(false);
     expect(polling(undefined)).toBe(false);
+  });
+});
+
+describe("repoRow", () => {
+  const repo = (over: Partial<Repo>): Repo => ({
+    full_name: "octo/app", private: false, description: null, updated_at: null,
+    project: null, name_taken: false, suggested_id: "app", ...over,
+  });
+
+  it("opens the existing project even when its name is also taken", () => {
+    expect(repoRow(repo({ project: "renamed", name_taken: true, suggested_id: "app-2" })))
+      .toEqual({ kind: "linked", projectId: "renamed" });
+  });
+
+  it("asks for another name when the default one is taken", () => {
+    expect(repoRow(repo({ name_taken: true, suggested_id: "app-2" })))
+      .toEqual({ kind: "nameTaken", suggestion: "app-2" });
+  });
+
+  it("clones directly when the name is free or has no usable suggestion", () => {
+    expect(repoRow(repo({}))).toEqual({ kind: "free" });
+    expect(repoRow(repo({ name_taken: true, suggested_id: null }))).toEqual({ kind: "free" });
   });
 });

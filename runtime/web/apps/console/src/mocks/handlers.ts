@@ -119,6 +119,7 @@ export function handlersFor(scenario: Scenario) {
     : { state: "disconnected", error: null };
   let ghSettleAt = 0;
   const projects = new Map<string, Project>();
+  const linkedRepos = new Map<string, string>([["ada/recipe-box", "recipe-box"]]);
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
   const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string> }>();
@@ -414,18 +415,30 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.get("/api/github/repos", ({ request }) => {
       const page = Number(new URL(request.url).searchParams.get("page") ?? "1");
-      const names = page === 1 ? ["ada/recipe-site", "ada/garden-log", "kitchen-co/menu"] : ["ada/old-notes"];
+      const names = page === 1 ? ["ada/recipe-box", "ada/garden-log", "kitchen-co/tiny-crm"] : ["ada/old-notes"];
       return HttpResponse.json({
         has_more: page === 1,
-        repos: names.map((full_name, i) => ({ full_name, private: i % 2 === 0, description: null, updated_at: nowSec() - (i + page) * 86400 })),
+        repos: names.map((full_name, i) => {
+          const base = slugify(full_name.split("/")[1] ?? "");
+          let suggested = base;
+          for (let n = 2; projects.has(suggested); n++) suggested = `${base}-${n}`;
+          const linked = linkedRepos.get(full_name);
+          return {
+            full_name, private: i % 2 === 0, description: null, updated_at: nowSec() - (i + page) * 86400,
+            project: linked && projects.has(linked) ? linked : null,
+            name_taken: projects.has(base),
+            suggested_id: base ? suggested : null,
+          };
+        }),
       });
     }),
     http.post("/api/github/clone", async ({ request }) => {
       const denied = guard();
       if (denied) return denied;
-      const { repo } = (await request.json()) as { repo: string };
-      const created = makeProject(repo.split("/")[1] ?? repo);
+      const { repo, id } = (await request.json()) as { repo: string; id?: string };
+      const created = makeProject(id ?? repo.split("/")[1] ?? repo);
       if (created instanceof Response) return created;
+      linkedRepos.set(repo, created.id);
       const job = startJob(created, "clone");
       return HttpResponse.json({ job_id: job.job_id, id: created.id }, { status: 202 });
     }),

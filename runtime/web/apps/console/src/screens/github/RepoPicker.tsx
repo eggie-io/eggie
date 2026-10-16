@@ -16,6 +16,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
   const repos = useRepos(true);
   const clone = useCloneRepo();
   const navigate = useNavigate();
+  const client = useQueryClient();
   const [started, setStarted] = useState<{ job_id: string; id: string } | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
 
@@ -41,6 +42,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
           // Another project took the name after this list was fetched.
           if (error instanceof ApiError && error.code === "project_exists") {
             setNaming({ repo: repo.full_name, id: id ?? repo.suggested_id ?? "", error: error.message });
+            void invalidateRepos(client);
           } else if (id !== undefined) {
             // The generic error line is hidden while the name field is open.
             setNaming({ repo: repo.full_name, id, error: error.message });
@@ -98,7 +100,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                   {details}
                 </button>
               )}
-              {naming?.repo === repo.full_name && (
+              {naming?.repo === repo.full_name && row.kind !== "linked" && (
                 <form
                   className={s.rename}
                   onSubmit={(event) => {
@@ -118,7 +120,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                     <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(naming.id)}>
                       Import
                     </Button>
-                    <Button variant="quiet" onClick={cancelNaming}>Cancel</Button>
+                    <Button variant="quiet" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
                   </div>
                 </form>
               )}

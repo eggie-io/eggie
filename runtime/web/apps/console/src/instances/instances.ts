@@ -13,7 +13,7 @@ export type SwitcherEntry = {
   label: string;
   note: string | null;
   current: boolean;
-  target: { kind: "kitchen"; host: string } | { kind: "local" } | null;
+  target: { host: string } | null;
 };
 
 function kitchenEntry(kitchen: Kitchen): SwitcherEntry {
@@ -24,29 +24,12 @@ function kitchenEntry(kitchen: Kitchen): SwitcherEntry {
   if (kitchen.status === "failed") return closed("Failed, see the web app");
   if (kitchen.status !== "running") return closed("Starting…");
   if (kitchen.signed_out) return closed("Set up again in the web app");
-  return { ...base, note: null, target: { kind: "kitchen", host: kitchen.console_hostname } };
+  return { ...base, note: null, target: { host: kitchen.console_hostname } };
 }
 
-export function switcherEntries({
-  kitchens,
-  site,
-  desktopHome,
-}: {
-  kitchens: Kitchen[];
-  site: string | null | undefined;
-  desktopHome: string | null;
-}): SwitcherEntry[] {
-  const local = site === null;
-  const entries: SwitcherEntry[] = [];
-  // A kitchen's console in a plain browser has no local VM to return to.
-  if (local || desktopHome !== null) {
-    entries.push({
-      key: "local",
-      label: "This computer",
-      note: null,
-      current: local,
-      target: local ? null : { kind: "local" },
-    });
-  }
-  return [...entries, ...kitchens.map(kitchenEntry)];
+// A kitchen only ever opens in a browser, which has no local VM to return to.
+export function switcherEntries({ kitchens, site }: { kitchens: Kitchen[]; site: string | null | undefined }): SwitcherEntry[] {
+  const here: SwitcherEntry[] =
+    site === null ? [{ key: "local", label: "This computer", note: null, current: true, target: null }] : [];
+  return [...here, ...kitchens.map(kitchenEntry)];
 }

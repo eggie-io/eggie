@@ -36,7 +36,7 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 
 When the VM is running, the same window shows the projects console (`localhost:<edge>`, entered with
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
-system browser — there is no native menu. Its "This computer" entry loads `<local UI>#console`, which `ROUTES` turns into `enter_console()`.
+system browser — there is no native menu.
 
 ## Things that will bite you
 

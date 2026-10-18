@@ -1,5 +1,9 @@
 # Kitchen Sign-in and Instance Switcher Implementation Plan
 
+> **Superseded in part (2026-10-18):** the desktop window no longer browses kitchens. A kitchen picked
+> there opens in the system browser, "This computer" is only the local VM's label, and the `home`
+> hand-off and the `#console` desktop route were removed. See `docs/site-mode.md` for what is current.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A kitchen console with no session signs the person in through the web app, and every signed-in console has a top-bar switcher between the local VM (desktop only) and the account's kitchens.

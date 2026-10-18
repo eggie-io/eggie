@@ -1,5 +1,9 @@
 # Kitchen sign-in through the web app, and the instance switcher
 
+> **Superseded in part (2026-10-18):** the desktop window no longer browses kitchens. A kitchen picked
+> there opens in the system browser, "This computer" is only the local VM's label, and the `home`
+> hand-off and the `#console` desktop route were removed. See `docs/site-mode.md` for what is current.
+
 eggie-resources#48 ("Cloud functionality"). Site mode (`docs/site-mode.md`) put the runtime on a
 DigitalOcean server the Eggie service provisions, a "kitchen", with its console at
 `https://<name>.eggie.io`. Two gaps:

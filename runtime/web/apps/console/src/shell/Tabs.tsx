@@ -8,7 +8,10 @@ export function Tabs() {
   const count = useProjects().data?.projects.length;
   return (
     <>
-      <Link className={s.tab} to="/" aria-current={onAgents ? undefined : "page"}>
+      <Link className={s.tab} to="/"
+        aria-current={onAgents ? undefined : "page"}
+        aria-label={count === undefined ? undefined : `Projects, ${count} ${count === 1 ? "project" : "projects"}`}
+      >
         <Icon name="layers" />Projects
         {count !== undefined && <span className={s.count}>{count}</span>}
       </Link>

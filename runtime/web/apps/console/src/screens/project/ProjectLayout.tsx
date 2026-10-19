@@ -13,6 +13,12 @@ export function ProjectLayout() {
   const query = useProject(id);
   const [dialog, setDialog] = useState<ProjectDialog | null>(null);
   const close = () => setDialog(null);
+  // The layout stays mounted across /p/:id changes; an open dialog must not carry over.
+  const [dialogId, setDialogId] = useState(id);
+  if (dialogId !== id) {
+    setDialogId(id);
+    setDialog(null);
+  }
   // TanStack keeps stale data on a failed refetch; a project deleted elsewhere
   // must not keep its full menu.
   const gone = query.error instanceof ApiError && query.error.code === "project_not_found";

@@ -165,8 +165,8 @@ export function ProjectPage() {
 
   return (
     <section className={s.page}>
-      {body}
       {query.isError && <Notice tone="danger">{query.error.message}</Notice>}
+      {body}
     </section>
   );
 }

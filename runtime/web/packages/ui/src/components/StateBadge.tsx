@@ -6,7 +6,7 @@ const LABEL: Record<ProjectState, string> = {
   running: "Running",
   stopped: "Stopped",
   starting: "Starting",
-  wrong: "Something's wrong",
+  wrong: "Something’s wrong",
 };
 
 const DOT: Record<ProjectState, DotStatus> = {

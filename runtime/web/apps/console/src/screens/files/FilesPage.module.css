@@ -61,6 +61,12 @@
 .noticeText { margin: 0; }
 .stillFull { margin-top: var(--space-2); font-weight: 600; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+/* The kit Button is nowrap with a fixed height; the label carries a file name of any length.
+   button.x outranks the kit rule whatever order the CSS loads in. */
+button.giveUp {
+  height: auto; min-height: var(--control-sm); max-width: 100%; min-width: 0;
+  padding-block: var(--space-1); white-space: normal; text-align: left; overflow-wrap: anywhere;
+}
 
 .queue { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 .upload { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: var(--space-3) 0; }

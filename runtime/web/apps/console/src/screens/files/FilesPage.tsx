@@ -133,7 +133,7 @@ export function FilesPage() {
           </p>
           <div className={s.actions}>
             <Button size="sm" onClick={() => void queue.carryOn().catch(() => false)}>I've freed some up — carry on</Button>
-            <Button size="sm" variant="ghost" onClick={() => queue.remove(heldBy.key)}>Give up on {heldBy.name}</Button>
+            <Button size="sm" variant="ghost" className={s.giveUp} onClick={() => queue.remove(heldBy.key)}>Give up on {heldBy.name}</Button>
           </div>
         </Notice>
       )}

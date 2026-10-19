@@ -36,6 +36,9 @@ class MacDesktop:
     def let_session_end_close(self, on_session_end) -> None:
         """Nothing to do: tray_mac's NSTerminateNow already lets logout through."""
 
+    def style_title_bar(self, window) -> None:
+        """Nothing to do: the native macOS title bar follows the system theme."""
+
     def on_window_shown(self, visible: bool) -> None:
         from .mac_login import set_dock_visible
         set_dock_visible(visible)

@@ -75,9 +75,16 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   tries `--terminate` first. Only `--shutdown` is sure to clear it, and that stops every distro and
   Docker Desktop, so the desktop app asks before using it.
 - The imported WSL distro runs as root: `create()` replaces `/etc/wsl.conf` with a
-  `[boot] systemd=true` stanza, dropping the image's default user. The runtime appends
-  `[user] default=eggie` later (`runtime/install/lib/wsl-user.sh`); keep `create()` the only
-  writer that truncates the file.
+  `[boot] systemd=true` stanza, dropping the image's default user. It may truncate only because
+  it runs right after a successful `--import`. The runtime owns everything else in the file:
+  `[user]` (`lib/wsl-user.sh`) and `[automount]`/`[interop]` (`lib/wsl-conf.py`). Never write
+  those sections from the host; a change there must not need a host release.
+- wsl.conf applies only when the distro boots, so setup restarts a VM it just created, once,
+  after the first bootstrap (`restart_after_first_bootstrap`, `restart_new_vm`). Never restart
+  an existing VM for it: projects and agents may be running.
+- Every `wsl -d` the provider runs passes `--cd ~`. Without it WSL maps the host process's Windows
+  folder into the VM, which has no drive mounts, so it prints a warning and falls back to home.
+  Older hosts rely on that fallback against updated VMs.
 - Lima gives cloud-init a new `instance-id` on every `limactl start`, and cloud-init regenerates the
   SSH host keys on a new instance, so a stale `~/.ssh/known_hosts` entry blocks SSH after a restart
   or reinstall. Turning off host-key checking does not help: Cursor's Remote-SSH reads known_hosts

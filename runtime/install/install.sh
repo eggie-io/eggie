@@ -305,7 +305,8 @@ if [[ -d /mnt/lima-cidata && -d /etc/cloud/cloud.cfg.d ]]; then
     install -m 644 "$INSTALL_DIR/cloud/99-eggie-keep-ssh-host-keys.cfg" /etc/cloud/cloud.cfg.d/
 fi
 
-# 9b. WSL comes with root only: add the login account step 10 provisions.
+# 9b. WSL comes with root only: add the login account step 10 provisions,
+# and keep the VM off the user's Windows files and programs.
 # A site is a cloud server whatever kernel it runs; the service made its account.
 if (( SITE )); then vm=site
 elif grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
@@ -314,6 +315,12 @@ else vm=other
 fi
 if [[ "$vm" == wsl ]]; then
   bash "$INSTALL_DIR/lib/wsl-user.sh" /etc/wsl.conf /etc/sudoers.d
+  # No C: drive at /mnt/c, no running Windows .exe files, no Windows folders
+  # on PATH. Enforced every run, so an older VM or a hand edit gets it back.
+  # WSL reads it at boot only. It can't be switched off live: interop is one
+  # kernel registration that every WSL distro shares.
+  python3 "$INSTALL_DIR/lib/wsl-conf.py" /etc/wsl.conf \
+    automount.enabled=false interop.enabled=false interop.appendWindowsPath=false
 fi
 
 # 10. per account: docker group, agent instructions, ~/projects, skills.

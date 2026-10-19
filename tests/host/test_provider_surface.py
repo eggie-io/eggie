@@ -36,6 +36,7 @@ LIFECYCLE_SURFACE = {
 # AttributeError before its first step.
 INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "remediable", "runtime", "access", "ssh_shortcut",
+                   "restart_after_first_bootstrap",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 

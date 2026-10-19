@@ -482,15 +482,25 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
     # minutes later.
     if image is not None:
         steps.append(step("fetch_image", fetch_image, always_run=True, progress=True))
+    # Only this process's create_vm counts: a VM made by an earlier run may
+    # already be in use.
+    created: list[bool] = []
     steps.append(
-        step("create_vm", lambda: _ensure_vm_running(provider), always_run=True))
+        step("create_vm", lambda: created.append(_ensure_vm_running(provider)),
+             always_run=True))
     # Only where the VM is reached over SSH. Placed after create_vm because it
     # reads the connection details the VM platform writes when it starts.
     shortcut = provider.ssh_shortcut()
     if shortcut is not None:
         steps.append(step("ssh_alias", shortcut, always_run=True))
+
+    def first_bootstrap():
+        _bootstrap(provider)
+        if created[-1:] == [True] and provider.restart_after_first_bootstrap:
+            restart_new_vm(provider)
+
     steps += [
-        step("bootstrap", lambda: _bootstrap(provider), always_run=True),
+        step("bootstrap", first_bootstrap, always_run=True),
         # Before verify: a mismatched or refusing API is one sentence here,
         # not a 404 or 401 minutes into the smoke test.
         step("connect", lambda: connect_with_updates(provider), always_run=True),
@@ -502,17 +512,35 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
     return steps
 
 
-def _ensure_vm_running(provider) -> None:
+def _ensure_vm_running(provider) -> bool:
     """Existing is not running. `eggie setup`'s summary told a user with a
     stopped VM to "run setup again to start it", but nothing in this list ever
     called `start()` -- Lima's `shell` refuses a stopped instance outright
     ("... is stopped, run 'limactl start ...'"), which is why only a Lima run
     ever surfaced this: `wsl.exe -d` auto-starts a distro, so WSL2 hid the gap
-    behind its own exec() calls."""
+    behind its own exec() calls. True when the VM was created here."""
     if provider.exists():
         provider.start()
-    else:
-        provider.create()
+        return False
+    provider.create()
+    return True
+
+
+# A cold boot brings Docker and the whole stack up before the API answers;
+# the connect step's own wait is sized for one container restarting.
+BOOT_TIMEOUT = 120.0
+
+
+def restart_new_vm(provider, *, client=None, sleep=time.sleep) -> None:
+    """Boot settings the runtime writes (on WSL, /etc/wsl.conf) apply only
+    from the VM's next start. A VM this run created has no session to
+    interrupt yet, so it gets that start now, not at a reboot weeks away."""
+    from host.client import ApiClient
+
+    provider.stop()
+    provider.start()
+    client = client or ApiClient.for_provider(provider)
+    _once_serving(client.health, sleep, BOOT_TIMEOUT)
 
 
 def _bootstrap(provider, *, repair: bool = False) -> None:

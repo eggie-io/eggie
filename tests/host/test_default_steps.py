@@ -16,6 +16,7 @@ class FakeProvider:
     location = r"C:\Users\you\AppData\Local\Eggie\vm"
     terminal = "PowerShell"
     remediable = True
+    restart_after_first_bootstrap = True
     runtime_value = None
     ssh_value = None
 
@@ -53,6 +54,7 @@ class SelfImagingProvider(FakeProvider):
     location = "/Users/you/.lima/eggie-vm"
     terminal = "Terminal"
     remediable = False
+    restart_after_first_bootstrap = False
 
     def image(self):
         return None
@@ -269,3 +271,60 @@ def test_a_vm_destroyed_outside_setup_is_rebuilt_on_a_re_run(tmp_path):
     assert [e.step for e in events if e.status == "skipped"] == \
         ["preflight", "remediate", "reboot_gate"], \
         "only facts about this computer may be remembered across runs"
+
+
+def _bootstrap_and_restarts(monkeypatch, provider, tmp_path):
+    import host.core.install as install
+    calls = []
+    monkeypatch.setattr(install, "_bootstrap", lambda p, **kw: calls.append("bootstrap"))
+    monkeypatch.setattr(install, "restart_new_vm", lambda p: calls.append("restart"))
+    run(build(provider, tmp_path), InstallState(tmp_path / "state.json"),
+        {"fetch_image": lambda emit: None, "connect": lambda: None,
+         "verify": lambda: None})
+    return calls
+
+
+def test_a_vm_created_by_this_run_restarts_once_after_its_first_bootstrap(
+        tmp_path, monkeypatch):
+    # The runtime's boot settings (on WSL: no Windows drive, no interop)
+    # would otherwise wait for a reboot the user may not do for weeks.
+    calls = _bootstrap_and_restarts(monkeypatch, FakeProvider(exists=False), tmp_path)
+    assert calls == ["bootstrap", "restart"]
+
+
+def test_an_existing_vm_is_never_restarted_by_setup(tmp_path, monkeypatch):
+    # Re-running setup must not cut off projects or an agent mid-session.
+    calls = _bootstrap_and_restarts(monkeypatch, FakeProvider(exists=True), tmp_path)
+    assert calls == ["bootstrap"]
+
+
+def test_a_platform_without_boot_settings_skips_the_restart(tmp_path, monkeypatch):
+    lima = SelfImagingProvider(exists=False)
+    lima.create = lambda: None  # Lima fetches its own image: no rootfs to check
+    calls = _bootstrap_and_restarts(monkeypatch, lima, tmp_path)
+    assert calls == ["bootstrap"]
+
+
+def test_the_restart_waits_for_the_api_past_a_cold_boot():
+    from host.client import ApiUnavailableError
+    from host.core.install import restart_new_vm
+
+    events = []
+
+    class Provider:
+        def stop(self): events.append("stop")
+        def start(self): events.append("start")
+
+    class Client:
+        answers = [ApiUnavailableError("refused"), ApiUnavailableError("refused"),
+                   {"api": 1}]
+
+        def health(self):
+            events.append("health")
+            answer = self.answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+    restart_new_vm(Provider(), client=Client(), sleep=lambda s: None)
+    assert events == ["stop", "start", "health", "health", "health"]

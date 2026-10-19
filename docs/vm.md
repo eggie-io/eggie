@@ -34,9 +34,37 @@ eggie vm start | vm stop | vm destroy
 eggie port add <guest> <host> | port remove <guest> <host> | port list
 ```
 
-`vm create` rewrites `/etc/wsl.conf` to `[boot] systemd=true`, so the imported distro starts as root.
-The runtime install then adds the `eggie` account (passwordless `sudo`) and makes it the
-default user from the VM's next start; until then `wsl -d eggie-vm` still opens as root.
+`vm create` writes `/etc/wsl.conf` with just `[boot] systemd=true`. It does this only right after a
+successful import, so it never overwrites what the runtime wrote. The runtime install owns the rest
+and enforces it on every install, update and repair:
+
+```ini
+[boot]
+systemd=true
+
+[user]
+default=eggie
+
+[automount]
+enabled=false
+
+[interop]
+enabled=false
+appendWindowsPath=false
+```
+
+- `[user]`: `wsl -d eggie-vm` opens as `eggie` (passwordless `sudo`), not root. An existing
+  `[user]` section is left alone.
+- `[automount]` and `[interop]`: no Windows drives under `/mnt`, no running Windows `.exe`
+  files, no Windows folders on `PATH` (see `security.md`). These are rewritten every run.
+
+WSL reads the file only when the distro starts. Setup restarts a VM it has just created once,
+right after the first install. An existing VM picks up a change at its next start (Windows
+restart, `wsl --shutdown`, or `eggie vm stop` then `start`); nothing restarts a running VM for it.
+Until then `ls /mnt/c` still lists the drive.
+
+Without interop, nothing in the VM can open a Windows browser. A tool that wants to (a CLI's
+`login`, for example) prints the link instead: copy it into a browser on Windows.
 
 ## Where things are inside
 

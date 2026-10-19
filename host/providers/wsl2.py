@@ -235,6 +235,9 @@ class Wsl2Provider:
         # systemd is off by default in WSL; docker.service needs it. Checked:
         # a failed write here means systemd stays off, and the only symptom is
         # bootstrap dying minutes later at `systemctl enable --now docker`.
+        # Replacing the whole file is safe only because the import above just
+        # succeeded: it refuses an existing distro, so nothing the runtime
+        # wrote (default user, no drives, no interop) can be here yet.
         self._require(
             self.exec(["bash", "-lc",
                        "printf '[boot]\\nsystemd=true\\n' > /etc/wsl.conf"],
@@ -252,7 +255,7 @@ class Wsl2Provider:
         self._require(self.exec(["true"]),
                       f"the virtual machine '{self.distro}' could not be started")
         if not self.exec(["pgrep", "-f", f"^{HOLD_NAME}"], root=True).ok:
-            self._spawn([self.wsl, "-d", self.distro, "-u", "root", "--",
+            self._spawn([self.wsl, "-d", self.distro, "-u", "root", "--cd", "~", "--",
                          "bash", "-c", f"exec -a {HOLD_NAME} sleep infinity"])
 
     def stop(self) -> None:
@@ -286,7 +289,9 @@ class Wsl2Provider:
         base = [self.wsl, "-d", self.distro]
         if root:
             base += ["-u", "root"]
-        base += ["--", *argv]
+        # Without --cd, WSL maps this process's Windows folder into the VM,
+        # which has no drive mounts to map it to: it warns, then falls back.
+        base += ["--cd", "~", "--", *argv]
         p = self._run(base)
         # command passthrough is UTF-8
         return self._answered(
@@ -472,3 +477,6 @@ class Wsl2Provider:
     # WSL2 and VirtualMachinePlatform are Windows features setup can turn on,
     # and turning them on needs a restart.
     remediable = True
+
+    # wsl.conf is read only when the distro starts.
+    restart_after_first_bootstrap = True

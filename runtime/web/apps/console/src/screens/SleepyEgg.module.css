@@ -1,8 +1,8 @@
 .art { position: relative; width: 124px; height: 124px; flex: none; }
-.plate { position: absolute; inset: 0; border-radius: 50%; background: var(--cold-soft); }
-.white { position: absolute; inset: 20px; border-radius: 50%; background: #FFF3E2; }
-.yolk { position: absolute; left: 47px; top: 52px; width: 30px; height: 24px; border-radius: 50%; background: var(--yolk); opacity: .6; }
-.mouth { position: absolute; left: 55px; top: 61px; width: 14px; height: 3px; border-radius: 2px; background: #2B1E14; opacity: .45; }
-.z1, .z2 { position: absolute; font: 700 15px var(--font-display); color: var(--ink-3); animation: global(om-zzz) 3s ease-out infinite; }
+.plate { position: absolute; inset: 0; border-radius: 50%; background: var(--hover); }
+.white { position: absolute; inset: 20px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.yolk { position: absolute; left: 47px; top: 52px; width: 30px; height: 24px; border-radius: 50%; background: var(--gold); opacity: .6; }
+.mouth { position: absolute; left: 55px; top: 61px; width: 14px; height: 3px; border-radius: 2px; background: var(--ink); opacity: .45; }
+.z1, .z2 { position: absolute; font-size: 15px; font-weight: 650; font-variation-settings: var(--font-wide); color: var(--ink-3); animation: global(om-zzz) 3s ease-out infinite; }
 .z1 { left: 88px; top: 34px; }
 .z2 { left: 96px; top: 22px; font-size: 13px; animation-delay: 1s; }

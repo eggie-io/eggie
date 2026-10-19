@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
-import { cx } from "@eggie/ui";
+import { Button, Icon, cx } from "@eggie/ui";
 import { createApi } from "../api/client";
 import { openExternal } from "../desktop/desktop";
 import { useDesktopHome } from "../desktop/DesktopContext";
 import { switcherEntries, type Kitchen, type SwitcherEntry } from "../instances/instances";
-import { CHEVRON_DOWN, CHECK } from "../screens/icons";
 import { openKitchenUrl, webAppKitchens } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import s from "./Shell.module.css";
@@ -66,21 +65,21 @@ export function InstanceSwitcher() {
 
   return (
     <div className={s.switcher} ref={root}>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        iconRight="chevron-down"
         className={s.switcherButton}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
       >
         <span className={s.brand}>{label}</span>
-        {CHEVRON_DOWN}
-      </button>
+      </Button>
       <div id={panelId} className={s.switcherMenu} hidden={!open}>
         {isError && (
           <div className={s.switcherNote} role="alert">
             <span>Couldn't load your kitchens.</span>
-            <button type="button" className={s.chip} disabled={isFetching} onClick={() => void refetch()}>Retry</button>
+            <Button size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button>
           </div>
         )}
         {!kitchens && !isError && <span className={s.switcherNote}>Loading…</span>}
@@ -100,7 +99,7 @@ export function InstanceSwitcher() {
                   {entry.label}
                   {entry.note && <span className={s.lineSub}>{entry.note}</span>}
                 </span>
-                {entry.current && CHECK}
+                {entry.current && <Icon name="check" />}
               </button>
             );
           })}

@@ -34,24 +34,31 @@
 <div id="busy" hidden></div>
 
 <template data-screen="first-run">
-  <section class="pad centered">
-    <div class="title-row">
-      <span class="egg" aria-hidden="true"></span>
-      <h1 class="display">Welcome to Eggie</h1>
+  <section class="install first-run">
+    <div class="brand-panel" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <p class="lede">Eggie sets up a tiny private computer inside your computer,
-      so you can build real, working web apps just by chatting with it.</p>
-    <ol class="steps">
-      <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
-        Your own files stay exactly where they are.</span></li>
-      <li><b>We hire the cook</b><span>A coding agent moves in. It writes the code
-        and runs it in there, never out here.</span></li>
-      <li><b>You start ordering</b><span>Describe what you want. Watch it get made.
-        Change your mind as often as you like.</span></li>
-    </ol>
-    <div class="row">
-      <button class="btn-primary" data-action="start-install">Warm up the kitchen</button>
-      <span class="hint">About 4 minutes. You can quit and come back.</span>
+    <div class="install-main">
+      <div class="install-head">
+        <h1 class="display">Welcome to Eggie</h1>
+        <p class="lede">Eggie sets up a tiny private computer inside your computer,
+          so you can build real, working web apps just by chatting with it.</p>
+      </div>
+      <ol class="steps">
+        <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
+          Your own files stay exactly where they are.</span></li>
+        <li><b>We hire the cook</b><span>A coding agent moves in. It writes the code
+          and runs it in there, never out here.</span></li>
+        <li><b>You start ordering</b><span>Describe what you want. Watch it get made.
+          Change your mind as often as you like.</span></li>
+      </ol>
+      <div class="row">
+        <button class="btn-primary" data-action="start-install">Warm up the kitchen</button>
+        <span class="hint">About 4 minutes. You can quit and come back.</span>
+      </div>
     </div>
   </section>
 </template>
@@ -344,52 +351,76 @@
 
 <template data-screen="install:running">
   <section class="install">
-    <div class="install-left">
-      <div class="pan pan-hot" aria-hidden="true"></div>
-      <h2 class="title">Heating the pan</h2>
-      <p class="lede">Nothing here can hurt your computer — the kitchen lives in
-        its own sealed box.</p>
-      <p class="hint">Good moment for a coffee.</p>
-      <p class="hint" data-when="resumed">Continuing setup after the restart — you don't need to do anything.</p>
-      <div class="install-foot">
-        <div class="bar"><span data-field="progress"></span></div>
-        <span class="hint" data-field="counter"></span>
-      </div>
+    <div class="brand-panel" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col">
-      <ol class="rows" data-rows></ol>
-      <p class="download-note" data-field="download" hidden></p>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">Heating the pan</h2>
+        <p class="lede">Nothing here can hurt your computer — the kitchen lives in
+          its own sealed box.</p>
+        <p class="hint">Good moment for a coffee.</p>
+        <p class="hint" data-when="resumed">Continuing setup after the restart — you don't need to do anything.</p>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
     </div>
   </section>
 </template>
 
 <template data-screen="install:reboot">
   <section class="install">
-    <div class="install-left">
-      <div class="pan pan-asleep" aria-hidden="true"></div>
-      <h2 class="title">Time for a quick nap</h2>
-      <p class="lede">Your computer needs one restart before the kitchen can open.
-        We'll pick up exactly where we left off — nothing is lost.</p>
-      <button class="btn-primary" data-action="reboot-now">Restart now</button>
-      <button class="btn-secondary" data-action="go-home">I'll restart later</button>
+    <div class="brand-panel brand-asleep" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">Time for a quick nap</h2>
+        <p class="lede">Your computer needs one restart before the kitchen can open.
+          We'll pick up exactly where we left off — nothing is lost.</p>
+        <div class="row">
+          <button class="btn-primary" data-action="reboot-now">Restart now</button>
+          <button class="btn-secondary" data-action="go-home">I'll restart later</button>
+        </div>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    </div>
   </section>
 </template>
 
 <template data-screen="install:failed">
   <section class="install install-failed">
-    <div class="install-left">
-      <div class="pan pan-burnt" aria-hidden="true"></div>
-      <h2 class="title">The burner wouldn't light</h2>
-      <p class="lede" data-field="action"></p>
-      <button class="btn-primary" data-retry data-action="start-install">Try this step again</button>
-      <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
-      <details class="log" data-when="message"><summary>Show the log</summary>
-        <pre data-field="message"></pre>
-        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
+    <div class="brand-panel brand-burnt" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">The burner wouldn't light</h2>
+        <p class="lede" data-field="action"></p>
+        <div class="row">
+          <button class="btn-primary" data-retry data-action="start-install"><span class="ic ic-refresh" aria-hidden="true"></span>Try this step again</button>
+          <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
+        </div>
+        <details class="log" data-when="message"><summary>Show the log</summary>
+          <pre data-field="message"></pre>
+          <button class="btn-copy" data-action="copy-log">Copy log</button></details>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    </div>
   </section>
 </template>
 

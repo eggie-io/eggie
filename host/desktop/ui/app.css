@@ -85,14 +85,10 @@ body {
   outline:2px solid var(--focus); outline-offset:2px; border-radius:var(--radius-xs);
 }
 
-@keyframes om-spin { to { transform:rotate(360deg); } }
-@keyframes om-sizzle { 0%{transform:translateY(0) scale(.6);opacity:0}
-  30%{opacity:1} 100%{transform:translateY(-22px) scale(1.1);opacity:0} }
+@keyframes eg-spin { to { transform:rotate(360deg); } }
 @keyframes om-glow { 0%,100%{transform:scale(1);opacity:.85}
   50%{transform:scale(1.05);opacity:1} }
 @keyframes om-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-@keyframes om-zzz { 0%{opacity:0;transform:translate(0,0) scale(.6)}
-  35%{opacity:1} 100%{opacity:0;transform:translate(16px,-26px) scale(1.15)} }
 @keyframes om-bar { 0%{transform:translateX(-100%)} 100%{transform:translateX(320%)} }
 @keyframes om-blink { 0%,100%{opacity:1} 50%{opacity:.35} }
 
@@ -183,32 +179,6 @@ body {
 .badge-bad { background:var(--danger-soft); color:var(--danger); }
 .badge-cold, .badge-empty { background:transparent; box-shadow:inset 0 0 0 1px var(--line-strong); color:var(--ink-2); }
 .badge-empty::before { background:transparent; box-shadow:inset 0 0 0 1.5px currentColor; }
-
-.title-row { display:flex; align-items:center; gap:16px; }
-.egg {
-  flex:none; width:42px; height:42px; border-radius:50%;
-  background:radial-gradient(circle, var(--gold) 0 9px, var(--page) 9.5px);
-  border:1px solid var(--line); box-shadow:0 2px 6px -2px var(--shadow-md);
-}
-
-.steps {
-  list-style:none; margin:0; padding:0; counter-reset:step;
-  display:flex; flex-direction:column; gap:14px;
-}
-.steps li {
-  counter-increment:step;
-  display:grid; grid-template-columns:30px 1fr; column-gap:14px; row-gap:2px;
-}
-.steps li::before {
-  content:counter(step); grid-row:span 2;
-  width:30px; height:30px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--gold-soft); color:var(--gold-ink);
-  font:700 14px var(--font-sans);
-}
-.steps li b { font:600 16.5px var(--font-sans); color:var(--ink); }
-.steps li span { font:400 14.5px var(--font-sans); color:var(--ink-2); }
-.pad.centered > .row .hint { max-width:230px; }
 
 /* Pan diameter; the action row, update note and error card line up with the
    text column beside it. */
@@ -301,23 +271,6 @@ details.log {
 }
 .error-card .btn-copy { margin-top:0; flex:none; }
 
-/* Install screens: a fixed 300px left column (pan, copy, buttons) beside a
-   row panel that grows to hold however many steps the factory returned --
-   seven on Lima, nine on WSL2. Padding here is tighter than .pad so nine
-   rows plus the left column both hold at the 800x560 floor. */
-.install {
-  display:flex; gap:24px; padding:36px 40px 30px; flex:1; min-height:0;
-}
-.install-left {
-  flex:0 0 300px; width:300px;
-  display:flex; flex-direction:column; align-items:flex-start; gap:12px;
-}
-.install-left .pan { margin-bottom:12px; }
-.install-foot {
-  margin-top:auto; align-self:stretch; display:flex; flex-direction:column; gap:10px;
-}
-.install-left .btn-primary, .install-left .btn-secondary { align-self:stretch; text-align:center; }
-
 /* Ring = the element, plate = ::before, contents = ::after. Offsets are
    fractions of the diameter so the pan scales with its box. */
 .pan { width:148px; height:148px; border-radius:50%; flex:none; position:relative; background:var(--hover); }
@@ -351,69 +304,133 @@ details.log {
 }
 .pan-flag .ic { width:20px; height:20px; }
 
-.bar {
-  position:relative; width:100%; height:8px; border-radius:999px;
-  background:var(--hover); border:1px solid var(--line); overflow:hidden;
+.bar, .row-progress .track {
+  position:relative; width:100%; height:6px; border-radius:var(--radius-pill); overflow:hidden;
+  background:var(--hover); box-shadow:inset 0 0 0 1px var(--line);
 }
-.bar span {
-  position:absolute; inset:0 auto 0 0; width:0; background:var(--gold-ink);
-  transition:width 300ms var(--ease);
+.bar span, .row-progress .fill {
+  position:absolute; inset:0 auto 0 0; width:0; border-radius:var(--radius-pill);
+  background:var(--accent); transition:width 300ms var(--ease);
 }
+
+/* Install and first run: a decorative panel beside a column whose header
+   stays put. Only the steps card scrolls, so nine rows never push the
+   buttons off the 800x560 floor. */
+.install {
+  flex:1; min-height:0;
+  display:grid; grid-template-columns:300px minmax(0,1fr); grid-template-rows:minmax(0,1fr);
+}
+.brand-panel {
+  position:relative; overflow:hidden;
+  background:var(--gold-soft); border-right:1px solid var(--line);
+}
+.brand-word {
+  position:absolute; left:28px; top:28px; display:flex; align-items:center; gap:8px;
+  font:650 18px/24px var(--font-sans); font-variation-settings:var(--font-wide);
+  letter-spacing:-.01em; color:var(--ink);
+}
+.brand-mark, .art-egg { border-radius:50% 50% 46% 46% / 58% 58% 42% 42%; background:var(--gold); }
+.brand-mark { width:20px; height:20px; box-shadow:inset -2.5px -2.5px 0 var(--orange); }
+.brand-art { position:absolute; left:0; top:50%; width:300px; height:285px; margin-top:-142px; }
+.brand-art > span { position:absolute; }
+.art-egg { left:83px; top:34px; width:138px; height:174px; box-shadow:inset -16px -16px 0 var(--orange); }
+.art-dot { border-radius:50%; }
+.art-periwinkle { left:208px; top:0; width:42px; height:42px; background:var(--periwinkle); }
+.art-coral { left:38px; top:218px; width:67px; height:67px; background:var(--coral); }
+.art-orchid { left:226px; top:189px; width:46px; height:46px; background:var(--orchid); }
+.art-pill {
+  left:120px; top:247px; height:27px; padding:0 13px; display:flex; align-items:center;
+  border-radius:var(--radius-pill); background:var(--accent); color:var(--on-accent);
+  font:500 12px/16px var(--font-mono); white-space:nowrap;
+}
+.brand-asleep { background:var(--hover); }
+.brand-asleep .art-egg {
+  background:var(--raised);
+  box-shadow:inset 0 0 0 1px var(--line-strong), inset -16px -16px 0 var(--line);
+}
+.brand-asleep .art-dot { background:var(--line-strong); }
+.brand-asleep .art-pill { background:var(--line-strong); color:var(--ink-2); }
+.brand-burnt { background:var(--danger-soft); }
+
+.install-main {
+  display:flex; flex-direction:column; gap:24px; min-width:0; min-height:0;
+  padding:40px 40px 24px;
+}
+.install-head { flex:none; display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+.install-head .overline { margin:0; min-height:16px; }
+.install-head .bar { max-width:320px; margin-bottom:8px; }
+.install-head .title { font-size:30px; line-height:36px; letter-spacing:-.02em; }
+.install-head .row { margin-top:8px; gap:12px; }
+.install-head details.log { align-self:stretch; }
+.install-head .log pre { max-height:120px; }
+/* action falls back to a crash's message, which can be a whole traceback. */
+.install-head [data-field="action"] { max-height:72px; overflow:auto; overflow-wrap:anywhere; }
 
 .rows-col {
-  flex:1; min-width:0; min-height:0; padding:10px;
-  display:flex; flex-direction:column;
-  background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-lg);
+  flex:1; min-height:0; overflow:auto;
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);
 }
-.rows {
-  flex:1; min-height:0; margin:0; padding:0; list-style:none;
-  display:flex; flex-direction:column; gap:5px; overflow-y:auto;
-}
-/* Only the download step reports a fraction; this is the one place that
-   number is shown, so the overall bar never sits full for the several
-   minutes create_vm/bootstrap/connect/verify/finish still take. */
-.download-note {
-  margin:8px 2px 0; padding:14px 10px 4px; border-top:1px solid var(--line);
-  font:400 13px var(--font-sans); color:var(--ink-3);
-}
+.rows { margin:0; padding:0; list-style:none; }
 .row-step {
-  display:flex; align-items:center; gap:10px;
-  padding:11px 12px; border-radius:var(--radius-md);
+  display:grid; grid-template-columns:20px 1fr auto; align-items:center; column-gap:12px; row-gap:6px;
+  min-height:48px; padding:10px 16px;
 }
-/* The failed variant packs one more line of copy into the same 300px column,
-   so its row panel trims 1px of vertical padding per row -- the difference
-   that keeps nine rows from clipping at the 560px floor. */
-.install-failed .row-step { padding:10px 12px; }
+.row-step + .row-step { border-top:1px solid var(--line); }
+.row-step .mark { width:20px; height:20px; display:grid; place-items:center; }
+.row-step .mark::before {
+  content:''; width:16px; height:16px; border-radius:50%;
+  box-shadow:inset 0 0 0 1.5px var(--line-strong);
+}
+.row-step .label { min-width:0; font:500 14px/20px var(--font-sans); color:var(--ink); overflow-wrap:anywhere; }
+.row-step .state { font:400 12px/16px var(--font-sans); color:var(--ink-3); white-space:nowrap; }
 
-.row-step .mark {
-  flex:0 0 20px; width:20px; height:20px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  font:700 12px var(--font-sans); line-height:1;
+.row-step[data-status="running"] { background:var(--raised); }
+.row-step[data-status="running"] .label { font-weight:600; }
+.row-step[data-status="running"] .state { color:var(--accent-ink); }
+.row-step[data-status="running"] .mark::before {
+  box-shadow:none; border:2px solid var(--accent); border-right-color:transparent;
+  animation:eg-spin .8s linear infinite;
 }
-.row-step .label { flex:1; font:600 14.5px var(--font-sans); color:var(--ink); }
-.row-step .state { font:400 13px var(--font-sans); color:var(--ink-3); }
-
-.row-step[data-status="waiting"] .mark { border:2px dashed var(--line-strong); }
-.row-step[data-status="waiting"] .label { font-weight:400; color:var(--ink-2); }
-.row-step[data-status="running"] { background:var(--gold-soft); }
-.row-step[data-status="running"] .mark {
-  flex-basis:22px; width:22px; height:22px; margin:-1px;
-  background:var(--gold-ink);
-  -webkit-mask:url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 22 22'><circle cx='11' cy='11' r='9' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-dasharray='44 12.6'/></svg>") center/contain no-repeat;
-  mask:url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 22 22'><circle cx='11' cy='11' r='9' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-dasharray='44 12.6'/></svg>") center/contain no-repeat;
-  animation:om-spin 1s linear infinite;
+.row-step:is([data-status="done"], [data-status="skipped"], [data-status="failed"], [data-status="reboot"]) .mark::before {
+  width:20px; height:20px; border-radius:0; box-shadow:none; background:currentColor;
+  -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat;
 }
-.row-step[data-status="running"] .state { font-weight:600; color:var(--gold-ink); }
-.row-step[data-status="done"] .mark,
-.row-step[data-status="skipped"] .mark { background:var(--success-soft); color:var(--success); }
-.row-step[data-status="done"] .mark::after,
-.row-step[data-status="skipped"] .mark::after { content:'\2713'; }
-.row-step[data-status="done"] .state,
-.row-step[data-status="skipped"] .state { color:var(--success); }
+.row-step:is([data-status="done"], [data-status="skipped"]) .mark { --icon:var(--i-check-circle); color:var(--success); }
 .row-step[data-status="failed"] { background:var(--danger-soft); }
-.row-step[data-status="failed"] .mark { background:var(--danger); color:var(--on-danger); }
-.row-step[data-status="failed"] .mark::after { content:'!'; }
+.row-step[data-status="failed"] .mark { --icon:var(--i-x-circle); color:var(--danger); }
 .row-step[data-status="failed"] .state { color:var(--danger); }
+.row-step[data-status="reboot"] { background:var(--warning-soft); }
+.row-step[data-status="reboot"] .mark { --icon:var(--i-alert-triangle); color:var(--warning); }
+.row-step[data-status="reboot"] .state { color:var(--warning); }
+
+.row-progress { grid-column:2 / -1; display:flex; align-items:center; gap:8px; }
+.row-progress .track { flex:1; }
+.row-progress .pct {
+  min-width:4ch; text-align:right; font:500 12px/16px var(--font-mono); color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+
+.first-run .install-main { justify-content:center; }
+.first-run .display { font-size:36px; line-height:42px; }
+.first-run .row .hint { max-width:220px; }
+.steps {
+  flex:0 1 auto; min-height:0; overflow:auto; margin:0; padding:0; list-style:none; counter-reset:step;
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);
+}
+.steps li {
+  counter-increment:step; padding:12px 16px;
+  display:grid; grid-template-columns:24px 1fr; column-gap:12px; row-gap:2px;
+}
+.steps li + li { border-top:1px solid var(--line); }
+.steps li::before {
+  content:counter(step); grid-row:span 2; width:24px; height:24px; border-radius:50%;
+  display:grid; place-items:center; background:var(--gold-soft); color:var(--gold-ink);
+  font:600 12px/1 var(--font-sans);
+}
+.steps li b { font:600 14px/20px var(--font-sans); color:var(--ink); }
+.steps li span { font:400 13px/18px var(--font-sans); color:var(--ink-2); }
 
 /* Doctor, Uninstall -- odds-and-ends screens reached from the home tiles
    rather than the main flow, so they reuse .pad/.title/.lede/.row above and
@@ -477,7 +494,7 @@ button[aria-busy="true"]::after {
   content:''; display:inline-block; width:14px; height:14px; margin-left:10px;
   vertical-align:-2px; border-radius:50%;
   border:2px solid var(--accent); border-right-color:transparent;
-  animation:om-spin .8s linear infinite;
+  animation:eg-spin .8s linear infinite;
 }
 .btn-primary[aria-busy="true"]::after, .btn-danger[aria-busy="true"]::after {
   border-color:currentColor; border-right-color:transparent;

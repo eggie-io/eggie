@@ -46,6 +46,9 @@ system browser — there is no native menu. Its "This computer" entry loads `<lo
   equal to `app.css` by a test: change both together. pywebview itself flips the dark-mode
   flag when the OS theme changes, but our colours are not re-applied, so after an OS theme switch
   the bar is mixed until relaunch.
+- **`min_size` and the window size are outer sizes** on Windows (title bar and borders included),
+  so at the 800×560 minimum the page is about 784×521. Nothing in `app.css` may demand more;
+  `#screen` scrolls instead. Check layouts at the page size, not the window size.
 - **pywebview injects `window.pywebview.api` into every page the window loads**, including the
   console served from the VM. Hence the guard. Keep `create_window(js_api=None)` and register
   functions with `window.expose()`: pywebview resolves a dotted call name from `js_api` with plain

@@ -57,132 +57,155 @@
 </template>
 
 <template data-screen="home:running">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-hot" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-running">Running</span>
-        <h1 class="display">The kitchen is open</h1>
-        <p class="lede">Your machine is up and the cook is at the counter.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-hot" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Running</span>
+          <h1 class="display">The kitchen is open</h1>
+          <p class="lede">Your machine is up and the cook is at the counter.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="enter-console">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary" data-action="stop-vm"><span class="ic ic-stop" aria-hidden="true"></span>Stop the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="enter-console">Open Eggie</button>
-      <button class="btn-secondary" data-action="stop-vm">Stop the kitchen</button>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:stopped">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-asleep" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-cold">Stopped</span>
-        <h1 class="display">The pan is cold</h1>
-        <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-asleep" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-cold">Stopped</span>
+          <h1 class="display">The pan is cold</h1>
+          <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="start-vm"><span class="ic ic-play" aria-hidden="true"></span>Start the kitchen</button>
+        <button class="btn-secondary" disabled>Open Eggie</button>
+        <span class="hint">Opens by itself once the pan is hot.</span>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="start-vm">Start the kitchen</button>
-      <button class="btn-secondary" disabled>Open Eggie</button>
-      <span class="hint">Opens by itself once the pan is hot.</span>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:not_installed">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-empty" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-empty">Not installed</span>
-        <h1 class="display">No kitchen yet</h1>
-        <p class="lede">There's nothing cooking on this computer. Setting one up takes
-          about four minutes and 6 GB of space.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-empty" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-empty">Not installed</span>
+          <h1 class="display">No kitchen yet</h1>
+          <p class="lede">There's nothing cooking on this computer. Setting one up takes
+            about four minutes and 6 GB of space.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="start-install"><span class="ic ic-play" aria-hidden="true"></span>Set up the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="start-install">Set up the kitchen</button>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
-        <span class="tile-note">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:wrong">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-burnt" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-bad">Needs a look</span>
-        <h1 class="display">Something's off in here</h1>
-        <p class="lede">The kitchen started but one of its parts didn't. Your projects
-          are safe — Doctor can usually sort this out on its own.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-burnt" aria-hidden="true">
+          <span class="pan-flag"><span class="ic ic-alert-triangle"></span></span>
+        </div>
+        <div class="hero-text">
+          <span class="badge badge-bad"><span class="ic ic-x-circle" aria-hidden="true"></span>Needs a look</span>
+          <h1 class="display">Something's off in here</h1>
+          <p class="lede">The kitchen started but one of its parts didn't. Your projects
+            are safe — Doctor can usually sort this out on its own.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="error-card">
+        <pre data-field="problem"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="doctor"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
+        <button class="btn-secondary" data-action="restart-vm"><span class="ic ic-refresh" aria-hidden="true"></span>Restart the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="doctor">Run Doctor</button>
-      <button class="btn-secondary" data-action="restart-vm">Restart the kitchen</button>
-    </div>
-    <details class="log"><summary>Show the log</summary>
-      <pre data-field="problem"></pre>
-      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>

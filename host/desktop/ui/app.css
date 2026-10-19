@@ -113,6 +113,15 @@ body {
   -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat;
 }
 
+.ic-play { --icon:var(--i-play); } .ic-stop { --icon:var(--i-stop); }
+.ic-external { --icon:var(--i-external); } .ic-refresh { --icon:var(--i-refresh); }
+.ic-activity { --icon:var(--i-activity); } .ic-info { --icon:var(--i-info); }
+.ic-check-circle { --icon:var(--i-check-circle); } .ic-x-circle { --icon:var(--i-x-circle); }
+.ic-alert-triangle { --icon:var(--i-alert-triangle); }
+.badge .ic { width:14px; height:14px; }
+.badge:has(.ic)::before { display:none; }
+.btn-primary .ic, .btn-secondary .ic, .btn-danger .ic { width:18px; height:18px; }
+
 .btn-primary, .btn-secondary, .btn-danger, .btn-update, .btn-copy {
   display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2);
   border:1px solid transparent; border-radius:var(--radius-pill); cursor:pointer;
@@ -129,7 +138,7 @@ body {
 .btn-danger { background:var(--danger); color:var(--on-danger); }
 .btn-danger:hover:not(:disabled) { background:var(--danger-hover); }
 .btn-update {
-  flex:none; margin-left:var(--space-2); height:var(--control-md); padding:0 var(--space-4);
+  flex:none; margin-left:auto; height:var(--control-sm); padding:0 var(--space-4);
   background:var(--paper); color:var(--ink); border-color:var(--line-input); font-size:14px;
 }
 .btn-update:hover:not(:disabled) { background:var(--hover); }
@@ -201,9 +210,19 @@ body {
 .steps li span { font:400 14.5px var(--font-sans); color:var(--ink-2); }
 .pad.centered > .row .hint { max-width:230px; }
 
+/* Pan diameter; the action row, update note and error card line up with the
+   text column beside it. */
+.home-main {
+  --pan:144px; --text-x:calc(var(--pan) + 32px);
+  flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; gap:20px;
+}
 .hero { display:flex; align-items:center; gap:32px; }
-.hero .pan { width:132px; height:132px; }
-.hero-text { display:flex; flex-direction:column; align-items:flex-start; gap:10px; min-width:0; }
+.hero .pan { width:var(--pan); height:var(--pan); }
+.hero-text { display:flex; flex-direction:column; align-items:flex-start; gap:12px; min-width:0; }
+.home-main > .row, .home-main > .update-note, .home-main > .error-card { margin-left:var(--text-x); }
+.home-main .row { gap:12px; }
+.home-main .row .hint { max-width:190px; }
+.pad-home { padding:0 40px 28px; gap:0; }
 
 .row {
   display:flex; align-items:center; gap:14px; flex-wrap:wrap;
@@ -231,50 +250,56 @@ details.log {
 .log pre { margin-top:8px; }
 
 .odds {
-  margin-top:auto; padding-top:22px; border-top:1px solid var(--line);
-  display:flex; flex-direction:column; gap:10px;
+  padding-top:16px; border-top:1px solid var(--line);
+  display:flex; flex-direction:column; gap:8px;
 }
-.tiles {
-  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px;
+.odds-head { display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); }
+.odds-version {
+  font:450 12px/16px var(--font-mono); color:var(--ink-3); min-width:0; overflow-wrap:anywhere;
 }
+.tiles { display:flex; flex-wrap:wrap; gap:var(--space-1); margin-left:-12px; }
 .tiles button {
-  cursor:pointer; padding:13px 16px; border-radius:var(--radius-md);
-  display:flex; align-items:center; gap:12px; text-align:left;
-  background:var(--paper); border:1px solid var(--line); color:var(--ink);
-  font:600 14.5px var(--font-sans);
-  transition:background 120ms var(--ease), color 120ms var(--ease);
+  cursor:pointer; height:var(--control-md); padding:0 var(--space-3); border-radius:var(--radius-pill);
+  display:inline-flex; align-items:center; gap:var(--space-2); white-space:nowrap;
+  background:transparent; border:1px solid transparent; color:var(--ink);
+  font:600 14px/20px var(--font-sans);
+  transition:background-color 120ms ease, color 120ms ease;
 }
 .tiles [data-action="import"] { --icon:url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>"); }
 .tiles [data-action="doctor"] { --icon:var(--i-activity); }
 .tiles [data-action="check-updates"] { --icon:var(--i-download); }
 .tiles [data-action="settings"] { --icon:var(--i-settings); }
 .tiles [data-action="uninstall"] { --icon:var(--i-trash); }
-.tiles button:hover { background:var(--hover); }
-.tiles button:disabled:not([aria-busy]) {
-  cursor:not-allowed; color:var(--ink-3); background:transparent; border-style:dashed;
-}
-.tiles button:disabled:not([aria-busy])::before { display:none; }
-.tile-danger:hover { background:var(--danger-soft); color:var(--danger); }
-.tile-note {
-  align-self:center; padding-left:14px;
-  font:400 13px var(--font-sans); color:var(--ink-3);
-}
+.tiles button:hover:not(:disabled) { background:var(--hover); }
+.tiles button:disabled:not([aria-busy]) { cursor:not-allowed; opacity:.48; }
+.tiles .tile-danger:hover:not(:disabled) { background:var(--danger-soft); color:var(--danger); }
 
 .update-note {
-  align-self:flex-start; max-width:100%;
-  display:flex; align-items:center; gap:14px;
-  padding:10px 10px 10px 14px; border-radius:var(--radius-lg);
-  background:var(--gold-soft); border:1px solid var(--line);
-}
-.update-note::before {
-  content:''; flex:none; width:30px; height:30px; border-radius:50%;
-  background:var(--gold) center/16px no-repeat url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232B1E14' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19V5'/><path d='m5 12 7-7 7 7'/></svg>");
+  align-self:flex-start; max-width:calc(100% - var(--text-x, 0px));
+  display:flex; align-items:center; gap:var(--space-3);
+  padding:var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius:var(--radius-md);
+  background:var(--gold-soft); color:var(--gold-ink);
 }
 .update-note p {
-  margin:0; display:flex; flex-direction:column; gap:1px; min-width:0;
-  font:400 13.5px/1.35 var(--font-sans); color:var(--ink-2);
+  margin:0; flex:1; display:flex; flex-direction:column; min-width:0;
+  font:400 13px/18px var(--font-sans); color:var(--ink-2);
 }
-.update-note b { font:700 14.5px/1.35 var(--font-sans); color:var(--ink); }
+.update-note b { font:600 14px/20px var(--font-sans); color:var(--ink); }
+
+/* "Didn't start" detail: the log stays in a <pre> so Copy log finds it. */
+.error-card {
+  max-width:640px; display:flex; align-items:flex-start; gap:var(--space-3);
+  padding:var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);
+}
+.error-card pre {
+  flex:1; min-width:0; margin:0; max-height:96px; overflow:auto;
+  font:450 13px/20px var(--font-mono); color:var(--ink);
+  white-space:pre-wrap; overflow-wrap:anywhere;
+  -webkit-user-select:text; user-select:text; cursor:text;
+}
+.error-card .btn-copy { margin-top:0; flex:none; }
 
 /* Install screens: a fixed 300px left column (pan, copy, buttons) beside a
    row panel that grows to hold however many steps the factory returned --
@@ -293,46 +318,38 @@ details.log {
 }
 .install-left .btn-primary, .install-left .btn-secondary { align-self:stretch; text-align:center; }
 
-.pan {
-  --rim:var(--hover); --base:var(--page); --dot:transparent;
-  width:148px; height:148px; border-radius:50%; flex:none; position:relative;
-  /* Sizes are fractions of the radius so the pan scales with its box. */
+/* Ring = the element, plate = ::before, contents = ::after. Offsets are
+   fractions of the diameter so the pan scales with its box. */
+.pan { width:148px; height:148px; border-radius:50%; flex:none; position:relative; background:var(--hover); }
+.pan::before, .pan::after { content:''; position:absolute; }
+.pan::before { inset:11.1%; border-radius:50%; background:var(--paper); box-shadow:inset 0 0 0 1px var(--line); }
+
+.pan-hot { background:var(--gold-soft); }
+.pan-hot::before {
   background:
-    radial-gradient(circle closest-side, var(--dot) 0 22%, transparent 23%),
-    radial-gradient(circle closest-side, var(--base) 0 66%, var(--line) 67% 69%, transparent 70%),
-    var(--rim);
+    radial-gradient(ellipse 24% 20% at 45% 54%, var(--code-ink) 98%, transparent) , var(--code-bg);
+  box-shadow:none;
 }
-.pan-hot { --rim:var(--gold-soft); --dot:var(--gold); }
-.pan-hot::before, .pan-hot::after {
-  content:''; position:absolute; border-radius:50%;
-  animation:om-sizzle 1.8s var(--ease) infinite;
-}
-.pan-hot::before { top:10%; left:30%; width:5%; height:5%; background:var(--gold); opacity:.5; }
-.pan-hot::after { top:14%; left:51%; width:3%; height:3%; background:var(--gold-ink); animation-delay:.9s; }
-
-.pan-asleep { --rim:var(--hover); --dot:var(--ink-3); }
-.pan-asleep::after {
-  content:'z'; position:absolute; top:-6px; right:6px; color:var(--ink-3);
-  font:700 16px var(--font-sans);
-  animation:om-zzz 1.8s var(--ease) infinite;
+.pan-hot::after {
+  left:41.1%; top:41.1%; width:18.9%; height:18.9%; border-radius:50%;
+  background:var(--gold); box-shadow:inset -3px -3px 0 var(--orange);
 }
 
-.pan-empty {
-  border:2px dashed var(--line-strong);
-  background:radial-gradient(circle closest-side, var(--hover) 0 52%, transparent 53%);
+.pan-asleep::after, .pan-burnt::after {
+  left:37.2%; top:31.1%; width:25.6%; height:34.4%;
+  border-radius:50% 50% 46% 46% / 58% 58% 42% 42%;
+  background:var(--raised); box-shadow:inset 0 0 0 1px var(--line-strong), inset -4px -4px 0 var(--line);
 }
 
-/* A broken yolk with a crack across it. */
-.pan-burnt { --rim:var(--danger-soft); }
-.pan-burnt::before, .pan-burnt::after { content:''; position:absolute; left:50%; top:50%; }
-.pan-burnt::before {
-  width:30%; height:21%; margin:-10.5% 0 0 -15%; border-radius:50%;
-  background:var(--gold); opacity:.7;
+.pan-empty { background:var(--hover); }
+
+.pan-burnt { background:var(--danger-soft); }
+.pan-flag {
+  position:absolute; right:16.7%; bottom:16.7%; width:40px; height:40px; border-radius:50%;
+  display:grid; place-content:center; z-index:1;
+  background:var(--danger); color:var(--on-danger); box-shadow:0 0 0 4px var(--page);
 }
-.pan-burnt::after {
-  width:6%; height:24%; margin:-14% 0 0 -3%; border-radius:999px;
-  background:var(--danger-soft); transform:rotate(-28deg);
-}
+.pan-flag .ic { width:20px; height:20px; }
 
 .bar {
   position:relative; width:100%; height:8px; border-radius:999px;
@@ -386,8 +403,6 @@ details.log {
   mask:url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 22 22'><circle cx='11' cy='11' r='9' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-dasharray='44 12.6'/></svg>") center/contain no-repeat;
   animation:om-spin 1s linear infinite;
 }
-/* Hint beside a row of buttons wraps rather than stretching to the edge. */
-.hero + .row .hint { max-width:190px; }
 .row-step[data-status="running"] .state { font-weight:600; color:var(--gold-ink); }
 .row-step[data-status="done"] .mark,
 .row-step[data-status="skipped"] .mark { background:var(--success-soft); color:var(--success); }

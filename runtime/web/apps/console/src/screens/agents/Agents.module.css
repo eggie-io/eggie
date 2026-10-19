@@ -64,7 +64,8 @@
   min-height: 32px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2);
   border-radius: var(--radius-sm); font-size: 13px; line-height: 18px; color: var(--ink); text-decoration: none;
 }
-.menuItem:hover, .menuItem:focus-visible { background: var(--hover); color: var(--ink); text-decoration: none; outline: 0; }
+.menuItem:hover, .menuItem:focus-visible { background: var(--hover); color: var(--ink); text-decoration: none; }
+.menuItem:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .menuItem > svg { color: var(--ink-2); }
 .menuCurrent { font-weight: 600; }
 .menuName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

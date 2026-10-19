@@ -13,10 +13,8 @@ import {
   Notice,
   ProgressBar,
   PromptCard,
-  RowCard,
   StateBadge,
   StatusDot,
-  SyncMarker,
   TextField,
   cx,
 } from "@eggie/ui";
@@ -116,9 +114,6 @@ function Column({ theme }: { theme: "light" | "dark" }) {
       </Section>
       <Section title="Cards">
         <Card className={s.cardDemo}>A card: paper, a hairline and a small shadow.</Card>
-        <RowCard className={s.wide}>Row card · plain</RowCard>
-        <RowCard className={s.wide} accent="attention">Row card · attention</RowCard>
-        <RowCard className={s.wide} accent="trouble">Row card · trouble</RowCard>
       </Section>
       <Section title="Progress">
         <div className={s.wide}><ProgressBar value={0.64} label="Uploading" /></div>
@@ -134,10 +129,6 @@ function Column({ theme }: { theme: "light" | "dark" }) {
       </Section>
       <Section title="Prompt card">
         <div className={s.wide}><PromptCard prompt={PROMPT} aside="live — give it a click" /></div>
-      </Section>
-      <Section title="Sync marker (hidden in the app until sync exists)">
-        <SyncMarker state="synced" />
-        <SyncMarker state="offline" />
       </Section>
       <Section title="Egg and icons">
         <Egg size={40} bob />

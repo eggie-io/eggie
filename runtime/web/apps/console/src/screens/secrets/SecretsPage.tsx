@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Card, Notice, TextField } from "@eggie/ui";
+import { Button, Card, Notice, TextField, cx } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
 import { useDeleteSecret, useLifecycle, useSecrets, useSetSecret } from "../../projects/queries";
 import { nameProblem } from "../../projects/secrets";
@@ -15,12 +15,12 @@ function RequestedRow({ id, name, hint }: { id: string; name: string; hint: stri
   const dismiss = useDeleteSecret(id);
   const [value, setValue] = useState("");
   return (
-    <li className={s.row}>
-      <span className={s.name}>{name}</span>
-      <div className={s.field}>
+    <li className={cx(s.row, s.requested)}>
+      <div className={s.who}>
+        <span className={s.name}>{name}</span>
         <p className={s.hint}>{hint}</p>
-        <TextField label="Value" secret value={value} onChange={setValue} />
       </div>
+      <TextField label="Value" secret value={value} onChange={setValue} />
       <div className={s.actions}>
         <Button disabled={trimValue(value) === "" || save.isPending} onClick={() => save.mutate({ name, value: trimValue(value) }, { onSuccess: () => setValue("") })}>Save</Button>
         <Button variant="ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate(name)}>Dismiss</Button>
@@ -52,7 +52,7 @@ function StoredRow({ id, name }: { id: string; name: string }) {
           <span className={s.masked}>••••••••</span>
           <div className={s.actions}>
             <Button onClick={() => setEditing(true)}>Replace</Button>
-            <Button variant="danger" disabled={remove.isPending} onClick={() => remove.mutate(name)}>Delete</Button>
+            <Button variant="ghost" className={s.quietDanger} disabled={remove.isPending} onClick={() => remove.mutate(name)}>Delete</Button>
           </div>
         </>
       )}

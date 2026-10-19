@@ -1,7 +1,0 @@
-.row {
-  min-width: 0; padding: var(--space-4) var(--space-5);
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
-}
-.plain { }
-.attention { border-color: var(--warning); }
-.trouble { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }

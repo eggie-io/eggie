@@ -275,13 +275,6 @@ details.log {
   font:400 13.5px/1.35 var(--font-sans); color:var(--ink-2);
 }
 .update-note b { font:700 14.5px/1.35 var(--font-sans); color:var(--ink); }
-.btn-update {
-  flex:none; margin-left:10px; cursor:pointer; padding:9px 16px; border-radius:var(--radius-md);
-  background:var(--paper); border:1px solid var(--line-strong); color:var(--ink);
-  font:700 14px var(--font-sans);
-  transition:transform 120ms var(--ease);
-}
-.btn-update:hover { transform:translateY(-1px); }
 
 /* Install screens: a fixed 300px left column (pan, copy, buttons) beside a
    row panel that grows to hold however many steps the factory returned --

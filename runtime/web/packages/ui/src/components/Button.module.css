@@ -1,30 +1,26 @@
 .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  cursor: pointer; border: 0;
-  transition: transform 120ms var(--ease-lift), background 120ms, color 120ms;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  border: 1px solid transparent; border-radius: var(--radius-pill);
+  font: inherit; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 160ms ease, border-color 120ms ease;
 }
-.button:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 2px; }
+.button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.button:disabled { cursor: not-allowed; opacity: 0.48; box-shadow: none; }
+/* Call sites still pass hand-drawn SVGs of their own sizes. */
+.button svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 
-/* Sizes set the font shorthand; variants below may swap only the family. */
-.md { padding: 10px 18px; border-radius: 13px; font: 700 15px var(--font-body); }
-.lg { padding: 14px 26px; border-radius: 15px; font: 700 17px var(--font-body); }
+.sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: 13px; line-height: 20px; }
+.md { height: var(--control-md); padding: 0 var(--space-4); font-size: 14px; line-height: 20px; }
+.lg { height: var(--control-lg); padding: 0 var(--space-5); font-size: 15px; line-height: 20px; }
 
-.primary {
-  background: var(--yolk); color: #2B1E14; font-family: var(--font-display);
-  box-shadow: 0 10px 22px -12px rgba(255,176,32,.9);
-}
-.primary:hover:not(:disabled) { transform: translateY(-2px); }
+.primary { background: var(--gold); color: var(--on-gold); }
+.primary:hover:not(:disabled) { background: var(--orange); box-shadow: var(--shadow-glow); }
 
-.secondary { background: var(--surface); border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; }
-.secondary:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.secondary { background: var(--paper); color: var(--ink); border-color: var(--line-input); }
+.secondary:hover:not(:disabled) { background: var(--hover); }
 
-.quiet { background: transparent; border: 1px solid var(--line); color: var(--ink-2); font-weight: 600; }
-.quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.ghost { background: transparent; color: var(--ink); }
+.ghost:hover:not(:disabled) { background: var(--hover); }
 
-.danger { background: var(--paprika-soft); color: var(--paprika); }
-.danger:hover:not(:disabled) { background: var(--paprika); color: #FFF; }
-
-.button:disabled {
-  cursor: not-allowed; background: transparent; border: 1px solid var(--line);
-  color: var(--ink-3); box-shadow: none; transform: none;
-}
+.danger { background: var(--danger); color: var(--on-danger); }
+.danger:hover:not(:disabled) { background: var(--danger-hover); }

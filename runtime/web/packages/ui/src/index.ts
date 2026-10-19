@@ -1,13 +1,18 @@
 export { cx } from "./cx";
+export { Badge, type BadgeTone } from "./components/Badge";
 export { Button, type ButtonProps, type ButtonVariant } from "./components/Button";
+export { Card } from "./components/Card";
+export { Choice, type ChoiceProps } from "./components/Choice";
 export { Collapsible } from "./components/Collapsible";
 export { Egg } from "./components/Egg";
+export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Modal } from "./components/Modal";
 export { Notice } from "./components/Notice";
 export { ProgressBar } from "./components/ProgressBar";
 export { PromptCard } from "./components/PromptCard";
 export { RowCard } from "./components/RowCard";
 export { StateBadge, type ProjectState } from "./components/StateBadge";
+export { StatusDot, type DotStatus } from "./components/StatusDot";
 export { SyncMarker, type SyncState } from "./components/SyncMarker";
 export { TextField } from "./components/TextField";
 export { BrandMark } from "./components/BrandMark";

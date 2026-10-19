@@ -12,7 +12,6 @@ export function ProgressBar({ value, label }: { value?: number; label: string })
   return (
     <div className={s.track} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
       <div className={s.fill} style={{ width: `${percent}%` }} />
-      <div className={s.sheen} />
     </div>
   );
 }

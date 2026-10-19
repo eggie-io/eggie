@@ -89,7 +89,7 @@ function Code({ code, expiresAt }: { code: string; expiresAt: number }) {
         >
           {copied ? "Copied" : "Copy code"}
         </Button>
-        <Button variant="quiet" onClick={() => openExternal(DEVICE_URL)}>Open GitHub again</Button>
+        <Button variant="ghost" onClick={() => openExternal(DEVICE_URL)}>Open GitHub again</Button>
       </div>
       <p className={s.muted}>
         {left > 0 ? `This code works for ${Math.ceil(left / 60)} more minute${left > 60 ? "s" : ""}.` : "This code has run out."}

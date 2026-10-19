@@ -1,4 +1,6 @@
+import { cx } from "../cx";
 import { ICON_PATHS, type IconName } from "../icons";
+import s from "./Icon.module.css";
 
 type Props = { name: IconName; size?: "sm" | "md"; label?: string; className?: string };
 
@@ -14,8 +16,7 @@ export function Icon({ name, size = "sm", label, className }: Props) {
       strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
-      style={{ flex: "none" }}
+      className={cx(s.icon, className)}
       {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
     >
       {ICON_PATHS[name].map((d) => (

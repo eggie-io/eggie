@@ -125,7 +125,7 @@ export function FilesPage() {
           </Notice>
           <div className={s.bannerActions}>
             <Button variant="primary" onClick={() => void queue.carryOn().catch(() => false)}>I've freed some up — carry on</Button>
-            <Button variant="quiet" onClick={() => queue.remove(heldBy.key)}>Give up on {heldBy.name}</Button>
+            <Button variant="ghost" onClick={() => queue.remove(heldBy.key)}>Give up on {heldBy.name}</Button>
           </div>
         </div>
       )}

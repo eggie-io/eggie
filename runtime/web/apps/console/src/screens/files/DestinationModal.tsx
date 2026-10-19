@@ -73,7 +73,7 @@ export function DestinationModal({
             ))}
           </ul>
           {newFolder === null ? (
-            <Button variant="quiet" onClick={() => setNewFolder("")}>New folder</Button>
+            <Button variant="ghost" onClick={() => setNewFolder("")}>New folder</Button>
           ) : (
             <TextField label="New folder" value={newFolder} onChange={setNewFolder} autoFocus error={newFolder === "" ? undefined : (nameError ?? undefined)} />
           )}
@@ -94,7 +94,7 @@ export function DestinationModal({
           </Button>
         )}
         {tooBig.length > 0 && <Button onClick={onPickAgain}>Pick a smaller file</Button>}
-        <Button variant="quiet" onClick={onClose}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
       </div>
       {chooser && <p className={s.note}>Big files are fine — you can pause and come back.</p>}
       {disk.isError && <Notice>{disk.error.message}</Notice>}

@@ -181,7 +181,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
           </div>
           <p className={s.quiet}>This can take a while, depending on how big the project is.</p>
           <div className={s.formActions}>
-            <Button variant="quiet" onClick={reset}>Cancel</Button>
+            <Button variant="ghost" onClick={reset}>Cancel</Button>
           </div>
         </>
       );
@@ -222,7 +222,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             <Button variant={mode === "replace" ? "danger" : "primary"} onClick={() => void bringIn(plan, mode)}>
               {mode === "replace" ? "Replace and bring it in" : "Bring it in"}
             </Button>
-            <Button variant="quiet" onClick={reset}>Pick another</Button>
+            <Button variant="ghost" onClick={reset}>Pick another</Button>
           </div>
         </>
       );
@@ -255,7 +255,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
           <p className={s.error}>{step.message}</p>
           <div className={s.formActions}>
             <Button variant="primary" onClick={() => void bringIn(step.plan, step.mode)}>Try again</Button>
-            <Button variant="quiet" onClick={reset}>Pick another</Button>
+            <Button variant="ghost" onClick={reset}>Pick another</Button>
           </div>
         </>
       );

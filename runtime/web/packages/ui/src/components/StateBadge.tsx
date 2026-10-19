@@ -1,5 +1,4 @@
-import { cx } from "../cx";
-import s from "./StateBadge.module.css";
+import { StatusDot, type DotStatus } from "./StatusDot";
 
 export type ProjectState = "running" | "stopped" | "starting" | "wrong";
 
@@ -10,11 +9,13 @@ const LABEL: Record<ProjectState, string> = {
   wrong: "Something's wrong",
 };
 
+const DOT: Record<ProjectState, DotStatus> = {
+  running: "running",
+  stopped: "stopped",
+  starting: "starting",
+  wrong: "failed",
+};
+
 export function StateBadge({ state }: { state: ProjectState }) {
-  return (
-    <span className={cx(s.badge, s[state])}>
-      <span className={state === "starting" ? s.spinner : s.dot} aria-hidden="true" />
-      {LABEL[state]}
-    </span>
-  );
+  return <StatusDot status={DOT[state]} label={LABEL[state]} />;
 }

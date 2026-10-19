@@ -51,7 +51,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
         />
         <div className={s.formActions}>
           <Button type="submit" variant="primary" disabled={!slug || create.isPending}>Make it</Button>
-          <Button variant="quiet" onClick={close}>Keep it for later</Button>
+          <Button variant="ghost" onClick={close}>Keep it for later</Button>
         </div>
       </form>
     </Modal>

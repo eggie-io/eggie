@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { cx } from "../cx";
+import { IconButton } from "./IconButton";
 import s from "./Modal.module.css";
 
 // A native <dialog> opened with showModal(): the browser makes the rest of the
@@ -7,11 +9,15 @@ export function Modal({
   open,
   onClose,
   title,
+  footer,
+  wide = false,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  footer?: ReactNode;
+  wide?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -27,7 +33,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={s.dialog}
+      className={cx(s.dialog, wide && s.wide)}
       aria-labelledby={titleId}
       onCancel={(event) => {
         // Esc: let the parent's `open` stay the only source of truth.
@@ -44,8 +50,13 @@ export function Modal({
       }}
     >
       <div className={s.panel}>
-        <h2 id={titleId} className={s.title}>{title}</h2>
-        {children}
+        <div className={s.head}>
+          <h2 id={titleId} className={s.title}>{title}</h2>
+        </div>
+        <div className={s.body}>{children}</div>
+        {footer && <div className={s.foot}>{footer}</div>}
+        {/* Last in the DOM so showModal() still focuses the first control of the content. */}
+        <IconButton icon="x" label="Close" size="sm" className={s.close} onClick={onClose} />
       </div>
     </dialog>
   );

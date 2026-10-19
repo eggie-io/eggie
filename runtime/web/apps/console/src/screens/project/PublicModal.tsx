@@ -50,7 +50,7 @@ export function PublicModal({ project, open, onClose }: { project: Project; open
                 <span className={s.addressLabel}>{entry.service}</span>
                 <span className={s.url}>{hostOf(entry.url)}</span>
                 <CopyButton text={entry.url} />
-                <Button variant="quiet" onClick={() => openExternal(entry.url)}>Open{ARROW}</Button>
+                <Button variant="ghost" onClick={() => openExternal(entry.url)}>Open{ARROW}</Button>
               </li>
             ))}
           </ul>
@@ -68,7 +68,7 @@ export function PublicModal({ project, open, onClose }: { project: Project; open
           <Notice>{view.message}</Notice>
           <div className={s.modalFoot}>
             <Button variant="primary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Try again</Button>
-            <Button variant="quiet" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Dismiss</Button>
+            <Button variant="ghost" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Dismiss</Button>
           </div>
         </>
       );

@@ -1,4 +1,7 @@
-.row { padding: 16px 20px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.row {
+  min-width: 0; padding: var(--space-4) var(--space-5);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
 .plain { }
-.attention { border-color: var(--yolk-soft); }
-.trouble { border-color: var(--paprika-soft); box-shadow: 0 0 0 3px var(--paprika-soft); }
+.attention { border-color: var(--warning); }
+.trouble { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }

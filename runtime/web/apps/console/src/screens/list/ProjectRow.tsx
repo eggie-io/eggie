@@ -44,7 +44,7 @@ export function ProjectRow({ project }: { project: Project }) {
           )}
           <Button
             aria-label={`Stop ${project.id}`}
-            variant="quiet"
+            variant="ghost"
             disabled={lifecycle.isPending}
             onClick={() => lifecycle.mutate("down")}
           >
@@ -84,7 +84,7 @@ export function ProjectRow({ project }: { project: Project }) {
 
   // wrong/gone/waiting already lead to the page through their only action.
   const settings = view.kind !== "wrong" && view.kind !== "gone" && view.kind !== "waiting" && (
-    <Button aria-label={`Settings for ${project.id}`} variant="quiet" onClick={look}>
+    <Button aria-label={`Settings for ${project.id}`} variant="ghost" onClick={look}>
       {GEAR}Settings
     </Button>
   );

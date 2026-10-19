@@ -88,7 +88,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
               {row.kind === "linked" ? (
                 <div className={s.repo}>
                   {details}
-                  <Button variant="quiet" className={s.open} onClick={() => open(row.projectId)}>Open</Button>
+                  <Button variant="ghost" className={s.open} onClick={() => open(row.projectId)}>Open</Button>
                 </div>
               ) : (
                 <button
@@ -123,7 +123,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                     <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(name)}>
                       Import
                     </Button>
-                    <Button variant="quiet" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
+                    <Button variant="ghost" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
                   </div>
                 </form>
               )}
@@ -133,7 +133,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
       </ul>
       {repos.isLoading && <p className={s.muted}>Fetching your repositories…</p>}
       {repos.hasNextPage && (
-        <Button variant="quiet" onClick={() => void repos.fetchNextPage()} disabled={repos.isFetchingNextPage}>
+        <Button variant="ghost" onClick={() => void repos.fetchNextPage()} disabled={repos.isFetchingNextPage}>
           Load more
         </Button>
       )}
@@ -183,7 +183,7 @@ function Cloning({
     return (
       <>
         <p className={s.error}>Couldn't download it: {job.detail}</p>
-        <Button variant="quiet" onClick={onRetry}>Pick another</Button>
+        <Button variant="ghost" onClick={onRetry}>Pick another</Button>
       </>
     );
   }

@@ -63,14 +63,14 @@ function UploadRow({ item, queue, onCarryOn }: { item: UploadItem; queue: Upload
       break;
     case "waiting":
       line = `${size(item.size)} · waiting its turn`;
-      actions = <Button variant="quiet" onClick={() => queue.remove(item.key)}>Remove</Button>;
+      actions = <Button variant="ghost" onClick={() => queue.remove(item.key)}>Remove</Button>;
       break;
     case "paused":
       line = `Paused at ${percent(item)}% · ${into(item.dir)}`;
       actions = (
         <>
           <Button onClick={() => queue.resume(item.key)}>Carry on</Button>
-          <Button variant="quiet" onClick={() => queue.remove(item.key)}>Remove</Button>
+          <Button variant="ghost" onClick={() => queue.remove(item.key)}>Remove</Button>
         </>
       );
       break;
@@ -79,7 +79,7 @@ function UploadRow({ item, queue, onCarryOn }: { item: UploadItem; queue: Upload
       actions = (
         <>
           <Button onClick={() => (item.file ? queue.resume(item.key) : picker.current?.click())}>Pick up where it stopped</Button>
-          <Button variant="quiet" onClick={() => queue.remove(item.key)}>Remove</Button>
+          <Button variant="ghost" onClick={() => queue.remove(item.key)}>Remove</Button>
           <input
             ref={picker}
             type="file"
@@ -98,7 +98,7 @@ function UploadRow({ item, queue, onCarryOn }: { item: UploadItem; queue: Upload
       actions = (
         <>
           <Button onClick={onCarryOn}>Carry on</Button>
-          <Button variant="quiet" onClick={() => queue.remove(item.key)}>Remove</Button>
+          <Button variant="ghost" onClick={() => queue.remove(item.key)}>Remove</Button>
         </>
       );
       break;
@@ -108,10 +108,10 @@ function UploadRow({ item, queue, onCarryOn }: { item: UploadItem; queue: Upload
         item.reason === "file_exists" ? (
           <>
             <Button onClick={() => queue.replace(item.key)}>Replace</Button>
-            <Button variant="quiet" onClick={() => queue.remove(item.key)}>Skip</Button>
+            <Button variant="ghost" onClick={() => queue.remove(item.key)}>Skip</Button>
           </>
         ) : (
-          <Button variant="quiet" onClick={() => queue.remove(item.key)}>Remove</Button>
+          <Button variant="ghost" onClick={() => queue.remove(item.key)}>Remove</Button>
         );
       break;
     case "done":

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
-import { useDesktopHome } from "../desktop/DesktopContext";
 import { openKitchenUrl, siteSignedOutAction } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import { SleepyEgg } from "./SleepyEgg";
@@ -11,9 +10,8 @@ import s from "./StatusScreen.module.css";
 export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetry: () => void }) {
   const site = useSite();
   const webApp = useWebApp();
-  const home = useDesktopHome();
   const link =
-    typeof site === "string" && typeof webApp === "string" ? openKitchenUrl(webApp, site, home) : null;
+    typeof site === "string" && typeof webApp === "string" ? openKitchenUrl(webApp, site) : null;
   const redirecting = link !== null && siteSignedOutAction(reason) === "redirect";
 
   useEffect(() => {

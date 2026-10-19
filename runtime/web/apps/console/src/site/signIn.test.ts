@@ -3,19 +3,15 @@ import { openKitchenUrl, webAppKitchens, siteSignedOutAction } from "./signIn";
 
 describe("openKitchenUrl", () => {
   it("builds the web app page link with the host", () =>
-    expect(openKitchenUrl("https://app.eggie.io", "foo.eggie.io", null)).toBe(
+    expect(openKitchenUrl("https://app.eggie.io/", "foo.eggie.io")).toBe(
       "https://app.eggie.io/kitchens/open?host=foo.eggie.io",
     ));
-  it("carries the desktop home", () =>
-    expect(openKitchenUrl("https://app.eggie.io/", "foo.eggie.io", "http://127.0.0.1:5123")).toBe(
-      "https://app.eggie.io/kitchens/open?host=foo.eggie.io&home=http%3A%2F%2F127.0.0.1%3A5123",
-    ));
   it("accepts a plain-http localhost web app for development", () =>
-    expect(openKitchenUrl("http://localhost:5173", "foo.eggie.io", null)).toBe(
+    expect(openKitchenUrl("http://localhost:5173", "foo.eggie.io")).toBe(
       "http://localhost:5173/kitchens/open?host=foo.eggie.io",
     ));
   it.each(["http://app.eggie.io", "javascript:alert(1)", "", "not a url"])("refuses web app %s", (webApp) =>
-    expect(openKitchenUrl(webApp, "foo.eggie.io", null)).toBeNull());
+    expect(openKitchenUrl(webApp, "foo.eggie.io")).toBeNull());
 });
 
 describe("siteSignedOutAction", () => {

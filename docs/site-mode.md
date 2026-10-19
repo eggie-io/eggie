@@ -148,8 +148,7 @@ anything else is the usual `handoff_invalid`, shown as a **Sign in** button.
 **Direct visit.** A browser that opens `https://foo.eggie.io` with no session is sent to the web
 app. `GET /api/health` carries `"web_app"` (the web app's address, from `EGGIE_WEB_URL`, default
 `https://app.eggie.io`), and the console navigates to
-`<web_app>/kitchens/open?host=foo.eggie.io`, adding `&home=<desktop home>` inside the desktop
-app. That page asks for a web app login if there is none, calls
+`<web_app>/kitchens/open?host=foo.eggie.io`. That page asks for a web app login if there is none, calls
 `POST /v1/instances/{id}/console` with the web session, and redirects back with
 `#handoff=<code>`. The console only follows `web_app` when it is `https`, or `http` on
 `localhost`.
@@ -251,8 +250,8 @@ Returns the account's instances. The runtime reads `id`, `display_name`, `consol
 `status`, `signed_out` and `is_owner`, and computes `current` itself from its own site host. It lists only; opening a kitchen's console still needs
 `POST /v1/instances/{id}/console` with a web session.
 
-The desktop window keeps the web app sign-in only for the current run (pywebview's private mode),
-so the first switch after each launch shows the web app login.
+The desktop window opens kitchens in the system browser: it runs pywebview in private mode, so it
+would never share the browser's web app sign-in and would ask for a login on every launch.
 
 ### `GET /v1/instances/me/certificate`
 
@@ -283,10 +282,9 @@ even if the server then fails to set a cookie. Codes the service mints never sta
 
 - Renew the certificate at least 30 days before `not_after`.
 - Deleting an instance: revoke its device tokens; the server is disposable.
-- The web app serves `/kitchens/open?host=<console host>[&home=<desktop home>]`. It checks that
+- The web app serves `/kitchens/open?host=<console host>`. It checks that
   the logged-in owner has an instance with that console hostname, mints the console code with
-  `POST /v1/instances/{id}/console`, and redirects to `https://<host>/#handoff=<code>`, with
-  `&home=<desktop home>` appended to the fragment when it is `http://127.0.0.1:<port>`. Its own address is the server's
+  `POST /v1/instances/{id}/console`, and redirects to `https://<host>/#handoff=<code>`. Its own address is the server's
   `EGGIE_WEB_URL`.
 - The web app shows each instance's console hostname and an "open console" action. Projects on
   an instance appear through the existing project registry sync under the instance's device id.

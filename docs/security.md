@@ -96,10 +96,9 @@ root-equivalent — plus:
 - The seeded token pair is rotated at first boot, and sign-out is refused on a site.
 - The edge port (39080) is the plain-HTTP probe entrypoint and serves every project host; on a site
   it is published on loopback only (`EGGIE_EDGE_BIND`).
-- The desktop window also shows the Eggie web app and kitchen consoles (pages from the internet) when
-  the person switches or signs in. The bridge guard refuses them as it refuses the VM console, and its
-  documented residual race applies to them too. Minting a kitchen code still needs a person's web app
-  session; the device token only lists kitchens (`GET /v1/instances`).
+- The desktop window never shows the Eggie web app or a kitchen console: the switcher opens kitchens
+  in the system browser. Minting a kitchen code still needs a person's web app session; the device
+  token only lists kitchens (`GET /v1/instances`).
 - A snapshot made with `snapshot-prep.sh` holds no token, database or key.
 - Containers cannot reach the cloud metadata service (`169.254.169.254`): it serves the user
   data that seeded the account token, and a project's code would otherwise read it. A droplet-only

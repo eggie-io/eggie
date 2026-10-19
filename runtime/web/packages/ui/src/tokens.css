@@ -3,13 +3,12 @@
 :root,
 .om-theme-light {
   color-scheme: light;
-  --page: #fcf7f0; --raised: #fefbf7; --paper: #ffffff; --hover: #f7f0e5; --selected: var(--accent-soft);
+  --page: #fcf7f0; --raised: #fefbf7; --paper: #ffffff; --hover: #f7f0e5;
   --line: #efe6d9; --line-strong: #d8c8b1; --line-input: #b3a089;
   --ink: #2a1f16; --ink-2: #6a5848; --ink-3: #97836f; --on-ink: #fdf4e7; --on-ink-2: #c9b8a4;
   --gold: #ffc21a; --orange: #ffa21f; --coral: #ff8a65; --orchid: #9bb4ff; --periwinkle: #8ec5a4;
   --on-gold: #2a1f16; --gold-ink: #8a5d00; --gold-soft: #ffefc2;
   --accent: #e0662f; --accent-hover: #c9521d; --on-accent: #ffffff; --accent-soft: #fde6d8; --accent-ink: #a8410f;
-  --focus: var(--accent);
   --success: #2f7d4f; --success-soft: #e1f3e4; --warning: #9a5300; --warning-soft: #fff1d6;
   --danger: #b3261e; --danger-hover: #951f19; --on-danger: #ffffff; --danger-soft: #fde7e6;
   --info: #3b4ad1; --info-soft: #e8eaff;
@@ -83,8 +82,19 @@
   --ease-lift: cubic-bezier(.2,.8,.2,1);
 }
 
-/* Old names, removed once every screen is migrated. */
-:root {
+/* var() aliases resolve where they are declared, so each theme wrapper
+   redeclares them to pick up its own colours. */
+:root,
+.om-theme-light,
+.om-theme-dark {
+  --selected: var(--accent-soft);
+  --focus: var(--accent);
+}
+
+/* Old names, removed once every screen is migrated (also --shadow, set with the colours above). */
+:root,
+.om-theme-light,
+.om-theme-dark {
   --desk: var(--raised); --cream: var(--page); --surface: var(--paper); --surface-2: var(--hover);
   --line-2: var(--line-strong);
   --yolk: var(--gold); --yolk-deep: var(--gold-ink); --yolk-soft: var(--gold-soft);

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { Badge, Card, Icon } from "@eggie/ui";
 import { useAgents, useAgentStatus } from "../../agents/queries";
-import { CHEVRON_RIGHT } from "../icons";
+import { AgentMark } from "./AgentMark";
 import s from "./Agents.module.css";
 
 export type AgentBase = "/agents" | "/welcome";
@@ -20,16 +21,20 @@ export function AgentPicker({ base }: { base: AgentBase }) {
       <ul className={s.grid}>
         {agents.map((agent) => (
           <li key={agent.id}>
-            <Link className={s.card} to={`${base}/${agent.id}`}>
-              <span className={s.cardTop}>
-                <img className={s.icon} src={agent.icon} alt="" width={40} height={40} />
-                {status.data?.agents[agent.id]?.connected && <span className={s.badge}>Connected</span>}
-                {CHEVRON_RIGHT}
-              </span>
-              <span className={s.cardText}>
-                <span className={s.cardName}>{agent.name}</span>
-                <span className={s.cardTagline}>{agent.platforms[platform]!.tagline}</span>
-              </span>
+            <Link className={s.cardLink} to={`${base}/${agent.id}`}>
+              <Card className={s.card}>
+                <span className={s.cardTop}>
+                  <AgentMark agent={agent} />
+                  <span className={s.cardEnd}>
+                    {status.data?.agents[agent.id]?.connected && <Badge tone="success" icon="check-circle">Connected</Badge>}
+                    <Icon name="chevron-right" className={s.cardChevron} />
+                  </span>
+                </span>
+                <span className={s.cardText}>
+                  <span className={s.cardName}>{agent.name}</span>
+                  <span className={s.cardTagline}>{agent.platforms[platform]!.tagline}</span>
+                </span>
+              </Card>
             </Link>
           </li>
         ))}
@@ -39,7 +44,7 @@ export function AgentPicker({ base }: { base: AgentBase }) {
 
   return (
     <div className={s.page}>
-      <div>
+      <div className={s.heading}>
         <h1 className={s.title}>{welcome ? "Which coding agent do you use?" : "Which agent do you use?"}</h1>
         <p className={s.sub}>
           {welcome

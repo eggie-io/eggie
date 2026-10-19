@@ -176,7 +176,6 @@ body {
   font:600 11px/16px var(--font-sans);
   letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2);
 }
-.mono { font:400 13px/20px var(--font-mono); }
 
 .badge {
   display:inline-flex; align-items:center; gap:var(--space-1); align-self:flex-start;
@@ -195,7 +194,8 @@ body {
    text column beside it. */
 .home-main {
   --pan:144px; --text-x:calc(var(--pan) + 32px);
-  flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; gap:20px;
+  flex:1 0 auto; display:flex; flex-direction:column; gap:20px;
+  justify-content:center; /* fallback for engines without `safe` */
   justify-content:safe center;
 }
 .hero { display:flex; align-items:center; gap:32px; }
@@ -206,7 +206,7 @@ body {
 .home-main > details.log pre { max-height:120px; }
 .home-main .row { gap:12px; }
 .home-main .row .hint { max-width:190px; }
-.pad-home { padding:16px 40px 28px; gap:0; }
+.pad-home { padding:16px 40px 28px; gap:0; flex:1 0 auto; }
 
 .row {
   display:flex; align-items:center; gap:14px; flex-wrap:wrap;
@@ -249,7 +249,6 @@ details.log {
   font:600 14px/20px var(--font-sans);
   transition:background-color 120ms ease, color 120ms ease;
 }
-.tiles [data-action="import"] { --icon:url("data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>"); }
 .tiles [data-action="doctor"] { --icon:var(--i-activity); }
 .tiles [data-action="check-updates"] { --icon:var(--i-download); }
 .tiles [data-action="settings"] { --icon:var(--i-settings); }
@@ -501,7 +500,7 @@ details.log {
    so it never covers a primary button. Capped height plus its own scroll
    keeps a long traceback from swallowing the 560px floor. */
 #notice {
-  flex:none; z-index:10;
+  flex:none;
   max-height:160px; overflow:auto;
   display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap;
   padding:var(--space-3) var(--space-5); background:var(--danger-soft);

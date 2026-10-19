@@ -28,6 +28,7 @@ disposable.
 | W11 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | W12 | Boot with the network off | The VM starts on its old runtime; `journalctl -u eggie-update` explains why | |
 | W13 | After W1, search the Start menu for "Eggie" and open Task Manager while the app runs | The Start menu entry is **Eggie**; Task Manager's Apps list shows **Eggie** (Details tab: `eggie-app.exe`). Nothing says "Setup" or "setup" | |
+| W14 | On Windows 11, set the OS theme to light then dark, and open Eggie each time | The title bar is cream (light) / dark brown (dark) with matching text and border. On Windows 10 the app still opens with the default title bar | |
 
 ## macOS (`EggieSetup-<version>-<arch>.pkg`)
 

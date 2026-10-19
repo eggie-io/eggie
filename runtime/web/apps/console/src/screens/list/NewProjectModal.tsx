@@ -1,16 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { Button, Modal, TextField } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { useCreateProject } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
-import s from "./ProjectList.module.css";
 
 export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
   const create = useCreateProject();
   const navigate = useNavigate();
   const slug = slugify(name);
+  const formId = useId();
 
   const close = () => {
     setName("");
@@ -36,8 +36,18 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     : undefined;
 
   return (
-    <Modal open={open} onClose={close} title="Name your project">
-      <form className={s.form} onSubmit={submit}>
+    <Modal
+      open={open}
+      onClose={close}
+      title="Name your project"
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>Keep it for later</Button>
+          <Button type="submit" form={formId} variant="primary" disabled={!slug || create.isPending}>Make it</Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={submit}>
         <TextField
           label="Name"
           value={name}
@@ -49,10 +59,6 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
           hint={slug ? <>It'll be called <strong>{slug}</strong></> : undefined}
           error={error}
         />
-        <div className={s.formActions}>
-          <Button type="submit" variant="primary" disabled={!slug || create.isPending}>Make it</Button>
-          <Button variant="ghost" onClick={close}>Keep it for later</Button>
-        </div>
       </form>
     </Modal>
   );

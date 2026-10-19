@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Modal, Notice, ProgressBar, cx } from "@eggie/ui";
+import { Button, Choice, Icon, Modal, Notice, ProgressBar, cx } from "@eggie/ui";
 import { api } from "../../api/client";
 import { createImportApi } from "../../imports/importApi";
 import { fromDrop, fromFileList } from "../../imports/pick";
@@ -11,7 +11,6 @@ import { tarBlob } from "../../imports/tar";
 import { size } from "../../projects/format";
 import { fits } from "../../uploads/queue";
 import type { Disk } from "../../uploads/uploadApi";
-import { FOLDER } from "../icons";
 import s from "./ProjectList.module.css";
 
 type Step =
@@ -144,7 +143,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     navigate(`/p/${encodeURIComponent(plan.id)}`);
   }
 
-  let body;
+  let body: ReactNode;
+  let footer: ReactNode;
   switch (step.kind) {
     case "pick":
       body = (
@@ -158,8 +158,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             onDragLeave={() => setDragging(false)}
             onDrop={(event) => void onDrop(event)}
           >
-            <span className={s.dropIcon}>{FOLDER}</span>
-            <p className={s.dropText}>Drop a folder here, or</p>
+            <Icon name="folder" size="md" className={s.dropIcon} />
+            <p>Drop a folder here, or</p>
             <Button
               variant="primary"
               onClick={choose}
@@ -167,8 +167,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
               Choose a folder…
             </Button>
           </div>
-          <p className={s.quiet}>The original stays exactly where it is. Repositories, dependency trees and caches are left out — your coding agent puts them back.</p>
-          {step.problem && <Notice>{step.problem}</Notice>}
+          <p>The original stays exactly where it is. Repositories, dependency trees and caches are left out — your coding agent puts them back.</p>
+          {step.problem && <Notice tone="warning">{step.problem}</Notice>}
         </>
       );
       break;
@@ -179,12 +179,10 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             <span className={s.spinner} aria-hidden="true" />
             <p>Reading the folder…</p>
           </div>
-          <p className={s.quiet}>This can take a while, depending on how big the project is.</p>
-          <div className={s.formActions}>
-            <Button variant="ghost" onClick={reset}>Cancel</Button>
-          </div>
+          <p>This can take a while, depending on how big the project is.</p>
         </>
       );
+      footer = <Button variant="ghost" onClick={reset}>Cancel</Button>;
       break;
     case "review": {
       const { plan, mode } = step;
@@ -195,35 +193,45 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             <dt>Folder</dt>
             <dd>{plan.name}</dd>
             <dt>It'll be called</dt>
-            <dd><strong>{plan.id}</strong></dd>
+            <dd><strong className={s.mono}>{plan.id}</strong></dd>
             <dt>Going in</dt>
             <dd>{plan.entries.length} {plan.entries.length === 1 ? "file" : "files"} · {size(plan.bytes)}</dd>
           </dl>
-          {plan.skipped.length > 0 && <p className={s.quiet}>Left out: {plan.skipped.join(", ")}.</p>}
+          {plan.skipped.length > 0 && <p>Left out: {plan.skipped.join(", ")}.</p>}
           {conflict && (
             <fieldset className={s.modes}>
               <legend className={s.modesTitle}>There's already a project called {plan.id}</legend>
-              <label className={s.mode}>
-                <input type="radio" name="mode" checked={mode === "merge"} onChange={() => setStep({ ...step, mode: "merge" })} />
-                <span><strong>Merge into it</strong> — adds the new files and updates ones with the same name. Everything else stays put.</span>
-              </label>
-              <label className={s.mode}>
-                <input type="radio" name="mode" checked={mode === "replace"} onChange={() => setStep({ ...step, mode: "replace" })} />
-                <span><strong>Replace it</strong> — empties the project first, then copies your folder in.</span>
-              </label>
+              <Choice
+                type="radio"
+                name="mode"
+                checked={mode === "merge"}
+                onChange={() => setStep({ ...step, mode: "merge" })}
+                label="Merge into it"
+                description="Adds the new files and updates ones with the same name. Everything else stays put."
+              />
+              <Choice
+                type="radio"
+                name="mode"
+                checked={mode === "replace"}
+                onChange={() => setStep({ ...step, mode: "replace" })}
+                label="Replace it"
+                description="Empties the project first, then copies your folder in."
+              />
               {mode === "replace" && (
-                <Notice>
+                <Notice tone="danger">
                   Replace deletes files. Everything in the existing project is gone for good — its files, its database data and its secrets, including work your coding agent did in there. There's no undo.
                 </Notice>
               )}
             </fieldset>
           )}
-          <div className={s.formActions}>
-            <Button variant={mode === "replace" ? "danger" : "primary"} onClick={() => void bringIn(plan, mode)}>
-              {mode === "replace" ? "Replace and bring it in" : "Bring it in"}
-            </Button>
-            <Button variant="ghost" onClick={reset}>Pick another</Button>
-          </div>
+        </>
+      );
+      footer = (
+        <>
+          <Button variant="ghost" onClick={reset}>Pick another</Button>
+          <Button variant={mode === "replace" ? "danger" : "primary"} onClick={() => void bringIn(plan, mode)}>
+            {mode === "replace" ? "Replace and bring it in" : "Bring it in"}
+          </Button>
         </>
       );
       break;
@@ -238,25 +246,23 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
                 <span className={s.spinner} aria-hidden="true" />
                 <p>Unpacking it in Eggie…</p>
               </div>
-              <p className={s.quiet}>This can take a while, depending on how big the project is.</p>
+              <p>This can take a while, depending on how big the project is.</p>
             </>
           ) : (
-            <>
+            <div className={s.progress}>
               <ProgressBar value={step.progress.total === 0 ? 0 : step.progress.sent / step.progress.total} label={`${step.plan.name} import`} />
-              <p className={s.quiet}>Sending · {size(step.progress.sent)} of {size(step.progress.total || step.plan.bytes)}</p>
-            </>
+              <p className={s.progressText}>Sending · {size(step.progress.sent)} of {size(step.progress.total || step.plan.bytes)}</p>
+            </div>
           )}
         </>
       );
       break;
     case "failed":
-      body = (
+      body = <Notice tone="danger">{step.message}</Notice>;
+      footer = (
         <>
-          <p className={s.error}>{step.message}</p>
-          <div className={s.formActions}>
-            <Button variant="primary" onClick={() => void bringIn(step.plan, step.mode)}>Try again</Button>
-            <Button variant="ghost" onClick={reset}>Pick another</Button>
-          </div>
+          <Button variant="ghost" onClick={reset}>Pick another</Button>
+          <Button variant="primary" onClick={() => void bringIn(step.plan, step.mode)}>Try again</Button>
         </>
       );
       break;
@@ -265,8 +271,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
   // Rendered only while open so a half-finished pick doesn't linger
   // underneath a closed dialog.
   return (
-    <Modal open={open} onClose={close} title="Bring in a folder">
-      <div className={s.form}>{open && body}</div>
+    <Modal open={open} onClose={close} title="Bring in a folder" footer={open ? footer : undefined}>
+      <div className={s.dialog}>{open && body}</div>
       <input
         ref={picker}
         type="file"

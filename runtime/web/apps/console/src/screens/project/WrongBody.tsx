@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Collapsible, Egg, Modal, Notice, PromptCard, StateBadge } from "@eggie/ui";
+import { Button, Collapsible, Modal, Notice, PromptCard, cx } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
@@ -7,6 +7,7 @@ import { fixPrompt } from "../../projects/prompts";
 import { useLifecycle, useLogs } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import type { Cause } from "../../projects/view";
+import { TitleRow } from "./TitleRow";
 import s from "./ProjectPage.module.css";
 
 function Logs({ id, wanted }: { id: string; wanted: boolean }) {
@@ -18,7 +19,7 @@ function Logs({ id, wanted }: { id: string; wanted: boolean }) {
   }, [logs.data]);
 
   if (logs.data !== undefined) {
-    return <pre ref={pre} className={s.logs}>{logs.data.trim() ? logs.data : "There aren't any logs to show yet."}</pre>;
+    return <pre ref={pre} className={cx(s.code, s.logs)}>{logs.data.trim() ? logs.data : "There aren't any logs to show yet."}</pre>;
   }
   if (logs.isError) {
     return (
@@ -48,19 +49,15 @@ export function WrongBody({ project, cause, detail }: { project: Project; cause:
 
   return (
     <>
-      <header className={s.wrongHead}>
-        <Egg tone="cold" size={56} />
-        <StateBadge state="wrong" />
-        <h1 className={s.big}>{copy.heading(project.id)}</h1>
-      </header>
-      <p className={s.lead}>{copy.body}</p>
-      {detail && <p className={s.detail}>{detail}</p>}
-      <div className={s.actions}>
-        <Button variant="primary" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Try again</Button>
+      <TitleRow title={project.id} sub="Something’s wrong" />
+      <Notice tone="danger" title={copy.heading(project.id)}>{copy.body}</Notice>
+      {detail && <pre className={s.code}>{detail}</pre>}
+      <div className={s.row}>
+        <Button variant="primary" icon="refresh" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Try again</Button>
         <Button onClick={() => setFixing(true)}>Get a prompt that fixes it</Button>
         <span className={s.note}>Nothing is lost. Your files are exactly where you left them.</span>
       </div>
-      {lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>}
+      {lifecycle.error && <Notice tone="danger">{actionError(lifecycle.error)}</Notice>}
       <Collapsible
         boxed
         summary="The raw details"
@@ -75,11 +72,14 @@ export function WrongBody({ project, cause, detail }: { project: Project; cause:
           <code>{hostOf(primary)}</code>
         </div>
       )}
-      <Modal open={fixing} onClose={() => setFixing(false)} title="A prompt that fixes it">
+      <Modal
+        open={fixing}
+        onClose={() => setFixing(false)}
+        title="A prompt that fixes it"
+        wide
+        footer={<Button onClick={() => setFixing(false)}>Close</Button>}
+      >
         <PromptCard prompt={fixPrompt(cause, project.id, detail)} />
-        <div className={s.modalFoot}>
-          <Button onClick={() => setFixing(false)}>Close</Button>
-        </div>
       </Modal>
     </>
   );

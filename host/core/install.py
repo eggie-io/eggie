@@ -482,12 +482,17 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
     # minutes later.
     if image is not None:
         steps.append(step("fetch_image", fetch_image, always_run=True, progress=True))
-    # Only this process's create_vm counts: a VM made by an earlier run may
-    # already be in use.
-    created: list[bool] = []
-    steps.append(
-        step("create_vm", lambda: created.append(_ensure_vm_running(provider)),
-             always_run=True))
+    # On disk, not in memory: a setup that fails between creating the VM and
+    # restarting it must still restart on the re-run, which finds the VM
+    # existing. Only creating the VM sets it, so a VM in use is never restarted.
+    restart_owed = Path(cache_dir) / RESTART_OWED
+
+    def create_vm():
+        if _ensure_vm_running(provider) and provider.restart_after_first_bootstrap:
+            restart_owed.parent.mkdir(parents=True, exist_ok=True)
+            restart_owed.touch()
+
+    steps.append(step("create_vm", create_vm, always_run=True))
     # Only where the VM is reached over SSH. Placed after create_vm because it
     # reads the connection details the VM platform writes when it starts.
     shortcut = provider.ssh_shortcut()
@@ -496,8 +501,9 @@ def default_steps(provider, *, cache_dir, template_dir: Path, domain,
 
     def first_bootstrap():
         _bootstrap(provider)
-        if created[-1:] == [True] and provider.restart_after_first_bootstrap:
+        if restart_owed.exists():
             restart_new_vm(provider)
+            restart_owed.unlink()
 
     steps += [
         step("bootstrap", first_bootstrap, always_run=True),
@@ -529,6 +535,7 @@ def _ensure_vm_running(provider) -> bool:
 # A cold boot brings Docker and the whole stack up before the API answers;
 # the connect step's own wait is sized for one container restarting.
 BOOT_TIMEOUT = 120.0
+RESTART_OWED = "vm-restart-owed"
 
 
 def restart_new_vm(provider, *, client=None, sleep=time.sleep) -> None:

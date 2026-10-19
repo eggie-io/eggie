@@ -328,3 +328,25 @@ def test_the_restart_waits_for_the_api_past_a_cold_boot():
 
     restart_new_vm(Provider(), client=Client(), sleep=lambda s: None)
     assert events == ["stop", "start", "health", "health", "health"]
+
+
+def test_a_restart_a_failed_setup_still_owed_happens_on_the_re_run(tmp_path, monkeypatch):
+    # The re-run finds the VM existing, but its boot settings never applied:
+    # without the restart, /mnt/c and interop stay on with nothing saying so.
+    import host.core.install as install
+    calls = []
+    monkeypatch.setattr(install, "_bootstrap", lambda p, **kw: calls.append("bootstrap"))
+
+    def restart_fails(p):
+        raise RuntimeError("the API did not come back")
+    monkeypatch.setattr(install, "restart_new_vm", restart_fails)
+    state = InstallState(tmp_path / "state.json")
+    patch = {"fetch_image": lambda emit: None, "connect": lambda: None,
+             "verify": lambda: None}
+    with pytest.raises(InstallError):
+        run(build(FakeProvider(exists=False), tmp_path), state, patch)
+
+    monkeypatch.setattr(install, "restart_new_vm", lambda p: calls.append("restart"))
+    run(build(FakeProvider(exists=True), tmp_path), state, patch)
+    run(build(FakeProvider(exists=True), tmp_path), state, patch)
+    assert calls == ["bootstrap", "bootstrap", "restart", "bootstrap"]

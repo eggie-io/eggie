@@ -80,8 +80,9 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   `[user]` (`lib/wsl-user.sh`) and `[automount]`/`[interop]` (`lib/wsl-conf.py`). Never write
   those sections from the host; a change there must not need a host release.
 - wsl.conf applies only when the distro boots, so setup restarts a VM it just created, once,
-  after the first bootstrap (`restart_after_first_bootstrap`, `restart_new_vm`). Never restart
-  an existing VM for it: projects and agents may be running.
+  after the first bootstrap (`restart_after_first_bootstrap`, `restart_new_vm`). The debt is a
+  `vm-restart-owed` file in the cache dir, so a setup that fails before the restart pays it on the
+  re-run. Never restart a VM for it otherwise: projects and agents may be running.
 - Every `wsl -d` the provider runs passes `--cd ~`. Without it WSL maps the host process's Windows
   folder into the VM, which has no drive mounts, so it prints a warning and falls back to home.
   Older hosts rely on that fallback against updated VMs.

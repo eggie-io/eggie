@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
 import { useCurrentAgent } from "../../agents/queries";
-import { NO_AGENT } from "../../agents/current";
+import { NO_AGENT, atSentenceStart } from "../../agents/current";
 import { Elapsed } from "../../components/Elapsed";
 import { projectColor } from "../../projects/color";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
@@ -116,7 +116,7 @@ export function ProjectRow({ project }: { project: Project }) {
       );
       break;
     case "setup":
-      line = <AgentNote agent={agent.name}>{SETUP_NOTE[project.origin]}{agent.name} makes it run here</AgentNote>;
+      line = <AgentNote agent={agent.name}>{SETUP_NOTE[project.origin] || atSentenceStart(agent.name)}{SETUP_NOTE[project.origin] && agent.name} makes it run here</AgentNote>;
       actions = (
         <Button aria-label={`Set up ${project.id}`} variant="secondary" size="sm" iconRight="chevron-right" onClick={look}>
           Set it up
@@ -125,7 +125,7 @@ export function ProjectRow({ project }: { project: Project }) {
       break;
   }
 
-  // wrong/gone/waiting already lead to the page through their only action.
+  // wrong/setup/gone/waiting already lead to the page through their only action.
   const settings = view.kind !== "wrong" && view.kind !== "setup" && view.kind !== "gone" && view.kind !== "waiting" && (
     <IconButton icon="settings" label={`Settings for ${project.id}`} size="sm" onClick={look} />
   );

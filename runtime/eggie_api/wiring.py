@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import ApiConfig
+from .errors import Conflict
 from .infra import disk
 from .infra.cloud import Cloud
 from .infra.db import Database
@@ -32,6 +34,19 @@ from .services.site import SiteSignIn
 from .services.sync import SyncLoop, run_pass
 from .services.system import SystemService
 from .services.uploads import UploadService
+
+
+log = logging.getLogger("eggie.api")
+
+
+def _start_quietly(lifecycle: LifecycleService, project_id: str) -> None:
+    try:
+        lifecycle.start(project_id)
+    except Conflict as e:
+        # The last secret is already saved; the user can still press Start.
+        if e.code != "project_busy":
+            raise
+        log.info("not starting %s after its last secret: %s", project_id, e.message)
 
 
 @dataclass(frozen=True)
@@ -110,6 +125,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         directory=config.github_dir)
     lifecycle = LifecycleService(config, runner, loader, repos.projects, secrets,
                                  jobs, locks, http_probe)
+    secrets.on_all_set = lambda pid: _start_quietly(lifecycle, pid)
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,

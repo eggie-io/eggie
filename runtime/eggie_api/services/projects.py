@@ -92,6 +92,7 @@ class ProjectService:
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": self._secrets.restart_needed(row),
                 "secrets_requested": self._secrets.requested_count(row["id"]),
+                "start_when_ready": bool(row["start_when_ready"]),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}

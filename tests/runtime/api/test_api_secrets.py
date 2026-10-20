@@ -238,3 +238,108 @@ def test_purge_drops_secrets_and_requests_and_plain_delete_keeps_them(env):
     env.client.delete("/projects/gone?purge=true")
     assert env.repos.secrets.values("gone") == {}
     assert env.repos.secrets.requests("gone") == []
+
+
+def _request(env, name):
+    env.client.put(f"/projects/blog/secret-requests/{name}", json={"hint": "h"})
+
+
+def _ups(env):
+    return [a for a in env.runner.calls if a[-2:] == ["up", "-d"]]
+
+
+def _settle(env):
+    active = env.app.state.services.jobs.active_for("blog")
+    if active is not None:
+        env.jobs.wait(active.id, timeout=5)
+
+
+def test_start_when_ready_waits_then_starts_on_the_last_secret(env):
+    _project(env)
+    _request(env, "A")
+    _request(env, "B")
+    assert env.client.post("/projects/blog/start-when-ready").json() == {"waiting": 2}
+    assert env.client.get("/projects/blog").json()["start_when_ready"] is True
+    env.client.put("/projects/blog/secrets/A", json={"value": "1"})
+    assert _ups(env) == []
+    env.client.put("/projects/blog/secrets/B", json={"value": "2"})
+    _settle(env)
+    assert len(_ups(env)) == 1
+    assert env.client.get("/projects/blog").json()["start_when_ready"] is False
+
+
+def test_start_when_ready_with_nothing_requested_starts_now(env):
+    _project(env)
+    r = env.client.post("/projects/blog/start-when-ready")
+    _run_to_completion(env, r)
+    assert len(_ups(env)) == 1
+    assert env.client.get("/projects/blog").json()["start_when_ready"] is False
+
+
+def test_saving_the_last_secret_without_the_flag_does_not_start(env):
+    _project(env)
+    _request(env, "A")
+    env.client.put("/projects/blog/secrets/A", json={"value": "1"})
+    _settle(env)
+    assert _ups(env) == []
+
+
+def test_replacing_an_existing_secret_does_not_start_a_waiting_project(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
+    _request(env, "A")
+    env.client.post("/projects/blog/start-when-ready")
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "2"})
+    _settle(env)
+    assert _ups(env) == []
+
+
+def test_a_start_that_finds_the_project_busy_is_logged_not_raised(env):
+    _project(env)
+    _request(env, "A")
+    env.client.post("/projects/blog/start-when-ready")
+    locks = env.app.state.services.locks
+    locks.acquire_or_raise("blog")
+    r = env.client.put("/projects/blog/secrets/A", json={"value": "1"})
+    assert r.status_code == 204
+    assert _ups(env) == []
+    locks.release("blog")
+
+
+def test_apply_pushed_marks_unused_and_requests_missing(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
+    env.client.put("/projects/blog/secrets/A", json={"value": "2"})
+    svc = env.app.state.services.secrets
+    assert svc.apply_pushed("blog", {"A": "", "NEW": "where to find it"}) == 1
+    body = env.client.get("/projects/blog/secrets").json()
+    assert [r["name"] for r in body["requested"]] == ["NEW"]
+    assert {s["name"]: s["unused"] for s in body["secrets"]} == {"A": False, "OLD": True}
+    assert all(set(s) == {"name", "updated_at", "unused"} for s in body["secrets"])
+
+
+def test_a_later_push_clears_the_mark_and_drops_stale_requests(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
+    svc = env.app.state.services.secrets
+    svc.apply_pushed("blog", {"GONE": "h"})
+    assert svc.apply_pushed("blog", {"OLD": ""}) == 0
+    body = env.client.get("/projects/blog/secrets").json()
+    assert body["requested"] == []
+    assert body["secrets"][0]["unused"] is False
+
+
+def test_setting_a_value_clears_its_unused_mark(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
+    env.app.state.services.secrets.apply_pushed("blog", {})
+    env.client.put("/projects/blog/secrets/OLD", json={"value": "2"})
+    assert env.client.get("/projects/blog/secrets").json()["secrets"][0]["unused"] is False
+
+
+def test_stop_clears_start_when_ready(env):
+    _project(env)
+    _request(env, "A")
+    env.client.post("/projects/blog/start-when-ready")
+    _run_to_completion(env, env.client.post("/projects/blog/down"))
+    assert env.client.get("/projects/blog").json()["start_when_ready"] is False

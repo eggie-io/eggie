@@ -1,20 +1,104 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Notice, PromptCard } from "@eggie/ui";
+import { Button, Notice, StateBadge } from "@eggie/ui";
+import { atSentenceStart } from "../../agents/current";
+import { useCurrentAgent } from "../../agents/queries";
 import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
-import { waitingPrompt } from "../../projects/prompts";
+import { newPrompt, said, setupPrompt } from "../../projects/prompts";
 import { publicView } from "../../projects/public";
 import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
-import { projectView } from "../../projects/view";
+import type { Project } from "../../projects/types";
+import { projectView, type ProjectView } from "../../projects/view";
 import { AddressRows } from "./AddressRows";
+import { HandoffCard, StepText } from "./HandoffCard";
 import { StartingBody } from "./StartingBody";
 import { TitleRow } from "./TitleRow";
 import { WrongBody } from "./WrongBody";
 import s from "./ProjectPage.module.css";
 import { openExternal } from "../../desktop/desktop";
+
+type HandoffView = Extract<ProjectView, { kind: "waiting" | "setup" }>;
+
+function SetupLead({ project, agent }: { project: Project; agent: string }) {
+  const fit = `and ${agent} can make it fit Eggie in one go.`;
+  if (project.origin === "github") {
+    const url = `https://github.com/${project.repo}`;
+    const from = project.repo ? (
+      <a
+        className={s.leadLink}
+        href={url}
+        onClick={(event) => {
+          event.preventDefault();
+          openExternal(url);
+        }}
+      >
+        {project.repo}
+      </a>
+    ) : "GitHub";
+    return <>Copied from {from}. It doesn't start yet. That's normal: code from GitHub is set up for someone else's computer, {fit}</>;
+  }
+  if (project.origin === "folder") {
+    return <>Copied from a folder on your computer. It doesn't start yet. That's normal: a project made somewhere else is set up for that place, {fit}</>;
+  }
+  return <>The code in <code className={s.leadCode}>~/projects/{project.id}</code> doesn't start yet. That's normal before its first run here, {fit}</>;
+}
+
+// Its own component so the agent status is only polled while a hand-off is on screen.
+function HandoffBody({ project, view, onTryNow, pending }: { project: Project; view: HandoffView; onTryNow: () => void; pending: boolean }) {
+  const agent = useCurrentAgent();
+  const starts = (action?: ReactNode) => (
+    <StepText
+      title={`${atSentenceStart(agent.name)} starts it when it's done`}
+      hint={<>It runs <code>eggie up</code>; this page updates by itself.</>}
+      action={action}
+    />
+  );
+  const title = `The next step happens in ${agent.name}`;
+
+  if (view.kind === "waiting") {
+    return (
+      <>
+        <p className={s.lead}>
+          Eggie made an empty folder at <code className={s.leadCode}>~/projects/{project.id}</code>. Building what goes in
+          it is {agent.name}'s job.
+        </p>
+        <HandoffCard
+          title={title}
+          agent={agent}
+          steps={{
+            prompt: newPrompt(project.id),
+            copyHint: "It already says where the folder is.",
+            pasteHint: "It asks what you want to build, then gets to work. Usually a few minutes.",
+            last: starts(),
+          }}
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      <p className={s.lead}><SetupLead project={project} agent={agent.name} /></p>
+      <HandoffCard
+        title={title}
+        agent={agent}
+        steps={{
+          prompt: setupPrompt(project.id, project.origin, view.detail, view.source),
+          extra: view.detail ? said(view.source, view.detail) : undefined,
+          copyHint: view.detail ? `${view.source === "docker" ? "Docker's" : "Eggie's"} message is included, so you don't have to dig for it.` : "It already says where the folder is.",
+          pasteHint: "It reads the project, makes it run here and tells you which keys to add in Secrets.",
+          last: starts(
+            <Button variant="ghost" size="sm" icon="refresh" disabled={pending} onClick={onTryNow}>
+              Try now
+            </Button>,
+          ),
+        }}
+      />
+    </>
+  );
+}
 
 export function ProjectPage() {
   const { id = "" } = useParams();
@@ -76,6 +160,17 @@ export function ProjectPage() {
         />
       );
       break;
+    case "waiting":
+    case "setup":
+      body = (
+        <>
+          <TitleRow title={project.id} sub={<StateBadge state={view.badge} />} />
+          <HandoffBody project={project} view={view} pending={lifecycle.isPending} onTryNow={() => lifecycle.mutate("up")} />
+          {failed}
+          {restartNotice}
+        </>
+      );
+      break;
     case "wrong":
       body = (
         <>
@@ -128,18 +223,6 @@ export function ProjectPage() {
           />
           {failed}
           <AddressRows web={project.web} live={false} publicUrls={publicUrls} />
-        </>
-      );
-      break;
-    case "waiting":
-      body = (
-        <>
-          <TitleRow title={project.id} sub="Nothing to cook yet" />
-          <p className={s.lead}>
-            {project.id} is an empty folder at ~/projects/{project.id}. Your coding agent fills it in; once there's a
-            docker-compose.yml, Start appears here.
-          </p>
-          <PromptCard prompt={waitingPrompt(project.id)} />
         </>
       );
       break;

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Outlet, useParams } from "react-router";
 import { ApiError } from "../../api/client";
 import { useProject } from "../../projects/queries";
-import { AnalyzeModal } from "./AnalyzeModal";
 import { DeleteModal } from "./DeleteModal";
 import { ProjectMenu, type ProjectDialog } from "./ProjectMenu";
 import { PublicModal } from "./PublicModal";
@@ -32,7 +31,6 @@ export function ProjectLayout() {
       </div>
       {project && (
         <>
-          <AnalyzeModal id={project.id} open={dialog === "analyze"} onClose={close} />
           <DeleteModal id={project.id} open={dialog === "delete"} onClose={close} />
           <PublicModal project={project} open={dialog === "public"} onClose={close} />
         </>

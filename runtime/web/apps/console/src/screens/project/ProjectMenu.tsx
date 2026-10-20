@@ -10,7 +10,7 @@ import { filesRoute } from "../../uploads/paths";
 import { menuNotes } from "./menu";
 import s from "./ProjectLayout.module.css";
 
-export type ProjectDialog = "analyze" | "public" | "delete";
+export type ProjectDialog = "public" | "delete";
 
 function Label({ icon, children, note, noteClass }: { icon: IconName; children: ReactNode; note?: string | null; noteClass?: string }) {
   return (
@@ -68,9 +68,9 @@ export function ProjectMenu({ id, project, onOpen }: { id: string; project?: Pro
             <NavLink to={page} end className={s.item}>
               <Label icon="layers">Overview</Label>
             </NavLink>
-            <button type="button" className={s.item} onClick={() => onOpen("analyze")}>
+            <NavLink to={`${page}/analyze`} className={s.item}>
               <Label icon="search">Analyze</Label>
-            </button>
+            </NavLink>
             <NavLink to={filesRoute(id, "")} className={s.item}>
               <Label icon="folder">Files</Label>
             </NavLink>

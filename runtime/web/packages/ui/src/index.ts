@@ -10,6 +10,7 @@ export { Modal } from "./components/Modal";
 export { Notice } from "./components/Notice";
 export { ProgressBar } from "./components/ProgressBar";
 export { PromptCard } from "./components/PromptCard";
+export { SegmentedControl } from "./components/SegmentedControl";
 export { StateBadge, type ProjectState } from "./components/StateBadge";
 export { StatusDot, type DotStatus } from "./components/StatusDot";
 export { TextField } from "./components/TextField";

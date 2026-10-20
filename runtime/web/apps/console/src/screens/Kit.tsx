@@ -13,6 +13,7 @@ import {
   Notice,
   ProgressBar,
   PromptCard,
+  SegmentedControl,
   StateBadge,
   StatusDot,
   TextField,
@@ -39,6 +40,7 @@ function Column({ theme }: { theme: "light" | "dark" }) {
   const [wide, setWide] = useState(false);
   const [secret, setSecret] = useState("sk-live-4f9a");
   const [mode, setMode] = useState("merge");
+  const [focus, setFocus] = useState<"full" | "start" | "share">("full");
   return (
     <div className={cx(`om-theme-${theme}`, s.column)}>
       <h2 className={s.heading}><BrandMark size={22} /> {theme}</h2>
@@ -115,6 +117,18 @@ function Column({ theme }: { theme: "light" | "dark" }) {
           <Choice type="checkbox" defaultChecked label="Keep the original" />
           <Choice type="checkbox" label="Not available" disabled />
         </div>
+      </Section>
+      <Section title="Segmented control">
+        <SegmentedControl
+          label="Analyze focus"
+          options={[
+            { value: "full", label: "Full once-over" },
+            { value: "start", label: "Why won't it start?" },
+            { value: "share", label: "Safe to share?" },
+          ]}
+          value={focus}
+          onChange={setFocus}
+        />
       </Section>
       <Section title="Cards">
         <Card className={s.cardDemo}>A card: paper, a hairline and a small shadow.</Card>

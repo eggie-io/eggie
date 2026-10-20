@@ -1,6 +1,6 @@
 .page { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .muted { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
-.lead { margin: 0; max-width: 640px; font-size: 15px; line-height: 22px; color: var(--ink-2); text-wrap: pretty; }
+.lead { display: block; margin: 0; max-width: 640px; font-size: 15px; line-height: 22px; color: var(--ink-2); text-wrap: pretty; }
 .row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 .note { font-size: 13px; line-height: 18px; color: var(--ink-2); }
 
@@ -117,3 +117,11 @@
   background: var(--code-bg); color: var(--code-ink); font: 500 13px/20px var(--font-mono); text-wrap: pretty; overflow-wrap: anywhere;
 }
 .promptExtra { color: var(--code-ink-2); white-space: pre-wrap; }
+
+.ask { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.askLabel { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink); }
+.gets { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.get {
+  display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--radius-pill);
+  background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; line-height: 18px; color: var(--ink);
+}

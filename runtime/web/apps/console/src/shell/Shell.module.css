@@ -5,9 +5,10 @@
   flex: none; position: relative; z-index: var(--z-dropdown);
   background: var(--raised); border-bottom: 1px solid var(--line);
 }
+/* The bar and tabs share the page column, so their edges line up with the content. */
 .bar {
   position: relative; height: 48px; display: flex; align-items: center; gap: var(--space-2);
-  padding: 0 var(--space-4) 0 var(--space-3);
+  width: 100%; max-width: var(--content-max); margin: 0 auto; padding: 0 var(--space-8) 0 26px;
 }
 
 .back {
@@ -26,7 +27,7 @@
 
 .end { margin-left: auto; flex: none; display: flex; align-items: center; gap: var(--space-1); }
 
-.nav { display: flex; gap: var(--space-1); padding: 0 var(--space-4); }
+.nav { display: flex; gap: var(--space-1); max-width: var(--content-max); margin: 0 auto; padding: 0 var(--space-5); }
 .tab {
   position: relative; height: 40px; display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--ink-2); font-size: 14px; font-weight: 500; white-space: nowrap;
@@ -108,6 +109,8 @@ button.switcherButton { min-width: 0; max-width: 100%; padding: 0 var(--space-2)
 }
 
 @media (max-width: 640px) {
+  .bar { padding: 0 var(--space-4) 0 var(--space-3); }
+  .nav { padding: 0 var(--space-4); }
   .open { display: none; }
   /* Menus hang from the bar's edges so they can use the whole phone width. */
   .switcher, .account { position: static; }

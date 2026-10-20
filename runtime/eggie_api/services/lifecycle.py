@@ -5,7 +5,7 @@ import time
 from typing import Iterator
 
 from ..config import ApiConfig
-from ..domain.project import STARTED_OK
+from ..domain.project import FAILED_TO_START, STARTED_OK
 from ..errors import Conflict, EggieError
 from ..infra import docker
 from ..infra.health import diagnose
@@ -16,6 +16,12 @@ from .locks import ProjectLocks
 from .secrets import RUNNING, SecretService
 
 log = logging.getLogger("eggie.api")
+
+
+def _tail(detail: str) -> str:
+    # Docker prints the cause last; earlier lines are build progress.
+    lines = [l for l in detail.splitlines() if l.strip()]
+    return "\n".join(lines[-3:])[:500]
 
 
 class LifecycleService:
@@ -89,7 +95,11 @@ class LifecycleService:
                         timeout=self._config.ready_timeout)
                 self._projects.set_status(project_id, status)
                 if diagnosis is None:
-                    self._projects.set_problem(project_id)
+                    if status == FAILED_TO_START and detail:
+                        self._projects.set_problem(project_id, FAILED_TO_START,
+                                                   _tail(detail))
+                    else:
+                        self._projects.set_problem(project_id)
                     if status == STARTED_OK:
                         self._projects.mark_ran_ok(project_id, time.time())
                 else:

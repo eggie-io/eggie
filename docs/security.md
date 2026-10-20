@@ -148,13 +148,17 @@ root-equivalent — plus:
 
 - `/api/transfers` has its own auth branch in `rest/auth.py`: `Host` must be the site host, and the
   API token and sessions are refused. The router redeems the ticket with the service before it reads
-  a byte, and limits attempts to 10 a minute.
+  a byte, and limits attempts to 10 a minute per sender address (the first `X-Forwarded-For`
+  entry, which Traefik sets) and 60 a minute in all.
 - The ticket (`Eggie-Transfer-Ticket`) and the per-push token (`Eggie-Transfer-Token`) travel in
   headers only, never in a URL or log line. The token is compared in constant time; an unknown id
   and a wrong token both answer 404.
-- The kitchen takes the project's identity from the ticket's grant, never from the bundle.
+- The kitchen takes the project's identity from the ticket's grant, never from the bundle; an `id`
+  in the pushed `.eggie/project.yml` is rewritten to the kitchen's project id.
 - Unpacking runs in a root helper container (`python -m eggie_api.infra.bundle unpack`): it refuses
-  absolute names, devices, FIFOs and hard links that escape the tree. A bundle whose data flag differs
+  absolute names, devices, FIFOs and hard links that escape the tree. Project files get the staging
+  folder's group (the VM's `docker`, inherited through `/opt/eggie`'s setgid bit) and setgid
+  directories; data keeps the sender's owners. A bundle whose data flag differs
   from the `Eggie-Transfer-Data` header accepted at open is refused (`bad_bundle`), as is a volume
   whose explicit `name:` is outside `<compose_name>_`.
 - What leaves the user's machine: the project files (including `.env`), volume and database data

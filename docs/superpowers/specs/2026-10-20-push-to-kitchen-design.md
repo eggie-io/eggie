@@ -219,7 +219,8 @@ There are two requests, so a refused ticket or a full disk is answered before an
   first push, `files` after the repeat-push warning, `files-and-data` after the data confirmation.
 
 In order:
-1. A per-kitchen limit of 10 attempts a minute (the `SiteSignIn` pattern): 429 `kitchen_busy`.
+1. A limit of 10 attempts a minute per sender address (first `X-Forwarded-For` entry, else the
+   socket peer) and 60 a minute in all: 429 `kitchen_busy`.
 2. Redeem the ticket (`POST /v1/transfers/tickets/redeem`). On a failure, answer 403 with the
    service's `transfer_ticket_invalid` envelope unchanged. If the service is unreachable, answer
    503 `cloud_unavailable`.

@@ -73,7 +73,7 @@
   --radius-xs: 4px; --radius-sm: 6px; --radius-md: 12px; --radius-lg: 20px; --radius-xl: 28px; --radius-pill: 999px;
 
   --control-sm: 28px; --control-md: 32px; --control-lg: 40px; --row-height: 44px;
-  --topbar-height: 56px; --sidebar-width: 248px; --content-max: 1200px;
+  --topbar-height: 56px; --sidebar-width: 248px; --content-max: 1184px;
   --icon-sm: 16px; --icon-md: 20px;
   --z-sticky: 10; --z-dropdown: 100; --z-overlay: 200; --z-toast: 300; --z-tooltip: 400;
   --ease-lift: cubic-bezier(.2,.8,.2,1);

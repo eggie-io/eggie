@@ -38,28 +38,34 @@ export function DeleteModal({ id, open, onClose }: { id: string; open: boolean; 
         </ul>
       );
   } else if (preview.isError) {
-    contents = <Notice>{preview.error.message}</Notice>;
+    contents = <Notice tone="danger">{preview.error.message}</Notice>;
   } else {
     contents = <p className={s.muted}>Counting what's in there…</p>;
   }
 
   return (
-    <Modal open={open} onClose={close} title={`Throw out ${id}?`}>
+    <Modal
+      open={open}
+      onClose={close}
+      title={`Throw out ${id}?`}
+      footer={
+        <>
+          <span className={s.footNote}>Other projects aren't touched.</span>
+          <Button onClick={close}>Keep it</Button>
+          <Button
+            variant="danger"
+            disabled={remove.isPending || preview.isPending}
+            onClick={() => remove.mutate(true, { onSuccess: (result) => navigate("/", { state: { deleted: result } }) })}
+          >
+            Yes, throw it out
+          </Button>
+        </>
+      }
+    >
       <p className={s.modalSub}>This clears the whole counter. Here's exactly what goes in the bin:</p>
       {contents}
-      <Notice>There's no undo and no bin to fish it out of. Anything you already downloaded stays yours; nothing else does.</Notice>
-      {remove.error && <Notice>{actionError(remove.error)}</Notice>}
-      <div className={s.modalFoot}>
-        <Button
-          variant="danger"
-          disabled={remove.isPending || preview.isPending}
-          onClick={() => remove.mutate(true, { onSuccess: (result) => navigate("/", { state: { deleted: result } }) })}
-        >
-          Yes, throw it out
-        </Button>
-        <Button onClick={close}>Keep it</Button>
-        <span className={s.note}>Other projects aren't touched.</span>
-      </div>
+      <Notice tone="warning">There's no undo and no bin to fish it out of. Anything you already downloaded stays yours; nothing else does.</Notice>
+      {remove.error && <Notice tone="danger">{actionError(remove.error)}</Notice>}
     </Modal>
   );
 }

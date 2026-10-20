@@ -1,20 +1,21 @@
-.field { display: flex; flex-direction: column; gap: 7px; }
-.label { font: 600 13.5px var(--font-body); color: var(--ink-2); }
-.wrap { position: relative; display: flex; }
-.wrap .input { flex: 1; min-width: 0; }
-.withEye { padding-right: 44px; }
-.eye {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center;
-  width: 36px; height: 36px; border: 0; border-radius: 9px; background: none; color: var(--ink-3); cursor: pointer;
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.label { font-size: 13px; line-height: 16px; font-weight: 500; color: var(--ink); }
+.control {
+  display: flex; align-items: center; gap: var(--space-2); height: var(--control-md); padding: 0 var(--space-3);
+  background: var(--paper); border: 1px solid var(--line-input); border-radius: var(--radius-md); color: var(--ink);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.eye:hover { color: var(--ink); }
-.eye:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 1px; }
+.control:hover { border-color: var(--ink-2); }
+.control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.invalid, .invalid:hover { border-color: var(--danger); }
+.invalid:focus-within { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 .input {
-  padding: 12px 14px; border-radius: 13px; border: 1px solid var(--line-2); background: var(--surface);
-  font: 500 16px var(--font-body); color: var(--ink);
+  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent;
+  color: inherit; font: inherit; font-size: 14px;
 }
-.input:focus-visible { outline: 2px solid var(--yolk-deep); outline-offset: 1px; }
-.invalid { border-color: var(--paprika); }
-.hint { margin: 0; font-size: 14px; color: var(--ink-2); }
+.input::placeholder { color: var(--ink-3); }
+button.eye { margin-right: calc(var(--space-2) * -1); color: var(--ink-2); }
+.hint, .error { margin: 0; font-size: 12px; line-height: 16px; }
+.hint { color: var(--ink-2); }
 .hint strong { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
-.error { margin: 0; font-size: 14px; color: var(--paprika); }
+.error { color: var(--danger); }

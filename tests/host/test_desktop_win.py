@@ -99,3 +99,10 @@ def test_autostart_keeps_the_console_exe_when_there_is_no_gui_sibling(tmp_path):
     store = {}
     _autostart(store).set_autostart(True, console)
     assert store[(RUN_KEY, AUTOSTART_VALUE_NAME)] == run_value(console)
+
+
+def test_a_title_bar_failure_does_not_stop_launch():
+    class NoNative:
+        pass
+
+    assert WindowsDesktop().style_title_bar(NoNative()) is None

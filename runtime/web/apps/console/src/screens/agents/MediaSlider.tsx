@@ -1,7 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
-import { cx } from "@eggie/ui";
+import { Icon, cx } from "@eggie/ui";
 import type { Media } from "../../agents/catalog";
-import { BACK, CHEVRON_RIGHT } from "../icons";
 import s from "./Agents.module.css";
 
 // One step's screenshots and videos. Keyed by the step, so it starts at the
@@ -31,8 +30,12 @@ export function MediaSlider({ media, alt }: { media: Media[]; alt: string }) {
       )}
       {many && (
         <>
-          <button type="button" className={cx(s.slideArrow, s.slidePrev)} aria-label="Previous screenshot" onClick={() => go(index - 1)}>{BACK}</button>
-          <button type="button" className={cx(s.slideArrow, s.slideNext)} aria-label="Next screenshot" onClick={() => go(index + 1)}>{CHEVRON_RIGHT}</button>
+          <button type="button" className={cx(s.slideArrow, s.slidePrev)} aria-label="Previous screenshot" onClick={() => go(index - 1)}>
+            <Icon name="chevron-left" />
+          </button>
+          <button type="button" className={cx(s.slideArrow, s.slideNext)} aria-label="Next screenshot" onClick={() => go(index + 1)}>
+            <Icon name="chevron-right" />
+          </button>
           <div className={s.slideDots}>
             {media.map((dot, n) => (
               <button

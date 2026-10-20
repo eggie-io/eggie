@@ -32,8 +32,9 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
   Mac; keep them accurate when you change either.
   `desktop_win.py` / `desktop_mac.py` — `WindowsDesktop` / `MacDesktop`, what the window asks of
   the OS (`tray`, `single_instance`, `autostart_*`, `watch_login_launch`, `on_window_shown`,
-  `let_session_end_close`); `tests/host/test_provider_surface.py::DESKTOP_SURFACE` pins it there
-  and asserts the VM providers carry none of it. macOS-only and Windows-only imports stay
+  `let_session_end_close`, `style_title_bar`);
+  `tests/host/test_provider_surface.py::DESKTOP_SURFACE` pins it there and asserts the VM
+  providers carry none of it. macOS-only and Windows-only imports stay
   function-local so the suite imports every provider on Linux.
 - `core/bootstrap.py` — the host's entire share of provisioning. Unless
   `/opt/eggie/runtime.version` exists (or `repair=True`) it runs a base64 stub as one `bash -lc`

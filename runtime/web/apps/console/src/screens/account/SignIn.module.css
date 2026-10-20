@@ -1,4 +1,10 @@
-.code { margin: 0; font: 800 34px var(--font-mono); letter-spacing: .12em; color: var(--ink); }
-.qr { padding: 12px; background: #fff; border-radius: 12px; border: 1px solid var(--line); line-height: 0; }
-.link { color: var(--ink); font-weight: 600; }
-.error { margin: 0; color: var(--ink-2); }
+.code { margin: 0; font: 600 32px/40px var(--font-mono); letter-spacing: .12em; color: var(--ink); }
+/* The QR draws its own white quiet zone, so it scans on a dark page too. */
+.qr { padding: var(--space-2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); line-height: 0; }
+.link {
+  height: var(--control-lg); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: 0 var(--space-5); border-radius: var(--radius-pill); background: var(--gold); color: var(--on-gold);
+  font-size: 15px; line-height: 20px; font-weight: 600; white-space: nowrap; transition: background-color 120ms ease, box-shadow 160ms ease;
+}
+.link:hover { background: var(--orange); color: var(--on-gold); box-shadow: var(--shadow-glow); text-decoration: none; }
+.error { margin: 0; font-size: 14px; line-height: 20px; color: var(--danger); }

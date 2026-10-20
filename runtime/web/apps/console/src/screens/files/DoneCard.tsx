@@ -1,4 +1,4 @@
-import { Button, PromptCard } from "@eggie/ui";
+import { Button, Card, Icon, PromptCard } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { kindOf, promptFor } from "../../uploads/kinds";
 import { joinPath } from "../../uploads/paths";
@@ -9,10 +9,13 @@ export function DoneCard({ item, onDismiss }: { item: UploadItem; onDismiss: () 
   const kind = kindOf(item.name);
   if (!kind) return null;
   return (
-    <section className={s.done}>
-      <h2 className={s.doneTitle}>
-        <code>{item.name}</code> is in — it landed in <code>{item.dir === "" ? "the top of the project" : `${item.dir}/`}</code>. All {size(item.size)} of it.
-      </h2>
+    <Card as="section" className={s.done}>
+      <div className={s.doneHead}>
+        <span className={s.doneIcon}><Icon name="check-circle" size="md" /></span>
+        <h2 className={s.doneTitle}>
+          <code>{item.name}</code> is in — it landed in <code>{item.dir === "" ? "the top of the project" : `${item.dir}/`}</code>. All {size(item.size)} of it.
+        </h2>
+      </div>
       <p className={s.doneLead}>
         <strong>One more step, and it's not yours to figure out.</strong>{" "}
         {kind === "dump"
@@ -20,10 +23,10 @@ export function DoneCard({ item, onDismiss }: { item: UploadItem; onDismiss: () 
           : "An archive sitting in a folder isn't unpacked yet. Hand this to your coding agent and it'll do the rest."}
       </p>
       <PromptCard prompt={promptFor(kind, joinPath(item.dir, item.name))} aside="for Claude Code, Codex, whoever's cooking" />
-      <div className={s.modalFoot}>
+      <div className={s.doneFoot}>
         <Button onClick={onDismiss}>Back to files</Button>
         <span className={s.note}>Or ignore all this — the file is in the folder either way.</span>
       </div>
-    </section>
+    </Card>
   );
 }

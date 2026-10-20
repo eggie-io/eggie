@@ -1,19 +1,21 @@
-.card {
-  min-width: 0; border-radius: 22px; background: var(--surface); border: 2px solid var(--yolk);
-  box-shadow: 0 20px 44px -30px var(--shadow); overflow: hidden;
+.card { overflow: hidden; }
+.head {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--line);
 }
-.head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--yolk-soft); }
-.gift { color: var(--yolk-deep); flex: none; }
-.title { font: 700 15.5px var(--font-body); color: var(--ink); }
-.aside { margin-left: auto; font-size: 12.5px; color: var(--yolk-deep); }
-.body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.title {
+  font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
+}
+.aside { margin-left: auto; min-width: 0; font-size: 12px; line-height: 16px; color: var(--ink-2); text-align: right; }
+.body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
 .prompt {
-  margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2);
-  font: 400 13px/1.7 var(--font-mono); color: var(--ink); white-space: pre-wrap;
+  margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: var(--code-bg); color: var(--code-ink);
+  font-family: var(--font-mono); font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.row { display: flex; align-items: center; gap: var(--space-3) var(--space-4); flex-wrap: wrap; }
 .copied {
-  display: flex; align-items: center; gap: 9px; padding: 14px 26px; border-radius: 15px;
-  background: var(--basil-soft); color: var(--basil); font: 700 17px var(--font-display);
+  display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-md);
+  font-weight: 600; color: var(--success);
 }
-.hint { font-size: 14px; line-height: 1.4; color: var(--ink-2); max-width: 320px; }
+.hint { flex: 1 1 200px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }

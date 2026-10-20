@@ -1,8 +1,10 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
 body {
-  margin: 0; background: var(--cream); color: var(--ink);
-  font-family: var(--font-body); -webkit-font-smoothing: antialiased;
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased;
 }
-a { color: var(--yolk-deep); text-decoration: none; }
-a:hover { color: var(--ink); text-decoration: underline; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+h1, h2, h3 { font-variation-settings: "wdth" 112; }

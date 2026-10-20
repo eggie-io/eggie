@@ -25,7 +25,7 @@ export function StatusScreen({
           <h1 className={s.title}>{title}</h1>
           {children}
         </div>
-        <div className={s.actions}>{actions}</div>
+        {actions && <div className={s.actions}>{actions}</div>}
         {footer && <p className={s.footer}>{footer}</p>}
       </div>
     </Shell>

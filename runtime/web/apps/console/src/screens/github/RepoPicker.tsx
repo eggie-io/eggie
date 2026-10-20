@@ -1,37 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, TextField } from "@eggie/ui";
+import { Badge, Button, Notice, TextField } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { invalidateGitHub, invalidateRepos, useCloneRepo, useRepos, type Repo } from "../../github/github";
 import { repoRow } from "../../github/view";
 import { relativeTime } from "../../projects/format";
-import { useJob } from "../../projects/queries";
+import type { Job } from "../../projects/types";
 import { slugify } from "../../projects/slugify";
 import s from "./GitHubModal.module.css";
+
+export type Started = { job_id: string; id: string };
 
 // id stays null until the user types, so the field follows the row's
 // suggestion as the list refetches.
 type Naming = { repo: string; id: string | null; error: string | null };
 
-export function RepoPicker({ login, onDone }: { login: string; onDone: () => void }) {
+export function RepoPicker({
+  login,
+  onDone,
+  onStarted,
+}: {
+  login: string;
+  onDone: () => void;
+  onStarted: (started: Started) => void;
+}) {
   const repos = useRepos(true);
   const clone = useCloneRepo();
   const navigate = useNavigate();
   const client = useQueryClient();
-  const [started, setStarted] = useState<{ job_id: string; id: string } | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
-
-  if (started) {
-    return (
-      <Cloning
-        jobId={started.job_id}
-        id={started.id}
-        onDone={onDone}
-        onRetry={() => setStarted(null)}
-      />
-    );
-  }
 
   const start = (repo: Repo, id?: string) => {
     // A direct click leaves no name field open to hide its error.
@@ -39,7 +37,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
     clone.mutate(
       { repo: repo.full_name, id },
       {
-        onSuccess: setStarted,
+        onSuccess: onStarted,
         onError: (error) => {
           // Another project took the name after this list was fetched.
           if (error instanceof ApiError && error.code === "project_exists") {
@@ -66,8 +64,8 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
   return (
     <>
       <p>Connected as @{login}. Pick a repository to make it a project:</p>
-      {repos.isError && <p className={s.error}>{repos.error.message}</p>}
-      {clone.error && !naming && <p className={s.error}>{clone.error.message}</p>}
+      {repos.isError && <Notice tone="danger">{repos.error.message}</Notice>}
+      {clone.error && !naming && <Notice tone="danger">{clone.error.message}</Notice>}
       <ul className={s.repos}>
         {all.map((repo) => {
           const row = repoRow(repo);
@@ -75,20 +73,22 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
           const details = (
             <>
               <span className={s.repoName}>{repo.full_name}</span>
-              {repo.private && <span className={s.badge}>Private</span>}
-              {row.kind === "linked" && <span className={s.badge}>Already a project</span>}
-              {row.kind === "nameTaken" && <span className={s.badge}>Name taken</span>}
+              {repo.private && <Badge icon="lock">Private</Badge>}
+              {row.kind === "linked" && <Badge tone="success">Already a project</Badge>}
+              {row.kind === "nameTaken" && <Badge tone="warning">Name taken</Badge>}
               {repo.updated_at !== null && (
-                <span className={s.muted}>updated {relativeTime(repo.updated_at, Date.now())}</span>
+                <span className={s.updated}>updated {relativeTime(repo.updated_at, Date.now())}</span>
               )}
             </>
           );
           return (
-            <li key={repo.full_name}>
+            <li key={repo.full_name} className={s.item}>
               {row.kind === "linked" ? (
                 <div className={s.repo}>
                   {details}
-                  <Button variant="quiet" className={s.open} onClick={() => open(row.projectId)}>Open</Button>
+                  <Button variant="ghost" size="sm" iconRight="chevron-right" className={s.open} onClick={() => open(row.projectId)}>
+                    Open
+                  </Button>
                 </div>
               ) : (
                 <button
@@ -120,10 +120,10 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
                     hint={slugify(name) ? <>It'll be called <strong>{slugify(name)}</strong></> : undefined}
                   />
                   <div className={s.actions}>
-                    <Button variant="primary" type="submit" disabled={clone.isPending || !slugify(name)}>
+                    <Button variant="ghost" size="sm" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
+                    <Button variant="primary" size="sm" type="submit" disabled={clone.isPending || !slugify(name)}>
                       Import
                     </Button>
-                    <Button variant="quiet" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
                   </div>
                 </form>
               )}
@@ -131,9 +131,15 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
           );
         })}
       </ul>
-      {repos.isLoading && <p className={s.muted}>Fetching your repositories…</p>}
+      {repos.isLoading && <p>Fetching your repositories…</p>}
       {repos.hasNextPage && (
-        <Button variant="quiet" onClick={() => void repos.fetchNextPage()} disabled={repos.isFetchingNextPage}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={s.more}
+          onClick={() => void repos.fetchNextPage()}
+          disabled={repos.isFetchingNextPage}
+        >
           Load more
         </Button>
       )}
@@ -143,18 +149,7 @@ export function RepoPicker({ login, onDone }: { login: string; onDone: () => voi
 
 // The project exists only once the clone lands, so the page opens after
 // the "cloning" phase, not on submit.
-function Cloning({
-  jobId,
-  id,
-  onDone,
-  onRetry,
-}: {
-  jobId: string;
-  id: string;
-  onDone: () => void;
-  onRetry: () => void;
-}) {
-  const job = useJob(jobId).data;
+export function Cloning({ id, job, onDone }: { id: string; job: Job | undefined; onDone: () => void }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const cloned = job !== undefined && job.state !== "failed" && (job.phase !== "cloning" || job.state === "done");
@@ -179,13 +174,6 @@ function Cloning({
       void invalidateGitHub(client);
     }
   }, [failed, client]);
-  if (job?.state === "failed") {
-    return (
-      <>
-        <p className={s.error}>Couldn't download it: {job.detail}</p>
-        <Button variant="quiet" onClick={onRetry}>Pick another</Button>
-      </>
-    );
-  }
+  if (job?.state === "failed") return <Notice tone="danger">Couldn't download it: {job.detail}</Notice>;
   return <p>Downloading {id} from GitHub…</p>;
 }

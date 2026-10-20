@@ -167,7 +167,9 @@ ACTIONS['start-install'] = async (node, data) => {
     li.className = 'row-step';
     li.dataset.status = 'waiting';
     li.dataset.name = row.name;
-    li.innerHTML = '<span class="mark"></span><span class="label"></span><span class="state"></span>';
+    li.innerHTML = '<span class="mark"></span><span class="label"></span><span class="state"></span>'
+      + '<div class="row-progress" hidden><span class="track"><span class="fill"></span></span>'
+      + '<span class="pct"></span></div>';
     li.querySelector('.label').textContent = row.label;
     li.querySelector('.state').textContent = 'Waiting';
     list.appendChild(li);
@@ -209,17 +211,18 @@ window.eggie.handlers.install = (event) => {
         bar.style.width = `${Math.round((window.eggie.done / window.eggie.total) * 100)}%`;
       }
     }
-    // fraction is non-null only on the download step: a separate footer line
-    // for it, never the overall bar, or the bar would sit full through the
+    // fraction is non-null only on the download step: it fills that row's own
+    // bar, never the overall bar, or the bar would sit full through the
     // several minutes create_vm/bootstrap/connect/verify/finish still take.
-    const note = document.querySelector('[data-field="download"]');
-    if (note) {
-      if (event.fraction !== null && event.fraction !== undefined) {
-        const label = li ? li.querySelector('.label').textContent : '';
-        note.textContent = `${label} · ${Math.round(event.fraction * 100)}%`;
-        note.hidden = false;
+    const download = li && li.querySelector('.row-progress');
+    if (download) {
+      if (typeof event.fraction === 'number') {
+        const pct = `${Math.round(event.fraction * 100)}%`;
+        download.querySelector('.fill').style.width = pct;
+        download.querySelector('.pct').textContent = pct;
+        download.hidden = false;
       } else {
-        note.hidden = true;
+        download.hidden = true;
       }
     }
     return;
@@ -245,14 +248,19 @@ window.eggie.handlers.install = (event) => {
   }
 };
 
-// Swap the left column without rebuilding the row panel, so the rows keep the
+// Swap the header without rebuilding the row panel, so the rows keep the
 // states the stream already put on them. rowsByName is rebuilt from the
 // spliced-in clone (keyed by the data-name each <li> carries) rather than
 // left pointing at the pre-clone elements, so a later 'step' event still
-// finds its row instead of silently no-oping.
+// finds its row instead of silently no-oping. The counter and overall bar
+// only move on completed steps, so they are carried over too.
 function swap(screen, data) {
   const rows = document.querySelector('[data-rows]');
   const keep = rows ? rows.cloneNode(true) : null;
+  const counter = document.querySelector('[data-field="counter"]');
+  const bar = document.querySelector('[data-field="progress"]');
+  const counterText = counter ? counter.textContent : '';
+  const barWidth = bar ? bar.style.width : '';
   show(screen, data);
   if (keep) {
     document.querySelector('[data-rows]').replaceWith(keep);
@@ -261,6 +269,10 @@ function swap(screen, data) {
       rowsByName[li.dataset.name] = li;
     });
   }
+  const newCounter = document.querySelector('[data-field="counter"]');
+  if (newCounter) newCounter.textContent = counterText;
+  const newBar = document.querySelector('[data-field="progress"]');
+  if (newBar) newBar.style.width = barWidth;
 }
 
 ACTIONS['start-over'] = async () => { await api().reset_install(); refresh(); };

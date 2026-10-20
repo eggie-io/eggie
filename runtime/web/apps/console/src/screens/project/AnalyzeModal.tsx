@@ -1,8 +1,8 @@
 import { Button, Modal, PromptCard } from "@eggie/ui";
-import { ANALYZE_PROMPT } from "../../projects/prompts";
+import { analyzePrompt } from "../../projects/prompts";
 import s from "./ProjectPage.module.css";
 
-export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AnalyzeModal({ id, open, onClose }: { id: string; open: boolean; onClose: () => void }) {
   return (
     <Modal
       open={open}
@@ -21,7 +21,7 @@ export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => 
         answer back.
       </p>
       <PromptCard
-        prompt={ANALYZE_PROMPT}
+        prompt={analyzePrompt("full", id, null)}
         aside="for Claude Code, Codex, whoever's cooking"
         hint="Now paste it into your coding agent and press enter."
       />

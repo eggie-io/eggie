@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { loadCatalog, platformFor, type Connect } from "./catalog";
+import { currentAgent } from "./current";
 import type { AgentStatuses } from "./status";
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -31,6 +32,12 @@ export function useAgentStatus(watch?: string) {
     refetchInterval: (query) =>
       watch && query.state.data?.agents[watch]?.connected ? false : POLL_MS,
   });
+}
+
+export function useCurrentAgent() {
+  const { agents } = useAgents();
+  const status = useAgentStatus();
+  return currentAgent(agents, status.data);
 }
 
 export function useEnsureSetup() {

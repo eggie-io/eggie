@@ -44,6 +44,9 @@ export const SCENARIOS = [
   "kitchens",
   "no-kitchens",
   "kitchens-down",
+  "handoff-new",
+  "handoff-github",
+  "handoff-folder",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -82,7 +85,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
 }
 
 function emptyProject(id: string): Project {
-  return project(id, { urls: [], web: [], empty: true, problem: NO_COMPOSE, first_run: true });
+  return project(id, { urls: [], web: [], empty: true, problem: NO_COMPOSE, first_run: true, ran_ok: false });
 }
 
 const LOGS = `11:04:19 photo-sorter_web  listening on 127.0.0.1:8000
@@ -194,6 +197,7 @@ export function handlersFor(scenario: Scenario) {
       target.status = "started_ok";
       // photo-sorter never gets better, so "Try again" can be walked.
       target.problem = target.id === "photo-sorter" ? LOOPBACK : null;
+      if (!target.problem) target.ran_ok = true;
       // started_ok with a diagnosed problem still finishes the job as done,
       // same as the real API; the problem lives on the project, in result.
       job.state = "done";
@@ -236,6 +240,18 @@ export function handlersFor(scenario: Scenario) {
       projects.set(p.id, p);
     }
     startJob(projects.get("tiny-crm")!, "up");
+    if (scenario === "handoff-github") {
+      projects.set("sebone-poc", project("sebone-poc", {
+        origin: "github",
+        repo: "ada/sebone-poc",
+        ran_ok: false,
+        status: "failed_to_start",
+        problem: { code: "failed_to_start", message: 'failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code 1' },
+      }));
+    }
+    if (scenario === "handoff-folder") {
+      projects.set("family-photos", { ...emptyProject("family-photos"), origin: "folder" });
+    }
     discovered.push(
       { name: "invoice-helper", seen_at: minutesAgo(4), adoptable: true, reason: null },
       { name: "spice-rack", seen_at: minutesAgo(20), adoptable: false, reason: "compose_missing" },
@@ -411,6 +427,7 @@ export function handlersFor(scenario: Scenario) {
 
     http.get("/api/agents/status", () => {
       if (scenario === "agents-connected") return HttpResponse.json({ agents: { "claude-code": { connected: true, setup: null }, codex: { connected: true, setup: "ready" } } });
+      if (scenario === "handoff-new" || scenario === "handoff-github") return HttpResponse.json({ agents: { "claude-code": { connected: true, setup: null } } });
       if (scenario === "agents-installing") return HttpResponse.json({ agents: { codex: { connected: false, setup: "installing" } } });
       if (scenario === "agents-failed") return HttpResponse.json({ agents: { codex: { connected: false, setup: "failed" } } });
       if (scenario === "fresh") {

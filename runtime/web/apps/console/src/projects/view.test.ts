@@ -95,8 +95,9 @@ describe("projectView", () => {
     expect(projectView(project({ empty: true, ran_ok: false })).kind).toBe("waiting");
   });
 
-  it("shows a clone with no compose file as needing set-up, not waiting", () => {
-    expect(projectView(project({ empty: true, ran_ok: false, origin: "github" })).kind).toBe("setup");
+  it("shows a clone with no compose file as needing set-up, without the API's compose_missing as Docker's message", () => {
+    const view = projectView(project({ empty: true, ran_ok: false, origin: "github", problem: problem("compose_missing") }));
+    expect(view).toEqual({ kind: "setup", badge: "setup", detail: null });
   });
 
   it("shows a never-run project whose start failed as needing set-up with Docker's message", () => {

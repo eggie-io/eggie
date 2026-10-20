@@ -37,7 +37,9 @@ export function projectView(project: Project): ProjectView {
   const fault = wrong(project);
   if (!project.ran_ok) {
     if (project.empty && project.origin === "new") return { kind: "waiting", badge: "waiting" };
-    if (project.empty || fault) return { kind: "setup", badge: "setup", detail: project.problem?.message ?? null };
+    // An empty folder's compose_missing is Eggie's, not something Docker said.
+    if (project.empty) return { kind: "setup", badge: "setup", detail: null };
+    if (fault) return { kind: "setup", badge: "setup", detail: project.problem?.message ?? null };
   }
   if (project.empty) return { kind: "waiting", badge: "waiting" };
   if (fault) return fault;

@@ -32,7 +32,7 @@ export function ProjectLayout() {
       </div>
       {project && (
         <>
-          <AnalyzeModal open={dialog === "analyze"} onClose={close} />
+          <AnalyzeModal id={project.id} open={dialog === "analyze"} onClose={close} />
           <DeleteModal id={project.id} open={dialog === "delete"} onClose={close} />
           <PublicModal project={project} open={dialog === "public"} onClose={close} />
         </>

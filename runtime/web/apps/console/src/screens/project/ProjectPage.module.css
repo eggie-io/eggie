@@ -78,3 +78,42 @@
   .heading { flex-basis: auto; }
   .actions { margin-left: 0; }
 }
+
+.leadCode { font: 500 13px/22px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.leadLink { font: 500 13px/22px var(--font-mono); color: var(--accent-ink); overflow-wrap: anywhere; }
+
+.handoff { overflow: hidden; }
+.handoffHead {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3);
+  min-height: 52px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line); background: var(--raised);
+}
+.handoffTitle { flex: 1 1 220px; min-width: 0; margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--ink); }
+.handoffAside { display: flex; align-items: center; gap: var(--space-2); }
+.switchAgent {
+  display: inline-flex; align-items: center; height: var(--control-sm); padding: 0 var(--space-3);
+  border-radius: var(--radius-pill); font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); text-decoration: none;
+}
+.switchAgent:hover { background: var(--hover); }
+.switchAgent:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.steps { margin: 0; padding: 0; list-style: none; }
+.step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 14px; padding: 14px var(--space-4); }
+.step:first-child { padding-top: var(--space-4); padding-bottom: var(--space-4); }
+.step + .step { border-top: 1px solid var(--line); }
+.stepLast { background: var(--raised); }
+.stepNumber {
+  width: 24px; height: 24px; display: grid; place-content: center; border-radius: 50%;
+  background: var(--gold); color: var(--on-gold); font: 600 12px/1 var(--font-mono);
+}
+.stepBody { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stepText { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.stepWords { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stepTitle { font-size: 14px; line-height: 24px; font-weight: 600; color: var(--ink); }
+.stepHint { font-size: 13px; line-height: 18px; color: var(--ink-2); text-wrap: pretty; }
+.stepHint code { font: 450 12px/16px var(--font-mono); color: var(--ink); }
+.promptBlock {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: 14px var(--space-4); border-radius: var(--radius-md);
+  background: var(--code-bg); color: var(--code-ink); font: 500 13px/20px var(--font-mono); text-wrap: pretty; overflow-wrap: anywhere;
+}
+.promptExtra { color: var(--code-ink-2); white-space: pre-wrap; }

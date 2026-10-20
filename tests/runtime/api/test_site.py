@@ -2,7 +2,7 @@
 from fastapi.testclient import TestClient
 
 from eggie_api.config import ApiConfig
-from tests.runtime.api.conftest import COMPOSE_ONE_WEB, SITE_BROWSER, SITE_ORIGIN, _write_compose
+from tests.runtime.api.conftest import BROWSER, COMPOSE_ONE_WEB, SITE_BROWSER, SITE_ORIGIN, _write_compose
 
 
 def test_site_host_comes_from_the_environment_and_is_absent_locally():
@@ -48,6 +48,8 @@ class Clock:
     def __call__(self):
         return self.now
 
+ORIGIN = {"Origin": "http://localhost:41080"}
+
 
 def test_remote_redemptions_resume_once_the_minute_has_moved_on(tmp_path):
     clock = Clock()
@@ -68,6 +70,34 @@ def test_remote_redemptions_resume_once_the_minute_has_moved_on(tmp_path):
     clock.now += 60 - REMOTE_PER_MINUTE + 1
     assert site.redeem("real") is not None
     assert len(cloud.calls) == REMOTE_PER_MINUTE + 1
+
+
+def _remote_site(tmp_path, answer):
+    repos = Repos.open(Database(tmp_path / "state.db"))
+    repos.account.update(access_token="at", refresh_token="rt",
+                         access_expires_at=10**12, org_id="org-1")
+    cloud = FakeCloud(redeem_instance_handoff=[answer])
+    account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
+    return SiteSignIn(Sessions(repos.sessions), account, cloud, remote=True)
+
+
+def test_remote_code_returns_the_services_return_path(tmp_path):
+    site = _remote_site(tmp_path, {"ok": True, "return_path": "/p/shop/secrets"})
+    session_id, path = site.redeem("from-web-app")
+    assert session_id and path == "/p/shop/secrets"
+
+
+def test_unsafe_return_path_from_the_service_is_dropped(tmp_path):
+    site = _remote_site(tmp_path, {"ok": True, "return_path": "//evil.com"})
+    session_id, path = site.redeem("from-web-app")
+    assert session_id and path is None
+
+
+def test_local_code_has_no_return_path(env):
+    code = env.client.post("/sessions/handoff").json()["code"]
+    resp = TestClient(env.app, headers={**BROWSER, **ORIGIN}).post(
+        "/api/session", json={"code": code})
+    assert resp.json() == {"signed_in": True, "return_path": None}
 
 
 def _site_browser(site_env):

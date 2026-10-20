@@ -78,6 +78,8 @@ function Column({ theme }: { theme: "light" | "dark" }) {
         <StatusDot status="starting" />
         <StatusDot status="stopped" />
         <StatusDot status="failed" />
+        <StatusDot status="waiting" />
+        <StatusDot status="degraded" />
         <StatusDot status="running" label="Open" />
       </Section>
       <Section title="State badges">
@@ -85,6 +87,8 @@ function Column({ theme }: { theme: "light" | "dark" }) {
         <StateBadge state="stopped" />
         <StateBadge state="starting" />
         <StateBadge state="wrong" />
+        <StateBadge state="waiting" />
+        <StateBadge state="setup" />
       </Section>
       <Section title="Notices">
         <Notice className={s.wide}>These addresses only work on this computer. Nothing is out on the internet.</Notice>

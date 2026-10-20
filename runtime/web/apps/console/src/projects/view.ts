@@ -6,7 +6,9 @@ export type Cause = "bound_to_loopback" | "service_unreachable" | "crash_looping
 export type ProjectView =
   | { kind: "starting"; badge: ProjectState; job: ActiveJob }
   | { kind: "stopping"; badge: ProjectState; job: ActiveJob }
-  | { kind: "gone" | "waiting" | "running" | "stopped"; badge: ProjectState }
+  | { kind: "gone" | "running" | "stopped"; badge: ProjectState }
+  | { kind: "waiting"; badge: "waiting" }
+  | { kind: "setup"; badge: "setup"; detail: string | null }
   | { kind: "wrong"; badge: "wrong"; cause: Cause; detail: string | null };
 
 const NAMED: Record<string, Cause> = {
@@ -32,8 +34,12 @@ export function projectView(project: Project): ProjectView {
   if (job && (job.kind === "up" || job.kind === "restart" || job.kind === "clone")) return { kind: "starting", badge: "starting", job };
   if (job && job.kind === "down") return { kind: "stopping", badge: "stopped", job };
   if (project.problem?.code === "folder_missing") return { kind: "gone", badge: "wrong" };
-  if (project.empty) return { kind: "waiting", badge: "stopped" };
   const fault = wrong(project);
+  if (!project.ran_ok) {
+    if (project.empty && project.origin === "new") return { kind: "waiting", badge: "waiting" };
+    if (project.empty || fault) return { kind: "setup", badge: "setup", detail: project.problem?.message ?? null };
+  }
+  if (project.empty) return { kind: "waiting", badge: "waiting" };
   if (fault) return fault;
   if (project.status === "started_ok") return { kind: "running", badge: "running" };
   return { kind: "stopped", badge: "stopped" };

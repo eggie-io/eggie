@@ -77,6 +77,14 @@ export function ProjectRow({ project }: { project: Project }) {
     case "stopping":
       line = <span className={s.quiet}>Putting it away…</span>;
       break;
+    case "setup":
+      line = <span className={s.trouble}>{CAUSE_COPY.unreadable.short}</span>;
+      actions = (
+        <Button aria-label={`Take a look at ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
+          Take a look
+        </Button>
+      );
+      break;
     case "wrong":
       line = <span className={s.trouble}>{CAUSE_COPY[view.cause].short}</span>;
       actions = (
@@ -104,7 +112,7 @@ export function ProjectRow({ project }: { project: Project }) {
   }
 
   // wrong/gone/waiting already lead to the page through their only action.
-  const settings = view.kind !== "wrong" && view.kind !== "gone" && view.kind !== "waiting" && (
+  const settings = view.kind !== "wrong" && view.kind !== "setup" && view.kind !== "gone" && view.kind !== "waiting" && (
     <IconButton icon="settings" label={`Settings for ${project.id}`} size="sm" onClick={look} />
   );
 

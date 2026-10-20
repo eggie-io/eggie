@@ -76,6 +76,14 @@ export function ProjectPage() {
         />
       );
       break;
+    case "setup":
+      body = (
+        <>
+          <WrongBody project={project} cause="unreadable" detail={view.detail} />
+          {restartNotice}
+        </>
+      );
+      break;
     case "wrong":
       body = (
         <>

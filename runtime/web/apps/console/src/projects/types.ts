@@ -41,6 +41,9 @@ export interface Project {
   urls: string[];
   problem: Problem | null;
   empty: boolean;
+  origin: "new" | "github" | "folder";
+  ran_ok: boolean;
+  repo: string | null;
   web: WebEntry[];
   first_run: boolean;
   job: ActiveJob | null;

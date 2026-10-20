@@ -88,13 +88,15 @@ export function floatingWarnings(t: PushTargets): string[] {
     .filter((d) => d.floating)
     .map(
       (d) =>
-        `${d.service} uses ${d.image}. The kitchen may download a newer version that can't read this data. Pin a version, e.g. ${pinExample(d.image)}.`,
+        `${d.service} uses ${d.image}. The kitchen may download a newer version that can't read this data. ${pinAdvice(d.image)}`,
     );
 }
 
-function pinExample(image: string): string {
+function pinAdvice(image: string): string {
   const name = image.split(":")[0].split("/").pop() ?? image;
-  return `${name}:16`;
+  return name.startsWith("postgres")
+    ? "Pin a version, e.g. postgres:16."
+    : `Pin a version tag, e.g. ${name}:<version>.`;
 }
 
 export function menuPush(
@@ -104,9 +106,9 @@ export function menuPush(
 ): { note: string | null; disabled: boolean } | null {
   if (project.push.blocked === "site") return null;
   if (project.push.blocked === "signed_out") return { note: "Account required", disabled: true };
+  if (pushingPercent !== null) return { note: `Pushing… ${Math.round(pushingPercent)}%`, disabled: false };
   if (!online) return { note: "Offline", disabled: true };
   if (project.empty) return { note: "Nothing to push yet", disabled: true };
-  if (pushingPercent !== null) return { note: `Pushing… ${Math.round(pushingPercent)}%`, disabled: false };
   const last = project.push.last;
   return { note: last ? last.console_hostname : null, disabled: false };
 }

@@ -9,6 +9,7 @@ import {
   type PushTargets,
   type TargetKitchen,
 } from "./push";
+import type { Project } from "../projects/types";
 
 const kitchen = (id: string, over: Partial<TargetKitchen> = {}): TargetKitchen => ({
   id,
@@ -94,16 +95,22 @@ describe("floatingWarnings", () => {
       databases: [
         { service: "db", image: "postgres:latest", floating: true },
         { service: "cache", image: "redis:7", floating: false },
+        { service: "q", image: "rabbitmq", floating: true },
       ],
     });
     expect(floatingWarnings(t)).toEqual([
       "db uses postgres:latest. The kitchen may download a newer version that can't read this data. Pin a version, e.g. postgres:16.",
+      "q uses rabbitmq. The kitchen may download a newer version that can't read this data. Pin a version tag, e.g. rabbitmq:<version>.",
     ]);
   });
 });
 
 describe("menuPush", () => {
-  const project = (over: object = {}) => ({ empty: false, push: { blocked: null, last: null }, ...over }) as never;
+  const project = (over: Partial<Pick<Project, "empty" | "push">> = {}): Pick<Project, "empty" | "push"> => ({
+    empty: false,
+    push: { blocked: null, last: null },
+    ...over,
+  });
 
   it("is hidden on a site", () => {
     expect(menuPush(project({ push: { blocked: "site", last: null } }), true, null)).toBeNull();
@@ -117,6 +124,7 @@ describe("menuPush", () => {
   });
 
   it("shows progress while pushing and the last kitchen otherwise", () => {
+    expect(menuPush(project({ empty: true }), false, 40)).toEqual({ note: "Pushing… 40%", disabled: false });
     expect(menuPush(project(), true, 40)).toEqual({ note: "Pushing… 40%", disabled: false });
     const last = { instance_id: "i", console_hostname: "k.eggie.io", pushed_at: 1 };
     expect(menuPush(project({ push: { blocked: null, last } }), true, null)).toEqual({ note: "k.eggie.io", disabled: false });

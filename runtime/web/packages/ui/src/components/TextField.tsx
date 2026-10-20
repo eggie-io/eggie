@@ -1,5 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { cx } from "../cx";
+import type { IconName } from "../icons";
+import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import s from "./TextField.module.css";
 
@@ -12,6 +14,7 @@ export function TextField({
   autoFocus = false,
   placeholder,
   secret = false,
+  icon,
 }: {
   label: string;
   value: string;
@@ -21,6 +24,7 @@ export function TextField({
   autoFocus?: boolean;
   placeholder?: string;
   secret?: boolean;
+  icon?: IconName;
 }) {
   const id = useId();
   const [shown, setShown] = useState(true);
@@ -30,6 +34,7 @@ export function TextField({
     <div className={s.field}>
       <label htmlFor={id} className={s.label}>{label}</label>
       <div className={cx(s.control, invalid && s.invalid)}>
+        {icon && <Icon name={icon} className={s.icon} />}
         <input
           id={id}
           type={secret && !shown ? "password" : "text"}

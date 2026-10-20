@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
+import re
 
 # Absolute path: Docker Desktop's WSL integration puts its own docker CLI on
 # PATH, and a bare `docker` would send this VM's projects to Desktop's engine.
@@ -138,19 +140,74 @@ def remove_by_label(runner, name: str, *, volumes: bool) -> Completed:
     return failure or Completed(0, "", "")
 
 
+def inspect_own_image(runner) -> Completed:
+    return runner.exec([DOCKER, "inspect", "--format", "{{.Config.Image}}",
+                        os.environ.get("HOSTNAME", "")], root=True)
+
+
+def own_image(runner) -> str | None:
+    """The image this API runs from, already on the VM so no pull is needed."""
+    result = inspect_own_image(runner)
+    return result.stdout.strip() if result.ok else None
+
+
+# Docker prints sizes in decimal units (go-units HumanSize).
+_SIZE_UNITS = {"B": 1, "kB": 10**3, "KB": 10**3, "MB": 10**6, "GB": 10**9,
+               "TB": 10**12, "PB": 10**15}
+
+
+def volume_sizes(runner) -> dict[str, int]:
+    """Bytes per volume name; empty when docker cannot say."""
+    result = runner.exec([DOCKER, "system", "df", "-v", "--format", "json"], root=True)
+    if not result.ok:
+        return {}
+    try:
+        rows = json.loads(result.stdout).get("Volumes") or []
+    except (ValueError, AttributeError):
+        return {}
+    sizes = {}
+    for row in rows:
+        match = re.fullmatch(r"([\d.]+)\s*([kKMGTP]?B)", str(row.get("Size", "")).strip())
+        if match and row.get("Name"):
+            sizes[row["Name"]] = int(float(match[1]) * _SIZE_UNITS[match[2]])
+    return sizes
+
+
 def remove_tree_as_root(runner, path) -> Completed:
     """The API runs as uid 1000, and containers write root-owned files into
     bind-mounted project folders. Removes `path` from a throwaway container of
-    this API's own image (already on the VM, so no pull) running as root."""
-    me = os.environ.get("HOSTNAME", "")
-    image = runner.exec([DOCKER, "inspect", "--format", "{{.Config.Image}}", me],
-                        root=True)
-    if not image.ok:
-        return image
+    this API's own image running as root."""
+    found = inspect_own_image(runner)
+    if not found.ok:
+        return found
     parent = str(os.path.dirname(str(path)))
     return runner.exec([DOCKER, "run", "--rm", "--user", "0",
                         "-v", f"{parent}:{parent}", "--entrypoint", "",
-                        image.stdout.strip(), "rm", "-rf", str(path)], root=True)
+                        found.stdout.strip(), "rm", "-rf", str(path)], root=True)
+
+
+def move_as_root(runner, src, dst) -> Completed:
+    """rename(2) of a folder into another parent needs write access to the
+    folder itself; a database's data folder is 0700 and owned by its user."""
+    found = inspect_own_image(runner)
+    if not found.ok:
+        return found
+    # One mount over both paths keeps it a rename, not a copy across mounts.
+    root = os.path.commonpath([str(src), str(dst)])
+    return runner.exec([DOCKER, "run", "--rm", "--user", "0",
+                        "-v", f"{root}:{root}", "--entrypoint", "",
+                        found.stdout.strip(), "mv", "-T", str(src), str(dst)], root=True)
+
+
+def create_volume(runner, name: str, *, project: str, key: str) -> Completed:
+    # Compose's own labels, so compose adopts the volume and delete finds it.
+    return runner.exec([DOCKER, "volume", "create",
+                        "--label", f"{PROJECT_LABEL}={project}",
+                        "--label", f"com.docker.compose.volume={key}", name], root=True)
+
+
+def remove_volume(runner, name: str) -> Completed:
+    return runner.exec([DOCKER, "volume", "rm", "-f", name], root=True)
 
 
 def container_id(provider, directory, service: str, *,

@@ -122,6 +122,30 @@ def _v6_secrets(conn: sqlite3.Connection) -> None:
     _add_column(conn, "projects", "secrets_changed_at", "REAL")
 
 
+def _v7_push(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS kitchen_pushes (
+            local_id TEXT,
+            instance_id TEXT,
+            console_hostname TEXT NOT NULL,
+            kitchen_project TEXT,
+            pushed_at REAL NOT NULL,
+            urls_json TEXT NOT NULL DEFAULT '[]',
+            secrets_missing INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (local_id, instance_id)
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pushed_projects (
+            local_id TEXT PRIMARY KEY,
+            cloud_project_id TEXT NOT NULL UNIQUE,
+            source_device_id TEXT,
+            first_pushed_at REAL NOT NULL,
+            last_pushed_at REAL
+        )""")
+    _add_column(conn, "secrets", "unused_at", "REAL")
+    _add_column(conn, "projects", "start_when_ready", "INTEGER NOT NULL DEFAULT 0")
+
+
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -131,6 +155,7 @@ MIGRATIONS = [
     _v4_account,
     _v5_github,
     _v6_secrets,
+    _v7_push,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

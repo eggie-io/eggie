@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Outlet, useParams } from "react-router";
 import { ApiError } from "../../api/client";
-import { useProject } from "../../projects/queries";
+import { usePushJob, usePushTargets, useProject } from "../../projects/queries";
+import { menuPush } from "../../push/push";
 import { AnalyzeModal } from "./AnalyzeModal";
 import { DeleteModal } from "./DeleteModal";
 import { ProjectMenu, type ProjectDialog } from "./ProjectMenu";
 import { PublicModal } from "./PublicModal";
+import { PushModal } from "./PushModal";
 import s from "./ProjectLayout.module.css";
+
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
 
 export function ProjectLayout() {
   const { id = "" } = useParams();
@@ -24,9 +35,17 @@ export function ProjectLayout() {
   const gone = query.error instanceof ApiError && query.error.code === "project_not_found";
   const project = gone ? undefined : query.data;
 
+  const targets = usePushTargets(id, dialog === "push");
+  const pushJob = usePushJob(project);
+  const browserOnline = useSyncExternalStore(subscribeOnline, () => navigator.onLine);
+  const online = browserOnline && !(targets.error instanceof ApiError && targets.error.code === "cloud_unavailable");
+  const progress = pushJob.data?.progress;
+  const pushing = project?.job?.kind !== "push" ? null : progress && progress.total > 0 ? (progress.done / progress.total) * 100 : 0;
+  const push = project ? menuPush(project, online, pushing) : null;
+
   return (
     <div className={s.layout}>
-      <ProjectMenu id={id} project={project} onOpen={setDialog} />
+      <ProjectMenu id={id} project={project} push={push} onOpen={setDialog} />
       <div className={s.content}>
         <Outlet />
       </div>
@@ -35,6 +54,7 @@ export function ProjectLayout() {
           <AnalyzeModal open={dialog === "analyze"} onClose={close} />
           <DeleteModal id={project.id} open={dialog === "delete"} onClose={close} />
           <PublicModal project={project} open={dialog === "public"} onClose={close} />
+          <PushModal project={project} open={dialog === "push"} onClose={close} />
         </>
       )}
     </div>

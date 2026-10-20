@@ -2,6 +2,7 @@ import { delay, http, HttpResponse } from "msw";
 import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
+import type { PushRecord, TargetKitchen } from "../push/push";
 import { baseName, joinPath, parentOf } from "../uploads/paths";
 
 export const SCENARIOS = [
@@ -44,6 +45,14 @@ export const SCENARIOS = [
   "kitchens",
   "no-kitchens",
   "kitchens-down",
+  "push-no-account",
+  "push-offline",
+  "push-no-kitchens",
+  "push-kitchens",
+  "push-running",
+  "push-done-secrets",
+  "push-rate-limited",
+  "kitchen-waiting-secrets",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -74,6 +83,8 @@ function project(id: string, over: Partial<Project> = {}): Project {
     public: { state: "off", note: null },
     restart_needed: false,
     secrets_requested: 0,
+    push: { blocked: null, last: null },
+    start_when_ready: false,
     ...over,
   };
 }
@@ -126,13 +137,22 @@ export function handlersFor(scenario: Scenario) {
   const linkedRepos = new Map<string, string>([["ada/recipe-box", "recipe-box"]]);
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string> }>();
+  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string>; unused: Set<string> }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]) }
-        : { names: new Map(), requested: new Map() };
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]), unused: new Set<string>() }
+        : scenario === "kitchen-waiting-secrets" && id === "weekend-shop"
+        ? {
+            names: new Map([["MAIL_PASSWORD", nowSec() - 3600], ["OLD_SENTRY_DSN", nowSec() - 86_400]]),
+            requested: new Map([
+              ["STRIPE_KEY", "Set on your computer. Enter its value for the kitchen."],
+              ["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"],
+            ]),
+            unused: new Set(["OLD_SENTRY_DSN"]),
+          }
+        : { names: new Map(), requested: new Map(), unused: new Set<string>() };
       secrets.set(id, entry);
     }
     return entry;
@@ -292,6 +312,10 @@ export function handlersFor(scenario: Scenario) {
     seedFile(p.id, "README.md", 2048, hoursAgo(30));
   }
 
+  if (scenario === "kitchen-waiting-secrets") {
+    const shop = projects.get("weekend-shop");
+    if (shop) shop.secrets_requested = secretsOf("weekend-shop").requested.size;
+  }
   if (scenario === "secrets") {
     const box = projects.get("recipe-box");
     if (box) box.secrets_requested = secretsOf("recipe-box").requested.size;
@@ -320,6 +344,123 @@ export function handlersFor(scenario: Scenario) {
   const noUpload = () => refuse("upload_not_found", "no such upload", 404);
   const traversal = (path: string) => path.startsWith("/") || path.split("/").includes("..");
 
+  const WEB_APP = "https://app.eggie.io";
+  const kitchen = (id: string, name: string, over: Partial<TargetKitchen> = {}): TargetKitchen => ({
+    id, display_name: name, console_hostname: `${id}.eggie.io`, site_hostname: `${id}.eggie.space`, readiness: "ready",
+    is_owner: true, open_console_url: `${WEB_APP}/kitchens/open?host=${id}.eggie.io`, manage_url: `${WEB_APP}/kitchens/${id}`, ...over,
+  });
+  const kitchens: TargetKitchen[] =
+    scenario === "push-no-kitchens" ? []
+    : scenario === "push-kitchens" ? [
+      kitchen("shop", "Shop"),
+      kitchen("spare", "Spare"),
+      kitchen("new", "Fresh one", { readiness: "starting" }),
+      kitchen("broken", "Broken", { readiness: "failed" }),
+      kitchen("lost", "Lost login", { readiness: "signed_out" }),
+      kitchen("team", "Team box", { is_owner: false }),
+      kitchen("odd", "Odd one", { readiness: "maintenance" }),
+    ]
+    : [kitchen("shop", "Shop"), kitchen("spare", "Spare")];
+  const pushed = new Map<string, Record<string, PushRecord>>();
+  const pushedOf = (id: string) => {
+    let entry = pushed.get(id);
+    if (!entry) pushed.set(id, (entry = {}));
+    return entry;
+  };
+  let freshReadyAt = 0;
+  // Spare already holds recipe-box although this computer has no record of it.
+  let spareHasIt = scenario === "push-kitchens";
+
+  function recordPush(target: Project, k: TargetKitchen, record: Omit<PushRecord, "console_hostname">) {
+    pushedOf(target.id)[k.id] = { ...record, console_hostname: k.console_hostname };
+    target.push = { ...target.push, last: { instance_id: k.id, console_hostname: k.console_hostname, pushed_at: record.pushed_at } };
+  }
+
+  // `midway` starts the job 40% into sending, as if it had been running a while.
+  function startPush(target: Project, k: TargetKitchen, data: boolean, midway = false): Job {
+    const id = Math.random().toString(16).slice(2, 14);
+    const total = data ? 180 * 1024 ** 2 : 24 * 1024 ** 2;
+    const local = data && target.status === "started_ok" ? ["preparing", "stopping", "packing", "starting"] : ["preparing", "packing"];
+    const remote = data ? ["waiting", "unpacking", "restoring data", "completing"] : ["waiting", "unpacking", "completing"];
+    const quick = scenario === "push-done-secrets";
+    const stepMs = quick ? 400 : scenario === "push-running" ? 4000 : 1500;
+    const job: Job = { job_id: id, kind: "push", phase: local[0], state: "running", detail: "", progress: null, result: null, started_at: nowSec(), finished_at: null };
+    jobs.set(id, job);
+    target.job = { id, kind: "push", phase: job.phase, started_at: job.started_at };
+    const phase = (name: string) => {
+      job.phase = name;
+      if (target.job) target.job = { ...target.job, phase: name };
+    };
+    const fail = (code: string, detail: string, retryAfter: number | null = null) => {
+      target.job = null;
+      job.state = "failed";
+      job.detail = detail;
+      job.result = { code, retry_after: retryAfter };
+      job.finished_at = nowSec();
+    };
+    const steps: (() => void)[] = [
+      ...local.slice(1).map((name) => () => phase(name)),
+      () => {
+        if (scenario === "push-rate-limited") return fail("transfer_rate_limited", "Too many pushes. Try again in 2 minutes.", 120);
+        if (k.id === "spare" && spareHasIt && target.id === "recipe-box") {
+          spareHasIt = false;
+          recordPush(target, k, { pushed_at: nowSec(), kitchen_project: target.id, urls: [], secrets_missing: 0 });
+          return fail("already_on_kitchen", `${target.id} is already on ${k.display_name}. Pushing again replaces it there.`);
+        }
+        phase("sending");
+        job.progress = { done: 0, total };
+      },
+      ...Array.from({ length: quick ? 2 : 6 }, () => () => {
+        const p = job.progress!;
+        job.progress = { done: Math.min(p.total, p.done + p.total / (quick ? 2 : 6)), total: p.total };
+      }),
+      ...remote.map((name) => () => phase(name)),
+    ];
+    let step = 0;
+    if (midway) {
+      step = local.length;
+      phase("sending");
+      job.started_at = nowSec() - 42;
+      target.job = { id, kind: "push", phase: "sending", started_at: job.started_at };
+      job.progress = { done: 0.4 * total, total };
+    }
+    const tick = () => {
+      if (job.state !== "running") return;
+      if (step < steps.length) {
+        steps[step]();
+        step += 1;
+        window.setTimeout(tick, stepMs);
+        return;
+      }
+      const missing = quick ? 2 : 0;
+      const urls = [`https://${target.id}.${k.site_hostname}`];
+      recordPush(target, k, { pushed_at: nowSec(), kitchen_project: target.id, urls, secrets_missing: missing });
+      target.job = null;
+      job.state = "done";
+      job.finished_at = nowSec();
+      job.result = {
+        instance_id: k.id, kitchen: k.display_name, kitchen_project: target.id, urls, secrets_missing: missing,
+        open_secrets_url: missing > 0 ? `${k.open_console_url}&return_path=${encodeURIComponent(`/p/${target.id}/secrets`)}` : null,
+        local_restart: local.includes("starting") ? "ok" : null,
+      };
+    };
+    window.setTimeout(tick, stepMs);
+    return job;
+  }
+
+  if (scenario.startsWith("push-") && projects.has("recipe-box")) {
+    const box = projects.get("recipe-box")!;
+    if (scenario === "push-no-account") {
+      for (const p of projects.values()) p.push = { blocked: "signed_out", last: null };
+    }
+    if (scenario === "push-kitchens") {
+      recordPush(box, kitchens[0], {
+        pushed_at: nowSec() - 3 * 86_400, kitchen_project: "recipe-box", urls: ["https://recipe-box.shop.eggie.space"], secrets_missing: 2,
+      });
+    }
+    if (scenario === "push-running") startPush(box, kitchens[0], false, true);
+  }
+
   const guard = () => (signedIn ? null : notSignedIn());
   const find = (id: string) => projects.get(id) ?? null;
 
@@ -331,6 +472,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       if (target.job) return busy();
       if (action !== "down" && target.empty) return refuse(NO_COMPOSE.code, NO_COMPOSE.message, 400);
+      target.start_when_ready = false;
       return HttpResponse.json({ job_id: startJob(target, action).job_id }, { status: 202 });
     });
 
@@ -510,7 +652,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       return HttpResponse.json({
-        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at })),
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, unused: entry.unused.has(name) })),
         requested: [...entry.requested].map(([name, hint]) => ({ name, hint })),
         restart_needed: target.restart_needed,
       });
@@ -525,9 +667,14 @@ export function handlersFor(scenario: Scenario) {
       if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
       const entry = secretsOf(target.id);
       entry.names.set(name, nowSec());
-      entry.requested.delete(name);
+      entry.unused.delete(name);
+      const hadRequest = entry.requested.delete(name);
       target.secrets_requested = entry.requested.size;
       touched(target);
+      if (hadRequest && entry.requested.size === 0 && target.start_when_ready && !target.job) {
+        target.start_when_ready = false;
+        startJob(target, "up");
+      }
       return new HttpResponse(null, { status: 204 });
     }),
     http.delete("/api/projects/:id/secrets/:name", ({ params }) => {
@@ -536,6 +683,7 @@ export function handlersFor(scenario: Scenario) {
       const entry = secretsOf(target.id);
       const name = String(params.name);
       const hadValue = entry.names.delete(name);
+      entry.unused.delete(name);
       const hadRequest = entry.requested.delete(name);
       if (!hadValue && !hadRequest) return refuse("secret_not_found", "no such secret", 404);
       target.secrets_requested = entry.requested.size;
@@ -554,6 +702,50 @@ export function handlersFor(scenario: Scenario) {
       const adopted = project(name, { first_run: true });
       projects.set(name, adopted);
       return HttpResponse.json(adopted, { status: 201 });
+    }),
+    http.get("/api/projects/:id/push", async ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const target = find(String(params.id));
+      if (!target) return notFound(String(params.id));
+      await delay(300);
+      if (target.push.blocked === "signed_out") return refuse("not_signed_in", "Push needs an Eggie account. Sign in to use it.", 409);
+      if (scenario === "push-offline") return refuse("cloud_unavailable", "The Eggie service couldn't be reached. Check the internet connection.", 503);
+      if (freshReadyAt === 0) freshReadyAt = Date.now() + 12_000;
+      const shown = kitchens.map((k) => (k.readiness === "starting" && Date.now() >= freshReadyAt ? { ...k, readiness: "ready" } : k));
+      return HttpResponse.json({
+        kitchens: shown,
+        create_kitchen_url: `${WEB_APP}/kitchens/new`,
+        pushed: pushedOf(target.id),
+        databases: target.id === "recipe-box"
+          ? [{ service: "db", image: "postgres:latest", floating: true }, { service: "cache", image: "redis:7", floating: false }]
+          : [],
+        running: target.status === "started_ok",
+      });
+    }),
+    http.post("/api/projects/:id/push", async ({ params, request }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const target = find(String(params.id));
+      if (!target) return notFound(String(params.id));
+      if (target.job) return busy();
+      const body = (await request.json()) as { instance_id: string; data: boolean; replace_data: boolean };
+      const k = kitchens.find((each) => each.id === body.instance_id);
+      if (!k) return refuse("instance_not_found", "That kitchen is gone.", 404);
+      if (body.data && pushedOf(target.id)[k.id] && !body.replace_data) {
+        return refuse("confirm_replace_data", "Confirm that the kitchen's data should be replaced.", 409);
+      }
+      return HttpResponse.json({ job_id: startPush(target, k, body.data).job_id }, { status: 202 });
+    }),
+    http.post("/api/projects/:id/start-when-ready", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const target = find(String(params.id));
+      if (!target) return notFound(String(params.id));
+      if (target.job) return busy();
+      if (target.secrets_requested === 0) return HttpResponse.json({ job_id: startJob(target, "up").job_id }, { status: 202 });
+      target.start_when_ready = true;
+      return HttpResponse.json({ waiting: target.secrets_requested });
     }),
     lifecycle("up"),
     lifecycle("down"),

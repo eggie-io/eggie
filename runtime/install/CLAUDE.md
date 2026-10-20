@@ -113,8 +113,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
   `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
   every session over the ssh control master opened at boot, before step 10's `usermod`, so those
   sessions never get the docker group. Step 11 therefore also grants each account access by uid
-  (ACLs on `/opt/eggie/projects` and `api.token`), and step 4's default ACL makes new project
-  entries group-writable whatever the creator's umask (the API's is 022).
+  (ACLs on `/opt/eggie/projects` and `api.token`, default ACLs on `/opt/eggie/transfers`), and
+  step 4's default ACL makes new project and transfer entries group-writable whatever the creator's umask (the API's is 022).
 - Every console status poll starts `eggie-agents.service`, so journald shows a Started/Finished
   pair every 3 s while an agents screen is open; and `systemctl start eggie-agents.service` in
   `install.sh` step 11c blocks while a requested setup runs.

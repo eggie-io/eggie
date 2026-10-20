@@ -11,7 +11,7 @@ export interface WebEntry {
   primary: boolean;
 }
 
-export type JobKind = "up" | "restart" | "down" | "clone";
+export type JobKind = "up" | "restart" | "down" | "clone" | "push" | "import";
 
 export interface ActiveJob {
   id: string;
@@ -33,6 +33,11 @@ export type PublicStatus =
   | { state: "on"; urls: PublicUrl[]; expires_at: number | null }
   | { state: "failed"; reason: Problem };
 
+export interface PushSummary {
+  blocked: "site" | "signed_out" | null;
+  last: { instance_id: string; console_hostname: string; pushed_at: number } | null;
+}
+
 export interface Project {
   id: string;
   status: Status;
@@ -47,10 +52,12 @@ export interface Project {
   public: PublicStatus;
   restart_needed: boolean;
   secrets_requested: number;
+  push: PushSummary;
+  start_when_ready: boolean;
 }
 
 export interface SecretsView {
-  secrets: { name: string; updated_at: number }[];
+  secrets: { name: string; updated_at: number; unused: boolean }[];
   requested: { name: string; hint: string }[];
   restart_needed: boolean;
 }
@@ -73,6 +80,7 @@ export interface Job {
   phase: string;
   state: "running" | "done" | "failed";
   detail: string;
+  progress?: { done: number; total: number } | null;
   result: unknown;
   started_at: number;
   finished_at: number | null;

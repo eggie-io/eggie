@@ -12,8 +12,10 @@ _GATEWAY = {502, 503, 504}
 
 
 class CloudError(Exception):
-    def __init__(self, code: str, message: str, status: int):
+    def __init__(self, code: str, message: str, status: int,
+                 retry_after: int | None = None):
         super().__init__(f"{code}: {message}")
+        self.retry_after = retry_after
         self.code = code
         self.message = message
         self.status = status
@@ -23,10 +25,20 @@ class CloudUnavailable(Exception):
     pass
 
 
-def _error_from(status: int, raw: bytes) -> Exception:
+def _retry_after(headers) -> int | None:
+    value = headers.get("Retry-After") if headers else None
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        # The HTTP-date form is not used by the service.
+        return None
+
+
+def _error_from(status: int, raw: bytes, headers=None) -> Exception:
     try:
         error = json.loads(raw)["error"]
-        return CloudError(str(error["code"]), str(error["message"]), status)
+        return CloudError(str(error["code"]), str(error["message"]), status,
+                          _retry_after(headers))
     except (ValueError, KeyError, TypeError):
         if status in _GATEWAY:
             return CloudUnavailable(f"the Eggie service answered {status}")
@@ -55,7 +67,7 @@ class Cloud:
                 status = response.status
                 raw = response.read()
         except urllib.error.HTTPError as e:
-            raise _error_from(e.code, e.read()) from None
+            raise _error_from(e.code, e.read(), e.headers) from None
         except (OSError, http.client.HTTPException) as e:
             # A truncated body (e.g. IncompleteRead) is not an OSError, but
             # it means the same thing here: the service did not answer.
@@ -124,3 +136,19 @@ class Cloud:
         instance's owner; the service consumes it either way."""
         return self.call("POST", "/v1/instances/handoff/redeem", token=token,
                          body={"code": code})
+
+    def transfer_targets(self, token: str):
+        return self.call("GET", "/v1/transfers/targets", token=token)
+
+    def mint_transfer_ticket(self, token: str, instance_id: str, project_id: str):
+        return self.call("POST", "/v1/transfers/tickets", token=token,
+                         body={"instance_id": instance_id, "project_id": project_id})
+
+    def redeem_transfer_ticket(self, token: str, ticket: str):
+        return self.call("POST", "/v1/transfers/tickets/redeem", token=token,
+                         body={"ticket": ticket})
+
+    def complete_transfer(self, token: str, ticket_id: str) -> None:
+        self.call("POST",
+                  f"/v1/transfers/{urllib.parse.quote(ticket_id, safe='')}/complete",
+                  token=token)

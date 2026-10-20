@@ -6,7 +6,7 @@ import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
 import { waitingPrompt } from "../../projects/prompts";
 import { publicView } from "../../projects/public";
-import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
+import { useDeleteProject, useLifecycle, useProject, useStartWhenReady } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
 import { AddressRows } from "./AddressRows";
@@ -20,6 +20,7 @@ export function ProjectPage() {
   const { id = "" } = useParams();
   const query = useProject(id);
   const lifecycle = useLifecycle(id);
+  const startWhenReady = useStartWhenReady(id);
   const forget = useDeleteProject(id);
   const navigate = useNavigate();
   const now = useNow();
@@ -58,7 +59,13 @@ export function ProjectPage() {
   const project = query.data;
   const primary = primaryUrl(project);
   const publicUrls = pub?.kind === "on" ? pub.urls : undefined;
-  const failed = lifecycle.error && <Notice tone="danger">{actionError(lifecycle.error)}</Notice>;
+  const failed = (lifecycle.error ?? startWhenReady.error) && (
+    <Notice tone="danger">{actionError(lifecycle.error ?? startWhenReady.error)}</Notice>
+  );
+  const start = () =>
+    project.secrets_requested > 0
+      ? startWhenReady.mutate(undefined, { onSuccess: () => navigate(`/p/${encodeURIComponent(id)}/secrets`) })
+      : lifecycle.mutate("up");
   const restartNotice = project.restart_needed && (
     <Notice tone="warning">Secrets changed — restart the project to apply them.</Notice>
   );
@@ -121,7 +128,7 @@ export function ProjectPage() {
             title={project.id}
             sub="Stopped"
             actions={
-              <Button variant="primary" icon="play" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up")}>
+              <Button variant="primary" icon="play" disabled={lifecycle.isPending || startWhenReady.isPending} onClick={start}>
                 Start
               </Button>
             }

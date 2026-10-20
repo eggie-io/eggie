@@ -35,10 +35,10 @@ class Opener:
         reply = self.replies.pop(0)
         if isinstance(reply, BaseException):
             raise reply
-        status, body = reply
+        status, body, *rest = reply
         if status >= 400:
-            raise urllib.error.HTTPError(request.full_url, status, "error", {},
-                                         io.BytesIO(body))
+            raise urllib.error.HTTPError(request.full_url, status, "error",
+                                         rest[0] if rest else {}, io.BytesIO(body))
         return _Response(status, body)
 
 
@@ -174,3 +174,52 @@ def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():
     assert (request.get_method(), request.full_url) == ("POST", "https://svc/api/v1/instances/handoff/redeem")
     assert json.loads(request.data) == {"code": "k3x9"}
     assert request.get_header("Authorization") == "Bearer at-1"
+
+
+def test_rate_limit_error_carries_retry_after():
+    opener = Opener((429, _error("transfer_rate_limited"), {"Retry-After": "120"}))
+    with pytest.raises(CloudError) as raised:
+        Cloud("https://svc/api", opener=opener).mint_transfer_ticket("t", "k1", "p1")
+    assert (raised.value.code, raised.value.retry_after) == ("transfer_rate_limited", 120)
+
+
+def test_an_unparseable_retry_after_is_ignored():
+    opener = Opener((429, _error("transfer_rate_limited"),
+                     {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}))
+    with pytest.raises(CloudError) as raised:
+        Cloud("https://svc/api", opener=opener).mint_transfer_ticket("t", "k1", "p1")
+    assert raised.value.retry_after is None
+
+
+def test_mint_sends_instance_and_project():
+    opener = Opener((200, b'{"ticket": "tk"}'))
+    out = Cloud("https://svc/api", opener=opener).mint_transfer_ticket("at-1", "k1", "p1")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("POST", "https://svc/api/v1/transfers/tickets")
+    assert json.loads(request.data) == {"instance_id": "k1", "project_id": "p1"}
+    assert request.get_header("Authorization") == "Bearer at-1"
+    assert out == {"ticket": "tk"}
+
+
+def test_redeem_sends_ticket_in_the_body_not_the_url():
+    opener = Opener((200, b'{"grant": 1}'))
+    Cloud("https://svc/api", opener=opener).redeem_transfer_ticket("at-1", "secret-ticket")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("POST", "https://svc/api/v1/transfers/tickets/redeem")
+    assert json.loads(request.data) == {"ticket": "secret-ticket"}
+    assert "secret-ticket" not in request.full_url
+
+
+def test_complete_posts_no_body():
+    opener = Opener((204, b""))
+    out = Cloud("https://svc/api", opener=opener).complete_transfer("at-1", "tr/1")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("POST", "https://svc/api/v1/transfers/tr%2F1/complete")
+    assert request.data is None and out is None
+
+
+def test_targets_are_listed_with_the_token():
+    opener = Opener((200, b'{"targets": []}'))
+    Cloud("https://svc/api", opener=opener).transfer_targets("at-1")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/transfers/targets")

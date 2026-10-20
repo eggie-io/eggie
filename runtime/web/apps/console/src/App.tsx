@@ -52,6 +52,10 @@ function Screens({ handoff }: { handoff: string | null }) {
     pendingHandoff.current = null;
     try {
       const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
+      // Once, before BrowserRouter mounts: a render-time replace would undo later navigation.
+      if (next.kind === "signedIn" && next.landing !== null) {
+        window.history.replaceState(null, "", next.landing);
+      }
       setSite((prev) => nextSite(prev, next));
       setWebApp((prev) => nextWebApp(prev, next));
       setResult(next);

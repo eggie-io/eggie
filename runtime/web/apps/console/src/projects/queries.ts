@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
+import type { PushTargets } from "../push/push";
 import type { DeletePreview, DeleteResult, Job, Project, ProjectList, PublicStatus, SecretsView } from "./types";
 
 const BUSY_MS = 3000;
@@ -55,6 +56,15 @@ export function useLifecycle(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (action: "up" | "down" | "restart") => api.post<{ job_id: string }>(`${projectPath(id)}/${action}`),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
+// Answers {job_id} when nothing is requested (it started) or {waiting} when it set the flag.
+export function useStartWhenReady(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ job_id: string } | { waiting: number }>(`${projectPath(id)}/start-when-ready`),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }
@@ -140,4 +150,38 @@ export function useDeleteSecret(id: string) {
     mutationFn: (name: string) => api.del<void>(secretPath(id, name)),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
+}
+
+const PUSH_TARGETS = (id: string) => ["push-targets", id] as const;
+const STARTING_MS = 5000;
+const OFFLINE_MS = 15_000;
+
+const offline = (error: unknown) => error instanceof ApiError && error.code === "cloud_unavailable";
+
+// Fetched on every open. A cloud_unavailable answer keeps polling with the dialog
+// closed, so the menu's "Offline" item comes back by itself.
+export function usePushTargets(id: string, open: boolean) {
+  return useQuery({
+    queryKey: PUSH_TARGETS(id),
+    queryFn: () => api.get<PushTargets>(`${projectPath(id)}/push`),
+    enabled: (query) => open || offline(query.state.error),
+    staleTime: 0,
+    refetchInterval: (query) => {
+      if (offline(query.state.error)) return OFFLINE_MS;
+      return open && query.state.data?.kitchens.some((k) => k.readiness === "starting") ? STARTING_MS : false;
+    },
+  });
+}
+
+export function useStartPush(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { instance_id: string; data: boolean; replace_data: boolean }) =>
+      api.post<{ job_id: string }>(`${projectPath(id)}/push`, body),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
+export function usePushJob(project: Project | undefined) {
+  return useJob(project?.job?.kind === "push" ? project.job.id : null);
 }

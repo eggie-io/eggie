@@ -40,6 +40,11 @@ class ProjectRepo:
         with self._db.tx() as conn:
             conn.execute("UPDATE projects SET last_started_at=? WHERE id=?", (at, id))
 
+    def set_start_when_ready(self, id, on: bool) -> None:
+        with self._db.tx() as conn:
+            conn.execute("UPDATE projects SET start_when_ready=? WHERE id=?",
+                         (1 if on else 0, id))
+
     def remove(self, id) -> None:
         with self._db.tx() as conn:
             conn.execute("DELETE FROM projects WHERE id=?", (id,))

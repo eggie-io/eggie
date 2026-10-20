@@ -79,7 +79,7 @@ def test_secrets_are_kept_per_project_and_never_listed_with_values(tmp_path):
     s.secrets.set("a", {"KEY": "one", "OTHER": "two"}, at=10.0)
     s.secrets.set("b", {"KEY": "three"}, at=11.0)
     assert [r["name"] for r in s.secrets.names("a")] == ["KEY", "OTHER"]
-    assert all(set(r) == {"name", "updated_at"} for r in s.secrets.names("a"))
+    assert all(set(r) == {"name", "updated_at", "unused_at"} for r in s.secrets.names("a"))
     assert s.secrets.values("a") == {"KEY": "one", "OTHER": "two"}
     assert s.secrets.values("b") == {"KEY": "three"}
 
@@ -177,3 +177,42 @@ def test_tx_rolls_back_a_failed_transaction_so_the_next_commit_is_clean(tmp_path
             raise RuntimeError("boom")
     repos.projects.add("b", "/g/b", "b.d.io")
     assert repos.projects.get("a")["status"] == "stopped"
+
+
+def test_kitchen_push_record_upserts_and_lists_by_instance(tmp_path):
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    repos.kitchen_pushes.record("shop", "k1", console_hostname="a.eggie.io", kitchen_project=None, urls=[], secrets_missing=0, at=1.0)
+    repos.kitchen_pushes.record("shop", "k1", console_hostname="a.eggie.io", kitchen_project="shop", urls=["https://u"], secrets_missing=2, at=2.0)
+    assert repos.kitchen_pushes.for_project("shop") == {"k1": {"pushed_at": 2.0, "console_hostname": "a.eggie.io",
+        "kitchen_project": "shop", "urls": ["https://u"], "secrets_missing": 2}}
+    assert repos.kitchen_pushes.pushed_ids() == {"shop"}
+
+
+def test_pushed_project_claim_keeps_first_pushed_at(tmp_path):
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    repos.pushed_projects.claim("shop", "c-1", "dev-1", 1.0)
+    repos.pushed_projects.claim("shop", "c-1", "dev-1", 5.0)
+    repos.pushed_projects.touch("shop", 6.0)
+    row = repos.pushed_projects.by_cloud_id("c-1")
+    assert (row["first_pushed_at"], row["last_pushed_at"]) == (1.0, 6.0)
+    assert repos.pushed_projects.local_ids() == {"shop"}
+    repos.pushed_projects.remove("shop")
+    assert repos.pushed_projects.by_cloud_id("c-1") is None
+
+
+def test_unused_mark_is_set_and_cleared(tmp_path):
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    repos.projects.add("shop", "/p/shop", "d")
+    repos.secrets.set("shop", {"A": "1"})
+    repos.secrets.mark_unused("shop", ["A"], 3.0)
+    assert repos.secrets.names("shop")[0]["unused_at"] == 3.0
+    repos.secrets.clear_unused("shop", ["A"])
+    assert repos.secrets.names("shop")[0]["unused_at"] is None
+
+
+def test_start_when_ready_defaults_off_and_toggles(tmp_path):
+    repos = Repos.open(Database(tmp_path / "s.db"))
+    repos.projects.add("shop", "/p/shop", "d")
+    assert repos.projects.get("shop")["start_when_ready"] == 0
+    repos.projects.set_start_when_ready("shop", True)
+    assert repos.projects.list()[0]["start_when_ready"] == 1

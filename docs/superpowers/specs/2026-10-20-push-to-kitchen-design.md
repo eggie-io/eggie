@@ -150,7 +150,7 @@ One uncompressed tar:
 ```
 manifest.json
 files/<project tree>
-volumes/<compose volume key>.tar     # only when data is sent
+volumes/<compose volume key>/        # only when data is sent: the volume's contents
 ```
 
 `manifest.json`:

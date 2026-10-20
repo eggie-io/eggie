@@ -306,6 +306,17 @@ def test_a_start_that_finds_the_project_busy_is_logged_not_raised(env):
     locks.release("blog")
 
 
+def test_a_start_that_cannot_read_the_project_is_logged_not_raised(env):
+    folder = _project(env)
+    _request(env, "A")
+    env.client.post("/projects/blog/start-when-ready")
+    (folder / "docker-compose.yml").write_text("services: [\n")
+    r = env.client.put("/projects/blog/secrets/A", json={"value": "1"})
+    assert r.status_code == 204
+    assert [s["name"] for s in env.client.get("/projects/blog/secrets").json()["secrets"]] == ["A"]
+    assert _ups(env) == []
+
+
 def test_apply_pushed_marks_unused_and_requests_missing(env):
     _project(env)
     env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})

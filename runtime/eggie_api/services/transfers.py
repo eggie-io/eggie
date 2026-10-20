@@ -33,7 +33,7 @@ from .lifecycle import LifecycleService
 from .loader import ProjectLoader
 from .locks import ProjectLocks
 from .ratelimit import Window
-from .secrets import RUNNING, SecretService
+from .secrets import SecretService
 
 log = logging.getLogger("eggie.api")
 
@@ -379,39 +379,51 @@ class _ImportJob:
         self.bundle = bundle
         self.staging = service._inbox / push.id
         self.image: str | None = None
+        self.stopped = False
 
     def run(self, write) -> dict:
         try:
-            result = self._steps(write)
-        except EggieError as e:
-            raise _failed(e.code, e.message) from None
-        except JobFailed as e:
-            if (e.result or {}).get("code"):
-                raise
-            raise _failed("import_failed", str(e)) from None
-        except Exception:
-            log.exception("importing a push into %s failed", self.pid)
-            raise _failed("import_failed", "The kitchen could not import the project.") from None
-        finally:
-            self.bundle.unlink(missing_ok=True)
-            self.s._remove(self.staging)
-            self.s._locks.release(self.pid)
-            self.s._ended(self.push)
-        if result["secrets_missing"] == 0:
             try:
-                self.s._lifecycle.start(self.pid)
+                result = self._steps(write)
             except EggieError as e:
-                write(f"not starting {self.pid}: {e.message}\n")
+                raise _failed(e.code, e.message) from None
+            except JobFailed as e:
+                if (e.result or {}).get("code"):
+                    raise
+                raise _failed("import_failed", str(e)) from None
+            except Exception:
+                log.exception("importing a push into %s failed", self.pid)
+                raise _failed("import_failed",
+                              "The kitchen could not import the project.") from None
+            finally:
+                self.bundle.unlink(missing_ok=True)
+                self.s._remove(self.staging)
+                self.s._locks.release(self.pid)
+                self.s._ended(self.push)
+        except JobFailed:
+            # It was up before: start whatever is in place now, rolled back or kept.
+            if self.stopped:
+                self._start(write)
+            raise
+        self._start(write)
         return result
+
+    def _start(self, write) -> None:
+        try:
+            self.s._lifecycle.start_when_ready(self.pid)
+        except EggieError as e:
+            write(f"not starting {self.pid}: {e.message}\n")
 
     def _steps(self, write) -> dict:
         write.phase("unpacking")
         write(f"unpacking the bundle for {self.pid}\n")
         manifest, compose = self._unpack()
         row = self.s._projects.get(self.pid)
-        if row["status"] in RUNNING:
+        # Compose down is idempotent, and a crash-looping stack still holds its volumes.
+        if row["status"] != "stopped":
             write.phase("stopping")
             write(f"stopping {self.pid}\n")
+            self.stopped = True
             try:
                 self.s._lifecycle.down_now(self.pid)
             except JobFailed as e:
@@ -478,11 +490,11 @@ class _ImportJob:
         if compose_name in others:
             raise Invalid("bad_bundle", f"The compose name {compose_name} belongs to "
                                         "another project on this kitchen.")
+        outside = rules.volume_outside(compose, compose_name, manifest.volumes)
+        if outside:
+            raise Invalid("bad_bundle", f"Volume {outside[0]} is named {outside[1]}, outside "
+                                        "this project.")
         for key in manifest.volumes:
-            name = rules.docker_volume_name(compose, compose_name, key)
-            if not name.startswith(f"{compose_name}_"):
-                raise Invalid("bad_bundle", f"Volume {key} is named {name}, outside "
-                                            "this project.")
             if not _real_dir(self.staging / "volumes" / key):
                 raise Invalid("bad_bundle", f"The bundle has no data for volume {key}.")
 

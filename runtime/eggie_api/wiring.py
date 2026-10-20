@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import ApiConfig
-from .errors import Conflict
+from .errors import EggieError
 from .infra import disk
 from .infra.cloud import Cloud
 from .infra.db import Database
@@ -46,10 +46,8 @@ log = logging.getLogger("eggie.api")
 def _start_quietly(lifecycle: LifecycleService, project_id: str) -> None:
     try:
         lifecycle.start(project_id)
-    except Conflict as e:
+    except EggieError as e:
         # The last secret is already saved; the user can still press Start.
-        if e.code != "project_busy":
-            raise
         log.info("not starting %s after its last secret: %s", project_id, e.message)
 
 
@@ -84,7 +82,7 @@ class Services:
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, kitchen=None,
-          sleep=None, free_bytes=None, timer=None) -> Services:
+          sleep=None, clock=None, free_bytes=None, timer=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -136,7 +134,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     push = PushService(
         config, runner, loader, repos.projects, secrets, lifecycle, locks, account, cloud,
         kitchen or KitchenClient(ca_file=config.kitchen_ca_file), repos.cloud_projects,
-        repos.kitchen_pushes, sync.wake, sleep=sleep or time.sleep)
+        repos.kitchen_pushes, sync.wake, clock=clock or time.time,
+        sleep=sleep or time.sleep)
     push.sweep()
     transfers = Transfers(
         config, runner, loader, repos.projects, repos.pushed_projects, secrets, lifecycle,

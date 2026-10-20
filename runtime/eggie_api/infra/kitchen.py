@@ -46,11 +46,19 @@ class _ProgressFile:
         self._file.close()
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect would re-send the Eggie-Transfer-* headers to wherever it points."""
+
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
 def _default_opener(ca_file: Path | None):
     context = ssl.create_default_context(cafile=None)
     if ca_file is not None:
         context.load_verify_locations(cafile=str(ca_file))
-    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=context)).open
+    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=context),
+                                       _NoRedirect()).open
 
 
 def _envelope(raw: bytes) -> dict | None:
@@ -77,6 +85,8 @@ class KitchenClient:
             with self._open(request, timeout=self._timeout) as response:
                 raw = response.read()
         except urllib.error.HTTPError as e:
+            if 300 <= e.code < 400:
+                raise KitchenUnreachable(f"the kitchen answered {e.code}") from None
             raise self._error(e.code, e.read(), older_is_unreachable) from None
         except (OSError, http.client.HTTPException) as e:
             raise KitchenUnreachable(str(e)) from None

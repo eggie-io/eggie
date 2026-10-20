@@ -396,6 +396,34 @@ def test_complete_project_not_found_fails_and_keeps_files(kitchen):
     assert kitchen.services.locks.acquire("my-shop")
 
 
+@pytest.mark.parametrize("status", ["started_ok", "crash_looping"])
+def test_a_failed_import_stops_then_starts_again_a_project_that_was_up(kitchen, status):
+    folder = kitchen_project(kitchen, status=status)
+    local_project(kitchen)
+
+    result = push(kitchen, make_bundle(kitchen), replace="files",
+                  complete=[CloudError("project_not_found", "gone", 404)])
+    settle(kitchen, "my-shop")
+
+    assert result["state"] == "failed"
+    assert kitchen.runner.argv_containing("down")
+    assert kitchen.runner.argv_containing("up")
+    assert (folder / "src" / "app.py").exists()
+
+
+def test_a_failed_import_with_missing_secrets_waits_for_them(kitchen):
+    kitchen_project(kitchen, status="started_ok")
+    local_project(kitchen)
+
+    result = push(kitchen, make_bundle(kitchen, secrets={"STRIPE_KEY": ""}), replace="files",
+                  complete=[CloudError("project_not_found", "gone", 404)])
+    settle(kitchen, "my-shop")
+
+    assert result["state"] == "failed"
+    assert kitchen.repos.projects.get("my-shop")["start_when_ready"] == 1
+    assert kitchen.runner.argv_containing("up") == []
+
+
 def test_complete_is_retried_three_times_on_an_unreachable_service(kitchen):
     local_project(kitchen)
     path = make_bundle(kitchen)
@@ -411,8 +439,8 @@ def test_complete_is_retried_three_times_on_an_unreachable_service(kitchen):
     assert kitchen.sleeps == [1, 3, 9]
 
 
-def test_a_bad_manifest_fails_before_touching_files(kitchen):
-    folder = kitchen_project(kitchen)
+def test_a_bad_manifest_fails_before_touching_files_or_the_stack(kitchen):
+    folder = kitchen_project(kitchen, status="started_ok")
     # The manifest names a volume the pushed compose file does not have.
     local_project(kitchen, compose="services:\n  web:\n    image: nginx\n")
     path = kitchen.local.parent / "bad.tar"
@@ -426,11 +454,16 @@ def test_a_bad_manifest_fails_before_touching_files(kitchen):
     assert status["result"] == {"code": "bad_manifest"}
     assert (folder / "src" / "old.py").exists()
     assert list((kitchen.config.transfers_root / "in").iterdir()) == []
+    settle(kitchen, "my-shop")
+    assert kitchen.runner.argv_containing("down") == []
+    assert kitchen.runner.argv_containing("up") == []
 
 
-def test_a_failed_replace_puts_the_old_folder_back(kitchen):
+@pytest.mark.parametrize("status, starts", [("stopped", False), ("started_ok", True)])
+def test_a_failed_replace_puts_the_old_folder_back(kitchen, status, starts):
     compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
-    folder = kitchen_project(kitchen, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"})
+    folder = kitchen_project(kitchen, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"},
+                             status=status)
     (folder / "docker-compose.yml").write_text(compose)
     # The pushed tree's `data` is a link out of the project; moving the
     # kitchen's data/pg through it would write outside the tree.
@@ -443,6 +476,8 @@ def test_a_failed_replace_puts_the_old_folder_back(kitchen):
     assert (folder / "src" / "old.py").exists()
     assert not (folder / "src" / "app.py").exists()
     assert (folder / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
+    settle(kitchen, "my-shop")
+    assert bool(kitchen.runner.argv_containing("up")) is starts
     assert kitchen.services.locks.acquire("my-shop")
 
 

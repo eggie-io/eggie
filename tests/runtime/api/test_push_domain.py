@@ -68,7 +68,7 @@ def test_kitchen_project_id_suffixes_taken_ids():
     assert kitchen_project_id("My Shop", {"my-shop", "my-shop-2"}) == "my-shop-3"
 
 
-@pytest.mark.parametrize("bad", ["", "x", "//evil.com", "/\\evil", "/a\\b", "/a#b", "/a b", "/a\x01", "/" + "a" * 1024])
+@pytest.mark.parametrize("bad", [None, 42, ["/x"], {"path": "/x"}, "", "x", "//evil.com", "/\\evil", "/a\\b", "/a#b", "/a b", "/a\x01", "/" + "a" * 1024])
 def test_unsafe_return_paths_become_none(bad):
     assert safe_return_path(bad) is None
 

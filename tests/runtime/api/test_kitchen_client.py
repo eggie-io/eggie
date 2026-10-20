@@ -1,6 +1,9 @@
+import email.message
 import io
 import json
 import urllib.error
+import urllib.request
+import urllib.response
 
 import pytest
 
@@ -92,3 +95,20 @@ def test_old_kitchen_and_connection_errors_are_unreachable():
     # Only open() reads a 401 as "older": elsewhere it is a real answer.
     with pytest.raises(KitchenError):
         client(_http_error(401, "not_signed_in")).status("k", "p", "t")
+
+
+def test_a_redirect_is_unreachable_and_never_followed(monkeypatch):
+    sent = []
+
+    def redirect(_handler, request):
+        sent.append(request.full_url)
+        headers = email.message.Message()
+        headers["Location"] = "https://elsewhere.example/steal"
+        response = urllib.response.addinfourl(io.BytesIO(b""), headers, request.full_url, 302)
+        response.msg = "Found"
+        return response
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", redirect)
+    with pytest.raises(KitchenUnreachable):
+        KitchenClient().status("k.example", "p1", "TOK")
+    assert sent == ["https://k.example/api/transfers/p1"]

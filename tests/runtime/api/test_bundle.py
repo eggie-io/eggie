@@ -209,3 +209,34 @@ def test_unpack_keeps_hard_links_inside_the_bundle(tmp_path):
         tar.addfile(link)
     unpack(bundle, dest)
     assert (dest / "files/b").read_text() == "x"
+
+
+def test_unpack_makes_project_files_group_writable_and_keeps_data_modes(tmp_path):
+    project = _project(tmp_path / "p")
+    (project / "run.sh").write_text("#!/bin/sh\n")
+    (project / "run.sh").chmod(0o755)
+    (project / "src" / "app.py").chmod(0o644)
+    (project / "pgdata" / "base" / "1").chmod(0o600)
+    (project / "pgdata").chmod(0o700)
+    vol = tmp_path / "vol"
+    vol.mkdir()
+    (vol / "shared").write_text("v")
+    (vol / "shared").chmod(0o664)
+    (vol / "tool").write_text("t")
+    (vol / "tool").chmod(0o4755)
+    out, dest = tmp_path / "b.tar", tmp_path / "dest"
+    dest.mkdir()
+    write_bundle(out, project, {"format": 1, "data_paths": ["pgdata"]}, volumes={"dbv": vol},
+                 data_paths=["pgdata"], include_data=True)
+
+    unpack(out, dest)
+
+    def mode(rel):
+        return (dest / rel).stat().st_mode & 0o7777
+    assert mode("files/src/app.py") == 0o664
+    assert mode("files/src") == 0o775
+    assert mode("files/run.sh") == 0o775
+    assert mode("files/pgdata") == 0o700
+    assert mode("files/pgdata/base/1") == 0o600
+    assert mode("volumes/dbv/shared") == 0o664
+    assert mode("volumes/dbv/tool") == 0o755

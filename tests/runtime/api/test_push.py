@@ -40,6 +40,21 @@ DONE = {"state": "done", "phase": "done", "detail": "",
                    "secrets_missing": 2}}
 
 
+class FakeTime:
+    """A clock that only moves when the push sleeps."""
+
+    def __init__(self):
+        self.now = 1_792_500_000.0
+        self.sleeps = []
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def clock(self):
+        return self.now
+
+
 def ticket(n=1):
     return {"ticket": f"tk-{n}", "expires_at": "2026-10-20T12:00:00Z",
             "instance_id": "k1", "console_hostname": "k1.eggie.io"}
@@ -47,9 +62,10 @@ def ticket(n=1):
 
 @pytest.fixture
 def env(tmp_path):
-    cloud, kitchen, sleeps = FakeCloud(), FakeKitchen(), []
-    for ns in _make_env(tmp_path, cloud=cloud, kitchen=kitchen, sleep=sleeps.append):
-        ns.cloud, ns.kitchen, ns.sleeps = cloud, kitchen, sleeps
+    cloud, kitchen, fake_time = FakeCloud(), FakeKitchen(), FakeTime()
+    for ns in _make_env(tmp_path, cloud=cloud, kitchen=kitchen, sleep=fake_time.sleep,
+                        clock=fake_time.clock):
+        ns.cloud, ns.kitchen, ns.time, ns.sleeps = cloud, kitchen, fake_time, fake_time.sleeps
         ns.client.post("/projects", json={"id": "shop"})
         (ns.config.projects_root / "shop" / "docker-compose.yml").write_text(COMPOSE_SHOP)
         ns.repos.cloud_projects.map("shop", "c-shop", "org-1")
@@ -163,13 +179,45 @@ def test_bundle_carries_secret_names_never_values(env):
 
 def test_record_is_written_when_the_kitchen_accepts_the_upload(env):
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
-           statuses=[KitchenUnreachable("gone")] * 3)
+           statuses=[KitchenUnreachable("gone")] * 31)
 
     job = push(env)
 
     assert job["state"] == "failed"
     assert job["result"]["code"] == "kitchen_unreachable"
     assert "k1" in env.repos.kitchen_pushes.for_project("shop")
+
+
+def test_waiting_rides_out_a_minute_of_missed_polls(env):
+    misses = [KitchenUnreachable("busy")] * 29 + [KitchenError("internal", "boom", 500)]
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[WORKING, *misses, DONE])
+
+    assert push(env)["state"] == "done"
+
+
+def test_waiting_gives_up_after_a_minute_without_an_answer(env):
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[WORKING] + [KitchenUnreachable("gone")] * 31 + [DONE])
+
+    job = push(env)
+
+    assert job["result"]["code"] == "kitchen_unreachable"
+    assert env.kitchen.names().count("status") == 32
+
+
+def test_an_import_still_running_after_two_hours_times_out(env):
+    def two_hours_later(*_args):
+        env.time.now += 2 * 3600
+        return WORKING
+
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[WORKING, two_hours_later, DONE])
+
+    job = push(env)
+
+    assert job["result"]["code"] == "kitchen_timeout"
+    assert job["detail"] == "My kitchen is still importing. Open the kitchen to check on shop."
 
 
 def test_repeat_push_with_data_needs_confirmation(env):
@@ -225,10 +273,14 @@ def test_rate_limit_reports_retry_after(env):
     assert "2 minutes" in job["detail"]
 
 
-def test_data_push_stops_and_restarts_a_running_project(env):
-    env.repos.projects.set_status("shop", "started_ok")
-    script(env, mints=[ticket()], opens=[OPENED], uploads=[None], statuses=[DONE])
+@pytest.mark.parametrize("status", ["started_ok", "crash_looping", "failed_to_start"])
+def test_data_push_stops_and_restarts_any_project_not_stopped(env, status):
+    env.repos.projects.set_status("shop", status)
+    script(env, targets=(TARGETS, TARGETS), mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[DONE])
 
+    # The dialog's "stops while its data is copied" notice reads the same flag.
+    assert env.browser.get("/api/projects/shop/push").json()["running"] is True
     job = push(env)
 
     words = [" ".join(argv) for argv in env.runner.calls]
@@ -237,6 +289,32 @@ def test_data_push_stops_and_restarts_a_running_project(env):
     up = next(i for i, w in enumerate(words) if w.endswith("up -d"))
     assert down < pack < up
     assert job["result"]["local_restart"] == "ok"
+
+
+def test_a_volume_named_outside_the_project_fails_before_anything_stops(env):
+    compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
+    (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
+    env.repos.projects.set_status("shop", "started_ok")
+    script(env)
+
+    job = push(env)
+
+    assert job["result"]["code"] == "bad_bundle"
+    assert "blog_db-data" in job["detail"] and "shop_" in job["detail"]
+    assert not [a for a in env.runner.calls if "down" in a or a[1] == "run"]
+    assert env.kitchen.calls == []
+
+
+def test_a_repeat_push_checks_volume_names_against_the_kitchen_project(env):
+    # Without a compose name the kitchen names volumes after its own project id.
+    compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: my-shop_db-data}")
+    (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
+    env.repos.kitchen_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
+                                    kitchen_project="my-shop", urls=[], secrets_missing=0,
+                                    at=1792510000)
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[None], statuses=[DONE])
+
+    assert push(env, replace_data=True)["state"] == "done"
 
 
 def test_unregistered_project_fails_with_not_registered(env):

@@ -129,8 +129,8 @@ SITE_BROWSER = {"Host": "foo.eggie.io"}
 SITE_ORIGIN = {"Origin": "https://foo.eggie.io"}
 
 
-def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, free_bytes=None,
-              timer=None, **overrides):
+def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, clock=None,
+              free_bytes=None, timer=None, **overrides):
     token_path = tmp_path / "api.token"
     token_path.write_text("test-token")
     config = ApiConfig(
@@ -158,7 +158,7 @@ def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, free_bytes=None
     runner = FakeRunner()
     probe = FakeProbe()
     app = create_app(config=config, runner=runner, http_probe=probe, cloud=cloud,
-                     kitchen=kitchen, sleep=sleep, free_bytes=free_bytes,
+                     kitchen=kitchen, sleep=sleep, clock=clock, free_bytes=free_bytes,
                      timer=timer)
     with TestClient(app, headers=AUTH) as client:
         # raw_client returns the 500 a real caller would see instead of

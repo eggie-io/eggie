@@ -13,7 +13,6 @@ from typing import Callable
 
 from ..config import ApiConfig
 from ..domain import push as rules
-from ..domain.project import STARTED_OK
 from ..errors import Conflict, DiskFull, EggieError, Unavailable, Upstream
 from ..infra import disk, docker, files
 from ..infra.bundle import pack_argv
@@ -35,6 +34,8 @@ REGISTRATION_WAIT = 15
 STATUS_INTERVAL = 2
 RETRY_DELAY = 5
 UNREACHABLE_ATTEMPTS = 3
+STATUS_GRACE = 60
+IMPORT_DEADLINE = 2 * 3600
 PACK_MARGIN = 512 * 1024 ** 2
 
 NOT_SIGNED_IN = "Push needs an Eggie account. Sign in to use it."
@@ -74,7 +75,14 @@ def _copy(code: str, *, kitchen: str, project: str, retry_after: int | None) -> 
         "kitchen_unreachable": (f"{kitchen} isn't answering, or runs an older Eggie. "
                                 "Try again in a minute."),
         "kitchen_restarted": "The kitchen restarted during the push. Push again.",
+        "kitchen_timeout": (f"{kitchen} is still importing. "
+                            f"Open the kitchen to check on {project}."),
     }.get(code)
+
+
+def _running(row: dict) -> bool:
+    # A crash-looping or half-started stack still writes to its volumes.
+    return row["status"] != "stopped"
 
 
 class _LogOnly:
@@ -143,7 +151,7 @@ class PushService:
                 "create_kitchen_url": reply.get("create_kitchen_url"),
                 "pushed": self._kitchen_pushes.for_project(project_id),
                 "databases": [asdict(d) for d in rules.databases(compose)],
-                "running": row["status"] == STARTED_OK}
+                "running": _running(row)}
 
     def start(self, project_id: str, instance_id: str, *, data: bool,
               replace_data: bool) -> str:
@@ -180,6 +188,7 @@ class _PushJob:
         self.instance_id = instance_id
         self.data = data
         self.replace = replace
+        self.compose = compose
         self.plan = rules.data_plan(compose)
         compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
         self.volumes = {key: rules.docker_volume_name(compose, compose_name, key)
@@ -211,9 +220,11 @@ class _PushJob:
         write.phase("preparing")
         kitchen = self._kitchen_row()
         cloud_id = self._cloud_id()
+        if self.data:
+            self._check_volume_names()
         self._check_disk()
         stopped = False
-        if self.data and self.s._projects.get(self.project_id)["status"] == STARTED_OK:
+        if self.data and _running(self.s._projects.get(self.project_id)):
             write.phase("stopping")
             write(f"stopping {self.project_id} while its data is copied\n")
             try:
@@ -267,6 +278,18 @@ class _PushJob:
             else:
                 raise self._fail("not_registered")
         return found["cloud_id"]
+
+    def _check_volume_names(self) -> None:
+        before = self.s._kitchen_pushes.for_project(self.project_id).get(self.instance_id) or {}
+        # Without a compose name the kitchen names volumes after its own project id.
+        compose_name = str(self.compose.get("name") or before.get("kitchen_project")
+                           or self.project_id)
+        outside = rules.volume_outside(self.compose, compose_name, self.plan.volumes)
+        if outside:
+            key, name = outside
+            raise self._fail("bad_bundle", (
+                f"Volume {key} is named {name}, and a kitchen only takes volumes whose "
+                f"names start with {compose_name}_. Push without data, or rename the volume."))
 
     def _check_disk(self) -> None:
         need = files.tree_stats(self.s._loader.dir(self.project_id))["bytes"] + PACK_MARGIN
@@ -359,22 +382,27 @@ class _PushJob:
             return opened["push_id"], opened["token"]
 
     def _wait(self, host: str, push_id: str, token: str) -> dict:
-        misses = 0
+        clock = self.s._clock
+        deadline = clock() + IMPORT_DEADLINE
+        first_miss = None
         while True:
+            if clock() >= deadline:
+                raise self._fail("kitchen_timeout")
             try:
                 status = self.s._kitchen.status(host, push_id, token)
-            except KitchenUnreachable:
-                misses += 1
-                if misses >= UNREACHABLE_ATTEMPTS:
+            except (KitchenUnreachable, KitchenError) as e:
+                if isinstance(e, KitchenError) and e.status < 500:
+                    # The kitchen keeps jobs in memory: a restart forgets the push.
+                    if e.status == 404:
+                        raise self._fail("kitchen_restarted") from None
+                    raise self._kitchen_failure(e) from None
+                # The bundle is in: a kitchen busy importing may answer slowly or not at all.
+                first_miss = clock() if first_miss is None else first_miss
+                if clock() - first_miss >= STATUS_GRACE:
                     raise self._fail("kitchen_unreachable") from None
                 self.s._sleep(STATUS_INTERVAL)
                 continue
-            except KitchenError as e:
-                # The kitchen keeps jobs in memory: a restart forgets the push.
-                if e.status == 404:
-                    raise self._fail("kitchen_restarted") from None
-                raise self._kitchen_failure(e) from None
-            misses = 0
+            first_miss = None
             if status.get("state") == DONE:
                 return status.get("result") or {}
             if status.get("state") == FAILED:

@@ -4,9 +4,11 @@ the API image; keep it free of anything that opens sqlite or starts threads."""
 from __future__ import annotations
 
 import argparse
+import grp
 import io
 import json
 import os
+import posixpath
 import shutil
 import sys
 import tarfile
@@ -16,6 +18,9 @@ from pathlib import Path
 from ..domain.push import is_excluded
 from .docker import DOCKER
 from .files import BadArchiveError, PathTraversalError
+
+PROJECT_GROUP = "docker"
+MAX_MANIFEST = 1024 ** 2
 
 
 def _is_data(rel: str, data_paths: Sequence[str]) -> bool:
@@ -79,6 +84,50 @@ def restore_volume(source: Path, target: Path) -> None:
                      follow_symlinks=False)
 
 
+def _manifest_data_paths(tar: tarfile.TarFile) -> tuple[str, ...]:
+    """Best effort: the API vets the manifest after unpacking and refuses a bad one."""
+    try:
+        member = tar.getmember("manifest.json")
+        if not member.isreg() or member.size > MAX_MANIFEST:
+            return ()
+        paths = json.loads(tar.extractfile(member).read()).get("data_paths")
+    except (KeyError, ValueError, AttributeError):
+        return ()
+    if not isinstance(paths, list):
+        return ()
+    return tuple(posixpath.normpath(p) for p in paths if isinstance(p, str))
+
+
+def _project_gid() -> int | None:
+    try:
+        return grp.getgrnam(PROJECT_GROUP).gr_gid
+    except KeyError:
+        return None
+
+
+def _ownership_filter(data_paths: Sequence[str], gid: int | None):
+    """Data (volumes and data_paths) keeps the sender's owners and modes, less the
+    high bits; every other project file joins the project group, group-writable."""
+    def apply(member: tarfile.TarInfo, dest: str) -> tarfile.TarInfo:
+        mode = member.mode
+        member = tarfile.tar_filter(member, dest)
+        name = posixpath.normpath(member.name)
+        rel = name.removeprefix("files/") if name.startswith("files/") else None
+        if mode is None or member.mode is None:
+            return member
+        if name == "volumes" or name.startswith("volumes/") or (
+                rel is not None and _is_data(rel, data_paths)):
+            return member.replace(mode=mode & 0o777, deep=False)
+        if name == "files" or rel is not None:
+            execute = 0o010 if member.isdir() or member.mode & 0o111 else 0
+            changes = {"mode": member.mode | 0o060 | execute}
+            if gid is not None:
+                changes["gid"] = gid
+            return member.replace(**changes, deep=False)
+        return member
+    return apply
+
+
 def unpack(bundle: Path, dest: Path) -> None:
     with tarfile.open(bundle) as tar:
         members = tar.getmembers()
@@ -93,8 +142,9 @@ def unpack(bundle: Path, dest: Path) -> None:
                 if m.linkname.startswith("/") or not target.startswith(
                         os.path.join(os.path.normpath(dest), "")):
                     raise PathTraversalError(f"hard link escapes bundle: {m.name}")
+        apply = _ownership_filter(_manifest_data_paths(tar), _project_gid())
         try:
-            tar.extractall(dest, members=members, filter="tar", numeric_owner=True)
+            tar.extractall(dest, members=members, filter=apply, numeric_owner=True)
         except tarfile.FilterError as e:
             raise PathTraversalError(str(e)) from e
 

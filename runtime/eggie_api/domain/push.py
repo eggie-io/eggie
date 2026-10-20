@@ -110,6 +110,17 @@ def docker_volume_name(compose: dict, compose_name: str, key: str) -> str:
     return spec.get("name") or f"{compose_name}_{key}"
 
 
+def volume_outside(compose: dict, compose_name: str,
+                   keys) -> tuple[str, str] | None:
+    """(key, docker name) of the first volume a kitchen refuses: restoring removes
+    each volume first, so it only takes names under the project's compose name."""
+    for key in keys:
+        name = docker_volume_name(compose, compose_name, key)
+        if not name.startswith(f"{compose_name}_"):
+            return key, name
+    return None
+
+
 def replace_mode(pushed_before: bool, data: bool) -> str:
     if not pushed_before:
         return REPLACE_NONE
@@ -152,8 +163,8 @@ def kitchen_project_id(name: str, taken: set[str]) -> str:
     return candidate
 
 
-def safe_return_path(path: str | None) -> str | None:
-    if not path or len(path) > MAX_RETURN_PATH or path[0] != "/":
+def safe_return_path(path: object) -> str | None:
+    if not isinstance(path, str) or not path or len(path) > MAX_RETURN_PATH or path[0] != "/":
         return None
     if len(path) > 1 and path[1] in "/\\":
         return None

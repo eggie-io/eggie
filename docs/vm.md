@@ -60,8 +60,8 @@ appendWindowsPath=false
 - `[interop] enabled=true`: never set it to `false`. Interop is one registration on the kernel
   every WSL distro shares, so turning it off in `eggie-vm` turns it off in the user's other
   distros too. A VM that got `false` from an earlier build is set back to `true` on its next
-  install, update or repair, and the other distros have it again once `eggie-vm` and they have
-  restarted (`wsl --shutdown` restarts them all).
+  install, update or repair. Updating alone does not repair the other distros: run
+  `wsl --shutdown` afterwards, which restarts `eggie-vm` and them.
 
 WSL reads the file only when the distro starts. Setup restarts a VM it has just created once,
 right after the first install. An existing VM picks up a change at its next start (Windows

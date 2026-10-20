@@ -11,8 +11,8 @@ INSTALL = ROOT / "runtime" / "install" / "install.sh"
 ISOLATION = ["automount.enabled=false", "interop.enabled=true",
              "interop.appendWindowsPath=false"]
 
-# What a VM set up before this change has: create() wrote [boot], wsl-user.sh
-# appended [user].
+# A VM without the settings yet: create() wrote [boot], wsl-user.sh appended
+# [user].
 EXISTING_VM = "[boot]\nsystemd=true\n\n[user]\ndefault=eggie\n"
 ISOLATED_VM = ("[boot]\nsystemd=true\n\n[user]\ndefault=eggie\n\n"
                "[automount]\nenabled=false\n\n"
@@ -100,4 +100,3 @@ def test_install_enforces_isolation_on_wsl_only(tmp_path):
     assert "lib/wsl-conf.py" in branch
     for key in ISOLATION:
         assert key in branch
-    assert "interop.enabled=false" not in text

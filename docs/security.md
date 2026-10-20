@@ -68,10 +68,12 @@ computer.
   Interop (Linux starting Windows `.exe` files) stays on. It is one registration (`WSLInterop` in
   `binfmt_misc`) on the kernel that every WSL distro shares, so `eggie-vm` booting with it off
   takes it away from the user's other distros as well; their `docker build` then fails with
-  `docker-credential-desktop.exe: exec format error`. Turning it off would add little anyway:
-  with no drive mounted and no Windows folders on `PATH`, nothing in the VM has a Windows program
-  at hand to start. `enabled=true` is written out so a VM that got `false` from an earlier build
-  gets it back.
+  `docker-credential-desktop.exe: exec format error`. `enabled=true` is written out so a VM that
+  got `false` from an earlier build gets it back. Those other distros have interop again once
+  `eggie-vm` has the update and everything has restarted: run `wsl --shutdown` after the update.
+
+  With no drive mounted and no Windows folders on `PATH`, no Windows program is at hand for a
+  command to start by mistake. That is all it does: see below.
 
   WSL reads the file only when the distro starts. Setup restarts a VM it has just created right
   after the first install, before anyone uses it. A VM that was already running when it got the
@@ -80,9 +82,13 @@ computer.
 
 What this does not stop:
 
+- **A Windows program started on purpose.** With interop on, any process in the VM, not only
+  root, can run a Windows `.exe` it has in the VM, for example one it downloaded into
+  `~/projects`. It runs on Windows as the user, with their files.
 - **Anything with root in the VM.** `eggie` has passwordless `sudo` and is in the `docker` group,
   which is root in the VM too, and coding agents run as `eggie`. Root can mount a drive by hand
-  (`mount -t drvfs C: /mnt/c`) and, through interop, start any Windows program on it. It can also
+  (`mkdir /mnt/c && mount -t drvfs C: /mnt/c`) and, through interop, start any Windows program
+  on it. It can also
   edit `/etc/wsl.conf`; the next install puts these keys back, but a reboot in between applies the
   edit.
 - **A kernel escape.** Every WSL2 distro on the computer runs in one shared utility VM with one

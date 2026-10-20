@@ -111,8 +111,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
   every WSL distro shares that kernel registration, so `eggie-vm` booting with
   `[interop] enabled=false` takes it from the user's other distros (`docker build` there fails
   with `docker-credential-desktop.exe: exec format error`). These settings guard the user's files
-  against accidents only: root in the VM (passwordless sudo, the docker group) can mount a drive
-  by hand or edit wsl.conf. The API writes into projects through the docker group; `/etc/gitconfig` trusts
+  against accidents only: any process can run a Windows `.exe` it has in the VM, and root
+  (passwordless sudo, the docker group) can mount a drive by hand or edit wsl.conf. The API writes into projects through the docker group; `/etc/gitconfig` trusts
   `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
   every session over the ssh control master opened at boot, before step 10's `usermod`, so those
   sessions never get the docker group. Step 11 therefore also grants each account access by uid

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .infra.cloud import Cloud
 from .infra.db import Database
 from .infra.github import GitHub
 from .infra.health import default_probe
+from .infra.kitchen import KitchenClient
 from .infra.repos import Repos
 from .infra.runner import LocalRunner
 from .infra.tunnel import TunnelClient
@@ -28,6 +30,7 @@ from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
 from .services.projects import ProjectService
 from .services.public import Public
+from .services.push import PushService
 from .services.secrets import SecretService
 from .services.sessions import Sessions
 from .services.site import SiteSignIn
@@ -65,6 +68,7 @@ class Services:
     secrets: SecretService
     account: Account
     public: Public
+    push: PushService
     github_link: GitHubLink
     sessions: Sessions
     site: SiteSignIn
@@ -77,7 +81,8 @@ class Services:
 
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
-          sessions=None, jobs=None, repos=None) -> Services:
+          sessions=None, jobs=None, repos=None, kitchen=None,
+          sleep=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -126,17 +131,22 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     lifecycle = LifecycleService(config, runner, loader, repos.projects, secrets,
                                  jobs, locks, http_probe)
     secrets.on_all_set = lambda pid: _start_quietly(lifecycle, pid)
+    push = PushService(
+        config, runner, loader, repos.projects, secrets, lifecycle, locks, account, cloud,
+        kitchen or KitchenClient(ca_file=config.kitchen_ca_file), repos.cloud_projects,
+        repos.kitchen_pushes, sync.wake, sleep=sleep or time.sleep)
+    push.sweep()
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,
         projects=ProjectService(config, runner, loader, repos.projects, secrets,
                                 jobs, locks, uploads, public, http_probe,
-                                sync.wake),
+                                sync.wake, push.summary),
         lifecycle=lifecycle,
         clone=CloneService(config, runner, loader, repos.projects, locks,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
-        account=account, public=public, github_link=github_link,
+        account=account, public=public, push=push, github_link=github_link,
         sessions=sessions, site=site,
         instances=Instances(account, cloud, config.site_host),
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),

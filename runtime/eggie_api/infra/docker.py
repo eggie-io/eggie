@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
+import re
 
 # Absolute path: Docker Desktop's WSL integration puts its own docker CLI on
 # PATH, and a bare `docker` would send this VM's projects to Desktop's engine.
@@ -147,6 +149,28 @@ def own_image(runner) -> str | None:
     """The image this API runs from, already on the VM so no pull is needed."""
     result = inspect_own_image(runner)
     return result.stdout.strip() if result.ok else None
+
+
+# Docker prints sizes in decimal units (go-units HumanSize).
+_SIZE_UNITS = {"B": 1, "kB": 10**3, "KB": 10**3, "MB": 10**6, "GB": 10**9,
+               "TB": 10**12, "PB": 10**15}
+
+
+def volume_sizes(runner) -> dict[str, int]:
+    """Bytes per volume name; empty when docker cannot say."""
+    result = runner.exec([DOCKER, "system", "df", "-v", "--format", "json"], root=True)
+    if not result.ok:
+        return {}
+    try:
+        rows = json.loads(result.stdout).get("Volumes") or []
+    except (ValueError, AttributeError):
+        return {}
+    sizes = {}
+    for row in rows:
+        match = re.fullmatch(r"([\d.]+)\s*([kKMGTP]?B)", str(row.get("Size", "")).strip())
+        if match and row.get("Name"):
+            sizes[row["Name"]] = int(float(match[1]) * _SIZE_UNITS[match[2]])
+    return sizes
 
 
 def remove_tree_as_root(runner, path) -> Completed:

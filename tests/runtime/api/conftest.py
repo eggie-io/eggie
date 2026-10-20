@@ -57,6 +57,9 @@ class FakeRunner:
         # Called with the destination path before `clone` is returned, so a
         # test can put files where a real clone would.
         self.on_clone = None
+        self.own_image = Completed(0, "eggie-api:test\n", "")
+        # Answers `docker run` (the root helper container) when set.
+        self.on_docker_run = None
 
     def exec(self, argv, *, root=False, env=None):
         self.calls.append(argv)
@@ -65,6 +68,10 @@ class FakeRunner:
             if self.on_clone is not None:
                 self.on_clone(argv[-1])
             return self._reply(self.clone)
+        if argv[1] == "run" and self.on_docker_run is not None:
+            return self.on_docker_run(argv)
+        if argv[1:4] == ["inspect", "--format", "{{.Config.Image}}"]:
+            return self.own_image
         if argv[1] == "version":
             return self._reply(self.docker_version)
         if argv[1] == "exec":
@@ -122,7 +129,7 @@ SITE_BROWSER = {"Host": "foo.eggie.io"}
 SITE_ORIGIN = {"Origin": "https://foo.eggie.io"}
 
 
-def _make_env(tmp_path, **overrides):
+def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, **overrides):
     token_path = tmp_path / "api.token"
     token_path.write_text("test-token")
     config = ApiConfig(
@@ -144,11 +151,13 @@ def _make_env(tmp_path, **overrides):
             "tunnel_token_path": tmp_path / "tunnel.token",
             "tls_dir": tmp_path / "tls",
             "account_seed": tmp_path / "account.json",
+            "transfers_root": tmp_path / "transfers",
             **overrides,
         })
     runner = FakeRunner()
     probe = FakeProbe()
-    app = create_app(config=config, runner=runner, http_probe=probe)
+    app = create_app(config=config, runner=runner, http_probe=probe, cloud=cloud,
+                     kitchen=kitchen, sleep=sleep)
     with TestClient(app, headers=AUTH) as client:
         # raw_client returns the 500 a real caller would see instead of
         # re-raising the exception inside the test.

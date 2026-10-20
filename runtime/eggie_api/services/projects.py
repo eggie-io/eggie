@@ -30,7 +30,8 @@ class ProjectService:
     def __init__(self, config: ApiConfig, runner, loader: ProjectLoader,
                  projects: ProjectRepo, secrets: SecretService, jobs: JobRegistry,
                  locks: ProjectLocks, uploads: UploadService, public: Public,
-                 http_probe, wake: Callable[[], None]):
+                 http_probe, wake: Callable[[], None],
+                 push_summary: Callable[[str], dict]):
         self._config = config
         self._runner = runner
         self._loader = loader
@@ -42,6 +43,7 @@ class ProjectService:
         self._public = public
         self._probe = http_probe
         self._wake = wake
+        self._push_summary = push_summary
 
     def payload(self, row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -89,6 +91,7 @@ class ProjectService:
                 "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
                 "web": web,
                 "public": public_status,
+                "push": self._push_summary(row["id"]),
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": self._secrets.restart_needed(row),
                 "secrets_requested": self._secrets.requested_count(row["id"]),

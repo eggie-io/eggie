@@ -37,3 +37,9 @@ class SecretHint(BaseModel):
 class CloneRepo(BaseModel):
     repo: str
     id: str | None = None
+
+
+class PushRequest(BaseModel):
+    instance_id: str = Field(min_length=1, max_length=256)
+    data: bool = False
+    replace_data: bool = False

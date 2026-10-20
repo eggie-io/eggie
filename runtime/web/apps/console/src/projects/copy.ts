@@ -29,6 +29,7 @@ export function pushPhaseCaption(phase: string): string {
     case "starting":
       return "Starting it again on this computer";
     case "sending":
+    case "receiving":
       return "Sending it to the kitchen";
     case "waiting":
       return "Waiting for the kitchen";

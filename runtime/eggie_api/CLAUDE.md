@@ -148,10 +148,11 @@ and a host release. Prefer additive changes.
   and `rest/routers/transfers.py` (`POST /api/transfers`, `PUT .../bundle`, `GET .../{push_id}`,
   `GET /api/ready`), site only, with their own auth branch in `rest/auth.py` (ticket and push token in
   `Eggie-Transfer-*` headers, never URL or log). The kitchen unpacks with
-  `python -m eggie_api.infra.bundle unpack` (root container, `filter="tar"`, numeric owners; refuses
-  absolute names, devices, FIFOs, escaping hard links). It takes project identity from the grant only,
-  refuses a bundle whose data flag differs from the open header (`bad_bundle`), and drops an opened
-  push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
+  `python -m eggie_api.infra.bundle unpack` (root container, `filter="tar"`; refuses absolute names,
+  devices, FIFOs, escaping hard links). Only `volumes/` and the manifest's `data_paths` keep the
+  sender's numeric owners and modes; every other project file gets group `docker` and `g+rwX`. It
+  takes project identity from the grant only, refuses a bundle whose data flag differs from the open
+  header (`bad_bundle`), and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
   sync; `kitchen_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
   the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
@@ -174,6 +175,8 @@ and a host release. Prefer additive changes.
 - Anything the API creates inside a project must be group-writable: login users are never the
   API's uid. `install.sh`'s default ACL on `/opt/eggie/projects` handles that under the API's
   umask 022; `clone_argv`'s `umask 002` predates it and is harmless.
+- An API restart during a kitchen import's replace step loses `transfers/in/<push>/old` (the sweep
+  deletes it); a failed volume restore leaves that volume empty (it is removed before copying).
 - A top-level directory or module in `eggie_api/` must not share a name with a stdlib module (`http`,
   `json`, …): the image's working directory is first on `sys.path`, so it would shadow the stdlib.
   `test_layering.py` pins it.

@@ -81,6 +81,8 @@ def test_manifest_round_trip_and_refusals():
     compose = {"services": {"db": {"image": "postgres:16", "volumes": ["./pgdata:/d", "dbv:/x"]}}, "volumes": {"dbv": {}}}
     raw = build_manifest(data=True, plan=data_plan(compose), secrets={"API_KEY": "hint"})
     assert parse_manifest(raw, compose) == Manifest(True, ("dbv",), ("pgdata",), {"API_KEY": "hint"})
+    no_data = build_manifest(data=False, plan=data_plan(compose), secrets={})
+    assert parse_manifest(no_data, compose) == Manifest(False, ("dbv",), ("pgdata",), {})
     for broken in ({**raw, "format": 2}, {**raw, "volumes": ["nope"]}, {**raw, "data_paths": ["../etc"]},
                    {**raw, "secrets": [{"name": "PATH", "hint": ""}]}):
         with pytest.raises(Invalid):

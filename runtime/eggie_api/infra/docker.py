@@ -138,10 +138,14 @@ def remove_by_label(runner, name: str, *, volumes: bool) -> Completed:
     return failure or Completed(0, "", "")
 
 
+def inspect_own_image(runner) -> Completed:
+    return runner.exec([DOCKER, "inspect", "--format", "{{.Config.Image}}",
+                        os.environ.get("HOSTNAME", "")], root=True)
+
+
 def own_image(runner) -> str | None:
     """The image this API runs from, already on the VM so no pull is needed."""
-    result = runner.exec([DOCKER, "inspect", "--format", "{{.Config.Image}}",
-                          os.environ.get("HOSTNAME", "")], root=True)
+    result = inspect_own_image(runner)
     return result.stdout.strip() if result.ok else None
 
 
@@ -149,13 +153,13 @@ def remove_tree_as_root(runner, path) -> Completed:
     """The API runs as uid 1000, and containers write root-owned files into
     bind-mounted project folders. Removes `path` from a throwaway container of
     this API's own image running as root."""
-    image = own_image(runner)
-    if image is None:
-        return Completed(1, "", "could not find this API's image")
+    found = inspect_own_image(runner)
+    if not found.ok:
+        return found
     parent = str(os.path.dirname(str(path)))
     return runner.exec([DOCKER, "run", "--rm", "--user", "0",
                         "-v", f"{parent}:{parent}", "--entrypoint", "",
-                        image, "rm", "-rf", str(path)], root=True)
+                        found.stdout.strip(), "rm", "-rf", str(path)], root=True)
 
 
 def container_id(provider, directory, service: str, *,

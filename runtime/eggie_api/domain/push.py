@@ -166,8 +166,8 @@ def build_manifest(*, data: bool, plan: DataPlan, secrets: dict[str, str]) -> di
     return {
         "format": MANIFEST_FORMAT,
         "data": data,
-        "volumes": list(plan.volumes) if data else [],
-        "data_paths": list(plan.data_paths) if data else [],
+        "volumes": list(plan.volumes),
+        "data_paths": list(plan.data_paths),
         "secrets": [{"name": n, "hint": secrets[n]} for n in sorted(secrets)],
     }
 

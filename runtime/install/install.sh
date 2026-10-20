@@ -315,12 +315,11 @@ else vm=other
 fi
 if [[ "$vm" == wsl ]]; then
   bash "$INSTALL_DIR/lib/wsl-user.sh" /etc/wsl.conf /etc/sudoers.d
-  # No C: drive at /mnt/c, no Windows folders on PATH. Enforced every run, so
-  # an older VM or a hand edit gets it back; WSL reads it at boot only.
+  # No C: drive at /mnt/c, no Windows folders on PATH; WSL reads it at boot.
   # Interop stays on: it is one kernel registration every WSL distro shares,
-  # and turning it off here takes it from the user's other distros too.
+  # so turning it off here breaks the user's other distros.
   python3 "$INSTALL_DIR/lib/wsl-conf.py" /etc/wsl.conf \
-    automount.enabled=false interop.enabled=true interop.appendWindowsPath=false
+    automount.enabled=false interop.appendWindowsPath=false
 fi
 
 # 10. per account: docker group, agent instructions, ~/projects, skills.

@@ -52,6 +52,7 @@ export const SCENARIOS = [
   "push-running",
   "push-done-secrets",
   "push-rate-limited",
+  "kitchen-waiting-secrets",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -136,13 +137,22 @@ export function handlersFor(scenario: Scenario) {
   const linkedRepos = new Map<string, string>([["ada/recipe-box", "recipe-box"]]);
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string> }>();
+  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string>; unused: Set<string> }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]) }
-        : { names: new Map(), requested: new Map() };
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]), unused: new Set<string>() }
+        : scenario === "kitchen-waiting-secrets" && id === "weekend-shop"
+        ? {
+            names: new Map([["MAIL_PASSWORD", nowSec() - 3600], ["OLD_SENTRY_DSN", nowSec() - 86_400]]),
+            requested: new Map([
+              ["STRIPE_KEY", "Set on your computer. Enter its value for the kitchen."],
+              ["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"],
+            ]),
+            unused: new Set(["OLD_SENTRY_DSN"]),
+          }
+        : { names: new Map(), requested: new Map(), unused: new Set<string>() };
       secrets.set(id, entry);
     }
     return entry;
@@ -302,6 +312,10 @@ export function handlersFor(scenario: Scenario) {
     seedFile(p.id, "README.md", 2048, hoursAgo(30));
   }
 
+  if (scenario === "kitchen-waiting-secrets") {
+    const shop = projects.get("weekend-shop");
+    if (shop) shop.secrets_requested = secretsOf("weekend-shop").requested.size;
+  }
   if (scenario === "secrets") {
     const box = projects.get("recipe-box");
     if (box) box.secrets_requested = secretsOf("recipe-box").requested.size;
@@ -458,6 +472,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       if (target.job) return busy();
       if (action !== "down" && target.empty) return refuse(NO_COMPOSE.code, NO_COMPOSE.message, 400);
+      target.start_when_ready = false;
       return HttpResponse.json({ job_id: startJob(target, action).job_id }, { status: 202 });
     });
 
@@ -637,7 +652,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       return HttpResponse.json({
-        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at })),
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, unused: entry.unused.has(name) })),
         requested: [...entry.requested].map(([name, hint]) => ({ name, hint })),
         restart_needed: target.restart_needed,
       });
@@ -652,9 +667,14 @@ export function handlersFor(scenario: Scenario) {
       if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
       const entry = secretsOf(target.id);
       entry.names.set(name, nowSec());
-      entry.requested.delete(name);
+      entry.unused.delete(name);
+      const hadRequest = entry.requested.delete(name);
       target.secrets_requested = entry.requested.size;
       touched(target);
+      if (hadRequest && entry.requested.size === 0 && target.start_when_ready && !target.job) {
+        target.start_when_ready = false;
+        startJob(target, "up");
+      }
       return new HttpResponse(null, { status: 204 });
     }),
     http.delete("/api/projects/:id/secrets/:name", ({ params }) => {
@@ -663,6 +683,7 @@ export function handlersFor(scenario: Scenario) {
       const entry = secretsOf(target.id);
       const name = String(params.name);
       const hadValue = entry.names.delete(name);
+      entry.unused.delete(name);
       const hadRequest = entry.requested.delete(name);
       if (!hadValue && !hadRequest) return refuse("secret_not_found", "no such secret", 404);
       target.secrets_requested = entry.requested.size;
@@ -715,6 +736,16 @@ export function handlersFor(scenario: Scenario) {
         return refuse("confirm_replace_data", "Confirm that the kitchen's data should be replaced.", 409);
       }
       return HttpResponse.json({ job_id: startPush(target, k, body.data).job_id }, { status: 202 });
+    }),
+    http.post("/api/projects/:id/start-when-ready", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const target = find(String(params.id));
+      if (!target) return notFound(String(params.id));
+      if (target.job) return busy();
+      if (target.secrets_requested === 0) return HttpResponse.json({ job_id: startJob(target, "up").job_id }, { status: 202 });
+      target.start_when_ready = true;
+      return HttpResponse.json({ waiting: target.secrets_requested });
     }),
     lifecycle("up"),
     lifecycle("down"),

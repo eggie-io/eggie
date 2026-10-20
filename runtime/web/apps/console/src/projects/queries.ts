@@ -60,6 +60,15 @@ export function useLifecycle(id: string) {
   });
 }
 
+// Answers {job_id} when nothing is requested (it started) or {waiting} when it set the flag.
+export function useStartWhenReady(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ job_id: string } | { waiting: number }>(`${projectPath(id)}/start-when-ready`),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
 export function usePublic(id: string) {
   const client = useQueryClient();
   return useMutation({

@@ -1,5 +1,5 @@
 .page {
-  flex: 1; width: 100%; max-width: var(--content-max); margin: 0 auto; padding: var(--space-8);
+  flex: 1; width: 100%; max-width: var(--content-max); padding: 28px var(--space-8);
   display: flex; flex-direction: column; gap: var(--space-5);
 }
 .muted { margin: 0; color: var(--ink-2); }
@@ -8,7 +8,7 @@
 .head { display: flex; align-items: flex-end; gap: var(--space-3); }
 .heading { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .title {
-  margin: 0; font-size: 30px; line-height: 36px; font-weight: 650; letter-spacing: -.02em;
+  margin: 0; font-size: 28px; line-height: 34px; font-weight: 650; letter-spacing: -.02em;
   font-variation-settings: var(--font-wide); color: var(--ink); overflow-wrap: anywhere;
 }
 .sub { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }

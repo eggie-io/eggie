@@ -1,2 +1,6 @@
 .egg { flex: none; }
 .bob { animation: global(om-bob) 4s ease-in-out infinite; }
+.white { fill: var(--paper); stroke: var(--line-strong); }
+.yolk { fill: var(--gold); }
+.yolk.dim { opacity: 0.45; }
+.cold { fill: var(--ink-3); opacity: 0.5; }

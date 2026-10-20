@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Modal, Notice, TextField } from "@eggie/ui";
+import { Button, Choice, Modal, Notice, TextField } from "@eggie/ui";
 import { size } from "../../projects/format";
 import { folderNameError, joinPath } from "../../uploads/paths";
 import { useDisk, useListing } from "../../uploads/queries";
@@ -47,14 +47,33 @@ export function DestinationModal({
   const total = files.reduce((sum, f) => sum + f.size, 0);
   const preview = files.length === 1 ? `${projectId}/${joinPath(target, files[0].name)}` : `${projectId}/${target === "" ? "" : `${target}/`}`;
 
+  const footer = (
+    <>
+      <Button variant="ghost" onClick={onClose}>Cancel</Button>
+      {tooBig.length > 0 && <Button onClick={onPickAgain}>Pick a smaller file</Button>}
+      {chooser && (
+        <Button
+          variant="primary"
+          disabled={free === undefined || fitting.length === 0 || nameError !== null}
+          onClick={() => {
+            onSend(target, fitting);
+            onClose();
+          }}
+        >
+          Send it up
+        </Button>
+      )}
+    </>
+  );
+
   return (
-    <Modal open={open} onClose={onClose} title={chooser ? "Where should this land?" : "This one won't fit"}>
+    <Modal open={open} onClose={onClose} title={chooser ? "Where should this land?" : "This one won't fit"} footer={footer}>
       {chooser && <p className={s.modalSub}>Pick the folder it belongs in — no rummaging around later.</p>}
       <p className={s.picked}>
         <strong>{files.length === 1 ? files[0].name : `${files.length} files`}</strong> <span>{size(total)}</span>
       </p>
       {tooBig.length > 0 && free !== undefined && (
-        <Notice>
+        <Notice tone="warning">
           {tooBig.length === 1 && files.length === 1 ? "This one won't fit — the" : `${tooBig.map((f) => f.name).join(", ")} won't fit — the`}{" "}
           {tooBig.length === 1 ? `file is ${size(tooBig[0].size)}` : `files need ${size(tooBig.reduce((n, f) => n + f.size, 0))}`} and Eggie has{" "}
           {size(free)} of room left. Make some space in the desktop app, then come back and send it up — we'll still be here.
@@ -65,39 +84,27 @@ export function DestinationModal({
           <ul className={s.choices}>
             {choices.map((dir) => (
               <li key={dir || "(top)"}>
-                <label className={s.choice}>
-                  <input type="radio" name="destination" checked={choice === dir} onChange={() => setChoice(dir)} />
-                  {dir === "" ? <span><strong>{projectId}</strong> — the top of the project</span> : <span>{dir}</span>}
-                </label>
+                <Choice
+                  type="radio"
+                  name="destination"
+                  className={s.choice}
+                  checked={choice === dir}
+                  onChange={() => setChoice(dir)}
+                  label={dir === "" ? <><strong className={s.mono}>{projectId}</strong> — the top of the project</> : <span className={s.mono}>{dir}</span>}
+                />
               </li>
             ))}
           </ul>
           {newFolder === null ? (
-            <Button variant="quiet" onClick={() => setNewFolder("")}>New folder</Button>
+            <Button variant="ghost" size="sm" icon="plus" className={s.newFolder} onClick={() => setNewFolder("")}>New folder</Button>
           ) : (
             <TextField label="New folder" value={newFolder} onChange={setNewFolder} autoFocus error={newFolder === "" ? undefined : (nameError ?? undefined)} />
           )}
           <p className={s.path}>{preview}</p>
+          <p className={s.note}>Big files are fine — you can pause and come back.</p>
         </>
       )}
-      <div className={s.modalFoot}>
-        {chooser && (
-          <Button
-            variant="primary"
-            disabled={free === undefined || fitting.length === 0 || nameError !== null}
-            onClick={() => {
-              onSend(target, fitting);
-              onClose();
-            }}
-          >
-            Send it up
-          </Button>
-        )}
-        {tooBig.length > 0 && <Button onClick={onPickAgain}>Pick a smaller file</Button>}
-        <Button variant="quiet" onClick={onClose}>Cancel</Button>
-      </div>
-      {chooser && <p className={s.note}>Big files are fine — you can pause and come back.</p>}
-      {disk.isError && <Notice>{disk.error.message}</Notice>}
+      {disk.isError && <Notice tone="danger">{disk.error.message}</Notice>}
     </Modal>
   );
 }

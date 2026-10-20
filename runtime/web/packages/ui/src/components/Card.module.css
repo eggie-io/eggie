@@ -1,0 +1,5 @@
+.card {
+  min-width: 0; margin: 0;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+ul.card { padding: 0; list-style: none; }

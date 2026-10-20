@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
-import { Button, Modal, Notice } from "@eggie/ui";
+import { Button, Card, Modal, Notice } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
-import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";
 import { usePublic } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
 import { openExternal } from "../../desktop/desktop";
-import { ARROW } from "../icons";
-import { CopyButton } from "../../components/CopyButton";
+import { AddressRow } from "./AddressRows";
 import s from "./ProjectPage.module.css";
 
 export function PublicModal({ project, open, onClose }: { project: Project; open: boolean; onClose: () => void }) {
@@ -21,6 +19,7 @@ export function PublicModal({ project, open, onClose }: { project: Project; open
   };
 
   let body: ReactNode;
+  let footer: ReactNode = null;
   switch (view.kind) {
     case "unavailable":
       body = <p className={s.modalSub}>{view.message}</p>;
@@ -32,11 +31,9 @@ export function PublicModal({ project, open, onClose }: { project: Project; open
           <p className={s.modalSub}>
             Anyone with the link can open {project.id} until it expires. You get a new address each time.
           </p>
-          <div className={s.modalFoot}>
-            <Button variant="primary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Make it public</Button>
-          </div>
         </>
       );
+      footer = <Button variant="primary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Make it public</Button>;
       break;
     case "enabling":
       body = <p className={s.modalSub}>Turning on…</p>;
@@ -44,41 +41,38 @@ export function PublicModal({ project, open, onClose }: { project: Project; open
     case "on":
       body = (
         <>
-          <ul className={s.addresses}>
+          <Card as="ul" className={s.addresses}>
             {view.urls.map((entry) => (
-              <li key={entry.url} className={s.address}>
-                <span className={s.addressLabel}>{entry.service}</span>
-                <span className={s.url}>{hostOf(entry.url)}</span>
-                <CopyButton text={entry.url} />
-                <Button variant="quiet" onClick={() => openExternal(entry.url)}>Open{ARROW}</Button>
-              </li>
+              <AddressRow key={entry.url} url={entry.url} label={entry.service} isPublic>
+                <Button variant="ghost" size="sm" iconRight="external" onClick={() => openExternal(entry.url)}>Open</Button>
+              </AddressRow>
             ))}
-          </ul>
-          {project.status !== "started_ok" && <Notice>Start the project so visitors can see it.</Notice>}
-          <div className={s.modalFoot}>
-            <Button variant="danger" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Turn off</Button>
-            {view.left && <span className={s.note}>{view.left}</span>}
-          </div>
+          </Card>
+          {project.status !== "started_ok" && <Notice tone="warning">Start the project so visitors can see it.</Notice>}
+        </>
+      );
+      footer = (
+        <>
+          {view.left && <span className={s.footNote}>{view.left}</span>}
+          <Button variant="danger" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Turn off</Button>
         </>
       );
       break;
     case "failed":
-      body = (
+      body = <Notice tone="danger">{view.message}</Notice>;
+      footer = (
         <>
-          <Notice>{view.message}</Notice>
-          <div className={s.modalFoot}>
-            <Button variant="primary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Try again</Button>
-            <Button variant="quiet" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Dismiss</Button>
-          </div>
+          <Button variant="ghost" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>Dismiss</Button>
+          <Button variant="primary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Try again</Button>
         </>
       );
       break;
   }
 
   return (
-    <Modal open={open} onClose={close} title={`Public address for ${project.id}`}>
+    <Modal open={open} onClose={close} title={`Public address for ${project.id}`} footer={footer}>
       {body}
-      {toggle.error && <Notice>{actionError(toggle.error)}</Notice>}
+      {toggle.error && <Notice tone="danger">{actionError(toggle.error)}</Notice>}
     </Modal>
   );
 }

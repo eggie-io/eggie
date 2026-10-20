@@ -1,22 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { Button, Egg, Notice, PromptCard, StateBadge } from "@eggie/ui";
+import { useEffect, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Button, Notice, PromptCard } from "@eggie/ui";
 import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
 import { waitingPrompt } from "../../projects/prompts";
-import { publicView, tileLine } from "../../projects/public";
+import { publicView } from "../../projects/public";
 import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
-import { useSite } from "../../site/SiteContext";
-import { ARROW } from "../icons";
 import { AddressRows } from "./AddressRows";
-import { AnalyzeModal } from "./AnalyzeModal";
-import { DeleteModal } from "./DeleteModal";
-import { PublicModal } from "./PublicModal";
 import { StartingBody } from "./StartingBody";
-import { Tiles } from "./Tiles";
+import { TitleRow } from "./TitleRow";
 import { WrongBody } from "./WrongBody";
 import s from "./ProjectPage.module.css";
 import { openExternal } from "../../desktop/desktop";
@@ -28,8 +23,6 @@ export function ProjectPage() {
   const forget = useDeleteProject(id);
   const navigate = useNavigate();
   const now = useNow();
-  const site = useSite();
-  const [modal, setModal] = useState<"analyze" | "delete" | "public" | null>(null);
   const view = query.data ? projectView(query.data) : null;
   const pub = query.data ? publicView(query.data.public, now) : null;
 
@@ -42,16 +35,13 @@ export function ProjectPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.kind]);
 
-  const back = <Link to="/" className={s.back}>‹ All projects</Link>;
-
   // Checked before the data check: TanStack keeps stale data around on a
   // failed refetch, so a project deleted elsewhere would otherwise keep
   // showing its old body instead of this notice.
   if (query.error instanceof ApiError && query.error.code === "project_not_found") {
     return (
       <section className={s.page}>
-        {back}
-        <h1 className={s.name}>No project called {id}</h1>
+        <TitleRow title={`No project called ${id}`} />
       </section>
     );
   }
@@ -59,37 +49,18 @@ export function ProjectPage() {
   if (query.data === undefined || view === null) {
     return (
       <section className={s.page}>
-        {back}
-        {query.isError ? <p className={s.error}>{query.error.message}</p> : <p className={s.muted}>Checking the kitchen…</p>}
+        <TitleRow title={id} />
+        {query.isError ? <Notice tone="danger">{query.error.message}</Notice> : <p className={s.muted}>Checking the kitchen…</p>}
       </section>
     );
   }
 
   const project = query.data;
   const primary = primaryUrl(project);
-  const tiles = (
-    <Tiles
-      id={project.id}
-      publicLine={tileLine(pub!)}
-      publicDisabled={pub!.kind === "unavailable"}
-      showPublic={site === null}
-      secretsLine={project.secrets_requested > 0 ? `${project.secrets_requested} requested` : "Keep API keys and passwords here, not in project files."}
-      onPublic={() => setModal("public")}
-      onAnalyze={() => setModal("analyze")}
-      onDelete={() => setModal("delete")}
-    />
-  );
-  const failed = lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>;
-  const restartNotice = project.restart_needed && <Notice>Secrets changed — restart the project to apply them.</Notice>;
-  const head = (sub?: string) => (
-    <header className={s.head}>
-      <Egg size={44} tone={view.badge === "running" || view.badge === "starting" ? "yolk" : "cold"} />
-      <div className={s.grow}>
-        <h1 className={s.name}>{project.id}</h1>
-        {sub && <p className={s.sub}>{sub}</p>}
-      </div>
-      <StateBadge state={view.badge} />
-    </header>
+  const publicUrls = pub?.kind === "on" ? pub.urls : undefined;
+  const failed = lifecycle.error && <Notice tone="danger">{actionError(lifecycle.error)}</Notice>;
+  const restartNotice = project.restart_needed && (
+    <Notice tone="warning">Secrets changed — restart the project to apply them.</Notice>
   );
 
   let body: ReactNode;
@@ -99,10 +70,10 @@ export function ProjectPage() {
       break;
     case "stopping":
       body = (
-        <>
-          {head()}
-          <p className={s.lead}>Putting {project.id} away… <Elapsed startedAt={view.job.started_at} /></p>
-        </>
+        <TitleRow
+          title={project.id}
+          sub={<>Putting {project.id} away… <Elapsed startedAt={view.job.started_at} /></>}
+        />
       );
       break;
     case "wrong":
@@ -110,7 +81,6 @@ export function ProjectPage() {
         <>
           <WrongBody project={project} cause={view.cause} detail={view.detail} />
           {restartNotice}
-          {tiles}
         </>
       );
       break;
@@ -118,20 +88,28 @@ export function ProjectPage() {
       const count = project.web.length;
       body = (
         <>
-          {head(count > 0 ? `${count} ${count === 1 ? "address" : "addresses"} open` : undefined)}
-          <div className={s.actions}>
-            {primary && (
-              <Button variant="primary" onClick={() => openExternal(primary)}>
-                Open in browser{ARROW}
-              </Button>
-            )}
-            <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("down")}>Stop</Button>
-            <Button disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>Restart</Button>
-          </div>
+          <TitleRow
+            title={project.id}
+            sub={count > 0 ? `Running · ${count} ${count === 1 ? "address" : "addresses"} open` : "Running"}
+            actions={
+              <>
+                <Button variant="ghost" icon="refresh" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("restart")}>
+                  Restart
+                </Button>
+                <Button variant="secondary" icon="stop" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("down")}>
+                  Stop
+                </Button>
+                {primary && (
+                  <Button variant="primary" iconRight="external" onClick={() => openExternal(primary)}>
+                    Open in browser
+                  </Button>
+                )}
+              </>
+            }
+          />
           {failed}
           {restartNotice}
-          <AddressRows web={project.web} live publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
-          {tiles}
+          <AddressRows web={project.web} live publicUrls={publicUrls} />
         </>
       );
       break;
@@ -139,36 +117,38 @@ export function ProjectPage() {
     case "stopped":
       body = (
         <>
-          {head()}
-          <div className={s.actions}>
-            <Button variant="primary" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up")}>Start</Button>
-          </div>
+          <TitleRow
+            title={project.id}
+            sub="Stopped"
+            actions={
+              <Button variant="primary" icon="play" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up")}>
+                Start
+              </Button>
+            }
+          />
           {failed}
-          <AddressRows web={project.web} live={false} publicUrls={pub?.kind === "on" ? pub.urls : undefined} />
-          {tiles}
+          <AddressRows web={project.web} live={false} publicUrls={publicUrls} />
         </>
       );
       break;
     case "waiting":
       body = (
         <>
-          {head("Nothing to cook yet")}
+          <TitleRow title={project.id} sub="Nothing to cook yet" />
           <p className={s.lead}>
             {project.id} is an empty folder at ~/projects/{project.id}. Your coding agent fills it in; once there's a
             docker-compose.yml, Start appears here.
           </p>
           <PromptCard prompt={waitingPrompt(project.id)} />
-          {tiles}
         </>
       );
       break;
     case "gone":
       body = (
         <>
-          {head()}
-          <h2 className={s.big}>The folder for {project.id} has gone missing</h2>
+          <TitleRow title={`The folder for ${project.id} has gone missing`} />
           <p className={s.lead}>Eggie still remembers it, but ~/projects/{project.id} isn't there any more.</p>
-          <div className={s.actions}>
+          <div className={s.row}>
             <Button
               variant="danger"
               disabled={forget.isPending}
@@ -177,7 +157,7 @@ export function ProjectPage() {
               Forget it
             </Button>
           </div>
-          {forget.error && <Notice>{actionError(forget.error)}</Notice>}
+          {forget.error && <Notice tone="danger">{actionError(forget.error)}</Notice>}
         </>
       );
       break;
@@ -185,12 +165,8 @@ export function ProjectPage() {
 
   return (
     <section className={s.page}>
-      {back}
-      {query.isError && <Notice>{query.error.message}</Notice>}
+      {query.isError && <Notice tone="danger">{query.error.message}</Notice>}
       {body}
-      <AnalyzeModal open={modal === "analyze"} onClose={() => setModal(null)} />
-      <DeleteModal id={project.id} open={modal === "delete"} onClose={() => setModal(null)} />
-      <PublicModal project={project} open={modal === "public"} onClose={() => setModal(null)} />
     </section>
   );
 }

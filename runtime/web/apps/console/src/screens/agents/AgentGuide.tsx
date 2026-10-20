@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router";
-import { Button, cx } from "@eggie/ui";
+import { Link, Navigate, useNavigate, useParams } from "react-router";
+import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
 import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
@@ -17,13 +17,17 @@ export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
 
-  if (error) return <p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p>;
-  if (agents === undefined) return <p className={s.muted}>Getting the guide…</p>;
+  if (error) return <div className={s.page}><p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p></div>;
+  if (agents === undefined) return <div className={s.page}><p className={s.muted}>Getting the guide…</p></div>;
   const agent = agents.find((candidate) => candidate.id === id);
   if (!agent) return <Navigate to={base} replace />;
 
   return (
-    <div className={s.page}>
+    <div className={cx(s.page, s.guidePage)}>
+      <Link to={base} className={s.back}>
+        <Icon name="chevron-left" />
+        Agents
+      </Link>
       <div className={s.guideHead}>
         <h1 className={s.guideTitle}>Connect a coding agent</h1>
         <AgentMenu agents={agents} current={agent} base={base} />
@@ -73,7 +77,7 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
     );
   else
     primary = (
-      <Button variant="primary" onClick={() => (last ? navigate("/") : setActive(active + 1))}>
+      <Button variant="primary" iconRight={last ? undefined : "chevron-right"} onClick={() => (last ? navigate("/") : setActive(active + 1))}>
         {last ? "Done" : "Next"}
       </Button>
     );
@@ -83,8 +87,10 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
     <div className={s.guide}>
       <div className={s.side}>
         {guide.warning && (
-          <aside className={s.warning} aria-label="Before you start">
-            <RichText nodes={guide.warning} />
+          <aside aria-label="Before you start">
+            <Notice tone="warning" className={s.rich}>
+              <RichText nodes={guide.warning} />
+            </Notice>
           </aside>
         )}
         <ol className={s.steps}>
@@ -96,11 +102,11 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
                 aria-current={index === active ? "step" : undefined}
                 onClick={() => setActive(index)}
               >
-                <span className={cx(s.stepDot, index <= active && s.stepDotOn)}>{index + 1}</span>
+                <span className={s.stepDot}>{index + 1}</span>
                 <span className={s.stepTitle}>{item.title}</span>
               </button>
               {/* Outside the button: a list is not allowed inside one. */}
-              {index === active && <div className={s.stepBody}><RichText nodes={item.body} /></div>}
+              {index === active && <div className={cx(s.stepBody, s.rich)}><RichText nodes={item.body} /></div>}
             </li>
           ))}
         </ol>
@@ -110,8 +116,10 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
             <h2 className={s.keyLabel}>Your kitchen's key</h2>
             {rows.map((row) => (
               <div key={row.label} className={s.keyRow}>
-                <span className={s.keyName}>{row.label}</span>
-                <span className={cx(s.keyValue, !row.copy && s.keyUnknown)} title={row.value}>{row.value}</span>
+                <span className={s.keyText}>
+                  <span className={s.keyName}>{row.label}</span>
+                  <span className={cx(s.keyValue, !row.copy && s.keyUnknown)} title={row.value}>{row.value}</span>
+                </span>
                 {row.copy && <CopyButton className={s.copy} text={row.value} />}
               </div>
             ))}
@@ -120,9 +128,9 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
         )}
       </div>
       <div className={s.main}>
-        <div className={s.frame}>
+        <Card className={s.frame}>
           <MediaSlider key={active} media={step.media} alt={step.alt} />
-        </div>
+        </Card>
         <div className={s.nav}>
           {/* Mounted before it has text, so screen readers announce the message. */}
           <span className={s.checkProblem} role="status">{problem}</span>

@@ -11,6 +11,7 @@ import { SecretsPage } from "./screens/secrets/SecretsPage";
 import { NeedsUpdate } from "./screens/NeedsUpdate";
 import { NotAnswering } from "./screens/NotAnswering";
 import { ProjectList } from "./screens/list/ProjectList";
+import { ProjectLayout } from "./screens/project/ProjectLayout";
 import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
 import { SignedOut } from "./screens/SignedOut";
@@ -131,9 +132,11 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
       ) : (
         <Routes>
           <Route path="/" element={<ProjectList />} />
-          <Route path="/p/:id" element={<ProjectPage />} />
-          <Route path="/p/:id/files/*" element={<FilesPage />} />
-          <Route path="/p/:id/secrets" element={<SecretsPage />} />
+          <Route path="/p/:id" element={<ProjectLayout />}>
+            <Route index element={<ProjectPage />} />
+            <Route path="files/*" element={<FilesPage />} />
+            <Route path="secrets" element={<SecretsPage />} />
+          </Route>
           <Route path="/agents" element={<AgentPicker base="/agents" />} />
           <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />
           <Route path="/kit" element={<Kit />} />

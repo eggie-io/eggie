@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { cx } from "@eggie/ui";
+import { Button, Icon, cx } from "@eggie/ui";
 import { useAgentStatus } from "../../agents/queries";
 import { decide, readMark, writeMark, type Phase } from "../../onboarding/onboarding";
 import { useProjects } from "../../projects/queries";
-import { CHECK } from "../icons";
 import s from "./Onboarding.module.css";
 
 const localStore = () => window.localStorage;
@@ -75,7 +74,7 @@ export function Progress() {
           className={cx(s.item, index < CURRENT && s.done, index === CURRENT && s.current)}
           aria-current={index === CURRENT ? "step" : undefined}
         >
-          <span className={s.dot}>{index < CURRENT ? CHECK : index + 1}</span>
+          <span className={s.dot}>{index < CURRENT ? <Icon name="check" /> : index + 1}</span>
           <span className={s.label}>{label}</span>
         </li>
       ))}
@@ -86,8 +85,9 @@ export function Progress() {
 export function SkipLink() {
   const { finish } = useOnboarding();
   return (
-    <button type="button" className={s.skip} aria-label="Skip for now" onClick={() => finish()}>
-      Skip<span className={s.skipTail}> for now</span>
-    </button>
+    <Button variant="ghost" size="sm" aria-label="Skip for now" onClick={() => finish()}>
+      {/* One flex item, so the button's gap doesn't split the words. */}
+      <span>Skip<span className={s.skipTail}> for now</span></span>
+    </Button>
   );
 }

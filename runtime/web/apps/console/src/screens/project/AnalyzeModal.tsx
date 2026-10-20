@@ -4,7 +4,18 @@ import s from "./ProjectPage.module.css";
 
 export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Modal open={open} onClose={onClose} title="Ask for a once-over">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Ask for a once-over"
+      wide
+      footer={
+        <>
+          <span className={s.footNote}>Nothing was sent anywhere. This is just words on your clipboard.</span>
+          <Button onClick={onClose}>Close</Button>
+        </>
+      }
+    >
       <p className={s.modalSub}>
         Eggie doesn't read your code — your coding agent does. Here's the ask, written so you get a plain-language
         answer back.
@@ -14,10 +25,6 @@ export function AnalyzeModal({ open, onClose }: { open: boolean; onClose: () => 
         aside="for Claude Code, Codex, whoever's cooking"
         hint="Now paste it into your coding agent and press enter."
       />
-      <div className={s.modalFoot}>
-        <Button onClick={onClose}>Close</Button>
-        <span className={s.note}>Nothing was sent anywhere. This is just words on your clipboard.</span>
-      </div>
     </Modal>
   );
 }

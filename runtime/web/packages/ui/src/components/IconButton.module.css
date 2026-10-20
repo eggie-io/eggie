@@ -1,0 +1,4 @@
+/* button.x outranks Button's own size padding whatever order the CSS loads in. */
+button.square { padding: 0; }
+button.md { width: var(--control-md); }
+button.sm { width: var(--control-sm); }

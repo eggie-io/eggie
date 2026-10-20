@@ -16,6 +16,7 @@ user's machine can reach in, so read this before adding any way in.
 | Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
 | Site, port `80` | A redirect to 443 | The internet (site mode only) |
 | Site, port `22` | The login account | Whoever holds the SSH key the service installed (site mode only) |
+| Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use ticket the service minted for this kitchen's owner (site mode only) |
 
 The host-side forwards are loopback-only: WSL2's `localhostForwarding` puts guest ports onto the
 Windows host's `127.0.0.1`, and Lima's `portForwards` (`host/providers/eggie.yaml`) default to
@@ -142,6 +143,24 @@ root-equivalent — plus:
   data that seeded the account token, and a project's code would otherwise read it. A droplet-only
   `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts. It covers bridged
   containers only; a project with `network_mode: host` sits on the host's network and is outside it, as it is outside every container boundary already.
+
+### Pushing to a kitchen
+
+- `/api/transfers` has its own auth branch in `rest/auth.py`: `Host` must be the site host, and the
+  API token and sessions are refused. The router redeems the ticket with the service before it reads
+  a byte, and limits attempts to 10 a minute.
+- The ticket (`Eggie-Transfer-Ticket`) and the per-push token (`Eggie-Transfer-Token`) travel in
+  headers only, never in a URL or log line. The token is compared in constant time; an unknown id
+  and a wrong token both answer 404.
+- The kitchen takes the project's identity from the ticket's grant, never from the bundle.
+- Unpacking runs in a root helper container (`python -m eggie_api.infra.bundle unpack`): it refuses
+  absolute names, devices, FIFOs and hard links that escape the tree. A bundle whose data flag differs
+  from the `Eggie-Transfer-Data` header accepted at open is refused (`bad_bundle`), as is a volume
+  whose explicit `name:` is outside `<compose_name>_`.
+- What leaves the user's machine: the project files (including `.env`), volume and database data
+  when ticked, and secret names with their hints. Never secret values.
+- TLS to the kitchen is always verified; `EGGIE_KITCHEN_CA_FILE` adds trust for dev (staging)
+  certificates.
 
 ## Before adding a way in
 

@@ -140,6 +140,20 @@ and a host release. Prefer additive changes.
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
+- **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
+  `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
+  (tar: `manifest.json`, `files/`, `volumes/<key>/`; the manifest always lists volumes and data_paths)
+  in a root helper container, then sends it with `infra/kitchen.py` (`KitchenClient`, TLS always
+  verified, `EGGIE_KITCHEN_CA_FILE` adds trust for staging certs). Kitchen side: `services/transfers.py`
+  and `rest/routers/transfers.py` (`POST /api/transfers`, `PUT .../bundle`, `GET .../{push_id}`,
+  `GET /api/ready`), site only, with their own auth branch in `rest/auth.py` (ticket and push token in
+  `Eggie-Transfer-*` headers, never URL or log). The kitchen unpacks with
+  `python -m eggie_api.infra.bundle unpack` (root container, `filter="tar"`, numeric owners; refuses
+  absolute names, devices, FIFOs, escaping hard links). It takes project identity from the grant only,
+  refuses a bundle whose data flag differs from the open header (`bad_bundle`), and drops an opened
+  push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
+  sync; `kitchen_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
+  the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
 ## Testing
 

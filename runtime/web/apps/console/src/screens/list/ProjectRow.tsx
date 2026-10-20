@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
+import { NO_AGENT } from "../../agents/current";
 import { Elapsed } from "../../components/Elapsed";
 import { projectColor } from "../../projects/color";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
@@ -13,8 +15,20 @@ import { projectView } from "../../projects/view";
 import s from "./ProjectList.module.css";
 import { openExternal } from "../../desktop/desktop";
 
+const SETUP_NOTE = { github: "From GitHub · ", folder: "From a folder · ", new: "" } as const;
+
+function AgentNote({ agent, children }: { agent: string; children: ReactNode }) {
+  return (
+    <span className={s.note}>
+      {agent !== NO_AGENT && <span className={s.agentMark} aria-hidden="true">{agent.charAt(0)}</span>}
+      <span>{children}</span>
+    </span>
+  );
+}
+
 export function ProjectRow({ project }: { project: Project }) {
   const view = projectView(project);
+  const agent = useCurrentAgent({ poll: false });
   const lifecycle = useLifecycle(project.id);
   const navigate = useNavigate();
   const now = useNow(30_000);
@@ -77,14 +91,6 @@ export function ProjectRow({ project }: { project: Project }) {
     case "stopping":
       line = <span className={s.quiet}>Putting it away…</span>;
       break;
-    case "setup":
-      line = <span className={s.trouble}>{CAUSE_COPY.unreadable.short}</span>;
-      actions = (
-        <Button aria-label={`Take a look at ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
-          Take a look
-        </Button>
-      );
-      break;
     case "wrong":
       line = <span className={s.trouble}>{CAUSE_COPY[view.cause].short}</span>;
       actions = (
@@ -102,10 +108,18 @@ export function ProjectRow({ project }: { project: Project }) {
       );
       break;
     case "waiting":
-      line = <span className={s.quiet}>Waiting for your coding agent</span>;
+      line = <AgentNote agent={agent.name}>Empty folder · {agent.name} builds it from one prompt</AgentNote>;
       actions = (
-        <Button aria-label={`Open page for ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
-          Open page
+        <Button aria-label={`Next step for ${project.id}`} variant="primary" size="sm" iconRight="chevron-right" onClick={look}>
+          Next step
+        </Button>
+      );
+      break;
+    case "setup":
+      line = <AgentNote agent={agent.name}>{SETUP_NOTE[project.origin]}{agent.name} makes it run here</AgentNote>;
+      actions = (
+        <Button aria-label={`Set up ${project.id}`} variant="secondary" size="sm" iconRight="chevron-right" onClick={look}>
+          Set it up
         </Button>
       );
       break;

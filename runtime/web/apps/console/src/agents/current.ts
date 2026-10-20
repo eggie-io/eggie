@@ -7,7 +7,8 @@ export interface CurrentAgent {
   id: string | null;
 }
 
-const NOBODY: CurrentAgent = { name: "your coding agent", connected: false, id: null };
+export const NO_AGENT = "your coding agent";
+const NOBODY: CurrentAgent = { name: NO_AGENT, connected: false, id: null };
 
 export function currentAgent(agents: Agent[] | undefined, statuses: AgentStatuses | undefined): CurrentAgent {
   const found = agents?.find((agent) => statuses?.agents[agent.id]?.connected);

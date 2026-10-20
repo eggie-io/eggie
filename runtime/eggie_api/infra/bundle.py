@@ -4,9 +4,9 @@ the API image; keep it free of anything that opens sqlite or starts threads."""
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
-import io
 import shutil
 import sys
 import tarfile
@@ -87,8 +87,14 @@ def unpack(bundle: Path, dest: Path) -> None:
                 raise PathTraversalError(f"absolute path in bundle: {m.name}")
             if m.ischr() or m.isblk() or m.isfifo():
                 raise BadArchiveError(f"special file in bundle: {m.name}")
+            # filter="tar" does not vet hard-link targets.
+            if m.islnk():
+                target = os.path.normpath(os.path.join(dest, m.linkname))
+                if m.linkname.startswith("/") or not target.startswith(
+                        os.path.join(os.path.normpath(dest), "")):
+                    raise PathTraversalError(f"hard link escapes bundle: {m.name}")
         try:
-            tar.extractall(dest, members=members, filter="tar")
+            tar.extractall(dest, members=members, filter="tar", numeric_owner=True)
         except tarfile.FilterError as e:
             raise PathTraversalError(str(e)) from e
 

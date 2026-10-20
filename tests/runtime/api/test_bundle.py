@@ -184,3 +184,28 @@ def test_unpack_argv_mounts_bundle_read_only_and_dest_writable():
     argv = unpack_argv("img", bundle_path="/opt/eggie/transfers/in/j.tar", dest_dir="/opt/eggie/stage")
     assert "/opt/eggie/transfers/in:/in:ro" in argv and "/opt/eggie/stage:/dest" in argv
     assert argv[argv.index("img") + 1:argv.index("img") + 4] == ["-m", "eggie_api.infra.bundle", "unpack"]
+
+
+@pytest.mark.parametrize("linkname", ["/etc/passwd", "../outside/secret"])
+def test_unpack_refuses_hard_links_leaving_the_bundle(tmp_path, linkname):
+    bundle, dest = tmp_path / "b.tar", tmp_path / "dest"
+    dest.mkdir()
+    info = tarfile.TarInfo("files/link")
+    info.type, info.linkname = tarfile.LNKTYPE, linkname
+    _tar_with(bundle, info)
+    with pytest.raises(PathTraversalError):
+        unpack(bundle, dest)
+
+
+def test_unpack_keeps_hard_links_inside_the_bundle(tmp_path):
+    bundle, dest = tmp_path / "b.tar", tmp_path / "dest"
+    dest.mkdir()
+    with tarfile.open(bundle, "w") as tar:
+        data = tarfile.TarInfo("files/a")
+        data.size = 1
+        tar.addfile(data, io.BytesIO(b"x"))
+        link = tarfile.TarInfo("files/b")
+        link.type, link.linkname = tarfile.LNKTYPE, "files/a"
+        tar.addfile(link)
+    unpack(bundle, dest)
+    assert (dest / "files/b").read_text() == "x"

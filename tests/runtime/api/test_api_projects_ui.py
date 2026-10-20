@@ -223,7 +223,6 @@ def test_a_diagnosed_start_does_not_count_as_having_run(env):
 def test_a_failed_start_does_not_count_as_having_run(env):
     _create(env, "blog")
     _write_compose(env, "blog")
-    env.probe.status = 502  # a refused stack does not answer the recheck
     env.runner.up = Completed(1, "", "failed to solve: npm ci exit code 1")
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert env.client.get("/projects/blog").json()["ran_ok"] is False
@@ -244,7 +243,6 @@ def test_a_recheck_that_clears_a_stale_problem_marks_the_project_as_having_run(e
 def test_a_refused_start_keeps_dockers_last_lines_as_the_problem(env):
     _create(env, "blog")
     _write_compose(env, "blog")
-    env.probe.status = 502
     env.runner.up = Completed(1, "", "step 1\n\nstep 2\nstep 3\nfailed to solve: npm ci exit code 1\n")
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     problem = env.client.get("/projects/blog").json()["problem"]
@@ -256,11 +254,21 @@ def test_a_good_start_clears_dockers_refusal(env):
     _create(env, "blog")
     _write_compose(env, "blog")
     good = env.runner.up
-    env.probe.status = 502
     env.runner.up = Completed(1, "", "failed to solve")
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert env.client.get("/projects/blog").json()["problem"] is not None
     env.runner.up = good
-    env.probe.status = 200
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert env.client.get("/projects/blog").json()["problem"] is None
+
+
+def test_a_refused_start_survives_an_answering_recheck(env):
+    # Old containers may keep answering after a failed rebuild.
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.runner.up = Completed(1, "", "failed to solve")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    env.probe.status = 200
+    body = env.client.get("/projects/blog").json()
+    assert body["problem"]["code"] == "failed_to_start"
+    assert body["ran_ok"] is False

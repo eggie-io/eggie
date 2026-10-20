@@ -71,7 +71,9 @@ class ProjectService:
                        "message": row["problem_message"]}
             # One request with a short timeout, never the readiness window:
             # this runs inside a read the CLI is waiting on.
-            if recheck and project is not None and answers(
+            # A refused start can leave old containers answering; only a good
+            # start may clear Docker's message.
+            if recheck and project is not None and row["problem_code"] != "failed_to_start" and answers(
                     project, row["domain"], edge_port=self._config.edge_port,
                     traefik_host=self._config.traefik_host, http_probe=self._probe):
                 # An entrypoint slower than the readiness window stores a

@@ -20,7 +20,7 @@ log = logging.getLogger("eggie.api")
 
 def _tail(detail: str) -> str:
     # Docker prints the cause last; earlier lines are build progress.
-    lines = [l for l in detail.splitlines() if l.strip()]
+    lines = [line for line in detail.splitlines() if line.strip()]
     return "\n".join(lines[-3:])[:500]
 
 

@@ -149,7 +149,7 @@ root-equivalent — plus:
 - `/api/transfers` has its own auth branch in `rest/auth.py`: `Host` must be the site host, and the
   API token and sessions are refused. The router redeems the ticket with the service before it reads
   a byte, and limits attempts to 10 a minute per sender address (the first `X-Forwarded-For`
-  entry, which Traefik sets) and 60 a minute in all.
+  entry, which Traefik sets, at most 1024 addresses tracked) and 60 a minute in all.
 - The ticket (`Eggie-Transfer-Ticket`) and the per-push token (`Eggie-Transfer-Token`) travel in
   headers only, never in a URL or log line. The token is compared in constant time; an unknown id
   and a wrong token both answer 404.
@@ -160,7 +160,8 @@ root-equivalent — plus:
   folder's group (the VM's `docker`, inherited through `/opt/eggie`'s setgid bit) and setgid
   directories; data keeps the sender's owners. A bundle whose data flag differs
   from the `Eggie-Transfer-Data` header accepted at open is refused (`bad_bundle`), as is a volume
-  whose explicit `name:` is outside `<compose_name>_`.
+  whose explicit `name:` is outside `<compose_name>_`, or (data or not) a compose `name:` that is
+  another kitchen project's.
 - What leaves the user's machine: the project files (including `.env`), volume and database data
   when ticked, and secret names with their hints. Never secret values.
 - TLS to the kitchen is always verified; `EGGIE_KITCHEN_CA_FILE` adds trust for dev (staging)

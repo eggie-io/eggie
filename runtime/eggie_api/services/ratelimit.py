@@ -22,6 +22,11 @@ class Window:
         self._warned = False
         self._lock = threading.Lock()
 
+    def has_room(self) -> bool:
+        now = self._clock()
+        with self._lock:
+            return sum(t > now - self._seconds for t in self._recent) < self._limit
+
     def idle(self, now: float) -> bool:
         with self._lock:
             return not self._recent or self._recent[-1] <= now - self._seconds
@@ -44,11 +49,13 @@ class Window:
 
 
 class KeyedWindow:
-    """A Window per key; a key idle for a whole window is forgotten."""
+    """A Window per key; a key idle for a whole window is forgotten, and a new
+    key is refused while `max_keys` are tracked."""
 
     def __init__(self, limit: int, seconds: float, clock=time.time, *,
-                 what: str = "requests"):
+                 what: str = "requests", max_keys: int = 1024):
         self._make = lambda: Window(limit, seconds, clock, what=what)
+        self._max_keys = max_keys
         self._clock = clock
         self._windows: dict[str, Window] = {}
         self._lock = threading.Lock()
@@ -58,4 +65,6 @@ class KeyedWindow:
         with self._lock:
             for idle in [k for k, w in self._windows.items() if w.idle(now)]:
                 del self._windows[idle]
+            if key not in self._windows and len(self._windows) >= self._max_keys:
+                return False
             return self._windows.setdefault(key, self._make()).take()

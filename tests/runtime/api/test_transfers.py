@@ -543,6 +543,18 @@ def test_the_bundle_is_gone_once_unpacked_while_the_import_goes_on(kitchen):
     assert bundles_at_down == [[]]
 
 
+def test_a_files_push_named_after_another_kitchen_project_is_refused(kitchen):
+    other = kitchen_project(kitchen, pid="my-shop", cloud_id="c-other", status="started_ok")
+    local_project(kitchen, compose="name: my-shop\n" + COMPOSE_SHOP)
+
+    status = push(kitchen, make_bundle(kitchen))
+
+    assert status["result"] == {"code": "bad_bundle"}
+    assert "belongs to another project" in status["detail"]
+    assert (other / "src" / "old.py").exists()
+    assert kitchen.runner.argv_containing("down") == []
+
+
 def test_failed_upload_releases_the_lock(kitchen):
     local_project(kitchen)
     path = make_bundle(kitchen)

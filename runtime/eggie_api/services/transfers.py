@@ -41,6 +41,7 @@ log = logging.getLogger("eggie.api")
 
 OPENS_PER_MINUTE = 10
 OPENS_PER_MINUTE_ALL = 60
+MAX_SENDERS = 1024
 UPLOAD_WINDOW = 600
 KEEP_ENDED = 3600
 DISK_MARGIN = 1024 ** 3
@@ -152,7 +153,8 @@ class Transfers:
         self._sleep = sleep
         self._timer = timer or _daemon_timer
         self._per_sender = KeyedWindow(OPENS_PER_MINUTE, 60.0, lambda: self._clock(),
-                                       what="push attempts from one address")
+                                       what="push attempts from one address",
+                                       max_keys=MAX_SENDERS)
         self._window = Window(OPENS_PER_MINUTE_ALL, 60.0, lambda: self._clock(),
                               what="push attempts")
         self._pushes: dict[str, _Push] = {}
@@ -204,8 +206,10 @@ class Transfers:
                            f"A push may be at most {_gb(self._config.max_upload_bytes)}.")
         # Traefik replaces a client's own X-Forwarded-For with the address it came from.
         sender = forwarded_for.split(",", 1)[0].strip() or peer
-        # Per sender first: one that is refused takes nothing from the others.
-        if not (self._per_sender.take(sender) and self._window.take()):
+        # A full kitchen refuses before tracking a sender; a refused sender
+        # takes nothing from the shared window.
+        if not (self._window.has_room() and self._per_sender.take(sender)
+                and self._window.take()):
             raise TooMany("kitchen_busy", "Too many pushes to this kitchen right now. "
                                           "Try again in a minute.")
         grant = self._redeem(ticket)
@@ -490,8 +494,11 @@ class _ImportJob:
                     check_hint(hint)
                 except SecretError as e:
                     raise Invalid("bad_manifest", e.message) from None
+        # Compose takes `name:` as its project: another project's would have this
+        # import stop and start that project's containers.
+        compose_name = self._own_compose_name(compose)
         if manifest.data:
-            self._check_volumes(compose, manifest)
+            self._check_volumes(compose, compose_name, manifest)
         self._pin_project_id(files)
         return manifest, compose
 
@@ -509,15 +516,19 @@ class _ImportJob:
         if pinned is not None:
             path.write_text(yaml.safe_dump(pinned, sort_keys=False), encoding="utf-8")
 
-    def _check_volumes(self, compose: dict, manifest: rules.Manifest) -> None:
-        """Restoring removes each volume first, so a bundle must only ever name
-        this project's own."""
+    def _own_compose_name(self, compose: dict) -> str:
         compose_name = str(compose.get("name") or self.pid)
         others = {name for r in self.s._projects.list() if r["id"] != self.pid
                   for name in (r["id"], r.get("compose_name")) if name}
         if compose_name in others:
             raise Invalid("bad_bundle", f"The compose name {compose_name} belongs to "
                                         "another project on this kitchen.")
+        return compose_name
+
+    def _check_volumes(self, compose: dict, compose_name: str,
+                       manifest: rules.Manifest) -> None:
+        """Restoring removes each volume first, so a bundle must only ever name
+        this project's own."""
         outside = rules.volume_outside(compose, compose_name, manifest.volumes)
         if outside:
             raise Invalid("bad_bundle", f"Volume {outside[0]} is named {outside[1]}, outside "

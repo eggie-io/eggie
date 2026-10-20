@@ -152,8 +152,8 @@ and a host release. Prefer additive changes.
   devices, FIFOs, escaping hard links). Only `volumes/` and the manifest's `data_paths` keep the
   sender's numeric owners and modes; every other project file gets the staging folder's group (the
   VM's `docker`, via `/opt/eggie`'s setgid) and `g+rwX`, directories setgid. A read-only or one-file
-  database bind is config, not data. Opens are limited to 10 a minute per sender address and 60 in
-  all. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten), refuses a bundle whose data flag differs from the open
+  database bind is config, not data. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
+  in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten), refuses a bundle whose data flag differs from the open
   header (`bad_bundle`), and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
   sync; `kitchen_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
   the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.

@@ -11,14 +11,15 @@ describe("newPrompt", () => {
 
 describe("setupPrompt", () => {
   it("says where the code came from per origin", () => {
-    expect(setupPrompt("a", "github", null)).toMatch(/^I copied ~\/projects\/a from GitHub into Eggie and/);
-    expect(setupPrompt("a", "folder", null)).toMatch(/^I copied ~\/projects\/a from a folder into Eggie and/);
-    expect(setupPrompt("a", "new", null)).toMatch(/^I copied ~\/projects\/a into Eggie and/);
+    expect(setupPrompt("a", "github", null, "docker")).toMatch(/^I copied ~\/projects\/a from GitHub into Eggie and/);
+    expect(setupPrompt("a", "folder", null, "docker")).toMatch(/^I copied ~\/projects\/a from a folder into Eggie and/);
+    expect(setupPrompt("a", "new", null, "docker")).toMatch(/^I copied ~\/projects\/a into Eggie and/);
   });
 
   it("appends Docker's message only when there is one", () => {
-    expect(setupPrompt("a", "github", "exit code 1")).toMatch(/what you changed\.\n\nDocker said: exit code 1$/);
-    expect(setupPrompt("a", "github", null)).not.toContain("Docker said");
+    expect(setupPrompt("a", "github", "exit code 1", "docker")).toMatch(/what you changed\.\n\nDocker said: exit code 1$/);
+    expect(setupPrompt("a", "github", "bad yaml", "eggie")).toMatch(/\n\nEggie said: bad yaml$/);
+    expect(setupPrompt("a", "github", null, "docker")).not.toContain("Docker said");
   });
 });
 

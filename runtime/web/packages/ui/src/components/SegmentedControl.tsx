@@ -21,12 +21,13 @@ export function SegmentedControl<T extends string>({
   const current = options.findIndex((option) => option.value === value);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const last = options.length - 1;
     const from = Math.max(current, 0);
     let next: number;
     if (event.key === "Home") next = 0;
     else if (event.key === "End") next = last;
-    else if (event.key in STEP) next = (from + STEP[event.key] + options.length) % options.length;
+    else if (Object.hasOwn(STEP, event.key)) next = (from + STEP[event.key] + options.length) % options.length;
     else return;
     event.preventDefault();
     onChange(options[next].value);

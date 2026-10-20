@@ -59,7 +59,7 @@ export function HandoffCard({ title, agent, steps }: { title: string; agent: Cur
             <Button variant="primary" icon={copied ? "check" : "copy"} onClick={copy}>
               {copied ? "Copied" : "Copy the prompt"}
             </Button>
-            <span className={s.note} role={refused ? "alert" : undefined}>{refused ? COPY_REFUSED : steps.copyHint}</span>
+            <span className={s.note} role={refused ? "alert" : copied ? "status" : undefined}>{refused ? COPY_REFUSED : copied ? "Copied" : steps.copyHint}</span>
           </div>
         </Step>
         <Step n={2}>

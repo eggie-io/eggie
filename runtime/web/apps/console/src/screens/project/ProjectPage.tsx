@@ -6,7 +6,7 @@ import { useCurrentAgent } from "../../agents/queries";
 import { ApiError } from "../../api/client";
 import { Elapsed } from "../../components/Elapsed";
 import { actionError, primaryUrl } from "../../projects/copy";
-import { dockerSaid, newPrompt, setupPrompt } from "../../projects/prompts";
+import { newPrompt, said, setupPrompt } from "../../projects/prompts";
 import { publicView } from "../../projects/public";
 import { useDeleteProject, useLifecycle, useProject } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
@@ -85,9 +85,9 @@ function HandoffBody({ project, view, onTryNow, pending }: { project: Project; v
         title={title}
         agent={agent}
         steps={{
-          prompt: setupPrompt(project.id, project.origin, view.detail),
-          extra: view.detail ? dockerSaid(view.detail) : undefined,
-          copyHint: view.detail ? "Docker's message is included, so you don't have to dig for it." : "It already says where the folder is.",
+          prompt: setupPrompt(project.id, project.origin, view.detail, view.source),
+          extra: view.detail ? said(view.source, view.detail) : undefined,
+          copyHint: view.detail ? `${view.source === "docker" ? "Docker's" : "Eggie's"} message is included, so you don't have to dig for it.` : "It already says where the folder is.",
           pasteHint: "It reads the project, makes it run here and tells you which keys to add in Secrets.",
           last: starts(
             <Button variant="ghost" size="sm" icon="refresh" disabled={pending} onClick={onTryNow}>

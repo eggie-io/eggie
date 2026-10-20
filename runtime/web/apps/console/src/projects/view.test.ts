@@ -97,12 +97,17 @@ describe("projectView", () => {
 
   it("shows a clone with no compose file as needing set-up, without the API's compose_missing as Docker's message", () => {
     const view = projectView(project({ empty: true, ran_ok: false, origin: "github", problem: problem("compose_missing") }));
-    expect(view).toEqual({ kind: "setup", badge: "setup", detail: null });
+    expect(view).toEqual({ kind: "setup", badge: "setup", detail: null, source: "eggie" });
   });
 
   it("shows a never-run project whose start failed as needing set-up with Docker's message", () => {
     const view = projectView(project({ ran_ok: false, origin: "folder", status: "failed_to_start", problem: problem("failed_to_start") }));
-    expect(view).toEqual({ kind: "setup", badge: "setup", detail: "failed_to_start message" });
+    expect(view).toEqual({ kind: "setup", badge: "setup", detail: "failed_to_start message", source: "docker" });
+  });
+
+  it("credits Eggie, not Docker, for an unreadable compose file on a never-run project", () => {
+    const view = projectView(project({ ran_ok: false, origin: "folder", problem: problem("invalid_compose") }));
+    expect(view).toMatchObject({ kind: "setup", source: "eggie" });
   });
 
   it("keeps a failure after the first good run as wrong", () => {

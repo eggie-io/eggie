@@ -3,12 +3,15 @@ import type { ActiveJob, Project } from "./types";
 
 export type Cause = "bound_to_loopback" | "service_unreachable" | "crash_looping" | "failed_to_start" | "unreadable";
 
+// Who wrote a fault message: Docker, or Eggie when it could not read the project.
+export type Source = "docker" | "eggie";
+
 export type ProjectView =
   | { kind: "starting"; badge: ProjectState; job: ActiveJob }
   | { kind: "stopping"; badge: ProjectState; job: ActiveJob }
   | { kind: "gone" | "running" | "stopped"; badge: ProjectState }
   | { kind: "waiting"; badge: "waiting" }
-  | { kind: "setup"; badge: "setup"; detail: string | null }
+  | { kind: "setup"; badge: "setup"; detail: string | null; source: Source }
   | { kind: "wrong"; badge: "wrong"; cause: Cause; detail: string | null };
 
 const NAMED: Record<string, Cause> = {
@@ -38,8 +41,11 @@ export function projectView(project: Project): ProjectView {
   if (!project.ran_ok) {
     if (project.empty && project.origin === "new") return { kind: "waiting", badge: "waiting" };
     // An empty folder's compose_missing is Eggie's, not something Docker said.
-    if (project.empty) return { kind: "setup", badge: "setup", detail: null };
-    if (fault) return { kind: "setup", badge: "setup", detail: project.problem?.message ?? null };
+    if (project.empty) return { kind: "setup", badge: "setup", detail: null, source: "eggie" };
+    if (fault) {
+      const source = fault.kind === "wrong" && fault.cause === "unreadable" ? "eggie" : "docker";
+      return { kind: "setup", badge: "setup", detail: project.problem?.message ?? null, source };
+    }
   }
   if (project.empty) return { kind: "waiting", badge: "waiting" };
   if (fault) return fault;

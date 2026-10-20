@@ -117,6 +117,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
 
   async function bringIn(plan: ImportPlan, mode: Mode) {
     setStep({ kind: "working", plan, progress: { sent: 0, total: 0 } });
+    let created = false;
     try {
       const disk = await api.get<Disk>("/api/disk");
       // The API keeps the uploaded archive on disk until it has unpacked it.
@@ -130,7 +131,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
         });
         return;
       }
-      await runImport(importApi, {
+      created = await runImport(importApi, {
         id: plan.id,
         mode,
         archive: tarBlob(plan.entries),
@@ -140,8 +141,8 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
       setStep({ kind: "failed", plan, mode, message: error instanceof Error ? error.message : "Something went wrong." });
       return;
     }
-    if (hasCompose(plan)) {
-      // Whatever fails here (a start already under way included) shows on the project page.
+    if (created && hasCompose(plan)) {
+      // Merging into an existing project does not start it. Whatever fails here (a start already under way included) shows on the project page.
       try {
         await importApi.up(plan.id);
       } catch {

@@ -11,7 +11,7 @@ import yaml
 
 from .. import constants
 from ..config import ApiConfig
-from ..domain.project import _slug
+from ..domain.project import FAILED_TO_START, _slug
 from ..errors import Conflict, EggieError, Invalid, NotFound
 from ..infra import docker, files
 from ..infra.github import origin_repo
@@ -73,9 +73,10 @@ class ProjectService:
             # this runs inside a read the CLI is waiting on.
             # A refused start can leave old containers answering; only a good
             # start may clear Docker's message.
-            if recheck and project is not None and row["problem_code"] != "failed_to_start" and answers(
-                    project, row["domain"], edge_port=self._config.edge_port,
-                    traefik_host=self._config.traefik_host, http_probe=self._probe):
+            if (recheck and project is not None
+                    and row["problem_code"] != FAILED_TO_START
+                    and answers(project, row["domain"], edge_port=self._config.edge_port,
+                                traefik_host=self._config.traefik_host, http_probe=self._probe)):
                 # An entrypoint slower than the readiness window stores a
                 # diagnosis that is true for a minute and false forever after.
                 self._projects.set_problem(row["id"])

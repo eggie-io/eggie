@@ -1,5 +1,5 @@
 import type { Project } from "./types";
-import type { Cause } from "./view";
+import type { Cause, Source } from "./view";
 
 const CLOSE = "Keep the change as small as you can, then tell me in plain words what you changed.";
 
@@ -27,12 +27,12 @@ export function newPrompt(id: string): string {
 
 const FROM: Record<Project["origin"], string> = { github: " from GitHub", folder: " from a folder", new: "" };
 
-export function setupPrompt(id: string, origin: Project["origin"], detail: string | null): string {
+export function setupPrompt(id: string, origin: Project["origin"], detail: string | null, source: Source): string {
   const ask = `I copied ${folder(id)}${FROM[origin]} into Eggie and it doesn't start yet. Work out how this project is meant to run, then make it start with \`eggie up\`: add or fix docker-compose.yml at the top of the folder, with the web service listening on 0.0.0.0. Don't change what the app does. If it needs API keys or passwords, don't invent them. List each one so I can add it in Eggie → Secrets. Finish by telling me in plain words what you changed.`;
-  return detail ? `${ask}\n\n${dockerSaid(detail)}` : ask;
+  return detail ? `${ask}\n\n${said(source, detail)}` : ask;
 }
 
-export const dockerSaid = (detail: string) => `Docker said: ${detail}`;
+export const said = (source: Source, detail: string) => `${source === "docker" ? "Docker" : "Eggie"} said: ${detail}`;
 
 export type Focus = "full" | "start" | "share";
 

@@ -234,9 +234,28 @@ def test_unpack_makes_project_files_group_writable_and_keeps_data_modes(tmp_path
     def mode(rel):
         return (dest / rel).stat().st_mode & 0o7777
     assert mode("files/src/app.py") == 0o664
-    assert mode("files/src") == 0o775
+    assert mode("files") == 0o2775
+    assert mode("files/src") == 0o2775
     assert mode("files/run.sh") == 0o775
     assert mode("files/pgdata") == 0o700
     assert mode("files/pgdata/base/1") == 0o600
     assert mode("volumes/dbv/shared") == 0o664
     assert mode("volumes/dbv/tool") == 0o755
+
+
+def test_unpack_gives_project_files_the_group_of_the_folder_it_unpacks_into(tmp_path, monkeypatch):
+    bundle, dest = tmp_path / "b.tar", tmp_path / "dest"
+    dest.mkdir()
+    with tarfile.open(bundle, "w") as tar:
+        for name in ("files/app.py", "volumes/dbv/f"):
+            info = tarfile.TarInfo(name)
+            info.gid = 4242
+            tar.addfile(info, io.BytesIO(b""))
+    # Owners only change as root; record the group each entry would get.
+    given = {}
+    monkeypatch.setattr(tarfile.TarFile, "chown",
+                        lambda self, member, path, numeric: given.update({member.name: member.gid}))
+
+    unpack(bundle, dest)
+
+    assert given == {"files/app.py": dest.stat().st_gid, "volumes/dbv/f": 4242}

@@ -4,7 +4,6 @@ the API image; keep it free of anything that opens sqlite or starts threads."""
 from __future__ import annotations
 
 import argparse
-import grp
 import io
 import json
 import os
@@ -19,7 +18,6 @@ from ..domain.push import is_excluded
 from .docker import DOCKER
 from .files import BadArchiveError, PathTraversalError
 
-PROJECT_GROUP = "docker"
 MAX_MANIFEST = 1024 ** 2
 
 
@@ -98,16 +96,10 @@ def _manifest_data_paths(tar: tarfile.TarFile) -> tuple[str, ...]:
     return tuple(posixpath.normpath(p) for p in paths if isinstance(p, str))
 
 
-def _project_gid() -> int | None:
-    try:
-        return grp.getgrnam(PROJECT_GROUP).gr_gid
-    except KeyError:
-        return None
-
-
-def _ownership_filter(data_paths: Sequence[str], gid: int | None):
+def _ownership_filter(data_paths: Sequence[str], gid: int):
     """Data (volumes and data_paths) keeps the sender's owners and modes, less the
-    high bits; every other project file joins the project group, group-writable."""
+    high bits; every other project file joins `gid`, group-writable, and its
+    directories are setgid so what is made in them later joins it too."""
     def apply(member: tarfile.TarInfo, dest: str) -> tarfile.TarInfo:
         mode = member.mode
         member = tarfile.tar_filter(member, dest)
@@ -119,11 +111,8 @@ def _ownership_filter(data_paths: Sequence[str], gid: int | None):
                 rel is not None and _is_data(rel, data_paths)):
             return member.replace(mode=mode & 0o777, deep=False)
         if name == "files" or rel is not None:
-            execute = 0o010 if member.isdir() or member.mode & 0o111 else 0
-            changes = {"mode": member.mode | 0o060 | execute}
-            if gid is not None:
-                changes["gid"] = gid
-            return member.replace(**changes, deep=False)
+            extra = 0o2010 if member.isdir() else 0o010 if member.mode & 0o111 else 0
+            return member.replace(mode=member.mode | 0o060 | extra, gid=gid, deep=False)
         return member
     return apply
 
@@ -142,7 +131,9 @@ def unpack(bundle: Path, dest: Path) -> None:
                 if m.linkname.startswith("/") or not target.startswith(
                         os.path.join(os.path.normpath(dest), "")):
                     raise PathTraversalError(f"hard link escapes bundle: {m.name}")
-        apply = _ownership_filter(_manifest_data_paths(tar), _project_gid())
+        # The image's /etc/group is not the VM's: the staging dir has the VM's
+        # docker group, through the setgid bit install.sh sets on /opt/eggie.
+        apply = _ownership_filter(_manifest_data_paths(tar), os.stat(dest).st_gid)
         try:
             tar.extractall(dest, members=members, filter=apply, numeric_owner=True)
         except tarfile.FilterError as e:

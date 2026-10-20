@@ -37,7 +37,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `apps/console` — the app. `/kit` is the component gallery in both themes.
   - `/p/:id/*` pages render inside `screens/project/ProjectLayout.tsx`: it owns the project menu
     (`ProjectMenu.tsx`; its Secrets and Public address notes come from `menu.ts`'s `menuNotes`) and
-    the Analyze, Public address and Delete dialogs. Overview, Files and Secrets render content
+    the Public address and Delete dialogs (Analyze is its own page, `AnalyzePage.tsx` at `/p/:id/analyze`). Overview, Files and Secrets render content
     only, starting with `TitleRow.tsx`. An unknown or deleted id still gets the layout, with a
     bare menu. `projects/color.ts`'s `projectColor` gives a project its tile colour, stable per id.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
@@ -48,7 +48,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.
   - `projects/view.ts` maps the API's `status`/`problem`/`job`/`empty` to one screen state for both
-    the list and the project page. `projects/slugify.ts` mirrors the API's `_slug`; both read
+    the list and the project page; `waiting` (never ran, no problem) and `setup` (needs the agent) drive
+    `HandoffCard.tsx` and `projects/prompts.ts`, with the agent name from `agents/current.ts`
+    (`useCurrentAgent`; list and dialogs pass `{ poll: false }`). Mock: `?scenario=handoff-new`,
+    `handoff-github`, `handoff-folder`. `projects/slugify.ts` mirrors the API's `_slug`; both read
     `tests/fixtures/slugify-cases.json`.
   - `uploads/queue.ts` owns the chunked-upload protocol (resume at the API's offset, busy retry on
     the last chunk, hold on `disk_full`) with no React in it. One instance lives above the router in

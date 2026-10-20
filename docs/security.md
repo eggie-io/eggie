@@ -35,9 +35,45 @@ Each of these is root-equivalent in the VM:
   mounting the Docker socket, running `privileged`, or using the host network, and the API does
   not inspect or refuse any of these.
 - **Every login account.** `install.sh` puts each login account in the `docker` group and gives it
-  ACLs on `/opt/eggie/projects` and read access to `api.token`. `sudo` needs no password (on WSL2
-  the account is `eggie`, and `wsl -d ... -u root` needs nothing at all). Whoever holds an SSH key into the VM holds the VM.
+  ACLs on `/opt/eggie/projects` and read access to `api.token`. `sudo` needs no password. On WSL2
+  `wsl -d eggie-vm` opens as the non-root `eggie` account, but `eggie` is in the `docker` group and
+  has passwordless `sudo`, and `wsl -d eggie-vm -u root` from Windows needs nothing at all. Whoever
+  holds an SSH key into the VM holds the VM.
 - **Coding agents.** They run as a login account, so they have everything above.
+
+## The user's own computer
+
+Nothing in the VM can reach the user's files or run programs on their computer:
+
+- **Lima:** `host/providers/eggie.yaml` has `mounts: []`, so no macOS folder is shared.
+- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and lets Linux run Windows `.exe`
+  files by default. `install.sh` turns both off on every install, update and repair
+  (`lib/wsl-conf.py`). The settings go in `/etc/wsl.conf`:
+
+  ```ini
+  [automount]
+  enabled=false
+
+  [interop]
+  enabled=false
+  appendWindowsPath=false
+  ```
+
+  So there is no `C:` drive at `/mnt/c`, `cmd.exe` and `powershell.exe` cannot be started from the
+  VM, and `PATH` has no Windows folders. WSL reads the file only when the distro starts. Setup
+  restarts a VM it has just created right after the first install, before anyone uses it. A VM
+  that was already running when it got the setting keeps the old behaviour until its next start,
+  for example a Windows restart or `wsl --shutdown`. Projects come in by HTTP upload (Import), not
+  through a shared folder.
+
+This protects against accidents, such as an agent deleting the wrong folder or a script started
+in the VM running on Windows. It is not a hard boundary:
+
+- `eggie` is in the `docker` group, which is root in the VM, and root can mount things again.
+- Every WSL2 distro on the computer runs in one shared utility VM with one kernel. A kernel
+  escape from any distro reaches all of them.
+- Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and
+  `\\wsl.localhost\eggie-vm` shows its files to any Windows program.
 
 ## What each secret protects, and what it doesn't
 

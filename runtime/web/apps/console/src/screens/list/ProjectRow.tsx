@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Button, Notice, RowCard, StateBadge } from "@eggie/ui";
+import { Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
+import { projectColor } from "../../projects/color";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";
@@ -9,7 +10,6 @@ import { useLifecycle } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
-import { ARROW, GEAR } from "../icons";
 import s from "./ProjectList.module.css";
 import { openExternal } from "../../desktop/desktop";
 
@@ -22,6 +22,7 @@ export function ProjectRow({ project }: { project: Project }) {
   const primary = primaryUrl(project);
   const page = `/p/${encodeURIComponent(project.id)}`;
   const look = () => navigate(page);
+  const tile = projectColor(project.id);
 
   // Clear a stale error notice from a previous action once the row moves to
   // a different view (e.g. a failed Start shouldn't still show once it's running).
@@ -38,13 +39,15 @@ export function ProjectRow({ project }: { project: Project }) {
       actions = (
         <>
           {primary && (
-            <Button aria-label={`Open ${project.id}`} onClick={() => openExternal(primary)}>
-              Open{ARROW}
+            <Button aria-label={`Open ${project.id}`} size="sm" iconRight="external" onClick={() => openExternal(primary)}>
+              Open
             </Button>
           )}
           <Button
             aria-label={`Stop ${project.id}`}
-            variant="quiet"
+            variant="ghost"
+            size="sm"
+            icon="stop"
             disabled={lifecycle.isPending}
             onClick={() => lifecycle.mutate("down")}
           >
@@ -56,7 +59,13 @@ export function ProjectRow({ project }: { project: Project }) {
     case "stopped":
       line = primary && <span className={s.addressMuted}>{hostOf(primary)}</span>;
       actions = (
-        <Button aria-label={`Start ${project.id}`} disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up")}>
+        <Button
+          aria-label={`Start ${project.id}`}
+          size="sm"
+          icon="play"
+          disabled={lifecycle.isPending}
+          onClick={() => lifecycle.mutate("up")}
+        >
           Start
         </Button>
       );
@@ -70,37 +79,53 @@ export function ProjectRow({ project }: { project: Project }) {
       break;
     case "wrong":
       line = <span className={s.trouble}>{CAUSE_COPY[view.cause].short}</span>;
-      actions = <Button aria-label={`Take a look at ${project.id}`} variant="danger" onClick={look}>Take a look</Button>;
+      actions = (
+        <Button aria-label={`Take a look at ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
+          Take a look
+        </Button>
+      );
       break;
     case "gone":
       line = <span className={s.trouble}>Its folder has gone missing</span>;
-      actions = <Button aria-label={`Take a look at ${project.id}`} variant="danger" onClick={look}>Take a look</Button>;
+      actions = (
+        <Button aria-label={`Take a look at ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
+          Take a look
+        </Button>
+      );
       break;
     case "waiting":
       line = <span className={s.quiet}>Waiting for your coding agent</span>;
-      actions = <Button aria-label={`Open page for ${project.id}`} onClick={look}>Open page</Button>;
+      actions = (
+        <Button aria-label={`Open page for ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
+          Open page
+        </Button>
+      );
       break;
   }
 
   // wrong/gone/waiting already lead to the page through their only action.
   const settings = view.kind !== "wrong" && view.kind !== "gone" && view.kind !== "waiting" && (
-    <Button aria-label={`Settings for ${project.id}`} variant="quiet" onClick={look}>
-      {GEAR}Settings
-    </Button>
+    <IconButton icon="settings" label={`Settings for ${project.id}`} size="sm" onClick={look} />
   );
 
   return (
-    <>
-      <RowCard accent={view.badge === "wrong" ? "trouble" : "plain"} className={s.row}>
-        <div className={s.who}>
-          <Link className={s.name} to={page}>{project.id}</Link>
-          {line}
-          {pub.kind === "on" && <span className={s.quiet}>{pub.left ? `Public · ${pub.left}` : "Public"}</span>}
-        </div>
-        <StateBadge state={view.badge} />
-        <div className={s.actions}>{actions}{settings}</div>
-      </RowCard>
-      {lifecycle.error && <Notice>{actionError(lifecycle.error)}</Notice>}
-    </>
+    <li className={s.row}>
+      <span className={s.tile} style={{ background: tile.bg, color: tile.ink }} aria-hidden="true">
+        {project.id.charAt(0)}
+      </span>
+      <div className={s.who}>
+        <Link className={s.name} to={page}>{project.id}</Link>
+        {line}
+        {pub.kind === "on" && (
+          <span className={s.public}>
+            <Icon name="globe" />
+            {pub.left ? `Public · ${pub.left}` : "Public"}
+          </span>
+        )}
+      </div>
+      <div className={s.state}><StateBadge state={view.badge} /></div>
+      <div className={s.actions}>{actions}{settings}</div>
+      {lifecycle.error && <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error)}</Notice>}
+    </li>
   );
 }

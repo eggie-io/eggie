@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { cx } from "@eggie/ui";
+import { Button, Icon, cx } from "@eggie/ui";
 import type { Account } from "../account/account";
 import { api as consoleApi, createApi } from "../api/client";
 import { useDesktopHome } from "../desktop/DesktopContext";
@@ -8,7 +8,6 @@ import { browserLink, openExternal } from "../desktop/desktop";
 import { REVOKE_URL, useDisconnectGitHub, useGitHub } from "../github/github";
 import { githubView } from "../github/view";
 import { GitHubModal } from "../screens/github/GitHubModal";
-import { CHEVRON_DOWN, EXTERNAL, GITHUB, SIGN_OUT } from "../screens/icons";
 import { useSite } from "../site/SiteContext";
 import s from "./Shell.module.css";
 
@@ -81,7 +80,7 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
         onClick={() => setOpen((was) => !was)}
       >
         <span className={s.avatar} aria-hidden="true">{initial(email)}</span>
-        {CHEVRON_DOWN}
+        <Icon name="chevron-down" />
       </button>
       {/* Hidden rather than unmounted, so a half-finished disconnect confirmation survives a close. */}
       <div id={panelId} className={s.menu} hidden={!open}>
@@ -98,8 +97,8 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
           <>
             <span className={s.rule} aria-hidden="true" />
             {error && <span className={s.menuError} role="alert">{error}</span>}
-            <button type="button" className={cx(s.item, s.itemQuiet)} onClick={signOut} disabled={leaving}>
-              {SIGN_OUT}<span className={s.itemLabel}>Sign out</span>
+            <button type="button" className={cx(s.item, s.itemDanger)} onClick={signOut} disabled={leaving}>
+              <Icon name="logout" /><span className={s.itemLabel}>Sign out</span>
             </button>
           </>
         )}
@@ -134,21 +133,21 @@ function GitHubLine({ onConnect }: { onConnect: () => void }) {
         to revoke it fully.
       </span>
     );
-    actions = <button type="button" className={s.chip} onClick={() => { setLeft(false); onConnect(); }}>Connect</button>;
+    actions = <Button size="sm" onClick={() => { setLeft(false); onConnect(); }}>Connect</Button>;
   } else if (view.kind === "ready" || view.kind === "applying" || view.kind === "setupFailed" || view.kind === "reconnect") {
     if (confirming) {
       detail = <span className={s.lineSub}>Disconnect @{view.login}?</span>;
       actions = (
         <>
-          <button
-            type="button"
-            className={cx(s.chip, s.chipDanger)}
+          <Button
+            variant="danger"
+            size="sm"
             disabled={disconnect.isPending}
             onClick={() => disconnect.mutate(undefined, { onSuccess: () => { setLeft(true); setConfirming(false); } })}
           >
             Disconnect
-          </button>
-          <button type="button" className={s.chip} onClick={() => setConfirming(false)}>Keep</button>
+          </Button>
+          <Button size="sm" onClick={() => setConfirming(false)}>Keep</Button>
         </>
       );
     } else {
@@ -159,19 +158,19 @@ function GitHubLine({ onConnect }: { onConnect: () => void }) {
       );
       actions = (
         <>
-          {view.kind === "reconnect" && <button type="button" className={s.chip} onClick={onConnect}>Reconnect</button>}
-          <button type="button" className={cx(s.chip, s.chipDanger)} onClick={() => setConfirming(true)}>Disconnect</button>
+          {view.kind === "reconnect" && <Button size="sm" onClick={onConnect}>Reconnect</Button>}
+          <Button variant="ghost" size="sm" className={s.quietDanger} onClick={() => setConfirming(true)}>Disconnect</Button>
         </>
       );
     }
   } else {
     detail = <span className={s.lineSub}>Not connected</span>;
-    actions = <button type="button" className={s.chip} onClick={onConnect}>Connect</button>;
+    actions = <Button size="sm" onClick={onConnect}>Connect</Button>;
   }
 
   return (
     <div className={s.line}>
-      {GITHUB}
+      <Icon name="branch" />
       <span className={s.lineText}>
         <span className={s.lineTitle}>GitHub</span>
         {detail}
@@ -217,7 +216,7 @@ function OpenInBrowser() {
         }
       }}
     >
-      {EXTERNAL}
+      <Icon name="external" />
       <span className={s.itemLabel}>Open in browser</span>
       {window.location.port && <span className={s.itemHint}>:{window.location.port}</span>}
     </button>

@@ -1,28 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
+import { Card } from "./Card";
+import { Icon } from "./Icon";
 import s from "./PromptCard.module.css";
 
 const COPIED_MS = 2600;
-
-const GIFT = (
-  <svg className={s.gift} width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-    <path d="M2.6 7.5h12.8v7H2.6v-7ZM9 7.5v7M2.2 5.2h13.6v2.3H2.2V5.2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-    <path d="M9 5.2S7.6 2.6 6.2 3.2C4.8 3.8 5.6 5.2 9 5.2Zm0 0s1.4-2.6 2.8-2c1.4.6.6 2-2.8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-  </svg>
-);
-
-const COPY = (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <rect x="5.2" y="2.5" width="8.3" height="8.3" rx="2" stroke="#2B1E14" strokeWidth="1.6" />
-    <path d="M10.8 13.5H4.5a2 2 0 0 1-2-2V5.2" stroke="#2B1E14" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
-
-const CHECK = (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M3.2 8.4 6.4 11.6 12.8 4.8" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 
 export function PromptCard({
   prompt,
@@ -64,9 +46,8 @@ export function PromptCard({
   }
 
   return (
-    <section className={s.card}>
+    <Card as="section" className={s.card}>
       <header className={s.head}>
-        {GIFT}
         <span className={s.title}>{title}</span>
         {aside && <span className={s.aside}>{aside}</span>}
       </header>
@@ -74,15 +55,15 @@ export function PromptCard({
         <pre ref={body} className={s.prompt}>{prompt}</pre>
         <div className={s.row}>
           {copied ? (
-            <span className={s.copied} role="status">{CHECK}Copied. It's yours.</span>
+            <span className={s.copied} role="status"><Icon name="check-circle" />Copied. It's yours.</span>
           ) : (
-            <Button variant="primary" size="lg" onClick={copy}>{COPY}Copy the prompt</Button>
+            <Button variant="primary" icon="copy" onClick={copy}>Copy the prompt</Button>
           )}
           <span className={s.hint} role={refused ? "alert" : undefined}>
             {refused ? "Couldn't copy — the text is selected, press Ctrl+C (⌘C on a Mac)." : hint}
           </span>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

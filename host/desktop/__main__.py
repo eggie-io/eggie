@@ -144,6 +144,7 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     shell.window = window
     controller.window = window
     window.expose(*guarded(api, shell))
+    window.events.before_show += lambda: desktop.style_title_bar(window)
     if tray is not None:
         window.events.closing += controller.on_closing
         controller.tray = tray

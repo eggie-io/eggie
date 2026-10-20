@@ -23,7 +23,7 @@
      navigation, so a notice living inside it would vanish the instant the
      crash handler calls refresh() -- the one moment it needs to stay put. -->
 <aside id="notice" hidden>
-  <p class="notice-head">Something went wrong.</p>
+  <p class="notice-head"><span class="ic ic-alert-triangle" aria-hidden="true"></span>Something went wrong.</p>
   <pre class="notice-detail" id="notice-detail"></pre>
   <button class="btn-secondary" data-action="copy-log">Copy log</button>
   <button class="btn-secondary" data-action="dismiss-notice">Dismiss</button>
@@ -34,217 +34,279 @@
 <div id="busy" hidden></div>
 
 <template data-screen="first-run">
-  <section class="pad centered">
-    <div class="title-row">
-      <span class="egg" aria-hidden="true"></span>
-      <h1 class="display">Welcome to Eggie</h1>
+  <section class="install first-run">
+    <div class="brand-panel" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <p class="lede">Eggie sets up a tiny private computer inside your computer,
-      so you can build real, working web apps just by chatting with it.</p>
-    <ol class="steps">
-      <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
-        Your own files stay exactly where they are.</span></li>
-      <li><b>We hire the cook</b><span>A coding agent moves in. It writes the code
-        and runs it in there, never out here.</span></li>
-      <li><b>You start ordering</b><span>Describe what you want. Watch it get made.
-        Change your mind as often as you like.</span></li>
-    </ol>
-    <div class="row">
-      <button class="btn-primary" data-action="start-install">Warm up the kitchen</button>
-      <span class="hint">About 4 minutes. You can quit and come back.</span>
+    <div class="install-main">
+      <div class="install-head">
+        <h1 class="display">Welcome to Eggie</h1>
+        <p class="lede">Eggie sets up a tiny private computer inside your computer,
+          so you can build real, working web apps just by chatting with it.</p>
+      </div>
+      <ol class="steps">
+        <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
+          Your own files stay exactly where they are.</span></li>
+        <li><b>We hire the cook</b><span>A coding agent moves in. It writes the code
+          and runs it in there, never out here.</span></li>
+        <li><b>You start ordering</b><span>Describe what you want. Watch it get made.
+          Change your mind as often as you like.</span></li>
+      </ol>
+      <div class="row">
+        <button class="btn-primary" data-action="start-install">Warm up the kitchen</button>
+        <span class="hint">About 4 minutes. You can quit and come back.</span>
+      </div>
     </div>
   </section>
 </template>
 
 <template data-screen="home:running">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-hot" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-running">Running</span>
-        <h1 class="display">The kitchen is open</h1>
-        <p class="lede">Your machine is up and the cook is at the counter.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-hot" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Running</span>
+          <h1 class="display">The kitchen is open</h1>
+          <p class="lede">Your machine is up and the cook is at the counter.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="enter-console">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary" data-action="stop-vm"><span class="ic ic-stop" aria-hidden="true"></span>Stop the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="enter-console">Open Eggie</button>
-      <button class="btn-secondary" data-action="stop-vm">Stop the kitchen</button>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:stopped">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-asleep" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-cold">Stopped</span>
-        <h1 class="display">The pan is cold</h1>
-        <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-asleep" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-cold">Stopped</span>
+          <h1 class="display">The pan is cold</h1>
+          <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="start-vm"><span class="ic ic-play" aria-hidden="true"></span>Start the kitchen</button>
+        <button class="btn-secondary" disabled>Open Eggie</button>
+        <span class="hint">Opens by itself once the pan is hot.</span>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="start-vm">Start the kitchen</button>
-      <button class="btn-secondary" disabled>Open Eggie</button>
-      <span class="hint">Opens by itself once the pan is hot.</span>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:not_installed">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-empty" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-empty">Not installed</span>
-        <h1 class="display">No kitchen yet</h1>
-        <p class="lede">There's nothing cooking on this computer. Setting one up takes
-          about four minutes and 6 GB of space.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-empty" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-empty">Not installed</span>
+          <h1 class="display">No kitchen yet</h1>
+          <p class="lede">There's nothing cooking on this computer. Setting one up takes
+            about four minutes and 6 GB of space.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="start-install"><span class="ic ic-play" aria-hidden="true"></span>Set up the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="start-install">Set up the kitchen</button>
-    </div>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
-        <span class="tile-note">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="home:wrong">
-  <section class="pad">
-    <div class="hero">
-      <div class="pan pan-burnt" aria-hidden="true"></div>
-      <div class="hero-text">
-        <span class="badge badge-bad">Needs a look</span>
-        <h1 class="display">Something's off in here</h1>
-        <p class="lede">The kitchen started but one of its parts didn't. Your projects
-          are safe — Doctor can usually sort this out on its own.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-burnt" aria-hidden="true">
+          <span class="pan-flag"><span class="ic ic-alert-triangle"></span></span>
+        </div>
+        <div class="hero-text">
+          <span class="badge badge-bad"><span class="ic ic-x-circle" aria-hidden="true"></span>Needs a look</span>
+          <h1 class="display">Something's off in here</h1>
+          <p class="lede">The kitchen started but one of its parts didn't. Your projects
+            are safe — Doctor can usually sort this out on its own.</p>
+        </div>
+      </div>
+      <div class="update-note" data-when="app_update">
+        <span class="ic ic-info" aria-hidden="true"></span>
+        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
+          <span>A fresh version of the app is waiting.</span></p>
+        <button class="btn-update" data-action="app-update">Update now</button>
+      </div>
+      <div class="error-card" data-when="problem">
+        <pre data-field="problem"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="doctor"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
+        <button class="btn-secondary" data-action="restart-vm"><span class="ic ic-refresh" aria-hidden="true"></span>Restart the kitchen</button>
       </div>
     </div>
-    <div class="update-note" data-when="app_update">
-      <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-        <span>A fresh version of the app is waiting.</span></p>
-      <button class="btn-update" data-action="app-update">Update now</button>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="doctor">Run Doctor</button>
-      <button class="btn-secondary" data-action="restart-vm">Restart the kitchen</button>
-    </div>
-    <details class="log"><summary>Show the log</summary>
-      <pre data-field="problem"></pre>
-      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     <footer class="odds">
-      <span class="overline">Odds and ends</span>
+      <div class="odds-head">
+        <span class="overline">Odds and ends</span>
+        <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
+      </div>
       <div class="tiles">
         <button data-action="doctor">Doctor</button>
         <button data-action="check-updates">Check for updates</button>
         <button data-action="settings">Settings</button>
         <button class="tile-danger" data-action="uninstall">Uninstall</button>
-        <span class="tile-note">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
       </div>
     </footer>
   </section>
 </template>
 
 <template data-screen="unreachable">
-  <section class="pad">
-    <span class="badge badge-warm">Running, but quiet</span>
-    <h1 class="display">Nobody's answering the door</h1>
-    <p class="lede">Your machine is on — we can see it humming — but Eggie can't
-      get a word in. Nine times out of ten a retry sorts it out. Nothing is lost
-      either way.</p>
-    <div class="row">
-      <button class="btn-primary" data-action="go-home">Try again</button>
-      <button class="btn-secondary" data-action="repair">Repair the connection</button>
-      <span class="hint">Repair restarts the link. Your projects stay put.</span>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-asleep" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-warm"><span class="ic ic-alert-triangle" aria-hidden="true"></span>Running, but quiet</span>
+          <h1 class="display">Nobody's answering the door</h1>
+          <p class="lede">Your machine is on — we can see it humming — but Eggie can't
+            get a word in. Nine times out of ten a retry sorts it out. Nothing is lost
+            either way.</p>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="go-home"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        <button class="btn-secondary" data-action="repair">Repair the connection</button>
+        <span class="hint">Repair restarts the link. Your projects stay put.</span>
+      </div>
+      <details class="log"><summary>Show logs</summary>
+        <pre data-field="problem"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     </div>
-    <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre>
-      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
 <template data-screen="unresponsive">
-  <section class="pad">
-    <span class="badge badge-bad">Not answering</span>
-    <h1 class="display">The kitchen stopped answering</h1>
-    <p class="lede">The machine your projects run on has stopped responding. It
-      happens now and then, often after the computer wakes from sleep.
-      Restarting it usually sorts it out. Your projects stay put.</p>
-    <div class="row">
-      <button class="btn-primary" data-action="recover">Restart the kitchen</button>
-      <button class="btn-secondary" data-action="go-home">Try again</button>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-burnt" aria-hidden="true">
+          <span class="pan-flag"><span class="ic ic-alert-triangle"></span></span>
+        </div>
+        <div class="hero-text">
+          <span class="badge badge-bad"><span class="ic ic-x-circle" aria-hidden="true"></span>Not answering</span>
+          <h1 class="display">The kitchen stopped answering</h1>
+          <p class="lede">The machine your projects run on has stopped responding. It
+            happens now and then, often after the computer wakes from sleep.
+            Restarting it usually sorts it out. Your projects stay put.</p>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="recover"><span class="ic ic-refresh" aria-hidden="true"></span>Restart the kitchen</button>
+        <button class="btn-secondary" data-action="go-home">Try again</button>
+      </div>
+      <details class="log"><summary>Show logs</summary>
+        <pre data-field="problem"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     </div>
-    <details class="log"><summary>Show logs</summary>
-      <pre data-field="problem"></pre>
-      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
 <template data-screen="runtime-update:running">
-  <section class="pad centered">
-    <span class="badge badge-warm">Updating</span>
-    <h1 class="display">Updating Eggie inside the kitchen</h1>
-    <p class="lede">This app is newer than what runs inside your machine, so that part
-      is catching up. It takes a minute or two. Your projects stay put.</p>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-busy" aria-hidden="true"></div>
+        <div class="hero-text">
+          <span class="badge badge-warm">Updating</span>
+          <h1 class="display">Updating Eggie inside the kitchen</h1>
+          <p class="lede">This app is newer than what runs inside your machine, so that part
+            is catching up. It takes a minute or two. Your projects stay put.</p>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
 <template data-screen="runtime-update:failed">
-  <section class="pad">
-    <span class="badge badge-bad">Update didn't finish</span>
-    <h1 class="display">The kitchen couldn't catch up</h1>
-    <p class="lede">Eggie couldn't update what runs inside your machine, so this app
-      can't talk to it yet. Your projects are safe. Check your internet connection and try again.</p>
-    <div class="row">
-      <button class="btn-primary" data-action="retry-runtime-update">Try again</button>
-      <button class="btn-secondary" data-action="doctor">Run Doctor</button>
+  <section class="pad pad-home">
+    <div class="home-main">
+      <div class="hero">
+        <div class="pan pan-burnt" aria-hidden="true">
+          <span class="pan-flag"><span class="ic ic-alert-triangle"></span></span>
+        </div>
+        <div class="hero-text">
+          <span class="badge badge-bad"><span class="ic ic-x-circle" aria-hidden="true"></span>Update didn't finish</span>
+          <h1 class="display">The kitchen couldn't catch up</h1>
+          <p class="lede">Eggie couldn't update what runs inside your machine, so this app
+            can't talk to it yet. Your projects are safe. Check your internet connection and try again.</p>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn-primary" data-action="retry-runtime-update"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        <button class="btn-secondary" data-action="doctor"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
+      </div>
+      <details class="log"><summary>Show logs</summary>
+        <pre data-field="message"></pre>
+        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
     </div>
-    <details class="log"><summary>Show logs</summary>
-      <pre data-field="message"></pre>
-      <button class="btn-copy" data-action="copy-log">Copy log</button></details>
   </section>
 </template>
 
@@ -252,9 +314,12 @@
   <section class="pad">
     <h2 class="title">Restarting the kitchen wasn't enough</h2>
     <p class="lede">The next step restarts everything the kitchen runs on.</p>
-    <p class="warn" data-field="warning"></p>
+    <div class="alert alert-warning">
+      <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+      <p data-field="warning"></p>
+    </div>
     <div class="row">
-      <button class="btn-danger" data-action="recover-everything">Restart everything</button>
+      <button class="btn-danger" data-action="recover-everything"><span class="ic ic-refresh" aria-hidden="true"></span>Restart everything</button>
       <button class="btn-secondary" data-action="go-home">Not now</button>
     </div>
     <details class="log"><summary>Show logs</summary>
@@ -268,7 +333,7 @@
     <div data-when="available">
       <h2 class="title">Eggie <span data-field="available"></span> is ready</h2>
       <p class="lede">Updating closes this window, installs the new version and opens it again.</p>
-      <div class="row"><button class="btn-primary" data-action="app-update">Update</button>
+      <div class="row"><button class="btn-primary" data-action="app-update"><span class="ic ic-download" aria-hidden="true"></span>Update</button>
         <button class="btn-secondary" data-action="go-home">Not now</button></div>
     </div>
     <div data-when="none">
@@ -314,6 +379,7 @@
 
 <template data-screen="quitting">
   <section class="pad centered">
+    <span class="spinner" aria-hidden="true"></span>
     <h2 class="title">Stopping Eggie…</h2>
     <p class="lede">Turning the kitchen off. The window closes by itself.</p>
   </section>
@@ -321,61 +387,85 @@
 
 <template data-screen="install:running">
   <section class="install">
-    <div class="install-left">
-      <div class="pan pan-hot" aria-hidden="true"></div>
-      <h2 class="title">Heating the pan</h2>
-      <p class="lede">Nothing here can hurt your computer — the kitchen lives in
-        its own sealed box.</p>
-      <p class="hint">Good moment for a coffee.</p>
-      <p class="hint" data-when="resumed">Continuing setup after the restart — you don't need to do anything.</p>
-      <div class="install-foot">
-        <div class="bar"><span data-field="progress"></span></div>
-        <span class="hint" data-field="counter"></span>
-      </div>
+    <div class="brand-panel" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col">
-      <ol class="rows" data-rows></ol>
-      <p class="download-note" data-field="download" hidden></p>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">Heating the pan</h2>
+        <p class="lede">Nothing here can hurt your computer — the kitchen lives in
+          its own sealed box.</p>
+        <p class="hint">Good moment for a coffee.</p>
+        <p class="hint" data-when="resumed">Continuing setup after the restart — you don't need to do anything.</p>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
     </div>
   </section>
 </template>
 
 <template data-screen="install:reboot">
   <section class="install">
-    <div class="install-left">
-      <div class="pan pan-asleep" aria-hidden="true"></div>
-      <h2 class="title">Time for a quick nap</h2>
-      <p class="lede">Your computer needs one restart before the kitchen can open.
-        We'll pick up exactly where we left off — nothing is lost.</p>
-      <button class="btn-primary" data-action="reboot-now">Restart now</button>
-      <button class="btn-secondary" data-action="go-home">I'll restart later</button>
+    <div class="brand-panel brand-asleep" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">Time for a quick nap</h2>
+        <p class="lede">Your computer needs one restart before the kitchen can open.
+          We'll pick up exactly where we left off — nothing is lost.</p>
+        <div class="row">
+          <button class="btn-primary" data-action="reboot-now">Restart now</button>
+          <button class="btn-secondary" data-action="go-home">I'll restart later</button>
+        </div>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    </div>
   </section>
 </template>
 
 <template data-screen="install:failed">
   <section class="install install-failed">
-    <div class="install-left">
-      <div class="pan pan-burnt" aria-hidden="true"></div>
-      <h2 class="title">The burner wouldn't light</h2>
-      <p class="lede" data-field="action"></p>
-      <button class="btn-primary" data-retry data-action="start-install">Try this step again</button>
-      <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
-      <details class="log" data-when="message"><summary>Show the log</summary>
-        <pre data-field="message"></pre>
-        <button class="btn-copy" data-action="copy-log">Copy log</button></details>
+    <div class="brand-panel brand-burnt" aria-hidden="true">
+      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
+      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
+        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
+        <span class="art-pill">ubuntu 24.04</span></div>
     </div>
-    <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    <div class="install-main">
+      <div class="install-head">
+        <p class="overline" data-field="counter"></p>
+        <div class="bar"><span data-field="progress"></span></div>
+        <h2 class="title">The burner wouldn't light</h2>
+        <p class="lede" data-field="action"></p>
+        <div class="row">
+          <button class="btn-primary" data-retry data-action="start-install"><span class="ic ic-refresh" aria-hidden="true"></span>Try this step again</button>
+          <button class="btn-secondary" data-action="start-over">Start over from scratch</button>
+        </div>
+        <details class="log" data-when="message"><summary>Show the log</summary>
+          <pre data-field="message"></pre>
+          <button class="btn-copy" data-action="copy-log">Copy log</button></details>
+      </div>
+      <div class="rows-col"><ol class="rows" data-rows></ol></div>
+    </div>
   </section>
 </template>
 
 <template data-screen="doctor">
-  <section class="pad">
+  <section class="pad pad-fill">
     <h2 class="title">Doctor</h2>
     <pre class="log" data-field="text"></pre>
-    <div class="row"><button class="btn-secondary" data-action="go-home">Done</button>
-      <button class="btn-secondary" data-action="copy-log">Copy log</button></div>
+    <div class="row"><button class="btn-primary" data-action="go-home">Done</button>
+      <button class="btn-copy" data-action="copy-log">Copy log</button></div>
   </section>
 </template>
 
@@ -386,11 +476,14 @@
       Your own files, outside the kitchen, are untouched.</p>
     <label class="choice"><input type="checkbox" name="purge">
       <b>Also delete downloads and settings</b>
-      <span>Frees the disk space Eggie used. You'd start from scratch next time.</span></label>
-    <p class="warn"><b>There's no undo.</b> Any project the cook made in there
-      goes with it.</p>
+      <span class="check-desc">Frees the disk space Eggie used. You'd start from scratch next time.</span></label>
+    <div class="alert alert-danger">
+      <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+      <p><b>There's no undo.</b> Any project the cook made in there
+        goes with it.</p>
+    </div>
     <div class="row">
-      <button class="btn-danger" data-action="do-uninstall">Remove Eggie</button>
+      <button class="btn-danger" data-action="do-uninstall"><span class="ic ic-trash" aria-hidden="true"></span>Remove Eggie</button>
       <button class="btn-secondary" data-action="go-home">Keep it</button>
     </div>
   </section>

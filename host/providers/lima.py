@@ -504,6 +504,10 @@ class LimaProvider:
     # what this program is doing.
     remediable = False
 
+    # Nothing the runtime installs on Lima waits for a reboot, and a Lima
+    # restart costs most of a minute.
+    restart_after_first_bootstrap = False
+
     def installer_asset(self, version: str) -> str:
         # The .pkg is built native-arch: an arm64 package refuses an Intel Mac.
         return f"EggieSetup-{version}-{self._machine()}.pkg"

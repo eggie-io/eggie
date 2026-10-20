@@ -23,13 +23,27 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 
 ## Structure
 
-- `packages/ui` — the kit: tokens, fonts, components, drawn from `docs/design/` (never from
-  `host/desktop/ui`). Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
-- `apps/console` — the app.
+- `packages/ui` — the kit: tokens, fonts, components, drawn from the Eggie design system
+  (claude.ai/design project "Omelet: Linux VM Setup UI": `Eggie Host + Console v3.dc.html` and
+  `_ds/eggie-console-design-system-…`), never from `host/desktop/ui` or the old `docs/design/` board.
+  Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
+  - Every icon is `<Icon name=…>`; the glyphs (the design system's 24px stroke set) are paths in
+    `src/icons.ts`, so a new one is added there, not drawn inline. `Button`, `IconButton`, `Badge`
+    and `Notice` take an icon by name.
+  - `src/tokens.css` holds every colour, type, space and shape token, light on `:root` and dark
+    twice (OS setting and the `.om-theme-dark` gallery wrapper). `packages/ui/test/tokens.test.ts`
+    fails on a `var(--x)` that no CSS declares, so a renamed token can't silently resolve to nothing.
+    No hex colours in TSX or module CSS (the QR code's black-on-white is the one exception).
+- `apps/console` — the app. `/kit` is the component gallery in both themes.
+  - `/p/:id/*` pages render inside `screens/project/ProjectLayout.tsx`: it owns the project menu
+    (`ProjectMenu.tsx`; its Secrets and Public address notes come from `menu.ts`'s `menuNotes`) and
+    the Analyze, Public address and Delete dialogs. Overview, Files and Secrets render content
+    only, starting with `TitleRow.tsx`. An unknown or deleted id still gets the layout, with a
+    bare menu. `projects/color.ts`'s `projectColor` gives a project its tile colour, stable per id.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
-    name rule. Sections: Requested (hint + value), Your secrets (write-only, typed values visible), Add. Mock: `?scenario=secrets`.
-  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM or in the desktop window), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openKitchenUrl`, "This computer" to `<desktop home>#console`). Mock: `?scenario=kitchens`, `no-kitchens`, `kitchens-down`.
-  - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`, and `webApp` likewise into `WebAppContext`/`useWebApp()`; the initial state comes from the page address via `isLocalHost`, so `undefined` occurs only on a non-local address before the first boot answer); on a site the signed-out screen redirects (`window.location.replace`) to `<web_app>/kitchens/open?host=…` via `site/signIn.ts`, or shows a Sign in button after a refused code (`handoff_spent`, so a failing redeem cannot loop), the sign-in screen says the server lost its sign-in (no button), the public-address tile and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`, `?scenario=site-signed-out`.
+    name rule. Sections: Requested (name with its hint, value), Your secrets (write-only, typed values visible), Add. Mock: `?scenario=secrets`.
+  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM, never clickable), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openKitchenUrl`, through `openExternal` in the desktop window). Mock: `?scenario=kitchens`, `no-kitchens`, `kitchens-down`.
+  - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`, and `webApp` likewise into `WebAppContext`/`useWebApp()`; the initial state comes from the page address via `isLocalHost`, so `undefined` occurs only on a non-local address before the first boot answer); on a site the signed-out screen redirects (`window.location.replace`) to `<web_app>/kitchens/open?host=…` via `site/signIn.ts`, or shows a Sign in button after a refused code (`handoff_spent`, so a failing redeem cannot loop), the sign-in screen says the server lost its sign-in (no button), the project menu's Public address item and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`, `?scenario=site-signed-out`.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.
@@ -54,7 +68,8 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     `<id>/agent.json` with `windows` and `mac` blocks, an optional `card` of fields to copy, steps with an HTML
     `body` and a `media` list (screenshots and videos; more than one makes a slider).
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
-    names a missing media file. `src/agents/rich.ts` parses the body into a tree of allowed
+    names a missing media file. `screens/agents/AgentMark.tsx` shows an agent's icon, or its
+    initials when the image fails to load. `src/agents/rich.ts` parses the body into a tree of allowed
     tags that `RichText.tsx` renders as elements — no `innerHTML`.
 
 ## Hard rules
@@ -93,3 +108,6 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
   it, so copy the files out first. The folder picker in `ImportFolderModal` once lost every pick to this.
 - nginx's `/agent-guides/` location has no SPA fallback, so its path must never be a console route
   prefix: `/agents/` once turned every guide reload into a bare 404. `content.test.ts` checks.
+- `runtime/agents/claude-code/icon.webp` is 6 bytes shorter than its RIFF header says (likely cut by
+  an old `text eol=lf` rule before images were marked binary), so browsers can't decode it and the
+  picker shows "CC". Re-export it from the source image; patching the bytes won't bring it back.

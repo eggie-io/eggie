@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { Egg, cx } from "@eggie/ui";
+import { BrandMark, Icon, StatusDot, cx } from "@eggie/ui";
 import { useDesktopHome } from "../desktop/DesktopContext";
-import { BACK } from "../screens/icons";
 import { InstanceSwitcher } from "./InstanceSwitcher";
 import s from "./Shell.module.css";
 
@@ -21,22 +20,19 @@ export function Shell({
   const home = useDesktopHome();
   return (
     <div className={s.page}>
-      <header className={cx(s.bar, tone === "cold" && s.muted)}>
-        {home && (
-          <a className={s.home} href={home} title="Back to Home" aria-label="Back to Home">{BACK}</a>
-        )}
-        <div className={s.place}>
-          <Egg tone={tone} size={22} />
+      <header className={cx(s.header, tone === "cold" && s.muted)}>
+        <div className={s.bar}>
+          {home && (
+            <a className={s.back} href={home} title="Back to Eggie" aria-label="Back to Eggie">
+              <Icon name="chevron-left" />
+            </a>
+          )}
+          <span className={s.mark}><BrandMark size={18} /></span>
           {signedIn ? <InstanceSwitcher /> : <span className={s.brand}>Eggie</span>}
-          {signedIn && <span className={s.open}><span className={s.dot} aria-hidden="true" />Open</span>}
+          {signedIn && <span className={s.open}><StatusDot status="running" label="Open" /></span>}
+          {trailing && <div className={s.end}>{trailing}</div>}
         </div>
-        {nav && (
-          <>
-            <span className={s.divider} aria-hidden="true" />
-            <nav className={s.nav}>{nav}</nav>
-          </>
-        )}
-        {trailing && <div className={s.end}>{trailing}</div>}
+        {nav && <nav className={s.nav}>{nav}</nav>}
       </header>
       <main className={s.content}>{children}</main>
     </div>

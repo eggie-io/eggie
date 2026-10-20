@@ -1,31 +1,30 @@
 import { useNavigate } from "react-router";
-import { Button, Collapsible, Notice, RowCard, cx } from "@eggie/ui";
+import { Button, Card, Collapsible, Notice } from "@eggie/ui";
 import { folderHeading, relativeTime } from "../../projects/format";
 import { useAdopt } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
 import type { Discovered } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
-import { FOLDER } from "../icons";
 import s from "./ProjectList.module.css";
 
 function Folder({ folder, now, adopting, onAdopt }: { folder: Discovered; now: number; adopting: boolean; onAdopt: () => void }) {
   const seen = `Turned up ${relativeTime(folder.seen_at, now)}`;
   if (folder.adoptable) {
     return (
-      <RowCard className={s.folder}>
+      <li className={s.folder}>
         <div className={s.folderText}>
-          <span className={s.name}>{folder.name}</span>
+          <span className={s.folderName}>{folder.name}</span>
           <span className={s.quiet}>{seen} · knows how to start itself</span>
         </div>
-        <Button variant="primary" disabled={adopting} onClick={onAdopt}>Adopt it</Button>
-      </RowCard>
+        <Button variant="primary" size="sm" disabled={adopting} onClick={onAdopt}>Adopt it</Button>
+      </li>
     );
   }
   const rename = slugify(folder.name);
   return (
-    <RowCard className={cx(s.folder, s.blocked)}>
+    <li className={s.folder}>
       <div className={s.folderText}>
-        <span className={s.name}>{folder.name}</span>
+        <span className={s.folderName}>{folder.name}</span>
         {folder.reason === "bad_name" ? (
           <span className={s.quiet}>
             Its name has characters an address can't use — ask your coding agent to rename the folder
@@ -43,8 +42,8 @@ function Folder({ folder, now, adopting, onAdopt }: { folder: Discovered; now: n
           </>
         )}
       </div>
-      <Button disabled>Can't adopt</Button>
-    </RowCard>
+      <Button size="sm" disabled>Can't adopt</Button>
+    </li>
   );
 }
 
@@ -53,18 +52,14 @@ export function DiscoveredBand({ folders }: { folders: Discovered[] }) {
   const navigate = useNavigate();
   const now = useNow(30_000);
   return (
-    <section className={s.band}>
-      <header className={s.bandHead}>
-        {FOLDER}
-        <div>
-          <h2 className={s.bandTitle}>{folderHeading(folders.length)}</h2>
-          <p className={s.bandSub}>Your coding agent made these. Eggie hasn't met them yet.</p>
-        </div>
-      </header>
-      <ul className={s.folders}>
-        {folders.map((folder) => (
-          <li key={folder.name}>
+    <Notice tone="warning" icon="folder">
+      <div className={s.band}>
+        <h2 className={s.bandTitle}>{folderHeading(folders.length)}</h2>
+        <p className={s.bandSub}>Your coding agent made these. Eggie hasn't met them yet.</p>
+        <Card as="ul" className={s.folders}>
+          {folders.map((folder) => (
             <Folder
+              key={folder.name}
               folder={folder}
               now={now}
               adopting={adopt.isPending && adopt.variables === folder.name}
@@ -72,10 +67,10 @@ export function DiscoveredBand({ folders }: { folders: Discovered[] }) {
                 adopt.mutate(folder.name, { onSuccess: (created) => navigate(`/p/${encodeURIComponent(created.id)}`) })
               }
             />
-          </li>
-        ))}
-      </ul>
-      {adopt.error && <Notice>{adopt.error.message}</Notice>}
-    </section>
+          ))}
+        </Card>
+        {adopt.error && <Notice tone="danger">{adopt.error.message}</Notice>}
+      </div>
+    </Notice>
   );
 }

@@ -1,14 +1,23 @@
-.body { display: grid; gap: 12px; }
-.muted { color: var(--ink-3); }
-.error { color: var(--paprika); }
-.code { font-family: var(--font-mono); font-size: 28px; letter-spacing: 0.12em; text-align: center; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.repos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow-y: auto; }
-.repo { width: 100%; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; text-align: left;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; font: inherit; }
-.repo:disabled { cursor: progress; opacity: 0.6; }
-.repoName { font-weight: 600; overflow-wrap: anywhere; }
-.badge { font-size: 12px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); }
+.body { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.body p { margin: 0; }
+.code {
+  padding: var(--space-4); border-radius: var(--radius-md); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line);
+  font: 500 28px/36px var(--font-mono); letter-spacing: .12em; text-align: center; color: var(--ink); overflow-wrap: anywhere;
+}
+.repos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); max-height: 50vh; overflow-y: auto; }
+.item { min-width: 0; }
+.repo {
+  width: 100%; min-height: 44px; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; text-align: left;
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--paper); color: var(--ink); cursor: pointer; font: inherit;
+  transition: background-color 120ms ease;
+}
+button.repo:hover:not(:disabled) { background: var(--hover); }
+.repo:disabled { cursor: progress; opacity: .48; }
 div.repo { cursor: default; }
-.rename { display: grid; gap: 8px; padding: 8px 10px 4px; }
+.repoName { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.updated { font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.rename { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-1); }
+.actions { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
 .open { margin-left: auto; }
+.more { align-self: flex-start; }

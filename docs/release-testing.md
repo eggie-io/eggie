@@ -28,6 +28,10 @@ disposable.
 | W11 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | W12 | Boot with the network off | The VM starts on its old runtime; `journalctl -u eggie-update` explains why | |
 | W13 | After W1, search the Start menu for "Eggie" and open Task Manager while the app runs | The Start menu entry is **Eggie**; Task Manager's Apps list shows **Eggie** (Details tab: `eggie-app.exe`). Nothing says "Setup" or "setup" | |
+| W14 | **VM can't reach Windows**, right after W1 (no restart in between) and again on a VM set up by the previous release once W11 updated it and it has restarted (`wsl --terminate eggie-vm`, then open Eggie). In PowerShell: `wsl -d eggie-vm -- ls /mnt/c`; `wsl -d eggie-vm -- cmd.exe /c ver`; `wsl -d eggie-vm -- bash -lc 'echo $PATH'`; `wsl -d eggie-vm -- whoami`; `wsl -d eggie-vm -- sudo -n true; echo $LASTEXITCODE` | `ls` lists nothing or says no such directory; `cmd.exe` fails (not found, or "Exec format error") and prints no Windows version; `PATH` has no `/mnt/c/...` entry; `whoami` says `eggie`; record whether `sudo -n true` exits 0 (expected: yes, passwordless) | |
+| W15 | After W14, on the same VM | Projects still start and answer; the console's **Import** with a Windows folder uploads it and the project appears; `\\wsl.localhost\eggie-vm\opt\eggie\projects` still opens in Explorer | |
+| W16 | After W14, connect each agent by its Windows guide: Claude Code, Codex, Cursor. Then in a `wsl -d eggie-vm --cd ~` shell run `claude` once | Each agent signs in from its Windows app, opens the projects folder in the VM and runs a command there (Cursor's WSL connection is the one most likely to break without interop). The CLI starts without a crash; any login link it prints opens when copied into a Windows browser | |
+| W17 | On Windows 11, set the OS theme to light then dark, and open Eggie each time | The title bar is cream (light) / dark brown (dark) with matching text and border. On Windows 10 the app still opens with the default title bar | |
 
 ## macOS (`EggieSetup-<version>-<arch>.pkg`)
 

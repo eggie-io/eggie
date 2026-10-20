@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { cx } from "@eggie/ui";
+import { Button, Icon, cx } from "@eggie/ui";
 import type { Agent } from "../../agents/catalog";
+import { AgentMark } from "./AgentMark";
 import type { AgentBase } from "./AgentPicker";
-import { CHECK, CHEVRON_DOWN } from "../icons";
 import s from "./Agents.module.css";
 
 export function AgentMenu({ agents, current, base }: { agents: Agent[]; current: Agent; base: AgentBase }) {
@@ -28,11 +28,9 @@ export function AgentMenu({ agents, current, base }: { agents: Agent[]; current:
 
   return (
     <div className={s.menuRoot} ref={root}>
-      <button type="button" className={s.menuButton} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
-        <img className={s.iconSmall} src={current.icon} alt="" width={26} height={26} />
+      <Button variant="secondary" iconRight="chevron-down" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
         {current.name}
-        {CHEVRON_DOWN}
-      </button>
+      </Button>
       {open && (
         <div className={s.menu} role="menu">
           {agents.map((agent) => (
@@ -43,13 +41,13 @@ export function AgentMenu({ agents, current, base }: { agents: Agent[]; current:
               className={cx(s.menuItem, agent.id === current.id && s.menuCurrent)}
               onClick={() => setOpen(false)}
             >
-              <img className={s.iconSmall} src={agent.icon} alt="" width={24} height={24} />
+              <AgentMark agent={agent} small />
               <span className={s.menuName}>{agent.name}</span>
-              {agent.id === current.id && CHECK}
+              {agent.id === current.id && <Icon name="check" />}
             </Link>
           ))}
           <span className={s.menuRule} aria-hidden="true" />
-          <Link role="menuitem" to={base} className={s.menuAll} onClick={() => setOpen(false)}>
+          <Link role="menuitem" to={base} className={s.menuItem} onClick={() => setOpen(false)}>
             See all agents
           </Link>
         </div>

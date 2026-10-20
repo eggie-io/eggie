@@ -1,2 +1,14 @@
-.notice { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13.5px; line-height: 1.45; color: var(--ink-3); }
-.icon { flex: none; }
+.notice {
+  display: flex; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  font-size: 14px; line-height: 20px; color: var(--ink);
+}
+.body { flex: 1; min-width: 0; }
+.title { display: block; font-weight: 600; }
+.info { background: var(--info-soft); }
+.info .icon { color: var(--info); }
+.success { background: var(--success-soft); }
+.success .icon { color: var(--success); }
+.warning { background: var(--warning-soft); }
+.warning .icon { color: var(--warning); }
+.danger { background: var(--danger-soft); }
+.danger .icon { color: var(--danger); }

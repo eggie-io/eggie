@@ -36,10 +36,19 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 
 When the VM is running, the same window shows the projects console (`localhost:<edge>`, entered with
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
-system browser — there is no native menu. Its "This computer" entry loads `<local UI>#console`, which `ROUTES` turns into `enter_console()`.
+system browser — there is no native menu.
 
 ## Things that will bite you
 
+- **The title bar is recoloured by `DesktopPlatform.style_title_bar` on `events.before_show`.** DWM
+  caption/text/border colours need Windows 11; Windows 10 keeps its default bar (the dark-mode
+  buttons flag still applies). Colours are read once per launch, and `title_bar_win.COLORS` is held
+  equal to `app.css` by a test: change both together. pywebview itself flips the dark-mode
+  flag when the OS theme changes, but our colours are not re-applied, so after an OS theme switch
+  the bar is mixed until relaunch.
+- **`min_size` and the window size are outer sizes** on Windows (title bar and borders included),
+  so at the 800×560 minimum the page is about 784×521. Nothing in `app.css` may demand more;
+  `#screen` scrolls instead. Check layouts at the page size, not the window size.
 - **pywebview injects `window.pywebview.api` into every page the window loads**, including the
   console served from the VM. Hence the guard. Keep `create_window(js_api=None)` and register
   functions with `window.expose()`: pywebview resolves a dotted call name from `js_api` with plain

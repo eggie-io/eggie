@@ -246,6 +246,13 @@ export function handlersFor(scenario: Scenario) {
         expires_at: nowSec() + (scenario === "public-expiring" ? 20 : 42 * 60),
       };
     }
+    // recipe-box shows the disabled state; the others still reach the refused POST below.
+    if (scenario === "public-unavailable") {
+      projects.get("recipe-box")!.public = {
+        state: "unavailable",
+        reason: { code: "not_registered", message: "This project isn't linked to your account yet. Try again in a minute." },
+      };
+    }
   }
 
   const GB = 1024 ** 3;

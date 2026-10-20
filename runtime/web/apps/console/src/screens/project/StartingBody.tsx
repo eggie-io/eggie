@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
-import { Egg, ProgressBar, StateBadge } from "@eggie/ui";
+import { Card, ProgressBar } from "@eggie/ui";
 import { Elapsed } from "../../components/Elapsed";
 import { phaseCaption } from "../../projects/copy";
 import { useJob } from "../../projects/queries";
 import type { ActiveJob, Project } from "../../projects/types";
+import { TitleRow } from "./TitleRow";
 import s from "./ProjectPage.module.css";
 
 export function StartingBody({ project, job }: { project: Project; job: ActiveJob }) {
@@ -23,25 +24,24 @@ export function StartingBody({ project, job }: { project: Project; job: ActiveJo
 
   const caption = phaseCaption(phase, firstRun);
   return (
-    <div className={s.center}>
-      <Egg size={88} bob />
-      <StateBadge state="starting" />
-      <h1 className={s.big}>Heating the pan for {project.id}</h1>
-      <p className={s.lead}>
-        {firstRun
-          ? "The first start always takes the longest — it's fetching everything your app needs to run. A few minutes, once. After that it's about ten seconds."
-          : "This usually takes about ten seconds."}
-      </p>
-      <div className={s.progress}>
+    <>
+      <TitleRow title={project.id} sub="Starting" />
+      <Card as="section" className={s.progressCard}>
+        <h2 className={s.cardTitle}>Heating the pan for {project.id}</h2>
+        <p className={s.cardText}>
+          {firstRun
+            ? "The first start always takes the longest — it's fetching everything your app needs to run. A few minutes, once. After that it's about ten seconds."
+            : "This usually takes about ten seconds."}
+        </p>
         <ProgressBar label={caption} />
         <div className={s.caption}>
           <span>{caption}</span>
           <span><Elapsed startedAt={job.started_at} /> so far</span>
         </div>
-      </div>
+      </Card>
       <p className={s.footnote}>
         You can wander off — this keeps going with the page closed, and the address turns on by itself when it's ready.
       </p>
-    </div>
+    </>
   );
 }

@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
-import { cx } from "@eggie/ui";
+import { Button, Icon, cx } from "@eggie/ui";
 import { createApi } from "../api/client";
+import { openExternal } from "../desktop/desktop";
 import { useDesktopHome } from "../desktop/DesktopContext";
 import { switcherEntries, type Kitchen, type SwitcherEntry } from "../instances/instances";
-import { CHEVRON_DOWN, CHECK } from "../screens/icons";
 import { openKitchenUrl, webAppKitchens } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import s from "./Shell.module.css";
@@ -45,45 +45,47 @@ export function InstanceSwitcher() {
   const kitchens = data?.instances;
   const current = kitchens?.find((kitchen) => kitchen.current);
   const label = site === null ? "This computer" : (current?.display_name ?? site ?? "Kitchen");
-  const entries = kitchens ? switcherEntries({ kitchens, site, desktopHome }) : [];
+  const entries = kitchens ? switcherEntries({ kitchens, site }) : [];
   const listed = kitchens?.length ?? 0;
 
+  const linkFor = (entry: SwitcherEntry) =>
+    entry.target !== null && webApp ? openKitchenUrl(webApp, entry.target.host) : null;
   const choose = (entry: SwitcherEntry) => {
-    if (entry.target?.kind === "local" && desktopHome) {
-      window.location.assign(`${desktopHome}#console`);
-    } else if (entry.target?.kind === "kitchen" && webApp) {
-      const url = openKitchenUrl(webApp, entry.target.host, desktopHome);
-      if (url) window.location.assign(url);
+    const url = linkFor(entry);
+    if (url === null) return;
+    // The desktop window keeps no web app sign-in; the system browser has one.
+    if (desktopHome !== null) {
+      setOpen(false);
+      openExternal(url);
+    } else {
+      window.location.assign(url);
     }
   };
-  const usable = (entry: SwitcherEntry) =>
-    entry.target?.kind === "local" ||
-    (entry.target?.kind === "kitchen" && !!webApp && openKitchenUrl(webApp, entry.target.host, desktopHome) !== null);
   const kitchensPage = webAppKitchens(webApp);
 
   return (
     <div className={s.switcher} ref={root}>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        iconRight="chevron-down"
         className={s.switcherButton}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
       >
         <span className={s.brand}>{label}</span>
-        {CHEVRON_DOWN}
-      </button>
+      </Button>
       <div id={panelId} className={s.switcherMenu} hidden={!open}>
         {isError && (
           <div className={s.switcherNote} role="alert">
             <span>Couldn't load your kitchens.</span>
-            <button type="button" className={s.chip} disabled={isFetching} onClick={() => void refetch()}>Retry</button>
+            <Button size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button>
           </div>
         )}
         {!kitchens && !isError && <span className={s.switcherNote}>Loading…</span>}
         {kitchens &&
           entries.map((entry) => {
-            const clickable = entry.target !== null && usable(entry);
+            const clickable = linkFor(entry) !== null;
             return (
               <button
                 key={entry.key}
@@ -97,7 +99,7 @@ export function InstanceSwitcher() {
                   {entry.label}
                   {entry.note && <span className={s.lineSub}>{entry.note}</span>}
                 </span>
-                {entry.current && CHECK}
+                {entry.current && <Icon name="check" />}
               </button>
             );
           })}

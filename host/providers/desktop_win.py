@@ -6,9 +6,12 @@ Nothing here touches the VM; that is Wsl2Provider's job.
 from __future__ import annotations
 
 import getpass
+import logging
 from pathlib import Path
 
 from . import registry
+
+log = logging.getLogger(__name__)
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # Task Manager's Startup tab leaves the Run value alone and records its own
@@ -57,6 +60,15 @@ class WindowsDesktop:
 
     def on_window_shown(self, visible: bool) -> None:
         """The taskbar button follows the window on its own."""
+
+    def style_title_bar(self, window) -> None:
+        try:
+            from . import title_bar_win
+            hwnd = int(window.native.Handle.ToInt64())
+            title_bar_win.apply(hwnd, title_bar_win.os_uses_dark(),
+                                title_bar_win.dwm_set_attribute)
+        except Exception as e:
+            log.warning("could not style the title bar: %r", e)
 
     def let_session_end_close(self, on_session_end) -> None:
         from .tray_win import let_session_end_close

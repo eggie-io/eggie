@@ -33,11 +33,13 @@ export function useProject(id: string) {
   });
 }
 
-export function useJob(jobId: string) {
+// A null id keeps the query idle, for callers that only sometimes follow a job.
+export function useJob(jobId: string | null) {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["jobs", jobId],
-    queryFn: () => api.get<Job>(`/api/jobs/${encodeURIComponent(jobId)}`),
+    enabled: jobId !== null,
+    queryFn: () => api.get<Job>(`/api/jobs/${encodeURIComponent(jobId ?? "")}`),
     refetchInterval: (q) => (q.state.error || (q.state.data && q.state.data.state !== "running") ? false : JOB_MS),
   });
   // A finished or forgotten job (the API restarted) means the project has

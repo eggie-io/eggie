@@ -32,7 +32,7 @@ def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"
 def test_exec_builds_passthrough_argv_and_decodes_utf8():
     r = FakeRunner(stdout=b"Linux 6.6\n")
     result = make(r).exec(["uname", "-sr"])
-    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "--", "uname", "-sr"]
+    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "--cd", "~", "--", "uname", "-sr"]
     assert result.stdout == "Linux 6.6"
     assert result.ok is True
 
@@ -40,7 +40,7 @@ def test_exec_builds_passthrough_argv_and_decodes_utf8():
 def test_exec_root_inserts_user_root():
     r = FakeRunner()
     make(r).exec(["id", "-un"], root=True)
-    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--", "id", "-un"]
+    assert r.calls[-1] == ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--cd", "~", "--", "id", "-un"]
 
 
 def test_exists_true_when_distro_in_list():
@@ -71,7 +71,7 @@ def test_create_imports_then_enables_systemd_then_reboots(tmp_path):
     assert any("-u" in a and "root" in a and "wsl.conf" in " ".join(a) for a in argvs)
     # terminates so systemd takes effect, then boots again
     terminate = argvs.index(["wsl.exe", "--terminate", "eggie-vm"])
-    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in argvs[terminate:]
+    assert ["wsl.exe", "-d", "eggie-vm", "--cd", "~", "--", "true"] in argvs[terminate:]
 
 
 def test_create_terminates_without_a_poweroff_wait(tmp_path):
@@ -173,6 +173,20 @@ def test_create_stops_when_the_systemd_write_fails(tmp_path):
         "a broken VM must not be reported as created"
 
 
+def test_create_never_rewrites_wsl_conf_on_a_distro_that_already_exists(tmp_path):
+    # create() truncates wsl.conf. That is safe only because --import refuses
+    # an existing distro, whose file holds the runtime's [user], [automount]
+    # and [interop]: losing them would put C: back at /mnt/c.
+    rootfs = tmp_path / "ubuntu.tar.gz"
+    rootfs.write_bytes(b"")
+    r = ScriptedRunner("--import", stderr="A distribution with the supplied "
+                                          "name already exists.".encode("utf-16-le"))
+    provider = make(r, install_dir=tmp_path / "inst", rootfs=rootfs)
+
+    _raises(provider.create, "could not be created")
+    assert not any("wsl.conf" in " ".join(a) for a in r.calls)
+
+
 def test_start_reports_a_distro_that_does_not_exist(tmp_path):
     r = ScriptedRunner("true", stderr="There is no distribution with the "
                                       "supplied name.".encode("utf-16-le"))
@@ -236,14 +250,14 @@ def test_recover_restarts_only_this_vm():
     make(r).recover()
     assert ["wsl.exe", "--terminate", "eggie-vm"] in r.calls
     assert ["wsl.exe", "--shutdown"] not in r.calls
-    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in r.calls
+    assert ["wsl.exe", "-d", "eggie-vm", "--cd", "~", "--", "true"] in r.calls
 
 
 def test_recover_everything_shuts_all_of_wsl_down_first():
     r = FakeRunner()
     make(r).recover(everything=True)
     assert r.calls[0] == ["wsl.exe", "--shutdown"]
-    assert ["wsl.exe", "-d", "eggie-vm", "--", "true"] in r.calls
+    assert ["wsl.exe", "-d", "eggie-vm", "--cd", "~", "--", "true"] in r.calls
 
 
 def test_recover_reports_a_vm_still_not_answering():
@@ -319,7 +333,7 @@ class PoweroffEnds(PrefixRunner):
 def test_stop_powers_off_through_systemd_before_terminating():
     runner = PoweroffEnds({})
     _stopper(runner, [0, 1]).stop()
-    assert ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--",
+    assert ["wsl.exe", "-d", "eggie-vm", "-u", "root", "--cd", "~", "--",
             "systemctl", "poweroff"] in runner.calls
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
@@ -333,7 +347,7 @@ def test_stop_on_a_stopped_distro_does_not_boot_it():
 
 def test_stop_terminates_even_when_poweroff_fails():
     runner = PoweroffEnds({
-        ("wsl.exe", "-d", "eggie-vm", "-u", "root", "--", "systemctl"): (1, b"boom"),
+        ("wsl.exe", "-d", "eggie-vm", "-u", "root", "--cd", "~", "--", "systemctl"): (1, b"boom"),
     })
     _stopper(runner, [0, 1]).stop()
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]

@@ -1,0 +1,84 @@
+.layout { flex: 1; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+
+.menu {
+  display: flex; flex-direction: column; padding: 0 var(--space-3);
+  background: var(--raised); border-right: 1px solid var(--line);
+}
+/* Two sticky halves instead of one full-height column: the menu starts below the
+   shell header but sticks to the very top once the page scrolls, and Delete stays
+   pinned to the bottom of the window either way. */
+.top { position: sticky; top: 0; display: flex; flex-direction: column; padding-top: var(--space-5); }
+.bottom {
+  position: sticky; bottom: 0; margin-top: auto; padding: var(--space-3) 0 var(--space-5);
+  border-top: 1px solid var(--line); background: var(--raised);
+}
+
+.allProjects {
+  align-self: flex-start; height: var(--control-sm); display: inline-flex; align-items: center; gap: var(--space-2);
+  margin: 0 0 var(--space-3) -2px; padding: 0 var(--space-3); border-radius: var(--radius-pill);
+  color: var(--ink); font-size: 13px; line-height: 20px; font-weight: 600; white-space: nowrap;
+  transition: background-color 120ms ease;
+}
+.allProjects:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
+.allProjects:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+.tile { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 10px var(--space-4); }
+.square {
+  width: 32px; height: 32px; flex: none; display: grid; place-content: center; border-radius: 8px;
+  font-size: 15px; line-height: 1; font-weight: 650;
+}
+.who { display: flex; flex-direction: column; min-width: 0; }
+.name {
+  font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.items { display: flex; flex-direction: column; gap: 2px; }
+.item {
+  width: 100%; min-height: 36px; display: flex; align-items: flex-start; gap: 10px; padding: 0 10px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer;
+  font: inherit; font-size: 14px; line-height: 20px; font-weight: 450; color: var(--ink); text-align: left;
+  transition: background-color 120ms ease;
+}
+.item > svg { flex: none; margin-top: 10px; }
+.item:hover:not(:disabled) { background: var(--hover); color: var(--ink); text-decoration: none; }
+.item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.item[aria-current="page"], .item[aria-current="page"]:hover { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.item:disabled { color: var(--ink-3); cursor: not-allowed; }
+.danger, .danger:hover:not(:disabled) { color: var(--danger); }
+
+/* A short note sits at the right of the label; a long one (an unavailable reason) wraps under it. */
+.text {
+  flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+  column-gap: var(--space-2); padding: var(--space-2) 0;
+}
+.label { flex: none; white-space: nowrap; }
+.note { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 16px; font-weight: 450; color: var(--ink-3); }
+.noteWarning { color: var(--warning); }
+.item[aria-current="page"] .note { color: inherit; }
+
+.content {
+  min-width: 0; width: 100%; max-width: var(--content-max); padding: 28px var(--space-8);
+  display: flex; flex-direction: column;
+}
+
+@media (max-width: 759px) {
+  .layout { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .menu {
+    flex-direction: row; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-4);
+    overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .top, .items { flex: none; flex-direction: row; align-items: center; gap: var(--space-1); }
+  .top { position: static; padding: 0; }
+  .allProjects { margin: 0; }
+  .tile { padding: 0 var(--space-2); }
+  .name { max-width: 120px; }
+  /* Room is short in the row; the overview's sub line still says the state. */
+  .badge { display: none; }
+  .bottom { position: static; flex: none; margin: 0; padding: 0 0 0 var(--space-1); border-top: 0; border-left: 1px solid var(--line); }
+  .item { width: auto; flex: none; align-items: center; }
+  .item > svg { margin-top: 0; }
+  .text { flex-wrap: nowrap; }
+  .note { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .content { padding: var(--space-5) var(--space-4); }
+}

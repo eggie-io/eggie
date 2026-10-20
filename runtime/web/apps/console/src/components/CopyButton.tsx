@@ -17,7 +17,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
     }
   };
   return (
-    <Button variant="quiet" className={className} onClick={copy}>
+    <Button variant="secondary" size="sm" icon="copy" className={className} onClick={copy}>
       <span role="status" aria-live="polite">{state === "copied" ? "Copied" : state === "refused" ? "Couldn't copy" : "Copy"}</span>
     </Button>
   );

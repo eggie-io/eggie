@@ -124,8 +124,8 @@ VM, `stack.site.yml` puts Traefik on 443 with the certificate from `/opt/eggie/t
 `services/site.py` redeems web-app handoff codes with the service. A non-web service of a project
 gets `<service>--<id>.<site domain>`. A console without a session sends the person to the web app's
 `/kitchens/open`, which signs them in there and returns with a handoff code; the top bar's switcher
-lists "This computer" (the local VM, in the desktop window or a plain browser) and the account's kitchens from `GET /api/instances`, and
-opens one through the same page. The full picture, including the contract with the
+lists the account's kitchens from `GET /api/instances` and opens one through the same page (in the
+system browser when the console runs in the desktop window). The full picture, including the contract with the
 service, is `site-mode.md`.
 
 ### Root-side helpers

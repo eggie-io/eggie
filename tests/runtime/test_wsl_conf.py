@@ -1,5 +1,5 @@
-"""wsl-conf.py keeps a WSL VM off the user's Windows files and programs, on
-every install, without disturbing what else wsl.conf says."""
+"""wsl-conf.py keeps a WSL VM off the user's Windows files, on every install,
+without disturbing what else wsl.conf says."""
 import subprocess
 import sys
 from pathlib import Path
@@ -8,15 +8,14 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "runtime" / "install" / "lib" / "wsl-conf.py"
 INSTALL = ROOT / "runtime" / "install" / "install.sh"
 
-ISOLATION = ["automount.enabled=false", "interop.enabled=false",
-             "interop.appendWindowsPath=false"]
+ISOLATION = ["automount.enabled=false", "interop.appendWindowsPath=false"]
 
-# What a VM set up before this change has: create() wrote [boot], wsl-user.sh
-# appended [user].
+# A VM without the settings yet: create() wrote [boot], wsl-user.sh appended
+# [user].
 EXISTING_VM = "[boot]\nsystemd=true\n\n[user]\ndefault=eggie\n"
 ISOLATED_VM = ("[boot]\nsystemd=true\n\n[user]\ndefault=eggie\n\n"
                "[automount]\nenabled=false\n\n"
-               "[interop]\nenabled=false\nappendWindowsPath=false\n")
+               "[interop]\nappendWindowsPath=false\n")
 
 
 def _run(conf: Path, *keys: str):
@@ -44,15 +43,16 @@ def test_running_twice_changes_nothing_the_second_time(tmp_path):
     assert again.stdout == ""
 
 
-def test_a_hand_edit_turning_interop_back_on_is_reverted(tmp_path):
+def test_a_hand_edit_is_reverted_and_its_comments_kept(tmp_path):
     conf = tmp_path / "wsl.conf"
-    conf.write_text("[boot]\nsystemd=true\n\n[interop]\nEnabled = true\n"
-                    "# kept\nappendWindowsPath=true\n\n[user]\ndefault=eggie\n")
+    conf.write_text("[boot]\nsystemd=true\n\n[automount]\nEnabled = true\n"
+                    "# kept\n\n[interop]\nappendWindowsPath=true\n\n[user]\ndefault=eggie\n")
     _run(conf, *ISOLATION)
     text = conf.read_text()
     assert "Enabled = true" not in text and "appendWindowsPath=true" not in text
-    assert text.count("[interop]") == 1
-    assert "[interop]\nenabled=false\n# kept\nappendWindowsPath=false\n" in text
+    assert text.count("[automount]") == 1 and text.count("[interop]") == 1
+    assert "[automount]\nenabled=false\n# kept\n" in text
+    assert "[interop]\nappendWindowsPath=false\n" in text
     assert "[user]\ndefault=eggie\n" in text
 
 
@@ -70,14 +70,14 @@ def test_every_copy_of_a_repeated_section_is_set(tmp_path):
     conf.write_text("[automount]\nenabled=true\n[user]\ndefault=eggie\n"
                     "[automount]\nenabled=true\n")
     _run(conf, *ISOLATION)
-    assert "enabled=true" not in conf.read_text()
+    assert conf.read_text().count("[automount]\nenabled=false\n") == 2
 
 
 def test_a_missing_file_is_created_world_readable(tmp_path):
     conf = tmp_path / "wsl.conf"
     _run(conf, *ISOLATION)
     assert conf.read_text() == ("[automount]\nenabled=false\n\n"
-                                "[interop]\nenabled=false\nappendWindowsPath=false\n")
+                                "[interop]\nappendWindowsPath=false\n")
     # WSL's init reads it; so does every user's shell tooling.
     assert conf.stat().st_mode & 0o777 == 0o644
 
@@ -89,3 +89,5 @@ def test_install_enforces_isolation_on_wsl_only(tmp_path):
     assert "lib/wsl-conf.py" in branch
     for key in ISOLATION:
         assert key in branch
+    # Interop off in one distro breaks it in every WSL distro on the machine.
+    assert "interop.enabled" not in branch

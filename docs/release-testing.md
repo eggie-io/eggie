@@ -30,8 +30,9 @@ disposable.
 | W13 | After W1, search the Start menu for "Eggie" and open Task Manager while the app runs | The Start menu entry is **Eggie**; Task Manager's Apps list shows **Eggie** (Details tab: `eggie-app.exe`). Nothing says "Setup" or "setup" | |
 | W14 | **VM can't reach Windows**, right after W1 (no restart in between) and again on a VM set up by the previous release once W11 updated it and it has restarted (`wsl --terminate eggie-vm`, then open Eggie). In PowerShell: `wsl -d eggie-vm -- ls /mnt/c`; `wsl -d eggie-vm -- cmd.exe /c ver`; `wsl -d eggie-vm -- bash -lc 'echo $PATH'`; `wsl -d eggie-vm -- whoami`; `wsl -d eggie-vm -- sudo -n true; echo $LASTEXITCODE` | `ls` lists nothing or says no such directory; `cmd.exe` fails (not found, or "Exec format error") and prints no Windows version; `PATH` has no `/mnt/c/...` entry; `whoami` says `eggie`; record whether `sudo -n true` exits 0 (expected: yes, passwordless) | |
 | W15 | After W14, on the same VM | Projects still start and answer; the console's **Import** with a Windows folder uploads it and the project appears; `\\wsl.localhost\eggie-vm\opt\eggie\projects` still opens in Explorer | |
-| W16 | After W14, connect each agent by its Windows guide: Claude Code, Codex, Cursor. Then in a `wsl -d eggie-vm --cd ~` shell run `claude` once | Each agent signs in from its Windows app, opens the projects folder in the VM and runs a command there (Cursor's WSL connection is the one most likely to break without interop). The CLI starts without a crash; any login link it prints opens when copied into a Windows browser | |
+| W16 | After W14, connect each agent by its Windows guide: Claude Code, Codex, Cursor. Then in a `wsl -d eggie-vm --cd ~` shell run `claude` once | Each agent signs in from its Windows app, opens the projects folder in the VM and runs a command there. Any login link it prints opens when copied into a Windows browser | |
 | W17 | On Windows 11, set the OS theme to light then dark, and open Eggie each time | The title bar is cream (light) / dark brown (dark) with matching text and border. On Windows 10 the app still opens with the default title bar | |
+| W18 | **Other distros keep interop.** Open a terminal in another WSL distro (e.g. Ubuntu) and keep it open. Run `cmd.exe /c ver` in it after `eggie-vm` starts (open Eggie), restarts (`wsl --terminate eggie-vm`, open Eggie) and stops (quit Eggie, `wsl --terminate eggie-vm`) | Prints the Windows version every time | |
 
 ## macOS (`EggieSetup-<version>-<arch>.pkg`)
 
@@ -86,6 +87,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B3 | Bring up the five compose files in `tests/fixtures/compose/` | Count how many work unchanged | |
 | B4 | Inside the VM, `eggie new` / `eggie up` from a coding agent | The project shows up in the console | |
 | B5 | In a running project: `eggie secret set API_KEY` (pipe a value), put `API_KEY=other` in the project's `.env`, then restart it | `docker exec <container> env` shows the secret's value, not the `.env` one; a compose `${KEY:?}` reference still lets `eggie logs` and stop/down work | |
+| B6 | Clone a repo with no docker-compose.yml, then a folder whose compose fails | Both show Needs set-up with a prompt (the second with Docker's message); after the agent runs `eggie up` successfully, a later failure shows Something's wrong | |
 
 ## Site mode (a droplet from the snapshot; see `site-mode.md`)
 

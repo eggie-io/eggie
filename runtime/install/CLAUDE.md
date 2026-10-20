@@ -60,7 +60,7 @@ name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=de
 images `build.sh --push --tag dev` pushed — else the newest release's; a private package reads as
 absent, and ghcr not answering at all is a failure, not a silent release) into `.env` for `stack.yml` → token (only if absent) → the compose stack
 (always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 22.20 from NodeSource →
-`/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root; then `lib/wsl-conf.py` enforces `[automount] enabled=false` and `[interop] enabled=false, appendWindowsPath=false` (no Windows drives, no running Windows `.exe` files, no Windows `PATH`), rewriting those keys every run and leaving every other line alone → per account (root + `lib/login-users.sh`):
+`/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root; then `lib/wsl-conf.py` enforces `[automount] enabled=false` and `[interop] appendWindowsPath=false` (no Windows drives, no Windows `PATH`), rewriting those keys every run and leaving every other line alone → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
 via `lib/install-skills.sh`, which retries up to three times, removing that user's `~/.npm/_npx`
@@ -105,10 +105,11 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
   `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
   for the API token: it must be written after the sweep.
 - Login accounts are never the API's uid 1000: WSL2's `eggie` is created from 1001 up, and Lima's
-  user carries the macOS uid. The WSL default user, drive mounts and interop are read at boot. Host setup restarts a VM it
+  user carries the macOS uid. The WSL default user, drive mounts and `PATH` are read at boot. Host setup restarts a VM it
   has just created right after the first install; an existing VM keeps the old behaviour until it
-  next starts. Don't try to apply interop live (`/proc/sys/fs/binfmt_misc/WSLInterop`): every WSL
-  distro shares that kernel registration, so turning it off would break the user's other distros. The API writes into projects through the docker group; `/etc/gitconfig` trusts
+  next starts. Never turn interop off, in wsl.conf or live (`/proc/sys/fs/binfmt_misc/WSLInterop`): every WSL
+  distro shares that kernel registration, so it breaks the user's other distros. These settings
+  only guard against accidents: root in the VM can mount a drive or edit wsl.conf. The API writes into projects through the docker group; `/etc/gitconfig` trusts
   `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
   every session over the ssh control master opened at boot, before step 10's `usermod`, so those
   sessions never get the docker group. Step 11 therefore also grants each account access by uid

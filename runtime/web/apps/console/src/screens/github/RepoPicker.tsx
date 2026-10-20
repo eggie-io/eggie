@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Badge, Button, Notice, TextField } from "@eggie/ui";
+import { Badge, Button, Notice, TextField, cx } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
 import { ApiError } from "../../api/client";
 import { invalidateGitHub, invalidateRepos, useCloneRepo, useRepos, type Repo } from "../../github/github";
-import { repoRow } from "../../github/view";
+import { filterRepos, repoRow, shouldLoadMore } from "../../github/view";
 import { relativeTime } from "../../projects/format";
 import type { Job } from "../../projects/types";
 import { slugify } from "../../projects/slugify";
+import { WhatNext } from "../list/WhatNext";
 import s from "./GitHubModal.module.css";
 
 export type Started = { job_id: string; id: string };
@@ -16,59 +18,90 @@ export type Started = { job_id: string; id: string };
 // suggestion as the list refetches.
 type Naming = { repo: string; id: string | null; error: string | null };
 
-export function RepoPicker({
-  login,
-  onDone,
-  onStarted,
-}: {
-  login: string;
-  onDone: () => void;
-  onStarted: (started: Started) => void;
-}) {
-  const repos = useRepos(true);
+// Lives in GitHubModal so the footer's Bring it in can start the selected repo.
+export function useRepoPick(onStarted: (started: Started) => void) {
   const clone = useCloneRepo();
-  const navigate = useNavigate();
   const client = useQueryClient();
+  const [selected, setSelected] = useState<string | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
+  const renameForm = useId();
 
-  const start = (repo: Repo, id?: string) => {
-    // A direct click leaves no name field open to hide its error.
+  const start = (repo: string, id?: string) => {
+    // A start without a name leaves no name field open to hide its error.
     if (id === undefined) setNaming(null);
     clone.mutate(
-      { repo: repo.full_name, id },
+      { repo, id },
       {
         onSuccess: onStarted,
         onError: (error) => {
           // Another project took the name after this list was fetched.
           if (error instanceof ApiError && error.code === "project_exists") {
-            setNaming({ repo: repo.full_name, id: id ?? null, error: error.message });
+            setNaming({ repo, id: id ?? null, error: error.message });
             void invalidateRepos(client);
           } else if (id !== undefined) {
             // The generic error line is hidden while the name field is open.
-            setNaming({ repo: repo.full_name, id, error: error.message });
+            setNaming({ repo, id, error: error.message });
           }
         },
       },
     );
   };
+  const select = (repo: Repo) => {
+    if (selected === repo.full_name) return;
+    clone.reset();
+    setSelected(repo.full_name);
+    setNaming(repoRow(repo).kind === "nameTaken" ? { repo: repo.full_name, id: null, error: null } : null);
+  };
+  const clear = () => {
+    setSelected(null);
+    setNaming(null);
+    clone.reset();
+  };
+  // With the name field open, Bring it in submits it so the typed name is used.
+  const bringIn = naming ? { type: "submit" as const, form: renameForm } : { onClick: () => selected && start(selected) };
+
+  return { clone, selected, naming, setNaming, renameForm, start, select, clear, bringIn };
+}
+
+export type RepoPick = ReturnType<typeof useRepoPick>;
+
+export function RepoPicker({ login, pick, onDone }: { login: string; pick: RepoPick; onDone: () => void }) {
+  const repos = useRepos(true);
+  const navigate = useNavigate();
+  const agent = useCurrentAgent({ poll: false });
+  const [query, setQuery] = useState("");
+  const { clone, naming, selected } = pick;
+
+  const { hasNextPage, isFetching, isError, fetchNextPage } = repos;
+  useEffect(() => {
+    // An error would refetch the same page in a loop; Load more shows as the retry instead.
+    if (!isError && shouldLoadMore(query, hasNextPage, isFetching)) void fetchNextPage();
+  }, [query, hasNextPage, isFetching, isError, fetchNextPage]);
+
   const open = (projectId: string) => {
     onDone();
     navigate(`/p/${encodeURIComponent(projectId)}`);
   };
-  const cancelNaming = () => {
-    setNaming(null);
-    clone.reset();
-  };
 
   const all = repos.data?.pages.flatMap((page) => page.repos) ?? [];
+  const shown = filterRepos(all, query);
+  const searching = query.trim() !== "";
+  const search = (value: string) => {
+    setQuery(value);
+    // Bring it in must never start a repo the list no longer shows.
+    if (selected && !filterRepos(all, value).some((repo) => repo.full_name === selected)) pick.clear();
+  };
+
   return (
     <>
       <p>Connected as @{login}. Pick a repository to make it a project:</p>
+      <TextField label="Search" icon="search" value={query} onChange={search} autoFocus />
       {repos.isError && <Notice tone="danger">{repos.error.message}</Notice>}
       {clone.error && !naming && <Notice tone="danger">{clone.error.message}</Notice>}
       <ul className={s.repos}>
-        {all.map((repo) => {
+        {shown.map((repo) => {
           const row = repoRow(repo);
+          const isSelected = row.kind !== "linked" && selected === repo.full_name;
           const name = naming?.repo === repo.full_name ? naming.id ?? repo.suggested_id ?? "" : "";
           const details = (
             <>
@@ -92,39 +125,31 @@ export function RepoPicker({
                 </div>
               ) : (
                 <button
-                  className={s.repo}
+                  className={cx(s.repo, isSelected && s.selected)}
+                  aria-pressed={isSelected}
                   disabled={clone.isPending}
-                  onClick={() =>
-                    row.kind === "nameTaken"
-                      ? setNaming({ repo: repo.full_name, id: null, error: null })
-                      : start(repo)
-                  }
+                  onClick={() => pick.select(repo)}
                 >
                   {details}
                 </button>
               )}
-              {naming?.repo === repo.full_name && row.kind !== "linked" && (
+              {isSelected && naming?.repo === repo.full_name && (
                 <form
+                  id={pick.renameForm}
                   className={s.rename}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    start(repo, name);
+                    if (slugify(name) && !clone.isPending) pick.start(repo.full_name, name);
                   }}
                 >
                   <TextField
                     label="Name the new project"
                     value={name}
-                    onChange={(id) => setNaming({ ...naming, id, error: null })}
+                    onChange={(id) => pick.setNaming({ ...naming, id, error: null })}
                     autoFocus
                     error={naming.error ?? undefined}
                     hint={slugify(name) ? <>It'll be called <strong>{slugify(name)}</strong></> : undefined}
                   />
-                  <div className={s.actions}>
-                    <Button variant="ghost" size="sm" onClick={cancelNaming} disabled={clone.isPending}>Cancel</Button>
-                    <Button variant="primary" size="sm" type="submit" disabled={clone.isPending || !slugify(name)}>
-                      Import
-                    </Button>
-                  </div>
                 </form>
               )}
             </li>
@@ -132,16 +157,26 @@ export function RepoPicker({
         })}
       </ul>
       {repos.isLoading && <p>Fetching your repositories…</p>}
-      {repos.hasNextPage && (
+      {searching && shown.length === 0 && !repos.isLoading && (isFetching || !hasNextPage) && (
+        <p>{isFetching ? "Looking through your repositories…" : "No repositories match"}</p>
+      )}
+      {hasNextPage && (!searching || isError) && (
         <Button
           variant="ghost"
           size="sm"
           className={s.more}
-          onClick={() => void repos.fetchNextPage()}
+          onClick={() => void fetchNextPage()}
           disabled={repos.isFetchingNextPage}
         >
           Load more
         </Button>
+      )}
+      {selected && (
+        <WhatNext
+          agent={agent.name}
+          first="Copies the code to this computer"
+          middle="Sets it up to run in Eggie. Most projects need this once, so it's not a sign anything's broken."
+        />
       )}
     </>
   );

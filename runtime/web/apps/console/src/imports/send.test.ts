@@ -16,6 +16,9 @@ function setup(failures: Partial<Record<keyof ImportApi, Error[]>> = {}) {
       calls.push(`create ${id}`);
       fail("create");
     },
+    async up(id) {
+      calls.push(`up ${id}`);
+    },
     async remove(id) {
       calls.push(`remove ${id}`);
       fail("remove");

@@ -9,6 +9,7 @@ export interface Progress {
 
 export interface ImportApi {
   create(id: string): Promise<unknown>;
+  up(id: string): Promise<unknown>;
   remove(id: string): Promise<unknown>;
   send(id: string, archive: Blob, onProgress: (sent: number, total: number) => void): Promise<unknown>;
 }

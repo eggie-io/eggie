@@ -210,11 +210,11 @@ export function handlersFor(scenario: Scenario) {
 
   // Shared by POST /api/projects and the GitHub clone mock, so a bad name or
   // a clash with an existing project is refused the same way from both.
-  function makeProject(rawId: string): Project | Response {
+  function makeProject(rawId: string, origin: Project["origin"] = "new"): Project | Response {
     const id = slugify(rawId);
     if (!id) return refuse("invalid_project", "a project needs a name made of letters, numbers or dashes", 422);
     if (projects.has(id)) return refuse("project_exists", `a project called ${id} already exists`, 409);
-    const created = emptyProject(id);
+    const created = { ...emptyProject(id), origin };
     projects.set(id, created);
     return created;
   }
@@ -505,8 +505,8 @@ export function handlersFor(scenario: Scenario) {
     http.post("/api/projects", async ({ request }) => {
       const denied = guard();
       if (denied) return denied;
-      const { id: raw } = (await request.json()) as { id: string };
-      const created = makeProject(raw);
+      const { id: raw, origin } = (await request.json()) as { id: string; origin?: Project["origin"] };
+      const created = makeProject(raw, origin);
       return created instanceof Response ? created : HttpResponse.json(created, { status: 201 });
     }),
     http.post("/api/projects/:id/files", async ({ params, request }) => {

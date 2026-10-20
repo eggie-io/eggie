@@ -21,6 +21,9 @@ export interface ImportPlan {
   skipped: string[];
 }
 
+// The API's COMPOSE_FILE: only a top-level file makes the folder startable.
+export const hasCompose = (plan: ImportPlan) => plan.entries.some((entry) => entry.path === "docker-compose.yml");
+
 // The same two sets host/client.py applies for the CLI and install
 // verification: a repository's object store, dependency trees and caches
 // are megabytes the VM has no use for, and `.git/config` carries credentials.

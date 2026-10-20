@@ -91,7 +91,7 @@ def test_the_install_surface_stays_out_of_the_lifecycle_protocol():
 # platform missing one fails only there, at the user's first launch.
 DESKTOP_SURFACE = {"autostart_enabled", "set_autostart", "single_instance",
                    "watch_login_launch", "on_window_shown", "tray",
-                   "let_session_end_close"}
+                   "let_session_end_close", "style_title_bar"}
 
 
 def test_the_desktop_protocol_is_exactly_the_desktop_surface():

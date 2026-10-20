@@ -34,14 +34,15 @@ def test_no_asset_reaches_a_remote_origin():
     assert not offenders, "UI assets must work offline:\n" + "\n".join(offenders)
 
 
-def test_the_three_typefaces_are_bundled():
+def test_the_design_system_typefaces_are_bundled():
     names = {p.name for p in (UI / "fonts").glob("*.woff2")}
-    for family in ("bricolage-grotesque", "hanken-grotesk", "ibm-plex-mono"):
+    for family in ("archivo", "jetbrains-mono"):
         assert any(n.startswith(family) for n in names), f"missing {family}"
+    assert not any(n.startswith(("bricolage", "hanken", "ibm-plex")) for n in names)
 
 
 def test_the_font_licenses_ship_with_them():
-    # All three are SIL OFL 1.1, which requires the license to travel with
+    # Both are SIL OFL 1.1, which requires the license to travel with
     # the binary.
     assert (UI / "fonts" / "OFL.txt").is_file()
 

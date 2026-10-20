@@ -45,6 +45,7 @@ class FakeDesktop:
         self._primary, self._tray_fails = primary, tray_fails
         self.tray_made, self.login_watch = None, None
         self.announce, self.session_end = None, None
+        self.styled = []
 
     def single_instance(self, on_show, *, announce):
         self.announce = announce
@@ -52,6 +53,7 @@ class FakeDesktop:
     def watch_login_launch(self, on_login): self.login_watch = on_login
     def let_session_end_close(self, on_session_end): self.session_end = on_session_end
     def on_window_shown(self, visible): pass
+    def style_title_bar(self, window): self.styled.append(window)
     def tray(self, **kwargs):
         self.tray_made = (kwargs, FakeTray(self._tray_fails))
         return self.tray_made[1]
@@ -74,7 +76,9 @@ class FakeEvent:
 
 
 class FakeEvents:
-    def __init__(self): self.closing = FakeEvent()
+    def __init__(self):
+        self.closing = FakeEvent()
+        self.before_show = FakeEvent()
 
 
 class FakeWindow:
@@ -208,6 +212,14 @@ def test_a_login_launch_with_a_vm_stays_in_the_tray(tmp_path):
 def test_a_login_launch_before_setup_opens_the_window(tmp_path):
     _, captured, _ = _run(tmp_path, FakeProvider(exists=False), background=True)
     assert captured["hidden"] is False
+
+
+def test_the_title_bar_is_styled_before_the_window_shows(tmp_path):
+    desktop = FakeDesktop()
+    _, _, window = _run(tmp_path, FakeProvider(), desktop)
+    assert len(window.events.before_show.handlers) == 1
+    window.events.before_show.handlers[0]()
+    assert desktop.styled == [window]
 
 
 def test_closing_the_window_is_wired_to_hide(tmp_path):

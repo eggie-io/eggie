@@ -42,6 +42,16 @@ def test_db_bind_mount_outside_the_project_is_not_data():
     assert data_plan(compose).data_paths == ()
 
 
+def test_read_only_db_binds_are_config_not_data():
+    compose = {"services": {"db": {"image": "postgres:16", "volumes": [
+        "./init.sql:/docker-entrypoint-initdb.d/init.sql:ro",
+        "./conf:/etc/postgresql:ro,z",
+        {"type": "bind", "source": "./certs", "target": "/certs", "read_only": True},
+        "./pgdata:/var/lib/postgresql/data:rw",
+        {"type": "bind", "source": "./wal", "target": "/wal"}]}}}
+    assert data_plan(compose).data_paths == ("pgdata", "wal")
+
+
 def test_docker_volume_name_honours_compose_and_volume_names():
     compose = {"name": "shop", "volumes": {"dbv": {}, "pinned": {"name": "real-name"}}}
     assert docker_volume_name(compose, "shop", "dbv") == "shop_dbv"

@@ -74,17 +74,18 @@ class DataPlan:
 
 
 def _mounts(svc: dict):
-    """Yield (kind, source) for each mount, kind being 'bind' or 'volume'."""
+    """Yield (kind, source, read_only) for each mount, kind being 'bind' or 'volume'."""
     for entry in svc.get("volumes") or []:
         if isinstance(entry, str):
             parts = entry.split(":")
             if len(parts) < 2:
                 continue
             src = parts[0]
-            yield ("bind" if src.startswith((".", "/")) else "volume"), src
+            options = parts[2].split(",") if len(parts) > 2 else []
+            yield ("bind" if src.startswith((".", "/")) else "volume"), src, "ro" in options
         elif isinstance(entry, dict) and isinstance(entry.get("source"), str):
             if entry.get("type") in ("bind", "volume"):
-                yield entry["type"], entry["source"]
+                yield entry["type"], entry["source"], entry.get("read_only") is True
 
 
 def data_plan(compose: dict) -> DataPlan:
@@ -93,10 +94,11 @@ def data_plan(compose: dict) -> DataPlan:
     paths: set[str] = set()
     db_services = {d.service for d in databases(compose)}
     for name, svc in (compose.get("services") or {}).items():
-        for kind, src in _mounts(svc or {}):
+        for kind, src, read_only in _mounts(svc or {}):
             if kind == "volume":
                 used.add(src)
-            elif name in db_services:
+            # A database never writes through a read-only bind: that is config.
+            elif name in db_services and not read_only:
                 path = posixpath.normpath(src)
                 if path != "." and path != ".." and not path.startswith(("../", "/")):
                     paths.add(path)
@@ -152,6 +154,15 @@ def merge_secret_names(pushed: dict[str, str], stored: set[str], requested: set[
         keep=tuple(sorted(names & stored)),
         unused=tuple(sorted(stored - names)),
         drop_requests=tuple(sorted(requested - names)))
+
+
+def pinned_project_yml(project_yml: dict, project_id: str) -> dict | None:
+    """project.yml with its id set to the kitchen's, or None when nothing
+    needs writing: an id there would otherwise name the project."""
+    current = project_yml.get("id")
+    if not current or _slug(str(current)) == project_id:
+        return None
+    return {**project_yml, "id": project_id}
 
 
 def kitchen_project_id(name: str, taken: set[str]) -> str:

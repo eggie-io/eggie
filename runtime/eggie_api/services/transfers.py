@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
+import yaml
+
 from .. import constants
 from ..config import ApiConfig
 from ..domain import push as rules
@@ -32,12 +34,13 @@ from .jobs import JobFailed, JobRegistry
 from .lifecycle import LifecycleService
 from .loader import ProjectLoader
 from .locks import ProjectLocks
-from .ratelimit import Window
+from .ratelimit import KeyedWindow, Window
 from .secrets import SecretService
 
 log = logging.getLogger("eggie.api")
 
 OPENS_PER_MINUTE = 10
+OPENS_PER_MINUTE_ALL = 60
 UPLOAD_WINDOW = 600
 KEEP_ENDED = 3600
 DISK_MARGIN = 1024 ** 3
@@ -148,7 +151,9 @@ class Transfers:
         self._clock = clock
         self._sleep = sleep
         self._timer = timer or _daemon_timer
-        self._window = Window(OPENS_PER_MINUTE, 60.0, lambda: self._clock(),
+        self._per_sender = KeyedWindow(OPENS_PER_MINUTE, 60.0, lambda: self._clock(),
+                                       what="push attempts from one address")
+        self._window = Window(OPENS_PER_MINUTE_ALL, 60.0, lambda: self._clock(),
                               what="push attempts")
         self._pushes: dict[str, _Push] = {}
         self._lock = threading.Lock()
@@ -185,7 +190,8 @@ class Transfers:
         if not self.ready():
             raise Unavailable("not_ready", "This kitchen isn't ready for a push.")
 
-    def open(self, *, ticket: str, size: int, data: bool, replace: str) -> dict:
+    def open(self, *, ticket: str, size: int, data: bool, replace: str,
+             forwarded_for: str, peer: str) -> dict:
         if not (0 < len(ticket) <= MAX_TICKET and ticket.isascii() and ticket.isprintable()
                 and " " not in ticket):
             raise bad_transfer("Eggie-Transfer-Ticket")
@@ -196,7 +202,10 @@ class Transfers:
         if size > self._config.max_upload_bytes:
             raise TooLarge("payload_too_large",
                            f"A push may be at most {_gb(self._config.max_upload_bytes)}.")
-        if not self._window.take():
+        # Traefik replaces a client's own X-Forwarded-For with the address it came from.
+        sender = forwarded_for.split(",", 1)[0].strip() or peer
+        # Per sender first: one that is refused takes nothing from the others.
+        if not (self._per_sender.take(sender) and self._window.take()):
             raise TooMany("kitchen_busy", "Too many pushes to this kitchen right now. "
                                           "Try again in a minute.")
         grant = self._redeem(ticket)
@@ -380,6 +389,7 @@ class _ImportJob:
         self.staging = service._inbox / push.id
         self.image: str | None = None
         self.stopped = False
+        self.keep_staging = False
 
     def run(self, write) -> dict:
         try:
@@ -397,7 +407,8 @@ class _ImportJob:
                               "The kitchen could not import the project.") from None
             finally:
                 self.bundle.unlink(missing_ok=True)
-                self.s._remove(self.staging)
+                if not self.keep_staging:
+                    self.s._remove(self.staging)
                 self.s._locks.release(self.pid)
                 self.s._ended(self.push)
         except JobFailed:
@@ -454,6 +465,8 @@ class _ImportJob:
         if not result.ok:
             reason = ((result.stderr or result.stdout).strip().splitlines() or ["unknown"])[-1]
             raise Invalid("bad_bundle", f"The bundle could not be unpacked: {reason}")
+        # open() reserved room for the bundle and one copy of it, not two.
+        self.bundle.unlink(missing_ok=True)
         files = self.staging / "files"
         manifest_path = self.staging / "manifest.json"
         compose_path = files / constants.COMPOSE_FILE
@@ -479,7 +492,22 @@ class _ImportJob:
                     raise Invalid("bad_manifest", e.message) from None
         if manifest.data:
             self._check_volumes(compose, manifest)
+        self._pin_project_id(files)
         return manifest, compose
+
+    def _pin_project_id(self, files: Path) -> None:
+        rel = ".eggie/project.yml"
+        path = files / rel
+        if not os.path.lexists(path):
+            return
+        if not _real_file(path) or not _no_links_above(files, rel):
+            raise Invalid("bad_bundle", f"The bundle's {rel} is not a plain file.")
+        try:
+            pinned = rules.pinned_project_yml(self.s._loader.parse_yaml(path), self.pid)
+        except Invalid as e:
+            raise Invalid("bad_bundle", e.message) from None
+        if pinned is not None:
+            path.write_text(yaml.safe_dump(pinned, sort_keys=False), encoding="utf-8")
 
     def _check_volumes(self, compose: dict, manifest: rules.Manifest) -> None:
         """Restoring removes each volume first, so a bundle must only ever name
@@ -528,11 +556,29 @@ class _ImportJob:
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     self._move(src, dst)
                     kept.append(rel)
-        except BaseException:
+        except BaseException as e:
             self._put_back(target, new, aside, kept, placed=placed, had_old=had_old)
+            if os.path.lexists(aside):
+                raise self._keep_old(aside, e) from None
             raise
         if had_old:
             self.s._remove(aside)
+
+    def _keep_old(self, aside: Path, error: BaseException) -> JobFailed:
+        """The import's cleanup would delete what could not be put back."""
+        code = error.code if isinstance(error, EggieError) else "import_failed"
+        reason = error.message if isinstance(error, EggieError) \
+            else "The kitchen could not replace the project's files."
+        kept_at = Path(self.s._config.transfers_root) / "kept" / f"{self.pid}-{self.push.id}"
+        try:
+            kept_at.parent.mkdir(parents=True, exist_ok=True)
+            self._move(aside, kept_at)
+        except OSError:
+            log.exception("could not keep %s's previous files out of the import's way", self.pid)
+            self.keep_staging, kept_at = True, aside
+        log.error("%s's previous files could not be put back; they are in %s", self.pid, kept_at)
+        return _failed(code, f"{reason} The project's previous files could not be put back; "
+                             f"they are kept in {kept_at}.")
 
     def _put_back(self, target: Path, new: Path, aside: Path, kept: list[str], *,
                   placed: bool, had_old: bool) -> None:

@@ -306,6 +306,22 @@ def test_name_taken_by_a_kitchen_project_gets_a_suffix(kitchen):
     assert kitchen.repos.projects.get("my-shop-2") is not None
 
 
+def test_a_push_into_a_taken_name_is_named_by_the_kitchen_not_its_project_yml(kitchen):
+    kitchen_project(kitchen, pid="my-shop", cloud_id="c-other")
+    local_project(kitchen, files={
+        "src/app.py": "new\n",
+        ".eggie/project.yml": "id: my-shop\nweb:\n  - service: web\n    port: 80\n"})
+
+    status = push(kitchen, make_bundle(kitchen))
+
+    assert status["state"] == "done", status
+    assert status["result"]["kitchen_project"] == "my-shop-2"
+    assert status["result"]["urls"] == ["https://my-shop-2.foo.eggie.space"]
+    pushed = yaml.safe_load((kitchen.config.projects_root / "my-shop-2" / ".eggie"
+                             / "project.yml").read_text())
+    assert pushed == {"id": "my-shop-2", "web": [{"service": "web", "port": 80}]}
+
+
 def test_full_import_replaces_files_keeps_data_paths_and_completes(kitchen):
     folder = kitchen_project(kitchen, status="started_ok")
     local_project(kitchen)
@@ -481,6 +497,52 @@ def test_a_failed_replace_puts_the_old_folder_back(kitchen, status, starts):
     assert kitchen.services.locks.acquire("my-shop")
 
 
+def test_a_failed_put_back_keeps_the_old_folder_outside_the_inbox(kitchen, monkeypatch):
+    compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
+    folder = kitchen_project(kitchen, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"})
+    (folder / "docker-compose.yml").write_text(compose)
+    local_project(kitchen, compose=compose, files={"src/app.py": "new\n"})
+    (kitchen.local / "data").symlink_to("/tmp")
+    rename = os.rename
+
+    def stuck(src, dst):
+        if str(dst) == str(folder) and str(src).endswith("/old"):
+            raise OSError(5, "Input/output error")
+        rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", stuck)
+
+    status = push(kitchen, make_bundle(kitchen), replace="files")
+
+    assert status["state"] == "failed"
+    assert status["result"] == {"code": "bad_bundle"}
+    [kept] = (kitchen.config.transfers_root / "kept").glob("my-shop-*")
+    assert (kept / "src" / "old.py").read_text() == "old\n"
+    assert (kept / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
+    assert str(kept) in status["detail"]
+    assert list((kitchen.config.transfers_root / "in").iterdir()) == []
+
+
+def test_the_bundle_is_gone_once_unpacked_while_the_import_goes_on(kitchen):
+    kitchen_project(kitchen, status="started_ok")
+    local_project(kitchen)
+    inbox = kitchen.config.transfers_root / "in"
+    bundles_at_down = []
+    exec_ = kitchen.runner.exec
+
+    def watch(argv, **kwargs):
+        if "down" in argv:
+            bundles_at_down.append(list(inbox.glob("*.tar")))
+        return exec_(argv, **kwargs)
+
+    kitchen.runner.exec = watch
+
+    status = push(kitchen, make_bundle(kitchen), replace="files")
+
+    assert status["state"] == "done", status
+    assert bundles_at_down == [[]]
+
+
 def test_failed_upload_releases_the_lock(kitchen):
     local_project(kitchen)
     path = make_bundle(kitchen)
@@ -594,6 +656,33 @@ def test_rate_limit_answers_429(kitchen):
     assert resp.status_code == 429
     assert resp.json()["error"]["code"] == "kitchen_busy"
     assert len(kitchen.cloud.calls) == 10
+
+
+def _refused_opens(k, n):
+    k.cloud.replies["redeem_transfer_ticket"] = [
+        CloudError("transfer_ticket_invalid", "m", 403)] * n
+
+
+def test_one_sender_at_its_limit_does_not_hold_back_another(kitchen):
+    _refused_opens(kitchen, 11)
+    first = {"X-Forwarded-For": "203.0.113.1, 10.0.0.1"}
+    for _ in range(10):
+        assert open_push(kitchen, **first).status_code == 403
+    assert open_push(kitchen, **first).json()["error"]["code"] == "kitchen_busy"
+
+    assert open_push(kitchen, **{"X-Forwarded-For": "203.0.113.2, 10.0.0.1"}).status_code == 403
+    assert len(kitchen.cloud.calls) == 11
+
+
+def test_all_senders_together_are_held_to_sixty_a_minute(kitchen):
+    _refused_opens(kitchen, 60)
+    for n in range(60):
+        resp = open_push(kitchen, **{"X-Forwarded-For": f"203.0.113.{n // 10}"})
+        assert resp.status_code == 403
+    resp = open_push(kitchen, **{"X-Forwarded-For": "198.51.100.7"})
+    assert resp.status_code == 429
+    assert resp.json()["error"]["code"] == "kitchen_busy"
+    assert len(kitchen.cloud.calls) == 60
 
 
 def test_ready_reflects_sign_in_and_docker(kitchen):

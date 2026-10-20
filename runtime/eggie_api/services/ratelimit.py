@@ -22,6 +22,10 @@ class Window:
         self._warned = False
         self._lock = threading.Lock()
 
+    def idle(self, now: float) -> bool:
+        with self._lock:
+            return not self._recent or self._recent[-1] <= now - self._seconds
+
     def take(self) -> bool:
         now = self._clock()
         with self._lock:
@@ -37,3 +41,21 @@ class Window:
             log.warning("more than %d %s in %.0f s; holding the rest back",
                         self._limit, self._what, self._seconds)
         return False
+
+
+class KeyedWindow:
+    """A Window per key; a key idle for a whole window is forgotten."""
+
+    def __init__(self, limit: int, seconds: float, clock=time.time, *,
+                 what: str = "requests"):
+        self._make = lambda: Window(limit, seconds, clock, what=what)
+        self._clock = clock
+        self._windows: dict[str, Window] = {}
+        self._lock = threading.Lock()
+
+    def take(self, key: str) -> bool:
+        now = self._clock()
+        with self._lock:
+            for idle in [k for k, w in self._windows.items() if w.idle(now)]:
+                del self._windows[idle]
+            return self._windows.setdefault(key, self._make()).take()

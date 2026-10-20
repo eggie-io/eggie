@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import time
 import urllib.parse
 from dataclasses import asdict
@@ -189,7 +190,13 @@ class _PushJob:
         self.data = data
         self.replace = replace
         self.compose = compose
-        self.plan = rules.data_plan(compose)
+        plan = rules.data_plan(compose)
+        folder = service._loader.dir(self.project_id)
+        # A one-file bind is config and travels with the files. A missing source
+        # stays data: Docker makes it a directory, and the kitchen may have one.
+        self.plan = rules.DataPlan(plan.volumes, tuple(
+            p for p in plan.data_paths
+            if (folder / p).is_dir() or not os.path.lexists(folder / p)), plan.external)
         compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
         self.volumes = {key: rules.docker_volume_name(compose, compose_name, key)
                         for key in self.plan.volumes}

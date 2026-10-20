@@ -177,6 +177,31 @@ def test_bundle_carries_secret_names_never_values(env):
     assert b"sk-very-secret" not in seen["bytes"]
 
 
+def test_a_one_file_db_bind_ships_as_a_file_not_as_data(env):
+    folder = env.config.projects_root / "shop"
+    (folder / "docker-compose.yml").write_text(
+        "services:\n  db:\n    image: postgres:16\n    volumes:\n"
+        "      - ./pgdata:/var/lib/postgresql/data\n      - ./postgres.conf:/etc/postgres.conf\n"
+        "      - ./fresh:/fresh\n")
+    (folder / "pgdata").mkdir()
+    (folder / "pgdata" / "PG_VERSION").write_text("16\n")
+    (folder / "postgres.conf").write_text("max_connections = 20\n")
+    seen = {}
+
+    def upload(host, push_id, token, path):
+        with tarfile.open(path) as tar:
+            seen["manifest"] = json.load(tar.extractfile("manifest.json"))
+            seen["names"] = set(tar.getnames())
+
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[upload], statuses=[DONE])
+
+    assert push(env, data=False)["state"] == "done"
+    # A source not there yet is still data: Docker creates it as a directory.
+    assert seen["manifest"]["data_paths"] == ["fresh", "pgdata"]
+    assert "files/postgres.conf" in seen["names"]
+    assert "files/pgdata/PG_VERSION" not in seen["names"]
+
+
 def test_record_is_written_when_the_kitchen_accepts_the_upload(env):
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
            statuses=[KitchenUnreachable("gone")] * 31)

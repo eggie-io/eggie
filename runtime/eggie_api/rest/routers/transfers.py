@@ -58,7 +58,9 @@ def build(s: Services) -> APIRouter:
     @router.post("/api/transfers", status_code=201)
     def open_transfer(request: Request) -> dict:
         return s.transfers.open(size=_size(request), ticket=_header(request, TICKET),
-                                data=_data(request), replace=_header(request, REPLACE))
+                                data=_data(request), replace=_header(request, REPLACE),
+                                forwarded_for=request.headers.get("x-forwarded-for", ""),
+                                peer=getattr(request.client, "host", ""))
 
     @router.put("/api/transfers/{push_id}/bundle", status_code=202)
     async def receive_bundle(push_id: str, request: Request) -> dict:

@@ -55,6 +55,7 @@ def test_adopt_registers_without_starting(env):
     resp = env.client.post("/projects/invoice-helper/adopt")
     assert resp.status_code == 201
     assert resp.json()["status"] == "stopped"
+    assert resp.json()["origin"] == "folder"
     assert not env.runner.argv_containing("up")
     assert env.client.get("/projects").json()["discovered"] == []
 

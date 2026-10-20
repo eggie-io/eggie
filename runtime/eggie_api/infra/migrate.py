@@ -122,6 +122,11 @@ def _v6_secrets(conn: sqlite3.Connection) -> None:
     _add_column(conn, "projects", "secrets_changed_at", "REAL")
 
 
+def _v7_project_origin(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "projects", "origin", "TEXT NOT NULL DEFAULT 'new'")
+    _add_column(conn, "projects", "ran_ok_at", "REAL")
+
+
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -131,6 +136,7 @@ MIGRATIONS = [
     _v4_account,
     _v5_github,
     _v6_secrets,
+    _v7_project_origin,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
@@ -13,6 +14,7 @@ from ..config import ApiConfig
 from ..domain.project import _slug
 from ..errors import Conflict, EggieError, Invalid, NotFound
 from ..infra import docker, files
+from ..infra.github import origin_repo
 from ..infra.health import answers
 from ..infra.reconcile import discover, examine
 from ..infra.repos.projects import ProjectRepo
@@ -75,6 +77,9 @@ class ProjectService:
                 # An entrypoint slower than the readiness window stores a
                 # diagnosis that is true for a minute and false forever after.
                 self._projects.set_problem(row["id"])
+                now = time.time()
+                self._projects.mark_ran_ok(row["id"], now)
+                row = {**row, "ran_ok_at": row["ran_ok_at"] or now}
                 problem = None
         active = self._jobs.active_for(row["id"])
         try:
@@ -89,6 +94,9 @@ class ProjectService:
                 "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
                 "web": web,
                 "public": public_status,
+                "origin": row["origin"],
+                "ran_ok": row["ran_ok_at"] is not None,
+                "repo": origin_repo(folder) if row["origin"] == "github" else None,
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": self._secrets.restart_needed(row),
                 "secrets_requested": self._secrets.requested_count(row["id"]),
@@ -96,7 +104,8 @@ class ProjectService:
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
 
-    def create(self, id: str, web: list[dict] | None, domain: str | None) -> dict:
+    def create(self, id: str, web: list[dict] | None, domain: str | None,
+               origin: str = "new") -> dict:
         # Same slug rule load_project applies to a directory name, so an id
         # survives the round trip host -> API -> compose project name.
         project_id = _slug(id)
@@ -113,7 +122,8 @@ class ProjectService:
             (d / ".eggie").mkdir(exist_ok=True)
             (d / ".eggie" / "project.yml").write_text(yaml.safe_dump(
                 {"id": project_id, "web": web}, sort_keys=False))
-        self._projects.add(project_id, str(d), domain or self._config.domain)
+        self._projects.add(project_id, str(d), domain or self._config.domain,
+                           origin=origin)
         self._wake()
         return self.payload(self._projects.get(project_id))
 
@@ -129,7 +139,8 @@ class ProjectService:
         if not found.adoptable:
             raise Conflict("not_adoptable",
                            f"'{project_id}' cannot be adopted: {found.reason}")
-        self._projects.add(project_id, str(folder), self._config.domain)
+        self._projects.add(project_id, str(folder), self._config.domain,
+                           origin="folder")
         self._wake()
         return self.payload(self._projects.get(project_id))
 

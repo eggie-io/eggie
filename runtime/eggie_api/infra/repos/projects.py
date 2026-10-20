@@ -7,11 +7,11 @@ class ProjectRepo:
     def __init__(self, db: Database):
         self._db = db
 
-    def add(self, id, guest_path, domain, status="stopped") -> None:
+    def add(self, id, guest_path, domain, status="stopped", origin="new") -> None:
         with self._db.tx() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO projects(id, guest_path, domain, status) "
-                "VALUES (?,?,?,?)", (id, guest_path, domain, status))
+                "INSERT OR REPLACE INTO projects(id, guest_path, domain, status, origin) "
+                "VALUES (?,?,?,?,?)", (id, guest_path, domain, status, origin))
 
     def get(self, id) -> dict | None:
         return self._db.one("SELECT * FROM projects WHERE id=?", (id,))
@@ -39,6 +39,12 @@ class ProjectRepo:
     def mark_started(self, id, at) -> None:
         with self._db.tx() as conn:
             conn.execute("UPDATE projects SET last_started_at=? WHERE id=?", (at, id))
+
+    def mark_ran_ok(self, id, at) -> None:
+        """Keeps the first time only: `ran_ok` means "ever", not "latest"."""
+        with self._db.tx() as conn:
+            conn.execute("UPDATE projects SET ran_ok_at=? WHERE id=? "
+                         "AND ran_ok_at IS NULL", (at, id))
 
     def remove(self, id) -> None:
         with self._db.tx() as conn:

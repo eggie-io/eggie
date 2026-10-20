@@ -157,6 +157,9 @@ and a host release. Prefer additive changes.
 - A project's `status` in `state.db` is the last start/stop outcome, not a live reading. Projects
   get no restart policy, so after a VM reboot only `LifecycleService.resume_all()` (run from `__main__`)
   brings the `started_ok` ones back; without it Traefik answers 404 under a "running" badge.
+- `ran_ok` on the project payload is "ever answered", set once by a start that passes the readiness
+  check or by a `recheck` that clears a stale problem; it never goes back to false. `origin` is
+  `new`/`github`/`folder`; `POST /projects` accepts only `new` and `folder`, clone sets `github`.
 - Anything the API creates inside a project must be group-writable: login users are never the
   API's uid. `install.sh`'s default ACL on `/opt/eggie/projects` handles that under the API's
   umask 022; `clone_argv`'s `umask 002` predates it and is harmless.

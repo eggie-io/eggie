@@ -90,6 +90,8 @@ class LifecycleService:
                 self._projects.set_status(project_id, status)
                 if diagnosis is None:
                     self._projects.set_problem(project_id)
+                    if status == STARTED_OK:
+                        self._projects.mark_ran_ok(project_id, time.time())
                 else:
                     self._projects.set_problem(project_id, diagnosis.code,
                                                diagnosis.message)

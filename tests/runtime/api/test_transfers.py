@@ -82,13 +82,34 @@ class Helper:
         return Completed(0, "", "")
 
 
+class FakeTimers:
+    """Stands in for threading.Timer; `fire()` runs every live one."""
+
+    def __init__(self):
+        self.made = []
+
+    def __call__(self, seconds, fn):
+        timer = type("T", (), {})()
+        timer.seconds, timer.fn, timer.live = seconds, fn, False
+        timer.start = lambda: setattr(timer, "live", True)
+        timer.cancel = lambda: setattr(timer, "live", False)
+        self.made.append(timer)
+        return timer
+
+    def fire(self):
+        for timer in self.made:
+            if timer.live:
+                timer.live = False
+                timer.fn()
+
+
 @pytest.fixture
 def kitchen(tmp_path):
-    cloud, sleeps, free = FakeCloud(), [], {"bytes": 100 * GIB}
+    cloud, sleeps, free, timers = FakeCloud(), [], {"bytes": 100 * GIB}, FakeTimers()
     for ns in _make_env(tmp_path, cloud=cloud, sleep=sleeps.append,
-                        free_bytes=lambda: free["bytes"],
+                        free_bytes=lambda: free["bytes"], timer=timers,
                         site_host="foo.eggie.io", domain="foo.eggie.space"):
-        ns.cloud, ns.sleeps, ns.free = cloud, sleeps, free
+        ns.cloud, ns.sleeps, ns.free, ns.timers = cloud, sleeps, free, timers
         ns.repos.account.update(access_token="at", refresh_token="rt",
                                 access_expires_at=10**12, org_id="org-1")
         ns.helper = Helper(tmp_path)
@@ -288,6 +309,15 @@ def test_name_taken_by_a_kitchen_project_gets_a_suffix(kitchen):
 def test_full_import_replaces_files_keeps_data_paths_and_completes(kitchen):
     folder = kitchen_project(kitchen, status="started_ok")
     local_project(kitchen)
+    old_file_at_down = []
+    exec_ = kitchen.runner.exec
+
+    def watch(argv, **kwargs):
+        if "down" in argv:
+            old_file_at_down.append((folder / "src" / "old.py").exists())
+        return exec_(argv, **kwargs)
+
+    kitchen.runner.exec = watch
 
     status = push(kitchen, make_bundle(kitchen), replace="files")
 
@@ -299,7 +329,7 @@ def test_full_import_replaces_files_keeps_data_paths_and_completes(kitchen):
     assert (folder / "src" / "app.py").read_text() == "print('new')\n"
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
     # The old stack was stopped before its files went away.
-    assert kitchen.runner.argv_containing("down")
+    assert old_file_at_down == [True]
     assert kitchen.cloud.calls[-1] == ("complete_transfer", "at", "t-1")
     assert kitchen.repos.pushed_projects.by_cloud_id("c-1")["last_pushed_at"] is not None
     assert list((kitchen.config.transfers_root / "in").iterdir()) == []
@@ -442,16 +472,68 @@ def test_a_new_open_replaces_one_that_never_uploaded(kitchen):
 
 
 def test_an_open_push_expires_after_ten_minutes(kitchen):
-    now = [1_000_000.0]
-    kitchen.services.transfers._clock = lambda: now[0]
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant(), grant("c-2", "Blog")]
-    assert open_push(kitchen).status_code == 201
-    now[0] += 601
+    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    opened = open_push(kitchen).json()
+    assert [t.seconds for t in kitchen.timers.made] == [600]
 
-    assert open_push(kitchen).status_code == 201
+    kitchen.timers.fire()
 
     assert kitchen.services.locks.acquire("my-shop")
     assert kitchen.repos.projects.get("my-shop") is None
+    assert kitchen.http.get(f"/api/transfers/{opened['push_id']}", headers={
+        "Eggie-Transfer-Token": opened["token"]}).status_code == 404
+
+
+def test_an_upload_stops_the_expiry(kitchen):
+    local_project(kitchen)
+    status = push(kitchen, make_bundle(kitchen))
+    kitchen.timers.fire()
+    assert status["state"] == "done"
+    assert kitchen.repos.projects.get("my-shop") is not None
+
+
+def test_a_wrong_token_upload_writes_nothing_and_keeps_the_push(kitchen):
+    local_project(kitchen)
+    path = make_bundle(kitchen)
+    kitchen.cloud.replies.update(redeem_transfer_ticket=[grant()], complete_transfer=[None])
+    opened = open_push(kitchen, size=path.stat().st_size).json()
+
+    resp = upload(kitchen, {**opened, "token": "wrong"}, path)
+
+    assert resp.status_code == 404
+    inbox = kitchen.config.transfers_root / "in"
+    assert not inbox.exists() or list(inbox.iterdir()) == []
+    assert upload(kitchen, opened, path).status_code == 202
+    assert finished(kitchen, opened)["state"] == "done"
+
+
+def test_a_bundle_with_data_the_open_did_not_declare_is_refused(kitchen, tmp_path):
+    folder = kitchen_project(kitchen)
+    local_project(kitchen)
+    source = tmp_path / "vol"
+    source.mkdir()
+
+    status = push(kitchen, make_bundle(kitchen, data=True, volumes={"db-data": source}),
+                  data="no", replace="files")
+
+    assert status["result"] == {"code": "bad_bundle"}
+    assert (folder / "src" / "old.py").exists()
+    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
+    assert not [a for a in kitchen.runner.calls if a[1:3] == ["volume", "rm"]]
+
+
+def test_a_volume_named_outside_the_project_is_refused(kitchen, tmp_path):
+    compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
+    kitchen_project(kitchen)
+    local_project(kitchen, compose=compose)
+    source = tmp_path / "vol"
+    source.mkdir()
+
+    status = push(kitchen, make_bundle(kitchen, data=True, volumes={"db-data": source}),
+                  data="yes", replace="files-and-data")
+
+    assert status["result"] == {"code": "bad_bundle"}
+    assert not [a for a in kitchen.runner.calls if a[1:3] == ["volume", "rm"]]
 
 
 def test_status_needs_the_token_and_hides_unknown_ids(kitchen):

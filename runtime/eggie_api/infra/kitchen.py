@@ -92,9 +92,10 @@ class KitchenClient:
     @staticmethod
     def _error(status: int, raw: bytes, older: bool) -> Exception:
         error = _envelope(raw)
-        # An older kitchen has no transfer route: it 404s, or its sign-in
-        # middleware answers first.
-        if older and (status == 404 or (error and error["code"] == "not_signed_in")):
+        # An older kitchen has no transfer route: it 404s, or its browser
+        # checks (Origin, then sign-in) answer first.
+        if older and (status == 404 or (error and error["code"] in (
+                "not_signed_in", "forbidden_origin"))):
             return KitchenUnreachable("older")
         if error:
             return KitchenError(error["code"], error["message"], status, error)

@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Request
 
-from ...errors import Invalid, LengthRequired, Unavailable
+from ...errors import LengthRequired
+from ...services.transfers import bad_transfer
 from .files import stream_to_tempfile
 
 if TYPE_CHECKING:
@@ -18,10 +19,6 @@ TOKEN = "Eggie-Transfer-Token"
 MAX_DIGITS = 19
 
 
-def _bad(header: str) -> Invalid:
-    return Invalid("bad_transfer", f"the push request needs a valid {header} header")
-
-
 def _number(value: str | None) -> int | None:
     if value is None or not (0 < len(value) <= MAX_DIGITS and value.isascii()
                              and value.isdigit()):
@@ -32,7 +29,7 @@ def _number(value: str | None) -> int | None:
 def _header(request: Request, name: str) -> str:
     value = request.headers.get(name)
     if value is None:
-        raise _bad(name)
+        raise bad_transfer(name)
     return value
 
 
@@ -41,14 +38,14 @@ def _size(request: Request) -> int:
         raise LengthRequired("length_required", f"the push request needs an {SIZE} header")
     size = _number(request.headers[SIZE])
     if size is None:
-        raise _bad(SIZE)
+        raise bad_transfer(SIZE)
     return size
 
 
 def _data(request: Request) -> bool:
     value = _header(request, DATA)
     if value not in ("yes", "no"):
-        raise _bad(DATA)
+        raise bad_transfer(DATA)
     return value == "yes"
 
 
@@ -76,8 +73,7 @@ def build(s: Services) -> APIRouter:
 
     @router.get("/api/ready")
     def ready() -> dict:
-        if not s.transfers.ready():
-            raise Unavailable("not_ready", "This kitchen isn't ready for a push.")
+        s.transfers.require_ready()
         return {"ready": True}
 
     return router

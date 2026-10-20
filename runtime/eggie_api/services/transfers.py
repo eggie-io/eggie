@@ -65,7 +65,7 @@ def _gb(n: int) -> str:
     return f"{n / 1024 ** 3:.1f} GB"
 
 
-def _bad(header: str) -> Invalid:
+def bad_transfer(header: str) -> Invalid:
     return Invalid("bad_transfer", f"the push request needs a valid {header} header")
 
 
@@ -96,6 +96,12 @@ def _no_links_above(root: Path, rel: str) -> bool:
     return True
 
 
+def _daemon_timer(seconds: float, fn: Callable[[], None]) -> threading.Timer:
+    timer = threading.Timer(seconds, fn)
+    timer.daemon = True
+    return timer
+
+
 @dataclass(frozen=True)
 class _Grant:
     ticket_id: str
@@ -112,9 +118,10 @@ class _Push:
     cloud_id: str
     ticket_id: str
     size: int
+    data: bool
     created: bool
-    opened_at: float
     state: str = OPENED
+    timer: object | None = None
     job_id: str | None = None
     ended_at: float | None = None
 
@@ -124,7 +131,8 @@ class Transfers:
                  projects: ProjectRepo, pushed_projects: PushedProjectRepo,
                  secrets: SecretService, lifecycle: LifecycleService, jobs: JobRegistry,
                  locks: ProjectLocks, account: Account, cloud, *,
-                 free_bytes: Callable[[], int], clock=time.time, sleep=time.sleep):
+                 free_bytes: Callable[[], int], clock=time.time, sleep=time.sleep,
+                 timer=None):
         self._config = config
         self._runner = runner
         self._loader = loader
@@ -139,6 +147,7 @@ class Transfers:
         self._free_bytes = free_bytes
         self._clock = clock
         self._sleep = sleep
+        self._timer = timer or _daemon_timer
         self._window = Window(OPENS_PER_MINUTE, 60.0, lambda: self._clock(),
                               what="push attempts")
         self._pushes: dict[str, _Push] = {}
@@ -172,14 +181,18 @@ class Transfers:
         return self._account.signed_in and self._runner.exec(
             [DOCKER, "version", "--format", "{{.Server.Version}}"], root=True).ok
 
+    def require_ready(self) -> None:
+        if not self.ready():
+            raise Unavailable("not_ready", "This kitchen isn't ready for a push.")
+
     def open(self, *, ticket: str, size: int, data: bool, replace: str) -> dict:
         if not (0 < len(ticket) <= MAX_TICKET and ticket.isascii() and ticket.isprintable()
                 and " " not in ticket):
-            raise _bad("Eggie-Transfer-Ticket")
+            raise bad_transfer("Eggie-Transfer-Ticket")
         if size <= 0:
-            raise _bad("Eggie-Transfer-Size")
+            raise bad_transfer("Eggie-Transfer-Size")
         if replace not in REPLACE_MODES:
-            raise _bad("Eggie-Transfer-Replace")
+            raise bad_transfer("Eggie-Transfer-Replace")
         if size > self._config.max_upload_bytes:
             raise TooLarge("payload_too_large",
                            f"A push may be at most {_gb(self._config.max_upload_bytes)}.")
@@ -205,20 +218,25 @@ class Transfers:
                 if free < need:
                     raise DiskFull("kitchen_disk_full",
                                    f"it needs {_gb(need)} and has {_gb(free)} free.")
+                # Claimed first: a sync pass must never see an unclaimed new project.
+                self._pushed.claim(local_id, grant.cloud_id, grant.source_device_id, now)
                 if self._projects.get(local_id) is None:
                     folder = self._loader.dir(local_id)
                     folder.mkdir(parents=True, exist_ok=True)
                     self._projects.add(local_id, str(folder), self._config.domain)
-                self._pushed.claim(local_id, grant.cloud_id, grant.source_device_id, now)
             except BaseException:
+                if not exists:
+                    self._pushed.remove(local_id)
                 self._locks.release(local_id)
                 raise
             token = tokens.token_urlsafe(32)
             push = _Push(id=tokens.token_hex(8), token_hash=_digest(token),
                          local_id=local_id, cloud_id=grant.cloud_id,
-                         ticket_id=grant.ticket_id, size=size, created=not exists,
-                         opened_at=now)
+                         ticket_id=grant.ticket_id, size=size, data=data,
+                         created=not exists)
             self._pushes[push.id] = push
+            push.timer = self._timer(UPLOAD_WINDOW, lambda: self._expire(push.id))
+            push.timer.start()
         log.info("push %s opened for %s", push.id, local_id)
         return {"push_id": push.id, "token": token}
 
@@ -257,11 +275,15 @@ class Transfers:
 
     def _prune(self, now: float) -> None:
         for push in list(self._pushes.values()):
-            if push.state == OPENED and now - push.opened_at > UPLOAD_WINDOW:
+            if push.state == ENDED and now - push.ended_at > KEEP_ENDED:
+                del self._pushes[push.id]
+
+    def _expire(self, push_id: str) -> None:
+        with self._lock:
+            push = self._pushes.get(push_id)
+            if push is not None and push.state == OPENED:
                 log.info("push %s for %s got no upload in time", push.id, push.local_id)
                 self._drop(push)
-            elif push.state == ENDED and now - push.ended_at > KEEP_ENDED:
-                del self._pushes[push.id]
 
     def _drop_waiting(self, cloud_id: str) -> None:
         for push in list(self._pushes.values()):
@@ -271,6 +293,8 @@ class Transfers:
     def _drop(self, push: _Push) -> None:
         """Ends a push that never reached its import."""
         self._pushes.pop(push.id, None)
+        if push.timer is not None:
+            push.timer.cancel()
         if push.created:
             # Nothing landed, so the next push of this project is a first push again.
             self._projects.remove(push.local_id)
@@ -302,6 +326,7 @@ class Transfers:
             if push.state != OPENED:
                 raise Conflict("transfer_started", "This push already has its bundle.")
             push.state = UPLOADING
+            push.timer.cancel()
         bundle = self._inbox / f"{push.id}.tar"
         try:
             if content_length is None:
@@ -430,6 +455,10 @@ class _ImportJob:
             raise Invalid("bad_manifest", "The bundle's manifest is not JSON.") from None
         compose = self.s._loader.parse_yaml(compose_path)
         manifest = rules.parse_manifest(raw, compose)
+        # The overwrite rules were checked against what open() was told.
+        if manifest.data != self.push.data:
+            raise Invalid("bad_bundle", "The bundle's data does not match what the push "
+                                        "was opened with.")
         for hint in manifest.secrets.values():
             if hint:
                 try:
@@ -437,10 +466,25 @@ class _ImportJob:
                 except SecretError as e:
                     raise Invalid("bad_manifest", e.message) from None
         if manifest.data:
-            for key in manifest.volumes:
-                if not _real_dir(self.staging / "volumes" / key):
-                    raise Invalid("bad_bundle", f"The bundle has no data for volume {key}.")
+            self._check_volumes(compose, manifest)
         return manifest, compose
+
+    def _check_volumes(self, compose: dict, manifest: rules.Manifest) -> None:
+        """Restoring removes each volume first, so a bundle must only ever name
+        this project's own."""
+        compose_name = str(compose.get("name") or self.pid)
+        others = {name for r in self.s._projects.list() if r["id"] != self.pid
+                  for name in (r["id"], r.get("compose_name")) if name}
+        if compose_name in others:
+            raise Invalid("bad_bundle", f"The compose name {compose_name} belongs to "
+                                        "another project on this kitchen.")
+        for key in manifest.volumes:
+            name = rules.docker_volume_name(compose, compose_name, key)
+            if not name.startswith(f"{compose_name}_"):
+                raise Invalid("bad_bundle", f"Volume {key} is named {name}, outside "
+                                            "this project.")
+            if not _real_dir(self.staging / "volumes" / key):
+                raise Invalid("bad_bundle", f"The bundle has no data for volume {key}.")
 
     def _move(self, src: Path, dst: Path) -> None:
         try:

@@ -84,7 +84,7 @@ class Services:
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, kitchen=None,
-          sleep=None, free_bytes=None) -> Services:
+          sleep=None, free_bytes=None, timer=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -143,7 +143,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         jobs, locks, account, cloud,
         free_bytes=free_bytes or (lambda: disk.usage(
             Path(config.transfers_root))["free_bytes"]),
-        sleep=sleep or time.sleep)
+        sleep=sleep or time.sleep, timer=timer)
     transfers.sweep()
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,

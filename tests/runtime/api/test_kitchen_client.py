@@ -85,6 +85,8 @@ def test_old_kitchen_and_connection_errors_are_unreachable():
         call(client(_http_error(401, "not_signed_in")))
     with pytest.raises(KitchenUnreachable, match="older"):
         call(client(_http_error(404, "not_found")))
+    with pytest.raises(KitchenUnreachable, match="older"):
+        call(client(_http_error(403, "forbidden_origin")))
     with pytest.raises(KitchenUnreachable):
         call(client(urllib.error.URLError("refused")))
     # Only open() reads a 401 as "older": elsewhere it is a real answer.

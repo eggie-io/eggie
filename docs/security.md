@@ -43,11 +43,12 @@ Each of these is root-equivalent in the VM:
 
 ## The user's own computer
 
-Nothing in the VM can reach the user's files or run programs on their computer:
+These settings keep agents from damaging the user's files by accident. They are not a security
+boundary.
 
 - **Lima:** `host/providers/eggie.yaml` has `mounts: []`, so no macOS folder is shared.
-- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and lets Linux run Windows `.exe`
-  files by default. `install.sh` turns both off on every install, update and repair
+- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and puts Windows folders on `PATH`
+  by default. `install.sh` turns both off on every install, update and repair
   (`lib/wsl-conf.py`). The settings go in `/etc/wsl.conf`:
 
   ```ini
@@ -55,21 +56,22 @@ Nothing in the VM can reach the user's files or run programs on their computer:
   enabled=false
 
   [interop]
-  enabled=false
   appendWindowsPath=false
   ```
 
-  So there is no `C:` drive at `/mnt/c`, `cmd.exe` and `powershell.exe` cannot be started from the
-  VM, and `PATH` has no Windows folders. WSL reads the file only when the distro starts. Setup
-  restarts a VM it has just created right after the first install, before anyone uses it. A VM
+  Interop (running Windows `.exe` files) stays on: it is one kernel registration every WSL distro
+  shares, so turning it off in `eggie-vm` breaks it in the user's other distros.
+
+  WSL reads the file only when the distro starts. Setup restarts a VM it has just created right after the first install, before anyone uses it. A VM
   that was already running when it got the setting keeps the old behaviour until its next start,
   for example a Windows restart or `wsl --shutdown`. Projects come in by HTTP upload (Import), not
   through a shared folder.
 
-This protects against accidents, such as an agent deleting the wrong folder or a script started
-in the VM running on Windows. It is not a hard boundary:
+What this does not stop:
 
-- `eggie` is in the `docker` group, which is root in the VM, and root can mount things again.
+- Any process in the VM can run a Windows `.exe` it has there; it runs on Windows as the user.
+- Root in the VM (`eggie` has passwordless `sudo` and the `docker` group) can mount a drive by
+  hand or edit `wsl.conf`.
 - Every WSL2 distro on the computer runs in one shared utility VM with one kernel. A kernel
   escape from any distro reaches all of them.
 - Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and

@@ -49,21 +49,21 @@ default=eggie
 enabled=false
 
 [interop]
-enabled=false
 appendWindowsPath=false
 ```
 
 - `[user]`: `wsl -d eggie-vm` opens as `eggie` (passwordless `sudo`), not root. An existing
   `[user]` section is left alone.
-- `[automount]` and `[interop]`: no Windows drives under `/mnt`, no running Windows `.exe`
-  files, no Windows folders on `PATH` (see `security.md`). These are rewritten every run.
+- `[automount]` and `[interop]`: no Windows drives under `/mnt`, no Windows folders on `PATH`
+  (see `security.md`). These are rewritten every run. Interop itself stays on: turning it off
+  breaks it in the user's other WSL distros.
 
 WSL reads the file only when the distro starts. Setup restarts a VM it has just created once,
 right after the first install. An existing VM picks up a change at its next start (Windows
 restart, `wsl --shutdown`, or `eggie vm stop` then `start`); nothing restarts a running VM for it.
 Until then `ls /mnt/c` still lists the drive.
 
-Without interop, nothing in the VM can open a Windows browser. A tool that wants to (a CLI's
+With no Windows folders on `PATH`, nothing in the VM can open a Windows browser. A tool that wants to (a CLI's
 `login`, for example) prints the link instead: copy it into a browser on Windows.
 
 ## Where things are inside

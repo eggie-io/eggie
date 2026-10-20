@@ -74,7 +74,7 @@ export function RepoPicker({ login, pick, onDone }: { login: string; pick: RepoP
 
   const { hasNextPage, isFetching, isError, fetchNextPage } = repos;
   useEffect(() => {
-    // An error would refetch the same page in a loop; Load more stays as the retry.
+    // An error would refetch the same page in a loop; Load more shows as the retry instead.
     if (!isError && shouldLoadMore(query, hasNextPage, isFetching)) void fetchNextPage();
   }, [query, hasNextPage, isFetching, isError, fetchNextPage]);
 
@@ -157,10 +157,10 @@ export function RepoPicker({ login, pick, onDone }: { login: string; pick: RepoP
         })}
       </ul>
       {repos.isLoading && <p>Fetching your repositories…</p>}
-      {searching && shown.length === 0 && !repos.isLoading && (
+      {searching && shown.length === 0 && !repos.isLoading && (isFetching || !hasNextPage) && (
         <p>{isFetching ? "Looking through your repositories…" : "No repositories match"}</p>
       )}
-      {!searching && hasNextPage && (
+      {hasNextPage && (!searching || isError) && (
         <Button
           variant="ghost"
           size="sm"

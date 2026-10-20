@@ -8,6 +8,12 @@ export function useCopy<T extends HTMLElement>(text: string) {
   const [refused, setRefused] = useState(false);
   const target = useRef<T>(null);
 
+  // A new text (e.g. another Analyze question) hasn't been copied yet.
+  useEffect(() => {
+    setCopied(false);
+    setRefused(false);
+  }, [text]);
+
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(false), COPIED_MS);

@@ -129,7 +129,8 @@ SITE_BROWSER = {"Host": "foo.eggie.io"}
 SITE_ORIGIN = {"Origin": "https://foo.eggie.io"}
 
 
-def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, **overrides):
+def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, free_bytes=None,
+              **overrides):
     token_path = tmp_path / "api.token"
     token_path.write_text("test-token")
     config = ApiConfig(
@@ -157,7 +158,7 @@ def _make_env(tmp_path, *, cloud=None, kitchen=None, sleep=None, **overrides):
     runner = FakeRunner()
     probe = FakeProbe()
     app = create_app(config=config, runner=runner, http_probe=probe, cloud=cloud,
-                     kitchen=kitchen, sleep=sleep)
+                     kitchen=kitchen, sleep=sleep, free_bytes=free_bytes)
     with TestClient(app, headers=AUTH) as client:
         # raw_client returns the 500 a real caller would see instead of
         # re-raising the exception inside the test.

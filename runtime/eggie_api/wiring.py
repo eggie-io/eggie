@@ -36,6 +36,7 @@ from .services.sessions import Sessions
 from .services.site import SiteSignIn
 from .services.sync import SyncLoop, run_pass
 from .services.system import SystemService
+from .services.transfers import Transfers
 from .services.uploads import UploadService
 
 
@@ -69,6 +70,7 @@ class Services:
     account: Account
     public: Public
     push: PushService
+    transfers: Transfers
     github_link: GitHubLink
     sessions: Sessions
     site: SiteSignIn
@@ -82,7 +84,7 @@ class Services:
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, kitchen=None,
-          sleep=None) -> Services:
+          sleep=None, free_bytes=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -136,17 +138,25 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         kitchen or KitchenClient(ca_file=config.kitchen_ca_file), repos.cloud_projects,
         repos.kitchen_pushes, sync.wake, sleep=sleep or time.sleep)
     push.sweep()
+    transfers = Transfers(
+        config, runner, loader, repos.projects, repos.pushed_projects, secrets, lifecycle,
+        jobs, locks, account, cloud,
+        free_bytes=free_bytes or (lambda: disk.usage(
+            Path(config.transfers_root))["free_bytes"]),
+        sleep=sleep or time.sleep)
+    transfers.sweep()
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,
         projects=ProjectService(config, runner, loader, repos.projects, secrets,
                                 jobs, locks, uploads, public, http_probe,
-                                sync.wake, push.summary),
+                                sync.wake, push.summary, repos.pushed_projects),
         lifecycle=lifecycle,
         clone=CloneService(config, runner, loader, repos.projects, locks,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
-        account=account, public=public, push=push, github_link=github_link,
+        account=account, public=public, push=push, transfers=transfers,
+        github_link=github_link,
         sessions=sessions, site=site,
         instances=Instances(account, cloud, config.site_host),
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),

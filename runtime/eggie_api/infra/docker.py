@@ -186,6 +186,30 @@ def remove_tree_as_root(runner, path) -> Completed:
                         found.stdout.strip(), "rm", "-rf", str(path)], root=True)
 
 
+def move_as_root(runner, src, dst) -> Completed:
+    """rename(2) of a folder into another parent needs write access to the
+    folder itself; a database's data folder is 0700 and owned by its user."""
+    found = inspect_own_image(runner)
+    if not found.ok:
+        return found
+    # One mount over both paths keeps it a rename, not a copy across mounts.
+    root = os.path.commonpath([str(src), str(dst)])
+    return runner.exec([DOCKER, "run", "--rm", "--user", "0",
+                        "-v", f"{root}:{root}", "--entrypoint", "",
+                        found.stdout.strip(), "mv", "-T", str(src), str(dst)], root=True)
+
+
+def create_volume(runner, name: str, *, project: str, key: str) -> Completed:
+    # Compose's own labels, so compose adopts the volume and delete finds it.
+    return runner.exec([DOCKER, "volume", "create",
+                        "--label", f"{PROJECT_LABEL}={project}",
+                        "--label", f"com.docker.compose.volume={key}", name], root=True)
+
+
+def remove_volume(runner, name: str) -> Completed:
+    return runner.exec([DOCKER, "volume", "rm", "-f", name], root=True)
+
+
 def container_id(provider, directory, service: str, *,
                  env: dict | None = None) -> str:
     """Empty string when compose cannot resolve one — the project was never

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
-from collections import deque
 
 from ..infra.cloud import CloudError, CloudUnavailable
 from .account import NotSignedIn
+from .ratelimit import Window
 from .sessions import Sessions
 
 log = logging.getLogger("eggie.site")
@@ -29,32 +28,13 @@ class SiteSignIn:
         self._account = account
         self._cloud = cloud
         self._remote = remote
-        self._clock = clock
-        self._recent: deque[float] = deque()
-        self._warned = False
-        self._lock = threading.Lock()
-
-    def _take_remote_slot(self) -> bool:
-        now = self._clock()
-        with self._lock:
-            while self._recent and self._recent[0] <= now - _WINDOW:
-                self._recent.popleft()
-            if len(self._recent) >= REMOTE_PER_MINUTE:
-                warn, self._warned = not self._warned, True
-            else:
-                self._recent.append(now)
-                self._warned = False
-                return True
-        if warn:
-            log.warning("more than %d sign-in links a minute; holding the rest back",
-                        REMOTE_PER_MINUTE)
-        return False
+        self._window = Window(REMOTE_PER_MINUTE, _WINDOW, clock, what="sign-in links")
 
     def redeem(self, code: str) -> str | None:
         session_id = self._sessions.redeem(code)
         if session_id is not None or not self._remote or self._sessions.is_local(code):
             return session_id
-        if not self._take_remote_slot():
+        if not self._window.take():
             return None
         try:
             out = self._account.authed(

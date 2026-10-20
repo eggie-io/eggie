@@ -43,11 +43,14 @@ Each of these is root-equivalent in the VM:
 
 ## The user's own computer
 
-Nothing in the VM can reach the user's files or run programs on their computer:
+The VM is kept off the user's own files so that an agent or a script can't damage them by
+accident: a wrong path or a careless `rm -rf` lands in the VM, not in the user's documents. This is
+not a security boundary. It does nothing against an agent that sets out to reach the user's
+computer.
 
 - **Lima:** `host/providers/eggie.yaml` has `mounts: []`, so no macOS folder is shared.
-- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and lets Linux run Windows `.exe`
-  files by default. `install.sh` turns both off on every install, update and repair
+- **WSL2:** by default WSL mounts every Windows drive at `/mnt/<drive>` and appends the Windows
+  folders to `PATH`. `install.sh` turns both off on every install, update and repair
   (`lib/wsl-conf.py`). The settings go in `/etc/wsl.conf`:
 
   ```ini
@@ -55,25 +58,37 @@ Nothing in the VM can reach the user's files or run programs on their computer:
   enabled=false
 
   [interop]
-  enabled=false
+  enabled=true
   appendWindowsPath=false
   ```
 
-  So there is no `C:` drive at `/mnt/c`, `cmd.exe` and `powershell.exe` cannot be started from the
-  VM, and `PATH` has no Windows folders. WSL reads the file only when the distro starts. Setup
-  restarts a VM it has just created right after the first install, before anyone uses it. A VM
-  that was already running when it got the setting keeps the old behaviour until its next start,
-  for example a Windows restart or `wsl --shutdown`. Projects come in by HTTP upload (Import), not
-  through a shared folder.
+  So there is no `C:` drive at `/mnt/c`, and `PATH` has no Windows folders. Projects come in by
+  HTTP upload (Import), not through a shared folder.
 
-This protects against accidents, such as an agent deleting the wrong folder or a script started
-in the VM running on Windows. It is not a hard boundary:
+  Interop (Linux starting Windows `.exe` files) stays on. It is one registration (`WSLInterop` in
+  `binfmt_misc`) on the kernel that every WSL distro shares, so `eggie-vm` booting with it off
+  takes it away from the user's other distros as well; their `docker build` then fails with
+  `docker-credential-desktop.exe: exec format error`. Turning it off would add little anyway:
+  with no drive mounted and no Windows folders on `PATH`, nothing in the VM has a Windows program
+  at hand to start. `enabled=true` is written out so a VM that got `false` from an earlier build
+  gets it back.
 
-- `eggie` is in the `docker` group, which is root in the VM, and root can mount things again.
-- Every WSL2 distro on the computer runs in one shared utility VM with one kernel. A kernel
-  escape from any distro reaches all of them.
-- Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and
-  `\\wsl.localhost\eggie-vm` shows its files to any Windows program.
+  WSL reads the file only when the distro starts. Setup restarts a VM it has just created right
+  after the first install, before anyone uses it. A VM that was already running when it got the
+  setting keeps the old behaviour until its next start, for example a Windows restart or
+  `wsl --shutdown`.
+
+What this does not stop:
+
+- **Anything with root in the VM.** `eggie` has passwordless `sudo` and is in the `docker` group,
+  which is root in the VM too, and coding agents run as `eggie`. Root can mount a drive by hand
+  (`mount -t drvfs C: /mnt/c`) and, through interop, start any Windows program on it. It can also
+  edit `/etc/wsl.conf`; the next install puts these keys back, but a reboot in between applies the
+  edit.
+- **A kernel escape.** Every WSL2 distro on the computer runs in one shared utility VM with one
+  kernel. A kernel escape from any distro reaches all of them.
+- **Windows reaching in.** `wsl -d eggie-vm -u root` needs no password, and
+  `\\wsl.localhost\eggie-vm` shows the VM's files to any Windows program.
 
 ## What each secret protects, and what it doesn't
 

@@ -15,7 +15,12 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 | `detect.ignore` | Top-level names under `home` that Eggie's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |
 | `setup.run` | Shell command run once per account when the user opens the agent's guide. |
 
-## The guide (`platforms.<mac|windows>`)
+## The guide (`platforms.<mac|windows|cloud>`)
+
+The console picks one by the VM (`/api/connect`'s `vm`): `wsl` → windows, `lima` → mac, a site →
+cloud, otherwise the browser's OS. `cloud` is for any computer reaching a server over SSH with the
+key the user downloaded from the web app.
+
 
 - `tagline`, and `steps`: each `{title, body, alt}` plus an optional `media` list of files in this
   folder, e.g. `["mac/3a.png", "mac/3b.png", "mac/3.mp4"]`. The kind comes from the extension
@@ -28,7 +33,8 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 - `card` (optional): fields to copy, in the order and shape the agent's own form asks for — SSH
   details on Mac, a fixed path on Windows. Each is `{label, value}`, where `value` is plain text
   or a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
-  `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent.
+  `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent. A
+  plain-text value is guidance and gets no copy button; an optional `hint` adds an info tooltip.
 
 ## Things that will bite you
 

@@ -21,6 +21,21 @@
         {"title": "Start prompting", "body": "Pick the projects folder and tell Claude Code what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen", "media": ["media/mac-claude-code-4.png"]}
       ]
     },
+    "cloud": {
+      "tagline": "SSH connection",
+      "card": [
+        {"label": "SSH host", "value": "{user}@{host}"},
+        {"label": "SSH port", "value": "{port}"},
+        {"label": "SSH key", "value": "The private key you downloaded from Eggie", "hint": "The private key file you saved when you made your SSH key in the Eggie web app. It is usually in your .ssh folder, named like eggie-…_ed25519."}
+      ],
+      "steps": [
+        {"title": "Open Claude Code", "body": "Open the Claude desktop app and switch to Claude Code.", "alt": "Screenshot · Claude Code start screen", "media": ["media/mac-claude-code-0.png"]},
+        {"title": "Add an SSH connection", "body": "<ol><li>Click <b>Local</b> under the prompt box.</li><li>Select <b>SSH</b>.</li><li>Select <b>Add SSH connection…</b></li></ol>", "alt": "Screenshot · environment menu with SSH and Add SSH connection", "media": ["media/mac-claude-code-1.png"]},
+        {"title": "Enter the details", "body": "<p>Name it <b>Eggie</b>, then copy the <b>SSH host</b> and <b>SSH port</b> from the card below.</p><p>For <b>SSH key</b>, choose the private key file you downloaded from Eggie.</p>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-claude-code-2.png", "media/mac-claude-code-3.png"]},
+        {"title": "Save the connection", "body": "<p>Click <b>Test connection</b> and wait while Claude Code installs what it needs. When it says the host is ready, click <b>Add SSH connection</b>.</p>", "alt": "Screenshot · Test connection succeeded, Add SSH connection button", "media": ["media/mac-claude-code-5.png"]},
+        {"title": "Start prompting", "body": "Pick the projects folder and tell Claude Code what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen", "media": ["media/mac-claude-code-4.png"]}
+      ]
+    },
     "windows": {
       "tagline": "Inside WSL",
       "steps": [

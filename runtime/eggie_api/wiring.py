@@ -108,6 +108,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     github_link = github_link or GitHubLink(
         repos.github, github, client_id=config.github_client_id,
         directory=config.github_dir)
+    instances = Instances(account, cloud, config.site_host)
     lifecycle = LifecycleService(config, runner, loader, repos.projects, secrets,
                                  jobs, locks, http_probe)
     return Services(
@@ -122,6 +123,6 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, github_link=github_link,
         sessions=sessions, site=site,
-        instances=Instances(account, cloud, config.site_host),
+        instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
-        certificate=certificate, sync=sync, system=SystemService(config, runner))
+        certificate=certificate, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

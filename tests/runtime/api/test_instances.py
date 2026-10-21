@@ -83,3 +83,21 @@ def test_a_service_error_is_a_502_with_its_message(tmp_path):
 def test_instances_is_reachable_from_the_console_only(env):
     assert console(env.app, env.client).get("/api/instances").status_code != 404
     assert env.client.get("/instances").status_code == 404
+
+
+def test_own_login_is_the_login_of_the_kitchen_this_server_is(tmp_path):
+    rows = [{**OTHER, "login_name": "bar"}, {**ROW, "login_name": "ada"}]
+    cloud = FakeCloud(list_instances=[rows])
+
+    assert instances(tmp_path, cloud, site_host="foo.eggie.io").own_login() == "ada"
+
+
+@pytest.mark.parametrize("cloud, signed_in", [
+    (FakeCloud(list_instances=[CloudUnavailable("down")]), True),
+    (FakeCloud(list_instances=[CloudError("x", "boom", 500)]), True),
+    (FakeCloud(list_instances=[[OTHER]]), True),
+    (FakeCloud(), False),
+], ids=["service-down", "service-error", "not-listed", "signed-out"])
+def test_own_login_is_none_when_the_service_cannot_say(tmp_path, cloud, signed_in):
+    assert instances(tmp_path, cloud, site_host="foo.eggie.io",
+                     signed_in=signed_in).own_login() is None

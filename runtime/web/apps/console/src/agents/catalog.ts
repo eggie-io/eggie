@@ -1,13 +1,14 @@
 import { parseRich, type Rich } from "./rich";
 
-export type Platform = "windows" | "mac";
-const PLATFORMS: Platform[] = ["windows", "mac"];
+export type Platform = "windows" | "mac" | "cloud";
+const PLATFORMS: Platform[] = ["windows", "mac", "cloud"];
 
 export interface Media { kind: "image" | "video"; src: string }
 // `media` is empty for a step that shows a placeholder; more than one makes a slider.
 export interface Step { title: string; body: Rich[]; media: Media[]; alt: string }
-// One line of the card: a label and a template over the API's SSH facts.
-export interface CardField { label: string; value: string }
+// One line of the card: a label and a template over the API's SSH facts, with
+// an optional explanation shown on demand.
+export interface CardField { label: string; value: string; hint?: string }
 // `card` is null for a guide with nothing to copy.
 export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
 export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
@@ -59,9 +60,10 @@ function parseStep(value: unknown, folder: string): Step | null {
 
 function parseCardField(value: unknown): CardField | null {
   if (!isObject(value) || !text(value.label) || !text(value.value)) return null;
+  if (value.hint !== undefined && !text(value.hint)) return null;
   const names = [...value.value.matchAll(PLACEHOLDER)].map((match) => match[1]);
   if (!names.every((name) => (SSH_FACTS as readonly string[]).includes(name))) return null;
-  return { label: value.label, value: value.value };
+  return { label: value.label, value: value.value, ...(value.hint !== undefined && { hint: value.hint }) };
 }
 
 function parseGuide(value: unknown, folder: string): Guide | null {
@@ -101,6 +103,7 @@ export function parseAgent(id: string, value: unknown, base: string): Agent | nu
 export function platformFor(connect: Connect | undefined, userAgent: string): Platform {
   if (connect?.vm === "wsl") return "windows";
   if (connect?.vm === "lima") return "mac";
+  if (connect?.vm === "site") return "cloud";
   return /Mac/.test(userAgent) ? "mac" : "windows";
 }
 

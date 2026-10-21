@@ -28,3 +28,18 @@ class Instances:
              "signed_out": bool(r.get("signed_out")), "is_owner": bool(r.get("is_owner")),
              "current": r["console_hostname"] == self._site_host}
             for r in rows if r.get("id") and r.get("console_hostname")]}
+
+    def own_login(self) -> str | None:
+        """This server's login account as the service records it; None when
+        the service cannot say, so the caller keeps what install recorded."""
+        if not self._site_host:
+            return None
+        try:
+            rows = self._account.authed(lambda token: self._cloud.list_instances(token))
+        except (NotSignedIn, CloudUnavailable, CloudError):
+            return None
+        for r in rows:
+            login = r.get("login_name")
+            if r.get("console_hostname") == self._site_host and isinstance(login, str) and login:
+                return login
+        return None

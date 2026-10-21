@@ -1,6 +1,8 @@
 import { SSH_FACTS, type Connect, type Guide } from "./catalog";
 
-export interface CardRow { label: string; value: string; copy: boolean }
+const PLACEHOLDER = /\{[^}]*\}/;
+
+export interface CardRow { label: string; value: string; copy: boolean; hint?: string }
 
 type Fact = (typeof SSH_FACTS)[number];
 
@@ -18,8 +20,9 @@ export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] 
     ? { host: ssh.host, port: String(ssh.port), user: ssh.user, key_file: ssh.key_file }
     : FALLBACK;
   const rows: CardRow[] = [];
-  for (const { label, value } of guide.card) {
-    let known = true;
+  for (const { label, value, hint } of guide.card) {
+    // Plain text, such as "the key you downloaded", is guidance, not a value.
+    let known = PLACEHOLDER.test(value);
     let applies = true;
     const filled = value.replace(/\{([^}]*)\}/g, (_, name: Fact) => {
       const fact = facts[name];
@@ -34,7 +37,7 @@ export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] 
       return "";
     });
     // Copying "your Mac user name@127.0.0.1" would paste a broken address.
-    if (applies) rows.push({ label, value: filled, copy: known });
+    if (applies) rows.push({ label, value: filled, copy: known, ...(hint && { hint }) });
   }
   return rows;
 }

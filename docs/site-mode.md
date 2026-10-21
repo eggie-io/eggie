@@ -160,8 +160,9 @@ the boot sequence already fetches. Until it answers, a page on `localhost` assum
 and any other address assumes nothing. On a site: a signed-out console goes
 straight to the web app page above, with no screen to click through. After a code the server
 refused it does not redirect again (that would loop) and shows a **Sign in** button instead,
-with Try again beside it. The public URL control is absent; the agents card shows the
-server's SSH host and port 22 with no key file; the account menu has no sign-out; and a server
+with Try again beside it. The public URL control is absent; the agents screen shows the
+cloud guide: the login and host come from the service's `GET /v1/instances` (falling back to what
+install recorded), port 22, and the key as "the one you downloaded" since only the user has it; the account menu has no sign-out; and a server
 whose account the service revoked gets a terminal "set it up again from the web app" screen,
 with a link to the web app's kitchens list, instead of a sign-in button that cannot work.
 

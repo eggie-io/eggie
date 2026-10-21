@@ -97,7 +97,15 @@ def test_own_login_is_the_login_of_the_kitchen_this_server_is(tmp_path):
     (FakeCloud(list_instances=[CloudError("x", "boom", 500)]), True),
     (FakeCloud(list_instances=[[OTHER]]), True),
     (FakeCloud(), False),
-], ids=["service-down", "service-error", "not-listed", "signed-out"])
+    (FakeCloud(list_instances=[None]), True),
+    (FakeCloud(list_instances=[["junk", {**ROW, "login_name": None}]]), True),
+], ids=["service-down", "service-error", "not-listed", "signed-out", "empty-body", "malformed-rows"])
 def test_own_login_is_none_when_the_service_cannot_say(tmp_path, cloud, signed_in):
     assert instances(tmp_path, cloud, site_host="foo.eggie.io",
                      signed_in=signed_in).own_login() is None
+
+
+def test_own_login_asks_the_service_once_it_has_an_answer(tmp_path):
+    kitchens = instances(tmp_path, FakeCloud(list_instances=[[ROW]]), site_host="foo.eggie.io")
+
+    assert kitchens.own_login() == kitchens.own_login() == "foo"

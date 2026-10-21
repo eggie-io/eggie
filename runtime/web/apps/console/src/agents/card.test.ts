@@ -60,4 +60,8 @@ describe("cardRows", () => {
     const site = { vm: "site" as const, ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } };
     expect(cardRows(guide, site)).toEqual([{ label: "SSH key", value: "The key you downloaded", copy: false, hint: "Saved earlier." }]);
   });
+
+  it("shows no card on a server that could not say its SSH facts, rather than the local VM's", () => {
+    expect(cardRows(userAtHost, { vm: "site", ssh: null })).toBeNull();
+  });
 });

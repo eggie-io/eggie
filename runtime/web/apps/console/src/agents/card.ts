@@ -16,6 +16,8 @@ const UNKNOWN_USER = "your Mac user name";
 export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] | null {
   if (!guide.card) return null;
   const ssh = connect?.ssh;
+  // The fallback is the local Mac VM's; on a server it would be wrong.
+  if (!ssh && connect?.vm === "site") return null;
   const facts: Record<Fact, string | null> = ssh
     ? { host: ssh.host, port: String(ssh.port), user: ssh.user, key_file: ssh.key_file }
     : FALLBACK;

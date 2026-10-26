@@ -18,6 +18,12 @@ describe("elapsed", () => {
 });
 
 describe("subtitle", () => {
+  it("counts projects waiting on the agent, and ignores the count at zero", () => {
+    expect(subtitle(6, 3, 2, "Claude Code")).toBe("Six on the go · two waiting on Claude Code");
+    expect(subtitle(6, 3, 0, "Claude Code")).toBe(subtitle(6, 3));
+    expect(subtitle(2, 0, 1)).toBe("Two on the go · one waiting on your coding agent");
+  });
+
   it("spells counts up to nine and uses digits after", () => {
     expect(subtitle(4, 2)).toBe("Four on the go · two of them cooking");
     expect(subtitle(9, 1)).toBe("Nine on the go · one of them cooking");

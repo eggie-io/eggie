@@ -87,6 +87,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B3 | Bring up the five compose files in `tests/fixtures/compose/` | Count how many work unchanged | |
 | B4 | Inside the VM, `eggie new` / `eggie up` from a coding agent | The project shows up in the console | |
 | B5 | In a running project: `eggie secret set API_KEY` (pipe a value), put `API_KEY=other` in the project's `.env`, then restart it | `docker exec <container> env` shows the secret's value, not the `.env` one; a compose `${KEY:?}` reference still lets `eggie logs` and stop/down work | |
+| B6 | Clone a repo with no docker-compose.yml, then a folder whose compose fails | Both show Needs set-up with a prompt (the second with Docker's message); after the agent runs `eggie up` successfully, a later failure shows Something's wrong | |
 
 ## Site mode (a droplet from the snapshot; see `site-mode.md`)
 
@@ -110,3 +111,4 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | S16 | Push a project that needs a secret not set on the kitchen, then open Start on it there | The card shows "Needs N secrets" and Start opens the secrets form; saving the last requested value starts the project | |
 | S17 | Open the push result's secrets link | It signs in if needed and lands on the project's secrets form on the kitchen | |
 | S18 | Delete the project locally after a push | The web app still lists the project; the kitchen copy keeps running | |
+| S19 | Agents → Claude Code (then Codex, Cursor) in the console; follow the cloud guide with the key downloaded from the web app | The card shows `<login>@<site host>` matching the web app's server page, port 22, and the key as text with a tooltip; the agent connects | |

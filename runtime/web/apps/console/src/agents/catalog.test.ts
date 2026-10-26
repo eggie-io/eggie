@@ -105,6 +105,9 @@ describe("platformFor", () => {
     expect(platformFor({ vm: "wsl", ssh: null }, "Macintosh")).toBe("windows");
     expect(platformFor({ vm: "lima", ssh: null }, "Windows NT")).toBe("mac");
   });
+  it("gives a cloud server the cloud guide whatever the browser is", () => {
+    expect(platformFor({ vm: "site", ssh: null }, "Macintosh")).toBe("cloud");
+  });
   it("falls back to the browser when the VM is unknown", () => {
     expect(platformFor({ vm: "other", ssh: null }, "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5)")).toBe("mac");
     expect(platformFor(undefined, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows");

@@ -147,6 +147,9 @@ def test_clone_passes_the_token_only_through_the_environment_then_starts_the_pro
         # renames it to the real project folder only once the clone succeeds.
         Path(dest).mkdir(parents=True)
         (Path(dest) / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
+        (Path(dest) / ".git").mkdir()
+        (Path(dest) / ".git" / "config").write_text(
+            '[remote "origin"]\n\turl = https://github.com/octo/app.git\n')
 
     runner.on_clone = put_compose
     resp = client.post("/github/clone", json={"repo": "octo/app"})
@@ -154,6 +157,8 @@ def test_clone_passes_the_token_only_through_the_environment_then_starts_the_pro
     job = finish(app, client, resp)
 
     assert job["state"] == "done", job
+    cloned = client.get("/projects/app").json()
+    assert (cloned["origin"], cloned["repo"]) == ("github", "octo/app")
     clone = next(argv for argv in runner.calls if argv[0] == "sh")
     assert TOKEN not in " ".join(clone)
     dest = clone[-1]

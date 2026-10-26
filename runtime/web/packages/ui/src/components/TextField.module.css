@@ -14,6 +14,7 @@
   color: inherit; font: inherit; font-size: 14px;
 }
 .input::placeholder { color: var(--ink-3); }
+.icon { flex: none; color: var(--ink-2); }
 button.eye { margin-right: calc(var(--space-2) * -1); color: var(--ink-2); }
 .hint, .error { margin: 0; font-size: 12px; line-height: 16px; }
 .hint { color: var(--ink-2); }

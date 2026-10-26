@@ -12,10 +12,10 @@ const read = (path: string) => JSON.parse(readFileSync(join(ROOT, path), "utf8")
 describe("shipped agent content", () => {
   const ids = parseIndex(read("index.json"));
 
-  it.each(ids)("%s parses, has both platforms, and every file it names exists", (id) => {
+  it.each(ids)("%s parses, has every platform, and every file it names exists", (id) => {
     const agent = parseAgent(id, read(`${id}/agent.json`), "");
     expect(agent).not.toBeNull();
-    expect(Object.keys(agent!.platforms).sort()).toEqual(["mac", "windows"]);
+    expect(Object.keys(agent!.platforms).sort()).toEqual(["cloud", "mac", "windows"]);
     const files = [agent!.icon, ...Object.values(agent!.platforms).flatMap((g) => g!.steps.flatMap((s) => s.media.map((m) => m.src)))];
     for (const file of files) if (file) expect(existsSync(join(ROOT, file)), file).toBe(true);
   });

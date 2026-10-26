@@ -236,7 +236,8 @@ class Transfers:
                 if self._projects.get(local_id) is None:
                     folder = self._loader.dir(local_id)
                     folder.mkdir(parents=True, exist_ok=True)
-                    self._projects.add(local_id, str(folder), self._config.domain)
+                    self._projects.add(local_id, str(folder), self._config.domain,
+                                       origin="folder")
             except BaseException:
                 if not exists:
                     self._pushed.remove(local_id)

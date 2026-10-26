@@ -1,0 +1,13 @@
+/* Wraps rather than scrolls on a narrow screen, so every choice stays in view. */
+.group {
+  display: inline-flex; flex-wrap: wrap; gap: var(--space-0-5); max-width: 100%; padding: 2px;
+  border-radius: var(--radius-md); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line);
+}
+.segment {
+  flex: 1 1 auto; height: var(--control-sm); padding: 0 var(--space-3); border: 0; border-radius: calc(var(--radius-md) - 2px);
+  background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; line-height: 20px; font-weight: 600;
+  white-space: nowrap; cursor: pointer; transition: background-color 120ms ease, color 120ms ease;
+}
+.segment:hover:not(.checked) { color: var(--ink); }
+.segment:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.checked { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--line); }

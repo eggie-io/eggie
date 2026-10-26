@@ -190,3 +190,85 @@ def test_listing_survives_a_public_status_crash(env):
     r = env.client.get("/projects")
     assert r.status_code == 200
     assert r.json()["projects"][0]["public"] == {"state": "off", "note": None}
+
+
+def test_a_new_project_is_new_and_has_never_run(env):
+    body = _create(env, "blog").json()
+    assert (body["origin"], body["ran_ok"], body["repo"]) == ("new", False, None)
+
+
+def test_the_console_can_mark_a_project_as_brought_from_a_folder(env):
+    assert _create(env, "blog", origin="folder").json()["origin"] == "folder"
+
+
+def test_create_refuses_github_as_an_origin(env):
+    assert _create(env, "blog", origin="github").status_code == 422
+
+
+def test_a_start_that_answers_marks_the_project_as_having_run(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["ran_ok"] is True
+
+
+def test_a_diagnosed_start_does_not_count_as_having_run(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.probe.status = 502
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["ran_ok"] is False
+
+
+def test_a_failed_start_does_not_count_as_having_run(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.runner.up = Completed(1, "", "failed to solve: npm ci exit code 1")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["ran_ok"] is False
+
+
+def test_a_recheck_that_clears_a_stale_problem_marks_the_project_as_having_run(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.probe.status = 502
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["ran_ok"] is False
+    env.probe.status = 200
+    row = env.client.get("/projects").json()["projects"][0]
+    assert row["problem"] is None
+    assert row["ran_ok"] is True
+
+
+def test_a_refused_start_keeps_dockers_last_lines_as_the_problem(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.runner.up = Completed(1, "", "step 1\n\nstep 2\nstep 3\nfailed to solve: npm ci exit code 1\n")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    problem = env.client.get("/projects/blog").json()["problem"]
+    assert problem == {"code": "failed_to_start",
+                       "message": "step 2\nstep 3\nfailed to solve: npm ci exit code 1"}
+
+
+def test_a_good_start_clears_dockers_refusal(env):
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    good = env.runner.up
+    env.runner.up = Completed(1, "", "failed to solve")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["problem"] is not None
+    env.runner.up = good
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert env.client.get("/projects/blog").json()["problem"] is None
+
+
+def test_a_refused_start_survives_an_answering_recheck(env):
+    # Old containers may keep answering after a failed rebuild.
+    _create(env, "blog")
+    _write_compose(env, "blog")
+    env.runner.up = Completed(1, "", "failed to solve")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    env.probe.status = 200
+    body = env.client.get("/projects/blog").json()
+    assert body["problem"]["code"] == "failed_to_start"
+    assert body["ran_ok"] is False

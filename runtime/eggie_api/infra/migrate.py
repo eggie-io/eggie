@@ -122,7 +122,12 @@ def _v6_secrets(conn: sqlite3.Connection) -> None:
     _add_column(conn, "projects", "secrets_changed_at", "REAL")
 
 
-def _v7_push(conn: sqlite3.Connection) -> None:
+def _v7_project_origin(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "projects", "origin", "TEXT NOT NULL DEFAULT 'new'")
+    _add_column(conn, "projects", "ran_ok_at", "REAL")
+
+
+def _v8_push(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS kitchen_pushes (
             local_id TEXT,
@@ -155,7 +160,8 @@ MIGRATIONS = [
     _v4_account,
     _v5_github,
     _v6_secrets,
-    _v7_push,
+    _v7_project_origin,
+    _v8_push,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

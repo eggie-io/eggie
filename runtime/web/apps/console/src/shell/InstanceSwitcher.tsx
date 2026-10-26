@@ -106,7 +106,16 @@ export function InstanceSwitcher() {
         {instances && listed === 0 && (
           <span className={s.switcherNote}>
             {instancesPage ? (
-              <a href={instancesPage}>Kitchens are created in the Eggie web app</a>
+              <a
+                href={instancesPage}
+                onClick={(event) => {
+                  event.preventDefault();
+                  setOpen(false);
+                  openExternal(instancesPage);
+                }}
+              >
+                Kitchens are created in the Eggie web app
+              </a>
             ) : (
               "Kitchens are created in the Eggie web app"
             )}

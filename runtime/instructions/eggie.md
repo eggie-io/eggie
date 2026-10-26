@@ -8,7 +8,22 @@ are not running inside the Eggie VM. Stop at once: create, install and run nothi
 tell the user that their coding agent is not connected to Eggie and they should follow
 its setup guide in Eggie again.
 
-**Then read `~/.eggie/owner.md`.** Its first line, `Level:`, says how to work with this user:
+**Then read `~/.eggie/owner.md`** — how this user wants to work.
+
+**No such file? Create it before doing anything they asked.** Ask once, in one message:
+"Before we start, so I talk to you the right way: 1. Just show me results 2. Explain what
+you're doing as we go 3. I'm a developer — talk tech and let me make technical choices".
+Then write the file (`mkdir -p ~/.eggie`), the answer as its first line:
+
+```
+Level: just-results
+```
+
+1 → `just-results`, 2 → `explain`, 3 → `developer`; skipped, or they just carry on →
+`just-results`, and never ask again. Tell them they can change it any time by telling you,
+then continue with their request.
+
+The `Level:` line says how to work with them:
 - `just-results` (also when the line is missing or unknown): they are not technical. Never ask
   them technical questions (stack, ports, databases, frameworks) — decide yourself, and report
   what you did in plain words.
@@ -16,13 +31,8 @@ its setup guide in Eggie again.
   give a technical name a short plain gloss.
 - `developer`: technical words are fine. Ask when a technical choice is real; their choice wins.
 
-Follow the notes under that line too (name, language, how they like answers). No file yet:
-before the first task ask once, in one message: "Before we start, so I talk to you the right
-way: 1. Just show me results 2. Explain what you're doing as we go 3. I'm a developer — talk
-tech and let me make technical choices". Write the file with their answer (skipped, or they
-just carry on: `just-results`, and do not ask again) and tell them they can change it any time
-by telling you. When they ask you to
-be more or less technical, or tell you something about how they like to work, update the file.
+Notes go under the `Level:` line (name, language, how they like answers); follow them. When
+they ask you to be more or less technical, or tell you how they like to work, update the file.
 At every level the rules below hold, and always give them the project's URL.
 
 - Start with `eggie status` to see what exists and what is running.

@@ -17,16 +17,17 @@
       ]
     },
     "cloud": {
+      "warning": "<p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
       "tagline": "SSH connection",
       "card": [
         {"label": "SSH host", "value": "{user}@{host}"},
         {"label": "SSH port", "value": "{port}"},
-        {"label": "SSH key", "value": "The private key you downloaded from Eggie", "hint": "The private key file you saved when you made your SSH key in the Eggie web app. It is usually in your .ssh folder, named like eggie-…_ed25519."}
+        {"label": "SSH key", "value": "The unzipped eggie-…_ed25519 file (not .pub)", "hint": "Unzip the eggie-…_ed25519.zip you downloaded from Eggie. It is usually in your Downloads folder. Use the file without .pub at the end."}
       ],
       "steps": [
         {"title": "Open Cursor", "body": "Open the Cursor app and sign in.", "alt": "Screenshot · Cursor start screen", "media": ["media/mac-cursor-1.png"]},
         {"title": "Add a remote connection", "body": "<ol><li>Click <b>This Mac</b> (<b>This PC</b> on Windows) above the prompt box.</li><li>Select <b>Remote Machine</b>.</li><li>Click <b>Connect via SSH</b>.</li></ol>", "alt": "Screenshot · Run on menu with Remote Machine and Connect via SSH", "media": ["media/mac-cursor-2.png"]},
-        {"title": "Connect to your kitchen", "body": "<p>Type the <b>SSH host</b> from the card below and press <b>Enter</b>.</p><p>When Cursor asks for a key, choose the private key file you downloaded from Eggie.</p>", "alt": "Screenshot · Connect via SSH dialog", "media": ["media/mac-cursor-3.png"]},
+        {"title": "Connect to your kitchen", "body": "<p>Type the <b>SSH host</b> from the card below and press <b>Enter</b>.</p><p>When Cursor asks for a key, choose the unzipped key file, the one without <code>.pub</code>.</p>", "alt": "Screenshot · Connect via SSH dialog", "media": ["media/mac-cursor-3.png"]},
         {"title": "Open the projects folder", "body": "Wait while Cursor installs what it needs. Then select the <b>projects</b> folder and click <b>Open</b>.", "alt": "Screenshot · Select Folder dialog with the projects folder", "media": ["media/mac-cursor-4.png", "media/mac-cursor-5.png"]},
         {"title": "Start prompting", "body": "Tell Cursor what to build.", "alt": "Screenshot · Cursor prompt, connected to your kitchen in ~/projects", "media": ["media/mac-cursor-6.png"]}
       ]

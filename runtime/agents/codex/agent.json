@@ -23,16 +23,17 @@
       ]
     },
     "cloud": {
+      "warning": "<p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
       "tagline": "SSH connection",
       "card": [
         {"label": "Hostname", "value": "{user}@{host}"},
         {"label": "SSH port", "value": "{port}"},
-        {"label": "Identity file", "value": "The private key you downloaded from Eggie", "hint": "The private key file you saved when you made your SSH key in the Eggie web app. It is usually in your .ssh folder, named like eggie-…_ed25519."}
+        {"label": "Identity file", "value": "The unzipped eggie-…_ed25519 file (not .pub)", "hint": "Unzip the eggie-…_ed25519.zip you downloaded from Eggie. It is usually in your Downloads folder. Use the file without .pub at the end."}
       ],
       "steps": [
         {"title": "Open Codex", "body": "Open the ChatGPT app and switch to Codex.", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
         {"title": "Add a remote connection", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Name the project, open the <b>Add a folder on this computer</b> menu and select <b>Add remote</b>.</li></ol>", "alt": "Screenshot · Create project dialog with Add remote", "media": ["media/mac-chatgpt-1.png", "media/mac-chatgpt-2.png"]},
-        {"title": "Enter the details", "body": "<ol><li>Name the connection <b>Eggie</b>, select <b>Identity</b>, then copy the hostname and SSH port from the card below.</li><li>For the identity file, choose the private key file you downloaded from Eggie.</li><li>Click <b>Save</b>, and sign in with ChatGPT if asked.</li></ol>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-chatgpt-3.png", "media/mac-chatgpt-4.png"]},
+        {"title": "Enter the details", "body": "<ol><li>Name the connection <b>Eggie</b>, select <b>Identity</b>, then copy the hostname and SSH port from the card below.</li><li>For the identity file, choose the unzipped key file, the one without <code>.pub</code>.</li><li>Click <b>Save</b>, and sign in with ChatGPT if asked.</li></ol>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-chatgpt-3.png", "media/mac-chatgpt-4.png"]},
         {"title": "Create a project", "body": "<ol><li>Create a new project.</li><li>Enter the project's name.</li><li>Select <b>Eggie</b> as the remote device.</li><li>Select the <b>projects</b> folder and save.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Video · creating a project on the Eggie remote", "media": ["media/mac-chatgpt-5.mp4"]},
         {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
       ]

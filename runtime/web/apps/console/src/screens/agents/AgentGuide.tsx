@@ -17,7 +17,13 @@ export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
 
-  if (error) return <div className={s.page}><p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p></div>;
+  if (error)
+    return (
+      <div className={s.page}>
+        <p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p>
+        {base === "/welcome" && <div><SkipButton /></div>}
+      </div>
+    );
   if (agents === undefined) return <div className={s.page}><p className={s.muted}>Getting the guide…</p></div>;
   const agent = agents.find((candidate) => candidate.id === id);
   if (!agent) return <Navigate to={base} replace />;
@@ -151,9 +157,14 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
           {/* Mounted before it has text, so screen readers announce the message. */}
           <span className={s.checkProblem} role="status">{problem}</span>
           {!problem && <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>}
-          {welcome && <SkipButton className={s.navSkip} />}
-          <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
-          {primary}
+          {/* Back and the primary wrap as one pair, so neither is left alone on a line. */}
+          <div className={s.navActions}>
+            {welcome && <SkipButton />}
+            <div className={s.navPair}>
+              <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
+              {primary}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -189,6 +189,6 @@
 .nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .count { margin-right: auto; font-size: 13px; line-height: 18px; color: var(--ink-2); }
 .checkProblem:empty { display: none; }
-/* On a phone Skip drops below Back and Next, so those two stay on one line. */
-@media (max-width: 560px) { .navSkip { order: 1; } }
+.navActions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.navPair { display: flex; gap: var(--space-2); }
 .checkProblem { flex: 1 1 200px; margin-right: auto; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--danger); text-wrap: pretty; }

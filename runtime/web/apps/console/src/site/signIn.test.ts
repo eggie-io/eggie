@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { openKitchenUrl, webAppKitchens, siteSignedOutAction } from "./signIn";
+import { openInstanceUrl, webAppInstances, siteSignedOutAction } from "./signIn";
 
-describe("openKitchenUrl", () => {
+describe("openInstanceUrl", () => {
   it("builds the web app page link with the host", () =>
-    expect(openKitchenUrl("https://app.eggie.io/", "foo.eggie.io")).toBe(
+    expect(openInstanceUrl("https://app.eggie.io/", "foo.eggie.io")).toBe(
       "https://app.eggie.io/kitchens/open?host=foo.eggie.io",
     ));
   it("accepts a plain-http localhost web app for development", () =>
-    expect(openKitchenUrl("http://localhost:5173", "foo.eggie.io")).toBe(
+    expect(openInstanceUrl("http://localhost:5173", "foo.eggie.io")).toBe(
       "http://localhost:5173/kitchens/open?host=foo.eggie.io",
     ));
   it.each(["http://app.eggie.io", "javascript:alert(1)", "", "not a url"])("refuses web app %s", (webApp) =>
-    expect(openKitchenUrl(webApp, "foo.eggie.io")).toBeNull());
+    expect(openInstanceUrl(webApp, "foo.eggie.io")).toBeNull());
 });
 
 describe("siteSignedOutAction", () => {
@@ -21,10 +21,10 @@ describe("siteSignedOutAction", () => {
     expect(siteSignedOutAction("handoff_spent")).toBe("button"));
 });
 
-describe("webAppKitchens", () => {
-  it("links the kitchens list, and nothing for an unusable web app", () => {
-    expect(webAppKitchens("https://app.eggie.io/")).toBe("https://app.eggie.io/kitchens");
-    expect(webAppKitchens("http://app.eggie.io")).toBeNull();
-    expect(webAppKitchens(null)).toBeNull();
+describe("webAppInstances", () => {
+  it("links the instances list, and nothing for an unusable web app", () => {
+    expect(webAppInstances("https://app.eggie.io/")).toBe("https://app.eggie.io/kitchens");
+    expect(webAppInstances("http://app.eggie.io")).toBeNull();
+    expect(webAppInstances(null)).toBeNull();
   });
 });

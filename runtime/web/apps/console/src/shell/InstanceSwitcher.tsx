@@ -4,8 +4,8 @@ import { Button, Icon, cx } from "@eggie/ui";
 import { createApi } from "../api/client";
 import { openExternal } from "../desktop/desktop";
 import { useDesktopHome } from "../desktop/DesktopContext";
-import { switcherEntries, type Kitchen, type SwitcherEntry } from "../instances/instances";
-import { openKitchenUrl, webAppKitchens } from "../site/signIn";
+import { switcherEntries, type Instance, type SwitcherEntry } from "../instances/instances";
+import { openInstanceUrl, webAppInstances } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import s from "./Shell.module.css";
 
@@ -20,7 +20,7 @@ export function InstanceSwitcher() {
   const desktopHome = useDesktopHome();
   const { data, isError, isFetching, refetch } = useQuery({
     queryKey: ["instances"],
-    queryFn: () => api.get<{ instances: Kitchen[] }>("/api/instances"),
+    queryFn: () => api.get<{ instances: Instance[] }>("/api/instances"),
     enabled: open,
     staleTime: 0,
     retry: false,
@@ -42,14 +42,14 @@ export function InstanceSwitcher() {
     };
   }, [open]);
 
-  const kitchens = data?.instances;
-  const current = kitchens?.find((kitchen) => kitchen.current);
+  const instances = data?.instances;
+  const current = instances?.find((instance) => instance.current);
   const label = site === null ? "This computer" : (current?.display_name ?? site ?? "Kitchen");
-  const entries = kitchens ? switcherEntries({ kitchens, site }) : [];
-  const listed = kitchens?.length ?? 0;
+  const entries = instances ? switcherEntries({ instances, site }) : [];
+  const listed = instances?.length ?? 0;
 
   const linkFor = (entry: SwitcherEntry) =>
-    entry.target !== null && webApp ? openKitchenUrl(webApp, entry.target.host) : null;
+    entry.target !== null && webApp ? openInstanceUrl(webApp, entry.target.host) : null;
   const choose = (entry: SwitcherEntry) => {
     const url = linkFor(entry);
     if (url === null) return;
@@ -61,7 +61,7 @@ export function InstanceSwitcher() {
       window.location.assign(url);
     }
   };
-  const kitchensPage = webAppKitchens(webApp);
+  const instancesPage = webAppInstances(webApp);
 
   return (
     <div className={s.switcher} ref={root}>
@@ -82,8 +82,8 @@ export function InstanceSwitcher() {
             <Button size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button>
           </div>
         )}
-        {!kitchens && !isError && <span className={s.switcherNote}>Loading…</span>}
-        {kitchens &&
+        {!instances && !isError && <span className={s.switcherNote}>Loading…</span>}
+        {instances &&
           entries.map((entry) => {
             const clickable = linkFor(entry) !== null;
             return (
@@ -103,10 +103,10 @@ export function InstanceSwitcher() {
               </button>
             );
           })}
-        {kitchens && listed === 0 && (
+        {instances && listed === 0 && (
           <span className={s.switcherNote}>
-            {kitchensPage ? (
-              <a href={kitchensPage}>Kitchens are created in the Eggie web app</a>
+            {instancesPage ? (
+              <a href={instancesPage}>Kitchens are created in the Eggie web app</a>
             ) : (
               "Kitchens are created in the Eggie web app"
             )}

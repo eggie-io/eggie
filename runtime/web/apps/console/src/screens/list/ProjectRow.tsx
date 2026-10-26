@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
+import { Badge, Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
 import { useCurrentAgent } from "../../agents/queries";
 import { NO_AGENT, atSentenceStart } from "../../agents/current";
 import { Elapsed } from "../../components/Elapsed";
@@ -8,7 +8,7 @@ import { projectColor } from "../../projects/color";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";
-import { useLifecycle } from "../../projects/queries";
+import { useLifecycle, useStartWhenReady } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
@@ -30,6 +30,7 @@ export function ProjectRow({ project }: { project: Project }) {
   const view = projectView(project);
   const agent = useCurrentAgent({ poll: false });
   const lifecycle = useLifecycle(project.id);
+  const startWhenReady = useStartWhenReady(project.id);
   const navigate = useNavigate();
   const now = useNow(30_000);
   const pub = publicView(project.public, now);
@@ -77,8 +78,12 @@ export function ProjectRow({ project }: { project: Project }) {
           aria-label={`Start ${project.id}`}
           size="sm"
           icon="play"
-          disabled={lifecycle.isPending}
-          onClick={() => lifecycle.mutate("up")}
+          disabled={lifecycle.isPending || startWhenReady.isPending}
+          onClick={() =>
+            project.secrets_requested > 0
+              ? startWhenReady.mutate(undefined, { onSuccess: () => navigate(`${page}/secrets`) })
+              : lifecycle.mutate("up")
+          }
         >
           Start
         </Button>
@@ -138,6 +143,11 @@ export function ProjectRow({ project }: { project: Project }) {
       <div className={s.who}>
         <Link className={s.name} to={page}>{project.id}</Link>
         {line}
+        {project.secrets_requested > 0 && (
+          <Badge tone="warning" icon="key">
+            Needs {project.secrets_requested} {project.secrets_requested === 1 ? "secret" : "secrets"}
+          </Badge>
+        )}
         {pub.kind === "on" && (
           <span className={s.public}>
             <Icon name="globe" />
@@ -147,7 +157,9 @@ export function ProjectRow({ project }: { project: Project }) {
       </div>
       <div className={s.state}><StateBadge state={view.badge} /></div>
       <div className={s.actions}>{actions}{settings}</div>
-      {lifecycle.error && <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error)}</Notice>}
+      {(lifecycle.error ?? startWhenReady.error) && (
+        <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error ?? startWhenReady.error)}</Notice>
+      )}
     </li>
   );
 }

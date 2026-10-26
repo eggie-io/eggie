@@ -6,7 +6,7 @@ from .account import NotSignedIn
 
 
 class Instances:
-    """The account's kitchens, trimmed to what the console's switcher shows."""
+    """The account's instances, trimmed to what the console's switcher shows."""
 
     def __init__(self, account, cloud, site_host: str | None):
         self._account = account

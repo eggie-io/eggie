@@ -8,14 +8,15 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..errors import (BadRequest, Conflict, DiskFull, EggieError, Forbidden, Invalid,
-                      NotFound, TooLarge, Unauthorized, Unavailable, Upstream)
+                      LengthRequired, NotFound, TooLarge, TooMany, Unauthorized,
+                      Unavailable, Upstream)
 
 log = logging.getLogger("eggie.api")
 
 STATUS: dict[type[EggieError], int] = {
     NotFound: 404, Conflict: 409, Invalid: 422, BadRequest: 400,
     Unauthorized: 401, Forbidden: 403, TooLarge: 413, DiskFull: 507,
-    Upstream: 502, Unavailable: 503,
+    Upstream: 502, Unavailable: 503, TooMany: 429, LengthRequired: 411,
 }
 
 

@@ -11,8 +11,20 @@ class SecretRepo:
 
     def names(self, project_id) -> list[dict]:
         return self._db.all(
-            "SELECT name, updated_at FROM secrets WHERE project_id=? "
+            "SELECT name, updated_at, unused_at FROM secrets WHERE project_id=? "
             "ORDER BY name", (project_id,))
+
+    def mark_unused(self, project_id, names, at) -> None:
+        with self._db.tx() as conn:
+            conn.executemany(
+                "UPDATE secrets SET unused_at=? WHERE project_id=? AND name=?",
+                [(at, project_id, n) for n in names])
+
+    def clear_unused(self, project_id, names) -> None:
+        with self._db.tx() as conn:
+            conn.executemany(
+                "UPDATE secrets SET unused_at=NULL WHERE project_id=? AND name=?",
+                [(project_id, n) for n in names])
 
     def values(self, project_id) -> dict[str, str]:
         return {r["name"]: r["value"] for r in self._db.all(

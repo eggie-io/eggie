@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Button } from "@eggie/ui";
 import type { SignedOutReason } from "../boot/boot";
-import { openKitchenUrl, siteSignedOutAction } from "../site/signIn";
+import { openInstanceUrl, siteSignedOutAction } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import { SleepyEgg } from "./SleepyEgg";
 import { StatusScreen } from "./StatusScreen";
@@ -11,7 +11,7 @@ export function SignedOut({ reason, onRetry }: { reason: SignedOutReason; onRetr
   const site = useSite();
   const webApp = useWebApp();
   const link =
-    typeof site === "string" && typeof webApp === "string" ? openKitchenUrl(webApp, site) : null;
+    typeof site === "string" && typeof webApp === "string" ? openInstanceUrl(webApp, site) : null;
   const redirecting = link !== null && siteSignedOutAction(reason) === "redirect";
 
   useEffect(() => {

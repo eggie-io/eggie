@@ -19,7 +19,8 @@ class Forget:
     local_id: str
 
 
-def plan(local_ids: set[str], mapping: dict[str, dict], org_id: str) -> list:
+def plan(local_ids: set[str], mapping: dict[str, dict], org_id: str,
+         keep: frozenset[str] = frozenset()) -> list:
     actions: list = []
     ours: dict[str, str] = {}
     for local_id, entry in sorted(mapping.items()):
@@ -29,7 +30,12 @@ def plan(local_ids: set[str], mapping: dict[str, dict], org_id: str) -> list:
         else:
             ours[local_id] = entry["cloud_id"]
     for local_id, cloud_id in sorted(ours.items()):
-        if local_id not in local_ids:
+        if local_id in local_ids:
+            continue
+        # A pushed project's service record outlives its local copy.
+        if local_id in keep:
+            actions.append(Forget(local_id))
+        else:
             actions.append(Delete(local_id, cloud_id))
     for local_id in sorted(local_ids - ours.keys()):
         actions.append(Create(local_id))

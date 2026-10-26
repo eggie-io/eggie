@@ -46,7 +46,8 @@ class LifecycleService:
             self._locks.release(project_id)
             raise
 
-    def start_work(self, project_id: str, *, stop_first: bool):
+    def start_work(self, project_id: str, *, stop_first: bool,
+                   release: bool = True):
         row = self._loader.require(project_id)
         # Parsing happens here, not in the job, so a broken compose file comes
         # back as an error code the caller can read instead of a failed job.
@@ -59,6 +60,7 @@ class LifecycleService:
 
         def work(write):
             try:
+                self._projects.set_start_when_ready(project_id, False)
                 if stop_first:
                     write(f"compose down {project_id}\n")
                     down_result = docker.compose_down(
@@ -121,7 +123,8 @@ class LifecycleService:
                         result=result)
                 return result
             finally:
-                self._locks.release(project_id)
+                if release:
+                    self._locks.release(project_id)
 
         return work
 
@@ -130,11 +133,29 @@ class LifecycleService:
                                   self.start_work(project_id, stop_first=stop_first),
                                   "restart" if stop_first else "up")
 
+    def down_now(self, project_id: str) -> None:
+        """Compose down inside a job that already holds the project lock."""
+        result = docker.compose_down(self._runner, self._loader.dir(project_id),
+                                     env=self._secrets.values(project_id))
+        if not result.ok:
+            raise JobFailed((result.stderr or result.stdout).strip()
+                            or "compose down failed")
+        self._projects.set_status(project_id, "stopped")
+
+    def start_when_ready(self, project_id: str) -> dict:
+        self._loader.require(project_id)
+        waiting = self._secrets.requested_count(project_id)
+        if waiting == 0:
+            return {"job_id": self.start(project_id)}
+        self._projects.set_start_when_ready(project_id, True)
+        return {"waiting": waiting}
+
     def stop(self, project_id: str) -> str:
         self._loader.require(project_id)
 
         def work(write):
             try:
+                self._projects.set_start_when_ready(project_id, False)
                 write.phase("stopping")
                 write(f"compose down {project_id}\n")
                 result = docker.compose_down(self._runner,

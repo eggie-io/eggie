@@ -20,6 +20,8 @@ function project(over: Partial<Project> = {}): Project {
     public: { state: "off", note: null },
     restart_needed: false,
     secrets_requested: 0,
+    push: { blocked: null, last: null },
+    start_when_ready: false,
     ...over,
   };
 }

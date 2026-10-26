@@ -16,6 +16,7 @@ INSTALL = ROOT / "runtime" / "install" / "install.sh"
 # constant that no longer exists.
 STACK = f"{constants.GUEST_ROOT}/stack.yml"
 STACK_YML = ROOT / "runtime" / "stack.yml"
+TRANSFERS = f"{constants.GUEST_ROOT}/transfers"
 
 
 def test_install_is_valid_bash():
@@ -133,6 +134,8 @@ def test_install_makes_opt_eggie_writable_before_the_api_starts():
     assert _index_of("g+s") < up, \
         "setgid, or project directories the API creates lose the group"
     assert _index_of("mkdir -p " + constants.GUEST_PROJECTS) < _index_of("chgrp")
+    assert TRANSFERS in _commands()[_index_of("mkdir -p " + constants.GUEST_PROJECTS)], \
+        "transfers/ needs the group and setgid before the API makes in/ under it"
 
 
 def test_install_guards_acl_on_the_package_before_using_setfacl():
@@ -146,6 +149,8 @@ def test_projects_get_a_default_group_acl_after_the_sweep_and_before_the_api():
     # umask for new entries, every folder it creates comes out 2755.
     default = _index_of("setfacl -d -m g::rwx")
     assert "-type d" in _commands()[default], "only directories take a default ACL"
+    # An import builds the tree in transfers/ and renames it into projects/.
+    assert {constants.GUEST_PROJECTS, TRANSFERS} <= set(_commands()[default].split())
     assert _index_of("g+rwX") < default < _index_of(" up -d")
 
 
@@ -160,6 +165,7 @@ def test_each_login_account_gets_access_by_uid_not_only_by_group():
     assert all(loop < i < _index_of("done < <(accounts)")
                for i in (recursive, default, token))
     assert "-type d" in commands[default]
+    assert {constants.GUEST_PROJECTS, TRANSFERS} <= set(commands[default].split())
     # After the last chmod of the token: chmod rewrites the ACL mask.
     assert _index_of(f"chmod 640 {constants.GUEST_TOKEN}") < token
 

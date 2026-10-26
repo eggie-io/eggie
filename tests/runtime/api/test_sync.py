@@ -109,3 +109,24 @@ def test_nothing_happens_when_signed_out(tmp_path):
     run_pass(account, cloud, repos)
 
     assert cloud.calls == []
+
+
+def test_plan_forgets_instead_of_deleting_a_pushed_project():
+    assert plan(set(), {"shop": M("c-shop")}, "org-1", keep=frozenset({"shop"})) == [Forget("shop")]
+
+
+def test_a_pass_keeps_the_service_record_of_a_pushed_project(tmp_path):
+    cloud = FakeCloud()
+    repos, account = setup(tmp_path, cloud)
+    repos.cloud_projects.map("shop", "c-shop", "org-1")
+    repos.instance_pushes.record("shop", "k1", console_hostname="h", instance_project="shop", urls=[], secrets_missing=0, at=1.0)
+    run_pass(account, cloud, repos)
+    assert cloud.calls == [] and repos.cloud_projects.mapping() == {}
+
+
+def test_an_instance_never_registers_a_pushed_project(tmp_path):
+    cloud = FakeCloud()
+    repos, account = setup(tmp_path, cloud, ["shop"])
+    repos.pushed_projects.claim("shop", "c-shop", "dev-1", 1.0)
+    run_pass(account, cloud, repos)
+    assert "create_project" not in cloud.names()

@@ -91,14 +91,15 @@ systemctl enable --now docker
 # equivalent here, so this grants no access it did not have. setgid makes the
 # project directories the API creates later inherit the group; without it the
 # API cannot even open /opt/eggie/state.db and restart:always loops it.
-mkdir -p /opt/eggie/projects
+mkdir -p /opt/eggie/projects /opt/eggie/transfers
 chgrp -R docker /opt/eggie
 chmod -R g+rwX /opt/eggie
 find /opt/eggie -type d -exec chmod g+s {} +
 # The API runs under umask 022, so what it creates in a project would come out
 # 2755 and shut the login accounts out. A default ACL replaces the umask for
 # new entries, whoever makes them: the API, a container, a coding agent.
-find /opt/eggie/projects -type d -exec setfacl -d -m g::rwx {} +
+# transfers/ too: a pushed project is unpacked there, then renamed into projects/.
+find /opt/eggie/projects /opt/eggie/transfers -type d -exec setfacl -d -m g::rwx {} +
 
 # The GitHub token is the API's alone: the sweep above just widened it, so
 # its modes are put back every run.
@@ -339,7 +340,7 @@ while IFS=: read -r name uid gid home; do
     # on Lima that is every session, multiplexed over the ssh control master
     # opened at boot. -P: a project's symlinks are not followed out of it.
     setfacl -R -P -m "u:$name:rwX" /opt/eggie/projects
-    find /opt/eggie/projects -type d -exec setfacl -d -m "u:$name:rwx" {} +
+    find /opt/eggie/projects /opt/eggie/transfers -type d -exec setfacl -d -m "u:$name:rwx" {} +
     setfacl -m "u:$name:r" /opt/eggie/api.token
   fi
   bash "$INSTALL_DIR/lib/install-agents.sh" "$RUNTIME_DIR" "$home" "$uid:$gid"

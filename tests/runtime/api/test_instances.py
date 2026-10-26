@@ -32,18 +32,18 @@ def instances(tmp_path, cloud, *, site_host=None, signed_in=True) -> Instances:
     return Instances(account, cloud, site_host)
 
 
-def test_lists_kitchens_in_service_order_with_only_the_fields_the_switcher_needs(tmp_path):
+def test_lists_instances_in_service_order_with_only_the_fields_the_switcher_needs(tmp_path):
     out = instances(tmp_path, FakeCloud(list_instances=[[ROW, OTHER]])).list()
 
-    kitchen = {"display_name": "Foo", "status": "running", "signed_out": False,
+    instance = {"display_name": "Foo", "status": "running", "signed_out": False,
                "is_owner": True, "current": False}
     assert out == {"instances": [
-        {**kitchen, "id": "i1", "console_hostname": "foo.eggie.io"},
-        {**kitchen, "id": "i2", "console_hostname": "bar.eggie.io"},
+        {**instance, "id": "i1", "console_hostname": "foo.eggie.io"},
+        {**instance, "id": "i2", "console_hostname": "bar.eggie.io"},
     ]}
 
 
-def test_marks_current_only_the_kitchen_this_server_is(tmp_path):
+def test_marks_current_only_the_instance_this_server_is(tmp_path):
     out = instances(tmp_path, FakeCloud(list_instances=[[ROW, OTHER]]),
                     site_host="foo.eggie.io").list()
 
@@ -85,7 +85,7 @@ def test_instances_is_reachable_from_the_console_only(env):
     assert env.client.get("/instances").status_code == 404
 
 
-def test_own_login_is_the_login_of_the_kitchen_this_server_is(tmp_path):
+def test_own_login_is_the_login_of_the_instance_this_server_is(tmp_path):
     rows = [{**OTHER, "login_name": "bar"}, {**ROW, "login_name": "ada"}]
     cloud = FakeCloud(list_instances=[rows])
 
@@ -106,6 +106,6 @@ def test_own_login_is_none_when_the_service_cannot_say(tmp_path, cloud, signed_i
 
 
 def test_own_login_asks_the_service_once_it_has_an_answer(tmp_path):
-    kitchens = instances(tmp_path, FakeCloud(list_instances=[[ROW]]), site_host="foo.eggie.io")
+    service = instances(tmp_path, FakeCloud(list_instances=[[ROW]]), site_host="foo.eggie.io")
 
-    assert kitchens.own_login() == kitchens.own_login() == "foo"
+    assert service.own_login() == service.own_login() == "foo"

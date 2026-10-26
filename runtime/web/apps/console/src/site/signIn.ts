@@ -14,13 +14,13 @@ function webAppOrigin(webApp: string | null | undefined): string | null {
 }
 
 // The web app page that signs the person in and sends them back with a handoff code.
-export function openKitchenUrl(webApp: string, host: string): string | null {
+export function openInstanceUrl(webApp: string, host: string): string | null {
   const origin = webAppOrigin(webApp);
   return origin === null ? null : `${origin}/kitchens/open?${new URLSearchParams({ host })}`;
 }
 
-// The web app's list of kitchens, for screens with nothing to retry.
-export function webAppKitchens(webApp: string | null | undefined): string | null {
+// The web app's list of instances, for screens with nothing to retry.
+export function webAppInstances(webApp: string | null | undefined): string | null {
   const origin = webAppOrigin(webApp);
   return origin === null ? null : `${origin}/kitchens`;
 }

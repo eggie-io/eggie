@@ -6,7 +6,9 @@ from ..db import Database
 from .account import AccountRepo
 from .cloud_projects import CloudProjectRepo
 from .github import GitHubRepo
+from .instance_pushes import InstancePushRepo
 from .projects import ProjectRepo
+from .pushed_projects import PushedProjectRepo
 from .secrets import SecretRepo
 from .sessions import SessionRepo
 
@@ -20,8 +22,11 @@ class Repos:
     account: AccountRepo
     github: GitHubRepo
     cloud_projects: CloudProjectRepo
+    instance_pushes: InstancePushRepo
+    pushed_projects: PushedProjectRepo
 
     @classmethod
     def open(cls, db: Database) -> "Repos":
         return cls(db, ProjectRepo(db), SecretRepo(db), SessionRepo(db),
-                   AccountRepo(db), GitHubRepo(db), CloudProjectRepo(db))
+                   AccountRepo(db), GitHubRepo(db), CloudProjectRepo(db),
+                   InstancePushRepo(db), PushedProjectRepo(db))

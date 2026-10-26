@@ -50,7 +50,7 @@ def test_restart_stops_before_it_starts(tmp_path):
     assert order == ["stop", "start"]
 
 
-def test_stopping_the_kitchen_is_a_job_not_a_blocking_call(tmp_path):
+def test_stopping_the_instance_is_a_job_not_a_blocking_call(tmp_path):
     # provider.stop() shells wsl.exe/limactl and takes seconds; running it on
     # the thread that owns the window freezes the app mid-click.
     provider = FakeProvider()
@@ -100,7 +100,7 @@ def test_uninstall_removes_the_vm_directory_but_keeps_downloads(tmp_path):
     assert (root / "lima").exists()
 
 
-def test_uninstall_refuses_a_running_kitchen(tmp_path):
+def test_uninstall_refuses_a_running_instance(tmp_path):
     """Lima will not delete a running instance; its raw `expected status
     Stopped, got Running` is no use to the user. Nothing is touched."""
     install_dir = tmp_path / "eggie" / "vm"

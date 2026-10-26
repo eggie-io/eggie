@@ -18,6 +18,7 @@ from ..infra.github import origin_repo
 from ..infra.health import answers
 from ..infra.reconcile import discover, examine
 from ..infra.repos.projects import ProjectRepo
+from ..infra.repos.pushed_projects import PushedProjectRepo
 from .jobs import JobRegistry
 from .loader import ProjectLoader
 from .locks import ProjectLocks
@@ -32,7 +33,8 @@ class ProjectService:
     def __init__(self, config: ApiConfig, runner, loader: ProjectLoader,
                  projects: ProjectRepo, secrets: SecretService, jobs: JobRegistry,
                  locks: ProjectLocks, uploads: UploadService, public: Public,
-                 http_probe, wake: Callable[[], None]):
+                 http_probe, wake: Callable[[], None],
+                 push_summary: Callable[[str], dict], pushed_projects: PushedProjectRepo):
         self._config = config
         self._runner = runner
         self._loader = loader
@@ -44,6 +46,8 @@ class ProjectService:
         self._public = public
         self._probe = http_probe
         self._wake = wake
+        self._push_summary = push_summary
+        self._pushed_projects = pushed_projects
 
     def payload(self, row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -97,12 +101,14 @@ class ProjectService:
                 "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
                 "web": web,
                 "public": public_status,
+                "push": self._push_summary(row["id"]),
                 "origin": row["origin"],
                 "ran_ok": row["ran_ok_at"] is not None,
                 "repo": origin_repo(folder) if row["origin"] == "github" else None,
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": self._secrets.restart_needed(row),
                 "secrets_requested": self._secrets.requested_count(row["id"]),
+                "start_when_ready": bool(row["start_when_ready"]),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
@@ -192,6 +198,7 @@ class ProjectService:
                     if not removed.ok and result.ok:
                         result = removed
             self._projects.remove(project_id)
+            self._pushed_projects.remove(project_id)
             self._wake()
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}

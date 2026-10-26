@@ -33,6 +33,7 @@ class Job:
         self.phase = "preparing"
         self.detail = ""
         self.result: dict | None = None
+        self.progress: dict | None = None
         self.logs: list[str] = []
         self.started_at = time.time()
         self.finished_at: float | None = None
@@ -46,6 +47,10 @@ class Job:
     def set_phase(self, phase: str) -> None:
         with self.cond:
             self.phase = phase
+
+    def set_progress(self, done: int, total: int) -> None:
+        with self.cond:
+            self.progress = {"done": done, "total": total}
 
     def finish(self, state: str, detail: str = "", result: dict | None = None) -> None:
         with self.cond:
@@ -68,6 +73,7 @@ class Job:
                 "state": self.state,
                 "detail": self.detail,
                 "result": self.result,
+                "progress": self.progress,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
             }
@@ -85,6 +91,13 @@ class _Output:
 
     def phase(self, name: str) -> None:
         self._job.set_phase(name)
+
+    def progress(self, done: int, total: int) -> None:
+        self._job.set_progress(done, total)
+
+    @property
+    def job_id(self) -> str:
+        return self._job.id
 
 
 class JobRegistry:

@@ -5,7 +5,7 @@ import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
-import { useOnboarding } from "../onboarding/Onboarding";
+import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
@@ -151,6 +151,7 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
           {/* Mounted before it has text, so screen readers announce the message. */}
           <span className={s.checkProblem} role="status">{problem}</span>
           {!problem && <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>}
+          {welcome && <SkipButton className={s.navSkip} />}
           <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
           {primary}
         </div>

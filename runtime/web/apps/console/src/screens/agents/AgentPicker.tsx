@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Badge, Card, Icon } from "@eggie/ui";
 import { useAgents, useAgentStatus } from "../../agents/queries";
+import { SkipButton } from "../onboarding/Onboarding";
 import { AgentMark } from "./AgentMark";
 import s from "./Agents.module.css";
 
@@ -54,7 +55,10 @@ export function AgentPicker({ base }: { base: AgentBase }) {
       </div>
       {body}
       {welcome && (
-        <p className={s.muted}>Don't see yours? Skip for now. You can connect one any time from Agents.</p>
+        <div className={s.skipRow}>
+          <p className={s.muted}>Don't see yours? You can connect one any time from Agents.</p>
+          <SkipButton />
+        </div>
       )}
     </div>
   );

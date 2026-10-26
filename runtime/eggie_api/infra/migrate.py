@@ -129,11 +129,11 @@ def _v7_project_origin(conn: sqlite3.Connection) -> None:
 
 def _v8_push(conn: sqlite3.Connection) -> None:
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS kitchen_pushes (
+        CREATE TABLE IF NOT EXISTS instance_pushes (
             local_id TEXT,
             instance_id TEXT,
             console_hostname TEXT NOT NULL,
-            kitchen_project TEXT,
+            instance_project TEXT,
             pushed_at REAL NOT NULL,
             urls_json TEXT NOT NULL DEFAULT '[]',
             secrets_missing INTEGER NOT NULL DEFAULT 0,

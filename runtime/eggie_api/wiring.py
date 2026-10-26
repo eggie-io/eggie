@@ -12,7 +12,7 @@ from .infra.cloud import Cloud
 from .infra.db import Database
 from .infra.github import GitHub
 from .infra.health import default_probe
-from .infra.kitchen import KitchenClient
+from .infra.instance import InstanceClient
 from .infra.repos import Repos
 from .infra.runner import LocalRunner
 from .infra.tunnel import TunnelClient
@@ -81,7 +81,7 @@ class Services:
 
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
-          sessions=None, jobs=None, repos=None, kitchen=None,
+          sessions=None, jobs=None, repos=None, instance=None,
           sleep=None, clock=None, free_bytes=None, timer=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
@@ -134,8 +134,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     secrets.on_all_set = lambda pid: _start_quietly(lifecycle, pid)
     push = PushService(
         config, runner, loader, repos.projects, secrets, lifecycle, locks, account, cloud,
-        kitchen or KitchenClient(ca_file=config.kitchen_ca_file), repos.cloud_projects,
-        repos.kitchen_pushes, sync.wake, clock=clock or time.time,
+        instance or InstanceClient(ca_file=config.instance_ca_file), repos.cloud_projects,
+        repos.instance_pushes, sync.wake, clock=clock or time.time,
         sleep=sleep or time.sleep)
     push.sweep()
     transfers = Transfers(

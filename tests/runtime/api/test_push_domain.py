@@ -2,7 +2,7 @@ import pytest
 
 from eggie_api.domain.push import (
     DEFAULT_HINT, DataPlan, Database, Manifest, build_manifest, check_replace, data_plan,
-    databases, docker_volume_name, is_excluded, is_floating, kitchen_project_id,
+    databases, docker_volume_name, is_excluded, is_floating, instance_project_id,
     merge_secret_names, parse_manifest, replace_mode, safe_return_path)
 from eggie_api.errors import Invalid
 
@@ -62,7 +62,7 @@ def test_replace_rules():
     assert replace_mode(False, True) == "none" and replace_mode(True, False) == "files"
     assert replace_mode(True, True) == "files-and-data"
     assert check_replace(False, True, "none") is None
-    assert check_replace(True, False, "none") == "already_on_kitchen"
+    assert check_replace(True, False, "none") == "already_on_instance"
     assert check_replace(True, True, "files") == "confirm_replace_data"
     assert check_replace(True, True, "files-and-data") is None
 
@@ -73,9 +73,9 @@ def test_secret_merge_table():
     assert m.request == {"B": "from local", "C": DEFAULT_HINT}
 
 
-def test_kitchen_project_id_suffixes_taken_ids():
-    assert kitchen_project_id("My Shop", set()) == "my-shop"
-    assert kitchen_project_id("My Shop", {"my-shop", "my-shop-2"}) == "my-shop-3"
+def test_instance_project_id_suffixes_taken_ids():
+    assert instance_project_id("My Shop", set()) == "my-shop"
+    assert instance_project_id("My Shop", {"my-shop", "my-shop-2"}) == "my-shop-3"
 
 
 @pytest.mark.parametrize("bad", [None, 42, ["/x"], {"path": "/x"}, "", "x", "//evil.com", "/\\evil", "/a\\b", "/a#b", "/a b", "/a\x01", "/" + "a" * 1024])

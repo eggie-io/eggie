@@ -1,4 +1,4 @@
-export type Kitchen = {
+export type Instance = {
   id: string;
   display_name: string;
   console_hostname: string;
@@ -16,20 +16,20 @@ export type SwitcherEntry = {
   target: { host: string } | null;
 };
 
-function kitchenEntry(kitchen: Kitchen): SwitcherEntry {
-  const base = { key: kitchen.id, label: kitchen.display_name, current: kitchen.current };
-  if (kitchen.current) return { ...base, note: null, target: null };
+function instanceEntry(instance: Instance): SwitcherEntry {
+  const base = { key: instance.id, label: instance.display_name, current: instance.current };
+  if (instance.current) return { ...base, note: null, target: null };
   const closed = (note: string): SwitcherEntry => ({ ...base, note, target: null });
-  if (!kitchen.is_owner) return closed("Owned by a teammate");
-  if (kitchen.status === "failed") return closed("Failed, see the web app");
-  if (kitchen.status !== "running") return closed("Starting…");
-  if (kitchen.signed_out) return closed("Set up again in the web app");
-  return { ...base, note: null, target: { host: kitchen.console_hostname } };
+  if (!instance.is_owner) return closed("Owned by a teammate");
+  if (instance.status === "failed") return closed("Failed, see the web app");
+  if (instance.status !== "running") return closed("Starting…");
+  if (instance.signed_out) return closed("Set up again in the web app");
+  return { ...base, note: null, target: { host: instance.console_hostname } };
 }
 
-// A kitchen only ever opens in a browser, which has no local VM to return to.
-export function switcherEntries({ kitchens, site }: { kitchens: Kitchen[]; site: string | null | undefined }): SwitcherEntry[] {
+// An instance only ever opens in a browser, which has no local VM to return to.
+export function switcherEntries({ instances, site }: { instances: Instance[]; site: string | null | undefined }): SwitcherEntry[] {
   const here: SwitcherEntry[] =
     site === null ? [{ key: "local", label: "This computer", note: null, current: true, target: null }] : [];
-  return [...here, ...kitchens.map(kitchenEntry)];
+  return [...here, ...instances.map(instanceEntry)];
 }

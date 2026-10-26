@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   defaultData,
   floatingWarnings,
-  kitchenRows,
+  instanceRows,
   menuPush,
   pushChoice,
   secretsUrl,
   type PushTargets,
-  type TargetKitchen,
+  type TargetInstance,
 } from "./push";
 import type { Project } from "../projects/types";
 
-const kitchen = (id: string, over: Partial<TargetKitchen> = {}): TargetKitchen => ({
+const instance = (id: string, over: Partial<TargetInstance> = {}): TargetInstance => ({
   id,
   display_name: id,
   console_hostname: `${id}.eggie.io`,
@@ -23,25 +23,25 @@ const kitchen = (id: string, over: Partial<TargetKitchen> = {}): TargetKitchen =
   ...over,
 });
 
-const targets = (kitchens: TargetKitchen[], over: Partial<PushTargets> = {}): PushTargets => ({
-  kitchens,
-  create_kitchen_url: "https://app.eggie.io/kitchens/new",
+const targets = (instances: TargetInstance[], over: Partial<PushTargets> = {}): PushTargets => ({
+  instances,
+  create_instance_url: "https://app.eggie.io/kitchens/new",
   pushed: {},
   databases: [],
   running: false,
   ...over,
 });
 
-describe("kitchenRows", () => {
-  it("only ready kitchens the user owns can be picked", () => {
-    const rows = kitchenRows(
+describe("instanceRows", () => {
+  it("only ready instances the user owns can be picked", () => {
+    const rows = instanceRows(
       targets([
-        kitchen("a"),
-        kitchen("b", { is_owner: false }),
-        kitchen("c", { readiness: "starting" }),
-        kitchen("d", { readiness: "failed" }),
-        kitchen("e", { readiness: "signed_out" }),
-        kitchen("f", { readiness: "weird" }),
+        instance("a"),
+        instance("b", { is_owner: false }),
+        instance("c", { readiness: "starting" }),
+        instance("d", { readiness: "failed" }),
+        instance("e", { readiness: "signed_out" }),
+        instance("f", { readiness: "weird" }),
       ]),
     );
     expect(rows.map((r) => [r.pickable, r.note, r.manageUrl])).toEqual([
@@ -54,10 +54,10 @@ describe("kitchenRows", () => {
     ]);
   });
 
-  it("a pushed kitchen defaults data off and marks the row", () => {
-    const [fresh, pushed] = kitchenRows(
-      targets([kitchen("a"), kitchen("b")], {
-        pushed: { b: { pushed_at: 1700000000, console_hostname: "b.eggie.io", kitchen_project: "p", urls: [], secrets_missing: 0 } },
+  it("a pushed instance defaults data off and marks the row", () => {
+    const [fresh, pushed] = instanceRows(
+      targets([instance("a"), instance("b")], {
+        pushed: { b: { pushed_at: 1700000000, console_hostname: "b.eggie.io", instance_project: "p", urls: [], secrets_missing: 0 } },
       }),
     );
     expect(fresh.pushedAt).toBeNull();
@@ -123,7 +123,7 @@ describe("menuPush", () => {
     expect(menuPush(project({ empty: true }), true, null)).toEqual({ note: "Nothing to push yet", disabled: true });
   });
 
-  it("shows progress while pushing and the last kitchen otherwise", () => {
+  it("shows progress while pushing and the last instance otherwise", () => {
     expect(menuPush(project({ empty: true }), false, 40)).toEqual({ note: "Pushing… 40%", disabled: false });
     expect(menuPush(project(), true, 40)).toEqual({ note: "Pushing… 40%", disabled: false });
     const last = { instance_id: "i", console_hostname: "k.eggie.io", pushed_at: 1 };

@@ -156,6 +156,6 @@ def test_a_v7_database_migrates_to_v8_with_start_when_ready_off(tmp_path):
     conn.execute("INSERT INTO projects(id, guest_path, domain) VALUES ('p','/g','d')")
     conn.commit()
     assert migrate.migrate(conn) == 8
-    assert {"kitchen_pushes", "pushed_projects"} <= tables(conn)
+    assert {"instance_pushes", "pushed_projects"} <= tables(conn)
     assert "unused_at" in columns(conn, "secrets")
     assert conn.execute("SELECT start_when_ready FROM projects").fetchone()[0] == 0

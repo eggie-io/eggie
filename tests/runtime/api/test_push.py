@@ -8,11 +8,11 @@ from fastapi.testclient import TestClient
 from eggie_api.infra.bundle import write_bundle
 from eggie_api.infra import docker
 from eggie_api.infra.cloud import CloudError
-from eggie_api.infra.kitchen import KitchenError, KitchenUnreachable
+from eggie_api.infra.instance import InstanceError, InstanceUnreachable
 from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import BROWSER, _make_env
 from tests.runtime.api.fake_cloud import FakeCloud
-from tests.runtime.api.fake_kitchen import FakeKitchen
+from tests.runtime.api.fake_instance import FakeInstance
 
 ORIGIN = {"Origin": "http://localhost:41080"}
 
@@ -28,15 +28,15 @@ volumes:
   db-data: {}
 """
 
-KITCHEN = {"id": "k1", "display_name": "My kitchen", "console_hostname": "k1.eggie.io",
+INSTANCE = {"id": "k1", "display_name": "My kitchen", "console_hostname": "k1.eggie.io",
            "site_hostname": "k1.eggie.space", "readiness": "ready", "is_owner": True,
            "open_console_url": "https://app.eggie.io/kitchens/open?host=k1.eggie.io",
            "manage_url": "https://app.eggie.io/kitchens/k1"}
-TARGETS = {"kitchens": [KITCHEN], "create_kitchen_url": "https://app.eggie.io/kitchens/new"}
+TARGETS = {"instances": [INSTANCE], "create_instance_url": "https://app.eggie.io/kitchens/new"}
 OPENED = {"push_id": "p1", "token": "push-token"}
 WORKING = {"state": "running", "phase": "unpacking", "detail": "", "result": None}
 DONE = {"state": "done", "phase": "done", "detail": "",
-        "result": {"kitchen_project": "shop", "urls": ["https://shop.k1.eggie.space"],
+        "result": {"instance_project": "shop", "urls": ["https://shop.k1.eggie.space"],
                    "secrets_missing": 2}}
 
 
@@ -62,10 +62,10 @@ def ticket(n=1):
 
 @pytest.fixture
 def env(tmp_path):
-    cloud, kitchen, fake_time = FakeCloud(), FakeKitchen(), FakeTime()
-    for ns in _make_env(tmp_path, cloud=cloud, kitchen=kitchen, sleep=fake_time.sleep,
+    cloud, instance, fake_time = FakeCloud(), FakeInstance(), FakeTime()
+    for ns in _make_env(tmp_path, cloud=cloud, instance=instance, sleep=fake_time.sleep,
                         clock=fake_time.clock):
-        ns.cloud, ns.kitchen, ns.time, ns.sleeps = cloud, kitchen, fake_time, fake_time.sleeps
+        ns.cloud, ns.instance, ns.time, ns.sleeps = cloud, instance, fake_time, fake_time.sleeps
         ns.client.post("/projects", json={"id": "shop"})
         (ns.config.projects_root / "shop" / "docker-compose.yml").write_text(COMPOSE_SHOP)
         ns.repos.cloud_projects.map("shop", "c-shop", "org-1")
@@ -105,7 +105,7 @@ def _pack_hook(env, tmp_path):
 def script(env, *, targets=(TARGETS,), mints=(), opens=(), uploads=(), statuses=()):
     env.cloud.replies.update(transfer_targets=list(targets),
                              mint_transfer_ticket=list(mints))
-    env.kitchen.replies.update(open=list(opens), upload=list(uploads),
+    env.instance.replies.update(open=list(opens), upload=list(uploads),
                                status=list(statuses))
 
 
@@ -120,20 +120,20 @@ def push(env, *, data=True, replace_data=False) -> dict:
 
 
 def record(env):
-    env.repos.kitchen_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
-                                    kitchen_project="shop", urls=["https://shop.k1.eggie.space"],
+    env.repos.instance_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
+                                    instance_project="shop", urls=["https://shop.k1.eggie.space"],
                                     secrets_missing=0, at=1792510000)
 
 
-def test_targets_merge_service_kitchens_with_local_records(env):
+def test_targets_merge_service_instances_with_local_records(env):
     script(env)
     record(env)
 
     body = env.browser.get("/api/projects/shop/push").json()
 
-    assert body["kitchens"] == [KITCHEN]
-    assert body["create_kitchen_url"] == TARGETS["create_kitchen_url"]
-    assert body["pushed"]["k1"]["kitchen_project"] == "shop"
+    assert body["instances"] == [INSTANCE]
+    assert body["create_instance_url"] == TARGETS["create_instance_url"]
+    assert body["pushed"]["k1"]["instance_project"] == "shop"
     assert body["databases"] == [{"service": "db", "image": "postgres:latest",
                                   "floating": True}]
     assert body["running"] is False
@@ -148,15 +148,15 @@ def test_push_happy_path_mints_opens_uploads_and_records(env):
     assert job["state"] == "done", job
     assert env.cloud.calls == [("transfer_targets", "at"),
                                ("mint_transfer_ticket", "at", "k1", "c-shop")]
-    assert env.kitchen.names() == ["open", "upload", "status", "status"]
-    _, host, sent_ticket, size, data, replace = env.kitchen.calls[0]
+    assert env.instance.names() == ["open", "upload", "status", "status"]
+    _, host, sent_ticket, size, data, replace = env.instance.calls[0]
     assert (host, sent_ticket, data, replace) == ("k1.eggie.io", "tk-1", True, "none")
     assert job["progress"] == {"done": size, "total": size}
-    assert env.repos.kitchen_pushes.for_project("shop")["k1"]["kitchen_project"] == "shop"
-    assert job["result"]["kitchen"] == "My kitchen"
+    assert env.repos.instance_pushes.for_project("shop")["k1"]["instance_project"] == "shop"
+    assert job["result"]["instance_name"] == "My kitchen"
     assert job["result"]["secrets_missing"] == 2
     assert job["result"]["open_secrets_url"] == (
-        KITCHEN["open_console_url"] + "&return_path=%2Fp%2Fshop%2Fsecrets")
+        INSTANCE["open_console_url"] + "&return_path=%2Fp%2Fshop%2Fsecrets")
 
 
 def test_bundle_carries_secret_names_never_values(env):
@@ -202,19 +202,19 @@ def test_a_one_file_db_bind_ships_as_a_file_not_as_data(env):
     assert "files/pgdata/PG_VERSION" not in seen["names"]
 
 
-def test_record_is_written_when_the_kitchen_accepts_the_upload(env):
+def test_record_is_written_when_the_instance_accepts_the_upload(env):
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
-           statuses=[KitchenUnreachable("gone")] * 31)
+           statuses=[InstanceUnreachable("gone")] * 31)
 
     job = push(env)
 
     assert job["state"] == "failed"
-    assert job["result"]["code"] == "kitchen_unreachable"
-    assert "k1" in env.repos.kitchen_pushes.for_project("shop")
+    assert job["result"]["code"] == "instance_unreachable"
+    assert "k1" in env.repos.instance_pushes.for_project("shop")
 
 
 def test_waiting_rides_out_a_minute_of_missed_polls(env):
-    misses = [KitchenUnreachable("busy")] * 29 + [KitchenError("internal", "boom", 500)]
+    misses = [InstanceUnreachable("busy")] * 29 + [InstanceError("internal", "boom", 500)]
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
            statuses=[WORKING, *misses, DONE])
 
@@ -223,12 +223,12 @@ def test_waiting_rides_out_a_minute_of_missed_polls(env):
 
 def test_waiting_gives_up_after_a_minute_without_an_answer(env):
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None],
-           statuses=[WORKING] + [KitchenUnreachable("gone")] * 31 + [DONE])
+           statuses=[WORKING] + [InstanceUnreachable("gone")] * 31 + [DONE])
 
     job = push(env)
 
-    assert job["result"]["code"] == "kitchen_unreachable"
-    assert env.kitchen.names().count("status") == 32
+    assert job["result"]["code"] == "instance_unreachable"
+    assert env.instance.names().count("status") == 32
 
 
 def test_an_import_still_running_after_two_hours_times_out(env):
@@ -241,7 +241,7 @@ def test_an_import_still_running_after_two_hours_times_out(env):
 
     job = push(env)
 
-    assert job["result"]["code"] == "kitchen_timeout"
+    assert job["result"]["code"] == "instance_timeout"
     assert job["detail"] == "My kitchen is still importing. Open the kitchen to check on shop."
 
 
@@ -257,7 +257,7 @@ def test_repeat_push_with_data_needs_confirmation(env):
 
 
 def test_ticket_refused_is_retried_exactly_once(env):
-    refused = KitchenError("transfer_ticket_invalid", "no", 403)
+    refused = InstanceError("transfer_ticket_invalid", "no", 403)
     script(env, mints=[ticket(1), ticket(2)], opens=[refused, refused])
 
     job = push(env)
@@ -267,25 +267,25 @@ def test_ticket_refused_is_retried_exactly_once(env):
     assert job["detail"] == "The kitchen didn't accept the push. Try again."
 
 
-def test_already_on_kitchen_is_recorded_and_not_retried(env):
+def test_already_on_instance_is_recorded_and_not_retried(env):
     script(env, mints=[ticket()],
-           opens=[KitchenError("already_on_kitchen", "exists", 409)])
+           opens=[InstanceError("already_on_instance", "exists", 409)])
 
     job = push(env)
 
     assert env.cloud.names().count("mint_transfer_ticket") == 1
-    assert job["result"]["code"] == "already_on_kitchen"
-    assert "k1" in env.repos.kitchen_pushes.for_project("shop")
+    assert job["result"]["code"] == "already_on_instance"
+    assert "k1" in env.repos.instance_pushes.for_project("shop")
 
 
-def test_unreachable_kitchen_gets_three_attempts_with_fresh_tickets(env):
+def test_unreachable_instance_gets_three_attempts_with_fresh_tickets(env):
     script(env, mints=[ticket(1), ticket(2), ticket(3)],
-           opens=[KitchenUnreachable("down")] * 3)
+           opens=[InstanceUnreachable("down")] * 3)
 
     job = push(env)
 
-    assert [call[2] for call in env.kitchen.calls] == ["tk-1", "tk-2", "tk-3"]
-    assert job["result"]["code"] == "kitchen_unreachable"
+    assert [call[2] for call in env.instance.calls] == ["tk-1", "tk-2", "tk-3"]
+    assert job["result"]["code"] == "instance_unreachable"
 
 
 def test_rate_limit_reports_retry_after(env):
@@ -327,15 +327,15 @@ def test_a_volume_named_outside_the_project_fails_before_anything_stops(env):
     assert job["result"]["code"] == "bad_bundle"
     assert "blog_db-data" in job["detail"] and "shop_" in job["detail"]
     assert not [a for a in env.runner.calls if "down" in a or a[1] == "run"]
-    assert env.kitchen.calls == []
+    assert env.instance.calls == []
 
 
-def test_a_repeat_push_checks_volume_names_against_the_kitchen_project(env):
-    # Without a compose name the kitchen names volumes after its own project id.
+def test_a_repeat_push_checks_volume_names_against_the_instance_project(env):
+    # Without a compose name the instance names volumes after its own project id.
     compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: my-shop_db-data}")
     (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
-    env.repos.kitchen_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
-                                    kitchen_project="my-shop", urls=[], secrets_missing=0,
+    env.repos.instance_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
+                                    instance_project="my-shop", urls=[], secrets_missing=0,
                                     at=1792510000)
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None], statuses=[DONE])
 

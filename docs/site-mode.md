@@ -176,9 +176,9 @@ mounted on a site only.
   checks overwrite rules and disk, and answers 201 `{push_id, token}`. An opened push with no upload
   in 10 minutes is dropped; a new open replaces it.
 - `PUT /api/transfers/{push_id}/bundle` and `GET /api/transfers/{push_id}` take `Eggie-Transfer-Token`.
-- Errors: `transfer_ticket_invalid`, `kitchen_busy` (429 past 10 opens a minute from one address
-  or 60 in all; 409 while the project is busy), `already_on_kitchen`,
-  `confirm_replace_data`, `kitchen_disk_full` (507), `bad_bundle`, `not_ready`, `cloud_unavailable`.
+- Errors: `transfer_ticket_invalid`, `instance_busy` (429 past 10 opens a minute from one address
+  or 60 in all; 409 while the project is busy), `already_on_instance`,
+  `confirm_replace_data`, `instance_disk_full` (507), `bad_bundle`, `not_ready`, `cloud_unavailable`.
 - `GET /api/ready` (open) answers 200 `{"ready": true}` when signed in and Docker answers, else 503
   `not_ready`. The service probes it before marking a kitchen running, so a release with it also
   serves `/api/transfers`.

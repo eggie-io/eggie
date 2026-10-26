@@ -1,4 +1,4 @@
-"""The kitchen's transfer entry point: who may open a push, where it lands,
+"""The instance's transfer entry point: who may open a push, where it lands,
 and what an import replaces and keeps."""
 import logging
 import os
@@ -104,7 +104,7 @@ class FakeTimers:
 
 
 @pytest.fixture
-def kitchen(tmp_path):
+def instance(tmp_path):
     cloud, sleeps, free, timers = FakeCloud(), [], {"bytes": 100 * GIB}, FakeTimers()
     for ns in _make_env(tmp_path, cloud=cloud, sleep=sleeps.append,
                         free_bytes=lambda: free["bytes"], timer=timers,
@@ -139,7 +139,7 @@ def make_bundle(k, *, data=False, secrets=None, volumes=None, name="b.tar"):
     return out
 
 
-def kitchen_project(k, pid="my-shop", cloud_id="c-1", files=None, status="stopped"):
+def instance_project(k, pid="my-shop", cloud_id="c-1", files=None, status="stopped"):
     folder = k.config.projects_root / pid
     folder.mkdir(parents=True)
     (folder / "docker-compose.yml").write_text(COMPOSE_SHOP)
@@ -204,141 +204,141 @@ def test_transfer_routes_exist_only_on_a_site(env):
     assert resp.json()["error"]["code"] == "not_signed_in"
 
 
-def test_a_site_serves_the_transfer_routes(kitchen):
+def test_a_site_serves_the_transfer_routes(instance):
     assert {"/api/transfers", "/api/transfers/{push_id}/bundle",
-            "/api/transfers/{push_id}", "/api/ready"} <= _paths(kitchen.app)
+            "/api/transfers/{push_id}", "/api/ready"} <= _paths(instance.app)
 
 
 @pytest.mark.parametrize("host", ["localhost:41080", "my-shop.foo.eggie.space", "evil.example"])
-def test_wrong_host_is_refused_before_anything(kitchen, host):
-    resp = open_push(kitchen, Host=host)
+def test_wrong_host_is_refused_before_anything(instance, host):
+    resp = open_push(instance, Host=host)
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "forbidden_host"
-    assert kitchen.cloud.calls == []
+    assert instance.cloud.calls == []
 
 
-def test_api_token_and_session_are_not_credentials(kitchen):
-    code = kitchen.client.post("/sessions/handoff").json()["code"]
-    browser = TestClient(kitchen.app, headers={**H, "Origin": "https://foo.eggie.io"})
+def test_api_token_and_session_are_not_credentials(instance):
+    code = instance.client.post("/sessions/handoff").json()["code"]
+    browser = TestClient(instance.app, headers={**H, "Origin": "https://foo.eggie.io"})
     signed_in = browser.post("/api/session", json={"code": code})
     # The cookie is Secure and the test client speaks http: send it by hand.
     session = {"Cookie": signed_in.headers["set-cookie"].split(";", 1)[0]}
 
     for creds in ({"Authorization": "Bearer test-token"}, session):
-        resp = kitchen.http.post("/api/transfers", headers={
+        resp = instance.http.post("/api/transfers", headers={
             **creds, "Eggie-Transfer-Size": "10", "Eggie-Transfer-Data": "no",
             "Eggie-Transfer-Replace": "none"})
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "bad_transfer"
-    assert kitchen.cloud.calls == []
+    assert instance.cloud.calls == []
 
 
-def test_missing_size_is_length_required_and_bad_values_are_bad_transfer(kitchen):
-    assert open_push(kitchen, size=None).status_code == 411
+def test_missing_size_is_length_required_and_bad_values_are_bad_transfer(instance):
+    assert open_push(instance, size=None).status_code == 411
     for bad in ({"size": "12abc"}, {"data": "maybe"}, {"replace": "everything"},
                 {"ticket": ""}):
-        resp = open_push(kitchen, **bad)
+        resp = open_push(instance, **bad)
         assert resp.json()["error"]["code"] == "bad_transfer", bad
-    assert kitchen.cloud.calls == []
+    assert instance.cloud.calls == []
 
 
-def test_refused_ticket_relays_the_service_envelope(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [
+def test_refused_ticket_relays_the_service_envelope(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [
         CloudError("transfer_ticket_invalid", "m", 403)]
-    resp = open_push(kitchen)
+    resp = open_push(instance)
     assert resp.status_code == 403
     assert resp.json() == {"error": {"code": "transfer_ticket_invalid", "message": "m"}}
-    assert kitchen.repos.projects.list() == []
+    assert instance.repos.projects.list() == []
 
 
-def test_an_unreachable_service_is_cloud_unavailable(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [CloudUnavailable("down")]
-    resp = open_push(kitchen)
+def test_an_unreachable_service_is_cloud_unavailable(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [CloudUnavailable("down")]
+    resp = open_push(instance)
     assert resp.status_code == 503
     assert resp.json()["error"]["code"] == "cloud_unavailable"
 
 
-def test_existing_project_needs_replace(kitchen):
-    kitchen_project(kitchen)
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    resp = open_push(kitchen, replace="none")
+def test_existing_project_needs_replace(instance):
+    instance_project(instance)
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    resp = open_push(instance, replace="none")
     assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "already_on_kitchen"
-    assert kitchen.services.locks.acquire("my-shop")
+    assert resp.json()["error"]["code"] == "already_on_instance"
+    assert instance.services.locks.acquire("my-shop")
 
 
-def test_data_into_existing_needs_files_and_data(kitchen):
-    kitchen_project(kitchen)
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
-    resp = open_push(kitchen, data="yes", replace="files")
+def test_data_into_existing_needs_files_and_data(instance):
+    instance_project(instance)
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
+    resp = open_push(instance, data="yes", replace="files")
     assert resp.json()["error"]["code"] == "confirm_replace_data"
-    assert open_push(kitchen, data="yes", replace="files-and-data").status_code == 201
+    assert open_push(instance, data="yes", replace="files-and-data").status_code == 201
 
 
-def test_a_held_project_lock_is_kitchen_busy(kitchen):
-    kitchen_project(kitchen)
-    kitchen.services.locks.acquire("my-shop")
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    resp = open_push(kitchen, replace="files")
+def test_a_held_project_lock_is_instance_busy(instance):
+    instance_project(instance)
+    instance.services.locks.acquire("my-shop")
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    resp = open_push(instance, replace="files")
     assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "kitchen_busy"
+    assert resp.json()["error"]["code"] == "instance_busy"
 
 
-def test_disk_check_uses_twice_the_size_plus_a_gib(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
-    kitchen.free["bytes"] = 2 * 1000 + GIB - 1
-    resp = open_push(kitchen, size=1000)
+def test_disk_check_uses_twice_the_size_plus_a_gib(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
+    instance.free["bytes"] = 2 * 1000 + GIB - 1
+    resp = open_push(instance, size=1000)
     assert resp.status_code == 507
-    assert resp.json()["error"]["code"] == "kitchen_disk_full"
+    assert resp.json()["error"]["code"] == "instance_disk_full"
     # A refused open leaves no project behind.
-    assert kitchen.repos.projects.list() == []
-    assert kitchen.repos.pushed_projects.by_cloud_id("c-1") is None
+    assert instance.repos.projects.list() == []
+    assert instance.repos.pushed_projects.by_cloud_id("c-1") is None
 
-    kitchen.free["bytes"] = 2 * 1000 + GIB
-    assert open_push(kitchen, size=1000).status_code == 201
-
-
-def test_name_taken_by_a_kitchen_project_gets_a_suffix(kitchen):
-    kitchen.repos.projects.add("my-shop", "/x", "foo.eggie.space")
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    assert open_push(kitchen).status_code == 201
-    assert kitchen.repos.pushed_projects.by_cloud_id("c-1")["local_id"] == "my-shop-2"
-    assert kitchen.repos.projects.get("my-shop-2") is not None
+    instance.free["bytes"] = 2 * 1000 + GIB
+    assert open_push(instance, size=1000).status_code == 201
 
 
-def test_a_push_into_a_taken_name_is_named_by_the_kitchen_not_its_project_yml(kitchen):
-    kitchen_project(kitchen, pid="my-shop", cloud_id="c-other")
-    local_project(kitchen, files={
+def test_name_taken_by_a_instance_project_gets_a_suffix(instance):
+    instance.repos.projects.add("my-shop", "/x", "foo.eggie.space")
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    assert open_push(instance).status_code == 201
+    assert instance.repos.pushed_projects.by_cloud_id("c-1")["local_id"] == "my-shop-2"
+    assert instance.repos.projects.get("my-shop-2") is not None
+
+
+def test_a_push_into_a_taken_name_is_named_by_the_instance_not_its_project_yml(instance):
+    instance_project(instance, pid="my-shop", cloud_id="c-other")
+    local_project(instance, files={
         "src/app.py": "new\n",
         ".eggie/project.yml": "id: my-shop\nweb:\n  - service: web\n    port: 80\n"})
 
-    status = push(kitchen, make_bundle(kitchen))
+    status = push(instance, make_bundle(instance))
 
     assert status["state"] == "done", status
-    assert status["result"]["kitchen_project"] == "my-shop-2"
+    assert status["result"]["instance_project"] == "my-shop-2"
     assert status["result"]["urls"] == ["https://my-shop-2.foo.eggie.space"]
-    pushed = yaml.safe_load((kitchen.config.projects_root / "my-shop-2" / ".eggie"
+    pushed = yaml.safe_load((instance.config.projects_root / "my-shop-2" / ".eggie"
                              / "project.yml").read_text())
     assert pushed == {"id": "my-shop-2", "web": [{"service": "web", "port": 80}]}
 
 
-def test_full_import_replaces_files_keeps_data_paths_and_completes(kitchen):
-    folder = kitchen_project(kitchen, status="started_ok")
-    local_project(kitchen)
+def test_full_import_replaces_files_keeps_data_paths_and_completes(instance):
+    folder = instance_project(instance, status="started_ok")
+    local_project(instance)
     old_file_at_down = []
-    exec_ = kitchen.runner.exec
+    exec_ = instance.runner.exec
 
     def watch(argv, **kwargs):
         if "down" in argv:
             old_file_at_down.append((folder / "src" / "old.py").exists())
         return exec_(argv, **kwargs)
 
-    kitchen.runner.exec = watch
+    instance.runner.exec = watch
 
-    status = push(kitchen, make_bundle(kitchen), replace="files")
+    status = push(instance, make_bundle(instance), replace="files")
 
     assert status["state"] == "done", status
-    assert status["result"] == {"kitchen_project": "my-shop",
+    assert status["result"] == {"instance_project": "my-shop",
                                 "urls": ["https://my-shop.foo.eggie.space"],
                                 "secrets_missing": 0}
     assert not (folder / "src" / "old.py").exists()
@@ -346,163 +346,163 @@ def test_full_import_replaces_files_keeps_data_paths_and_completes(kitchen):
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
     # The old stack was stopped before its files went away.
     assert old_file_at_down == [True]
-    assert kitchen.cloud.calls[-1] == ("complete_transfer", "at", "t-1")
-    assert kitchen.repos.pushed_projects.by_cloud_id("c-1")["last_pushed_at"] is not None
-    assert list((kitchen.config.transfers_root / "in").iterdir()) == []
-    settle(kitchen, "my-shop")
-    assert kitchen.runner.argv_containing("up")
+    assert instance.cloud.calls[-1] == ("complete_transfer", "at", "t-1")
+    assert instance.repos.pushed_projects.by_cloud_id("c-1")["last_pushed_at"] is not None
+    assert list((instance.config.transfers_root / "in").iterdir()) == []
+    settle(instance, "my-shop")
+    assert instance.runner.argv_containing("up")
 
 
-def test_a_data_folder_the_api_cannot_move_goes_through_the_root_helper(kitchen):
-    folder = kitchen_project(kitchen)
+def test_a_data_folder_the_api_cannot_move_goes_through_the_root_helper(instance):
+    folder = instance_project(instance)
     # A database's data folder is 0700 and owned by the database's user.
     (folder / "pgdata").chmod(0o500)
-    local_project(kitchen)
+    local_project(instance)
 
-    status = push(kitchen, make_bundle(kitchen), replace="files")
+    status = push(instance, make_bundle(instance), replace="files")
 
     assert status["state"] == "done", status
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
-    assert any(dst == str(folder / "pgdata") for _, dst in kitchen.helper.moves)
+    assert any(dst == str(folder / "pgdata") for _, dst in instance.helper.moves)
 
 
-def test_a_data_push_replaces_files_and_restores_each_volume(kitchen, tmp_path):
-    folder = kitchen_project(kitchen)
-    local_project(kitchen)
+def test_a_data_push_replaces_files_and_restores_each_volume(instance, tmp_path):
+    folder = instance_project(instance)
+    local_project(instance)
     source = tmp_path / "vol-db-data"
     source.mkdir()
     (source / "dump.sql").write_text("select 1;\n")
 
-    status = push(kitchen, make_bundle(kitchen, data=True, volumes={"db-data": source}),
+    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
                   data="yes", replace="files-and-data")
 
     assert status["state"] == "done", status
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on my laptop\n"
-    assert (kitchen.helper.volumes / "my-shop_db-data" / "dump.sql").read_text() == "select 1;\n"
-    removed = kitchen.runner.argv_containing("rm")
+    assert (instance.helper.volumes / "my-shop_db-data" / "dump.sql").read_text() == "select 1;\n"
+    removed = instance.runner.argv_containing("rm")
     assert any(a[1:3] == ["volume", "rm"] and a[-1] == "my-shop_db-data" for a in removed)
-    created = [a for a in kitchen.runner.argv_containing("create") if a[1] == "volume"]
+    created = [a for a in instance.runner.argv_containing("create") if a[1] == "volume"]
     assert created and "com.docker.compose.project=my-shop" in created[0]
 
 
-def test_import_with_missing_secrets_waits_instead_of_starting(kitchen):
-    local_project(kitchen)
+def test_import_with_missing_secrets_waits_instead_of_starting(instance):
+    local_project(instance)
 
-    status = push(kitchen, make_bundle(kitchen, secrets={"STRIPE_KEY": "from the dashboard"}))
+    status = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": "from the dashboard"}))
 
     assert status["result"]["secrets_missing"] == 1
-    row = kitchen.repos.projects.get("my-shop")
+    row = instance.repos.projects.get("my-shop")
     assert row["start_when_ready"] == 1
-    assert kitchen.runner.argv_containing("up") == []
-    assert kitchen.services.secrets.list("my-shop")["requested"] == [
+    assert instance.runner.argv_containing("up") == []
+    assert instance.services.secrets.list("my-shop")["requested"] == [
         {"name": "STRIPE_KEY", "hint": "from the dashboard"}]
 
 
-def test_complete_project_not_found_fails_and_keeps_files(kitchen):
-    local_project(kitchen)
+def test_complete_project_not_found_fails_and_keeps_files(instance):
+    local_project(instance)
 
-    status = push(kitchen, make_bundle(kitchen),
+    status = push(instance, make_bundle(instance),
                   complete=[CloudError("project_not_found", "gone", 404)])
 
     assert status["state"] == "failed"
     assert status["result"] == {"code": "project_not_found"}
     assert "deleted from your account" in status["detail"]
-    assert (kitchen.config.projects_root / "my-shop" / "src" / "app.py").exists()
-    assert kitchen.repos.pushed_projects.by_cloud_id("c-1")["last_pushed_at"] is None
-    assert kitchen.services.locks.acquire("my-shop")
+    assert (instance.config.projects_root / "my-shop" / "src" / "app.py").exists()
+    assert instance.repos.pushed_projects.by_cloud_id("c-1")["last_pushed_at"] is None
+    assert instance.services.locks.acquire("my-shop")
 
 
 @pytest.mark.parametrize("status", ["started_ok", "crash_looping"])
-def test_a_failed_import_stops_then_starts_again_a_project_that_was_up(kitchen, status):
-    folder = kitchen_project(kitchen, status=status)
-    local_project(kitchen)
+def test_a_failed_import_stops_then_starts_again_a_project_that_was_up(instance, status):
+    folder = instance_project(instance, status=status)
+    local_project(instance)
 
-    result = push(kitchen, make_bundle(kitchen), replace="files",
+    result = push(instance, make_bundle(instance), replace="files",
                   complete=[CloudError("project_not_found", "gone", 404)])
-    settle(kitchen, "my-shop")
+    settle(instance, "my-shop")
 
     assert result["state"] == "failed"
-    assert kitchen.runner.argv_containing("down")
-    assert kitchen.runner.argv_containing("up")
+    assert instance.runner.argv_containing("down")
+    assert instance.runner.argv_containing("up")
     assert (folder / "src" / "app.py").exists()
 
 
-def test_a_failed_import_with_missing_secrets_waits_for_them(kitchen):
-    kitchen_project(kitchen, status="started_ok")
-    local_project(kitchen)
+def test_a_failed_import_with_missing_secrets_waits_for_them(instance):
+    instance_project(instance, status="started_ok")
+    local_project(instance)
 
-    result = push(kitchen, make_bundle(kitchen, secrets={"STRIPE_KEY": ""}), replace="files",
+    result = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": ""}), replace="files",
                   complete=[CloudError("project_not_found", "gone", 404)])
-    settle(kitchen, "my-shop")
+    settle(instance, "my-shop")
 
     assert result["state"] == "failed"
-    assert kitchen.repos.projects.get("my-shop")["start_when_ready"] == 1
-    assert kitchen.runner.argv_containing("up") == []
+    assert instance.repos.projects.get("my-shop")["start_when_ready"] == 1
+    assert instance.runner.argv_containing("up") == []
 
 
-def test_complete_is_retried_three_times_on_an_unreachable_service(kitchen):
-    local_project(kitchen)
-    path = make_bundle(kitchen)
+def test_complete_is_retried_three_times_on_an_unreachable_service(instance):
+    local_project(instance)
+    path = make_bundle(instance)
 
-    ok = push(kitchen, path, complete=[CloudUnavailable("x"), CloudUnavailable("x"), None])
+    ok = push(instance, path, complete=[CloudUnavailable("x"), CloudUnavailable("x"), None])
     assert ok["state"] == "done"
-    assert kitchen.sleeps == [1, 3]
+    assert instance.sleeps == [1, 3]
 
-    settle(kitchen, "my-shop")
-    kitchen.sleeps.clear()
-    gone = push(kitchen, path, replace="files", complete=[CloudUnavailable("x")] * 4)
+    settle(instance, "my-shop")
+    instance.sleeps.clear()
+    gone = push(instance, path, replace="files", complete=[CloudUnavailable("x")] * 4)
     assert gone["result"] == {"code": "cloud_unavailable"}
-    assert kitchen.sleeps == [1, 3, 9]
+    assert instance.sleeps == [1, 3, 9]
 
 
-def test_a_bad_manifest_fails_before_touching_files_or_the_stack(kitchen):
-    folder = kitchen_project(kitchen, status="started_ok")
+def test_a_bad_manifest_fails_before_touching_files_or_the_stack(instance):
+    folder = instance_project(instance, status="started_ok")
     # The manifest names a volume the pushed compose file does not have.
-    local_project(kitchen, compose="services:\n  web:\n    image: nginx\n")
-    path = kitchen.local.parent / "bad.tar"
-    bundle_io.write_bundle(path, kitchen.local, {"format": 1, "data": False,
+    local_project(instance, compose="services:\n  web:\n    image: nginx\n")
+    path = instance.local.parent / "bad.tar"
+    bundle_io.write_bundle(path, instance.local, {"format": 1, "data": False,
                                                  "volumes": ["db-data"], "data_paths": [],
                                                  "secrets": []},
                            volumes={}, data_paths=[], include_data=False)
 
-    status = push(kitchen, path, replace="files")
+    status = push(instance, path, replace="files")
 
     assert status["result"] == {"code": "bad_manifest"}
     assert (folder / "src" / "old.py").exists()
-    assert list((kitchen.config.transfers_root / "in").iterdir()) == []
-    settle(kitchen, "my-shop")
-    assert kitchen.runner.argv_containing("down") == []
-    assert kitchen.runner.argv_containing("up") == []
+    assert list((instance.config.transfers_root / "in").iterdir()) == []
+    settle(instance, "my-shop")
+    assert instance.runner.argv_containing("down") == []
+    assert instance.runner.argv_containing("up") == []
 
 
 @pytest.mark.parametrize("status, starts", [("stopped", False), ("started_ok", True)])
-def test_a_failed_replace_puts_the_old_folder_back(kitchen, status, starts):
+def test_a_failed_replace_puts_the_old_folder_back(instance, status, starts):
     compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
-    folder = kitchen_project(kitchen, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"},
+    folder = instance_project(instance, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"},
                              status=status)
     (folder / "docker-compose.yml").write_text(compose)
     # The pushed tree's `data` is a link out of the project; moving the
-    # kitchen's data/pg through it would write outside the tree.
-    local_project(kitchen, compose=compose, files={"src/app.py": "new\n"})
-    (kitchen.local / "data").symlink_to("/tmp")
+    # instance's data/pg through it would write outside the tree.
+    local_project(instance, compose=compose, files={"src/app.py": "new\n"})
+    (instance.local / "data").symlink_to("/tmp")
 
-    status = push(kitchen, make_bundle(kitchen), replace="files")
+    status = push(instance, make_bundle(instance), replace="files")
 
     assert status["state"] == "failed"
     assert (folder / "src" / "old.py").exists()
     assert not (folder / "src" / "app.py").exists()
     assert (folder / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
-    settle(kitchen, "my-shop")
-    assert bool(kitchen.runner.argv_containing("up")) is starts
-    assert kitchen.services.locks.acquire("my-shop")
+    settle(instance, "my-shop")
+    assert bool(instance.runner.argv_containing("up")) is starts
+    assert instance.services.locks.acquire("my-shop")
 
 
-def test_a_failed_put_back_keeps_the_old_folder_outside_the_inbox(kitchen, monkeypatch):
+def test_a_failed_put_back_keeps_the_old_folder_outside_the_inbox(instance, monkeypatch):
     compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
-    folder = kitchen_project(kitchen, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"})
+    folder = instance_project(instance, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"})
     (folder / "docker-compose.yml").write_text(compose)
-    local_project(kitchen, compose=compose, files={"src/app.py": "new\n"})
-    (kitchen.local / "data").symlink_to("/tmp")
+    local_project(instance, compose=compose, files={"src/app.py": "new\n"})
+    (instance.local / "data").symlink_to("/tmp")
     rename = os.rename
 
     def stuck(src, dst):
@@ -512,162 +512,162 @@ def test_a_failed_put_back_keeps_the_old_folder_outside_the_inbox(kitchen, monke
 
     monkeypatch.setattr(os, "rename", stuck)
 
-    status = push(kitchen, make_bundle(kitchen), replace="files")
+    status = push(instance, make_bundle(instance), replace="files")
 
     assert status["state"] == "failed"
     assert status["result"] == {"code": "bad_bundle"}
-    [kept] = (kitchen.config.transfers_root / "kept").glob("my-shop-*")
+    [kept] = (instance.config.transfers_root / "kept").glob("my-shop-*")
     assert (kept / "src" / "old.py").read_text() == "old\n"
     assert (kept / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
     assert str(kept) in status["detail"]
-    assert list((kitchen.config.transfers_root / "in").iterdir()) == []
+    assert list((instance.config.transfers_root / "in").iterdir()) == []
 
 
-def test_the_bundle_is_gone_once_unpacked_while_the_import_goes_on(kitchen):
-    kitchen_project(kitchen, status="started_ok")
-    local_project(kitchen)
-    inbox = kitchen.config.transfers_root / "in"
+def test_the_bundle_is_gone_once_unpacked_while_the_import_goes_on(instance):
+    instance_project(instance, status="started_ok")
+    local_project(instance)
+    inbox = instance.config.transfers_root / "in"
     bundles_at_down = []
-    exec_ = kitchen.runner.exec
+    exec_ = instance.runner.exec
 
     def watch(argv, **kwargs):
         if "down" in argv:
             bundles_at_down.append(list(inbox.glob("*.tar")))
         return exec_(argv, **kwargs)
 
-    kitchen.runner.exec = watch
+    instance.runner.exec = watch
 
-    status = push(kitchen, make_bundle(kitchen), replace="files")
+    status = push(instance, make_bundle(instance), replace="files")
 
     assert status["state"] == "done", status
     assert bundles_at_down == [[]]
 
 
-def test_a_files_push_named_after_another_kitchen_project_is_refused(kitchen):
-    other = kitchen_project(kitchen, pid="my-shop", cloud_id="c-other", status="started_ok")
-    local_project(kitchen, compose="name: my-shop\n" + COMPOSE_SHOP)
+def test_a_files_push_named_after_another_instance_project_is_refused(instance):
+    other = instance_project(instance, pid="my-shop", cloud_id="c-other", status="started_ok")
+    local_project(instance, compose="name: my-shop\n" + COMPOSE_SHOP)
 
-    status = push(kitchen, make_bundle(kitchen))
+    status = push(instance, make_bundle(instance))
 
     assert status["result"] == {"code": "bad_bundle"}
     assert "belongs to another project" in status["detail"]
     assert (other / "src" / "old.py").exists()
-    assert kitchen.runner.argv_containing("down") == []
+    assert instance.runner.argv_containing("down") == []
 
 
-def test_failed_upload_releases_the_lock(kitchen):
-    local_project(kitchen)
-    path = make_bundle(kitchen)
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
-    opened = open_push(kitchen, size=path.stat().st_size + 1).json()
+def test_failed_upload_releases_the_lock(instance):
+    local_project(instance)
+    path = make_bundle(instance)
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
+    opened = open_push(instance, size=path.stat().st_size + 1).json()
 
-    resp = upload(kitchen, opened, path)
+    resp = upload(instance, opened, path)
 
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "bad_transfer"
-    assert list((kitchen.config.transfers_root / "in").glob("*.tar")) == []
+    assert list((instance.config.transfers_root / "in").glob("*.tar")) == []
     # The project made for the failed push is gone too, so a retry is a first push again.
-    assert open_push(kitchen, size=path.stat().st_size).status_code == 201
+    assert open_push(instance, size=path.stat().st_size).status_code == 201
 
 
-def test_a_new_open_replaces_one_that_never_uploaded(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
-    first = open_push(kitchen).json()
-    second = open_push(kitchen)
+def test_a_new_open_replaces_one_that_never_uploaded(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
+    first = open_push(instance).json()
+    second = open_push(instance)
     assert second.status_code == 201
-    stale = kitchen.http.get(f"/api/transfers/{first['push_id']}",
+    stale = instance.http.get(f"/api/transfers/{first['push_id']}",
                              headers={"Eggie-Transfer-Token": first["token"]})
     assert stale.status_code == 404
 
 
-def test_an_open_push_expires_after_ten_minutes(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    opened = open_push(kitchen).json()
-    assert [t.seconds for t in kitchen.timers.made] == [600]
+def test_an_open_push_expires_after_ten_minutes(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    opened = open_push(instance).json()
+    assert [t.seconds for t in instance.timers.made] == [600]
 
-    kitchen.timers.fire()
+    instance.timers.fire()
 
-    assert kitchen.services.locks.acquire("my-shop")
-    assert kitchen.repos.projects.get("my-shop") is None
-    assert kitchen.http.get(f"/api/transfers/{opened['push_id']}", headers={
+    assert instance.services.locks.acquire("my-shop")
+    assert instance.repos.projects.get("my-shop") is None
+    assert instance.http.get(f"/api/transfers/{opened['push_id']}", headers={
         "Eggie-Transfer-Token": opened["token"]}).status_code == 404
 
 
-def test_an_upload_stops_the_expiry(kitchen):
-    local_project(kitchen)
-    status = push(kitchen, make_bundle(kitchen))
-    kitchen.timers.fire()
+def test_an_upload_stops_the_expiry(instance):
+    local_project(instance)
+    status = push(instance, make_bundle(instance))
+    instance.timers.fire()
     assert status["state"] == "done"
-    assert kitchen.repos.projects.get("my-shop") is not None
+    assert instance.repos.projects.get("my-shop") is not None
 
 
-def test_a_wrong_token_upload_writes_nothing_and_keeps_the_push(kitchen):
-    local_project(kitchen)
-    path = make_bundle(kitchen)
-    kitchen.cloud.replies.update(redeem_transfer_ticket=[grant()], complete_transfer=[None])
-    opened = open_push(kitchen, size=path.stat().st_size).json()
+def test_a_wrong_token_upload_writes_nothing_and_keeps_the_push(instance):
+    local_project(instance)
+    path = make_bundle(instance)
+    instance.cloud.replies.update(redeem_transfer_ticket=[grant()], complete_transfer=[None])
+    opened = open_push(instance, size=path.stat().st_size).json()
 
-    resp = upload(kitchen, {**opened, "token": "wrong"}, path)
+    resp = upload(instance, {**opened, "token": "wrong"}, path)
 
     assert resp.status_code == 404
-    inbox = kitchen.config.transfers_root / "in"
+    inbox = instance.config.transfers_root / "in"
     assert not inbox.exists() or list(inbox.iterdir()) == []
-    assert upload(kitchen, opened, path).status_code == 202
-    assert finished(kitchen, opened)["state"] == "done"
+    assert upload(instance, opened, path).status_code == 202
+    assert finished(instance, opened)["state"] == "done"
 
 
-def test_a_bundle_with_data_the_open_did_not_declare_is_refused(kitchen, tmp_path):
-    folder = kitchen_project(kitchen)
-    local_project(kitchen)
+def test_a_bundle_with_data_the_open_did_not_declare_is_refused(instance, tmp_path):
+    folder = instance_project(instance)
+    local_project(instance)
     source = tmp_path / "vol"
     source.mkdir()
 
-    status = push(kitchen, make_bundle(kitchen, data=True, volumes={"db-data": source}),
+    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
                   data="no", replace="files")
 
     assert status["result"] == {"code": "bad_bundle"}
     assert (folder / "src" / "old.py").exists()
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
-    assert not [a for a in kitchen.runner.calls if a[1:3] == ["volume", "rm"]]
+    assert not [a for a in instance.runner.calls if a[1:3] == ["volume", "rm"]]
 
 
-def test_a_volume_named_outside_the_project_is_refused(kitchen, tmp_path):
+def test_a_volume_named_outside_the_project_is_refused(instance, tmp_path):
     compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
-    kitchen_project(kitchen)
-    local_project(kitchen, compose=compose)
+    instance_project(instance)
+    local_project(instance, compose=compose)
     source = tmp_path / "vol"
     source.mkdir()
 
-    status = push(kitchen, make_bundle(kitchen, data=True, volumes={"db-data": source}),
+    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
                   data="yes", replace="files-and-data")
 
     assert status["result"] == {"code": "bad_bundle"}
-    assert not [a for a in kitchen.runner.calls if a[1:3] == ["volume", "rm"]]
+    assert not [a for a in instance.runner.calls if a[1:3] == ["volume", "rm"]]
 
 
-def test_status_needs_the_token_and_hides_unknown_ids(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    opened = open_push(kitchen).json()
+def test_status_needs_the_token_and_hides_unknown_ids(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
+    opened = open_push(instance).json()
     url = f"/api/transfers/{opened['push_id']}"
 
-    wrong = kitchen.http.get(url, headers={"Eggie-Transfer-Token": "nope"})
-    unknown = kitchen.http.get("/api/transfers/abc", headers={"Eggie-Transfer-Token": "nope"})
+    wrong = instance.http.get(url, headers={"Eggie-Transfer-Token": "nope"})
+    unknown = instance.http.get("/api/transfers/abc", headers={"Eggie-Transfer-Token": "nope"})
     assert wrong.status_code == unknown.status_code == 404
     assert wrong.json() == unknown.json()
     assert wrong.json()["error"]["code"] == "transfer_not_found"
-    assert kitchen.http.get(url, headers={"Eggie-Transfer-Token": opened["token"]}
+    assert instance.http.get(url, headers={"Eggie-Transfer-Token": opened["token"]}
                             ).status_code == 200
 
 
-def test_rate_limit_answers_429(kitchen):
-    kitchen.cloud.replies["redeem_transfer_ticket"] = [
+def test_rate_limit_answers_429(instance):
+    instance.cloud.replies["redeem_transfer_ticket"] = [
         CloudError("transfer_ticket_invalid", "m", 403)] * 10
     for _ in range(10):
-        assert open_push(kitchen).status_code == 403
-    resp = open_push(kitchen)
+        assert open_push(instance).status_code == 403
+    resp = open_push(instance)
     assert resp.status_code == 429
-    assert resp.json()["error"]["code"] == "kitchen_busy"
-    assert len(kitchen.cloud.calls) == 10
+    assert resp.json()["error"]["code"] == "instance_busy"
+    assert len(instance.cloud.calls) == 10
 
 
 def _refused_opens(k, n):
@@ -675,57 +675,57 @@ def _refused_opens(k, n):
         CloudError("transfer_ticket_invalid", "m", 403)] * n
 
 
-def test_one_sender_at_its_limit_does_not_hold_back_another(kitchen):
-    _refused_opens(kitchen, 11)
+def test_one_sender_at_its_limit_does_not_hold_back_another(instance):
+    _refused_opens(instance, 11)
     first = {"X-Forwarded-For": "203.0.113.1, 10.0.0.1"}
     for _ in range(10):
-        assert open_push(kitchen, **first).status_code == 403
-    assert open_push(kitchen, **first).json()["error"]["code"] == "kitchen_busy"
+        assert open_push(instance, **first).status_code == 403
+    assert open_push(instance, **first).json()["error"]["code"] == "instance_busy"
 
-    assert open_push(kitchen, **{"X-Forwarded-For": "203.0.113.2, 10.0.0.1"}).status_code == 403
-    assert len(kitchen.cloud.calls) == 11
+    assert open_push(instance, **{"X-Forwarded-For": "203.0.113.2, 10.0.0.1"}).status_code == 403
+    assert len(instance.cloud.calls) == 11
 
 
-def test_all_senders_together_are_held_to_sixty_a_minute(kitchen):
-    _refused_opens(kitchen, 60)
+def test_all_senders_together_are_held_to_sixty_a_minute(instance):
+    _refused_opens(instance, 60)
     for n in range(60):
-        resp = open_push(kitchen, **{"X-Forwarded-For": f"203.0.113.{n // 10}"})
+        resp = open_push(instance, **{"X-Forwarded-For": f"203.0.113.{n // 10}"})
         assert resp.status_code == 403
-    resp = open_push(kitchen, **{"X-Forwarded-For": "198.51.100.7"})
+    resp = open_push(instance, **{"X-Forwarded-For": "198.51.100.7"})
     assert resp.status_code == 429
-    assert resp.json()["error"]["code"] == "kitchen_busy"
-    assert len(kitchen.cloud.calls) == 60
+    assert resp.json()["error"]["code"] == "instance_busy"
+    assert len(instance.cloud.calls) == 60
 
 
-def test_ready_reflects_sign_in_and_docker(kitchen):
-    assert kitchen.http.get("/api/ready").json() == {"ready": True}
-    kitchen.runner.docker_version = Completed(1, "", "Cannot connect to the Docker daemon")
-    resp = kitchen.http.get("/api/ready")
+def test_ready_reflects_sign_in_and_docker(instance):
+    assert instance.http.get("/api/ready").json() == {"ready": True}
+    instance.runner.docker_version = Completed(1, "", "Cannot connect to the Docker daemon")
+    resp = instance.http.get("/api/ready")
     assert resp.status_code == 503
     assert resp.json()["error"]["code"] == "not_ready"
-    kitchen.runner.docker_version = Completed(0, "27.1.1", "")
-    kitchen.repos.account.update(access_token=None)
-    assert kitchen.http.get("/api/ready").status_code == 503
+    instance.runner.docker_version = Completed(0, "27.1.1", "")
+    instance.repos.account.update(access_token=None)
+    assert instance.http.get("/api/ready").status_code == 503
 
 
-def test_ticket_never_reaches_a_log_line(kitchen, caplog):
+def test_ticket_never_reaches_a_log_line(instance, caplog):
     caplog.set_level(logging.DEBUG)
-    local_project(kitchen)
-    path = make_bundle(kitchen)
-    kitchen.cloud.replies.update(
+    local_project(instance)
+    path = make_bundle(instance)
+    instance.cloud.replies.update(
         redeem_transfer_ticket=[CloudError("transfer_ticket_invalid", "m", 403),
                                 grant()],
         complete_transfer=[CloudError("transfer_not_found", "x", 404)])
-    open_push(kitchen, ticket="tk-secret-one")
-    opened = open_push(kitchen, ticket="tk-secret-two", size=path.stat().st_size).json()
-    upload(kitchen, opened, path)
-    finished(kitchen, opened)
+    open_push(instance, ticket="tk-secret-one")
+    opened = open_push(instance, ticket="tk-secret-two", size=path.stat().st_size).json()
+    upload(instance, opened, path)
+    finished(instance, opened)
 
     assert "tk-secret" not in caplog.text
     assert opened["token"] not in caplog.text
 
 
-def test_deleting_a_kitchen_project_forgets_that_it_was_pushed(kitchen):
-    kitchen_project(kitchen)
-    assert kitchen.client.delete("/projects/my-shop").status_code == 200
-    assert kitchen.repos.pushed_projects.by_cloud_id("c-1") is None
+def test_deleting_a_instance_project_forgets_that_it_was_pushed(instance):
+    instance_project(instance)
+    assert instance.client.delete("/projects/my-shop").status_code == 200
+    assert instance.repos.pushed_projects.by_cloud_id("c-1") is None

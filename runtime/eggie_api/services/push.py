@@ -1,5 +1,5 @@
-"""Pushes a local project to a kitchen: pack it, mint a ticket, send the
-bundle straight to the kitchen and wait for its import."""
+"""Pushes a local project to an instance: pack it, mint a ticket, send the
+bundle straight to the instance and wait for its import."""
 from __future__ import annotations
 
 import json
@@ -18,9 +18,9 @@ from ..errors import Conflict, DiskFull, EggieError, Unavailable, Upstream
 from ..infra import disk, docker, files
 from ..infra.bundle import pack_argv
 from ..infra.cloud import CloudError, CloudUnavailable
-from ..infra.kitchen import KitchenClient, KitchenError, KitchenUnreachable
+from ..infra.instance import InstanceClient, InstanceError, InstanceUnreachable
 from ..infra.repos.cloud_projects import CloudProjectRepo
-from ..infra.repos.kitchen_pushes import KitchenPushRepo
+from ..infra.repos.instance_pushes import InstancePushRepo
 from ..infra.repos.projects import ProjectRepo
 from .account import Account, NotSignedIn
 from .jobs import DONE, FAILED, JobFailed
@@ -47,7 +47,7 @@ DISK_FULL = "This computer doesn't have room to pack the project."
 
 MINT_CODES = {"project_not_found", "instance_not_running", "instance_forbidden",
               "instance_not_found", "transfer_rate_limited"}
-KITCHEN_CODES = {"transfer_ticket_invalid", "kitchen_busy", "already_on_kitchen",
+INSTANCE_CODES = {"transfer_ticket_invalid", "instance_busy", "already_on_instance",
                  "confirm_replace_data"}
 
 
@@ -58,25 +58,25 @@ def _wait_text(retry_after: int | None) -> str:
     return f"{minutes} minute" + ("" if minutes == 1 else "s")
 
 
-def _copy(code: str, *, kitchen: str, project: str, retry_after: int | None) -> str | None:
+def _copy(code: str, *, instance: str, project: str, retry_after: int | None) -> str | None:
     return {
         "not_signed_in": NOT_SIGNED_IN,
         "cloud_unavailable": CLOUD_UNAVAILABLE,
         "not_registered": NOT_REGISTERED,
         "project_not_found": NOT_REGISTERED,
-        "instance_not_running": f"{kitchen} isn't ready. Pick it again once it is running.",
+        "instance_not_running": f"{instance} isn't ready. Pick it again once it is running.",
         "instance_forbidden": "Only the kitchen's owner can push to it.",
         "instance_not_found": "That kitchen is gone.",
         "transfer_rate_limited": f"Too many pushes. Try again in {_wait_text(retry_after)}.",
         "transfer_ticket_invalid": "The kitchen didn't accept the push. Try again.",
-        "kitchen_busy": f"{kitchen} is busy with this project. Try again in a minute.",
-        "already_on_kitchen": (f"{project} is already on {kitchen}. "
+        "instance_busy": f"{instance} is busy with this project. Try again in a minute.",
+        "already_on_instance": (f"{project} is already on {instance}. "
                                "Pushing again replaces it there."),
         "confirm_replace_data": CONFIRM_REPLACE,
-        "kitchen_unreachable": (f"{kitchen} isn't answering, or runs an older Eggie. "
+        "instance_unreachable": (f"{instance} isn't answering, or runs an older Eggie. "
                                 "Try again in a minute."),
-        "kitchen_restarted": "The kitchen restarted during the push. Push again.",
-        "kitchen_timeout": (f"{kitchen} is still importing. "
+        "instance_restarted": "The kitchen restarted during the push. Push again.",
+        "instance_timeout": (f"{instance} is still importing. "
                             f"Open the kitchen to check on {project}."),
     }.get(code)
 
@@ -104,8 +104,8 @@ class PushService:
     def __init__(self, config: ApiConfig, runner, loader: ProjectLoader,
                  projects: ProjectRepo, secrets: SecretService,
                  lifecycle: LifecycleService, locks: ProjectLocks, account: Account,
-                 cloud, kitchen: KitchenClient, cloud_projects: CloudProjectRepo,
-                 kitchen_pushes: KitchenPushRepo, wake: Callable[[], None], *,
+                 cloud, instance: InstanceClient, cloud_projects: CloudProjectRepo,
+                 instance_pushes: InstancePushRepo, wake: Callable[[], None], *,
                  clock=time.time, sleep=time.sleep):
         self._config = config
         self._runner = runner
@@ -116,9 +116,9 @@ class PushService:
         self._locks = locks
         self._account = account
         self._cloud = cloud
-        self._kitchen = kitchen
+        self._instance = instance
         self._cloud_projects = cloud_projects
-        self._kitchen_pushes = kitchen_pushes
+        self._instance_pushes = instance_pushes
         self._wake = wake
         self._clock = clock
         self._sleep = sleep
@@ -148,9 +148,9 @@ class PushService:
             raise Unavailable("cloud_unavailable", CLOUD_UNAVAILABLE) from None
         except CloudError as e:
             raise Upstream("cloud_error", e.message) from None
-        return {"kitchens": reply.get("kitchens") or [],
-                "create_kitchen_url": reply.get("create_kitchen_url"),
-                "pushed": self._kitchen_pushes.for_project(project_id),
+        return {"instances": reply.get("instances") or [],
+                "create_instance_url": reply.get("create_instance_url"),
+                "pushed": self._instance_pushes.for_project(project_id),
                 "databases": [asdict(d) for d in rules.databases(compose)],
                 "running": _running(row)}
 
@@ -158,7 +158,7 @@ class PushService:
               replace_data: bool) -> str:
         row = self._loader.require(project_id)
         compose = self._loader.compose(project_id)
-        pushed_before = instance_id in self._kitchen_pushes.for_project(project_id)
+        pushed_before = instance_id in self._instance_pushes.for_project(project_id)
         if data and pushed_before and not replace_data:
             raise Conflict("confirm_replace_data", CONFIRM_REPLACE)
         job = _PushJob(self, row, compose, instance_id, data=data,
@@ -170,7 +170,7 @@ class PushService:
             blocked = "site"
         else:
             blocked = None if self._account.signed_in else "signed_out"
-        records = self._kitchen_pushes.for_project(project_id)
+        records = self._instance_pushes.for_project(project_id)
         last = None
         if records:
             instance_id, rec = max(records.items(), key=lambda kv: kv[1]["pushed_at"])
@@ -193,14 +193,14 @@ class _PushJob:
         plan = rules.data_plan(compose)
         folder = service._loader.dir(self.project_id)
         # A one-file bind is config and travels with the files. A missing source
-        # stays data: Docker makes it a directory, and the kitchen may have one.
+        # stays data: Docker makes it a directory, and the instance may have one.
         self.plan = rules.DataPlan(plan.volumes, tuple(
             p for p in plan.data_paths
             if (folder / p).is_dir() or not os.path.lexists(folder / p)), plan.external)
         compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
         self.volumes = {key: rules.docker_volume_name(compose, compose_name, key)
                         for key in self.plan.volumes}
-        self.kitchen_name = "The kitchen"
+        self.instance_name = "The kitchen"
         self.write = None
 
     def run(self, write) -> dict:
@@ -218,14 +218,14 @@ class _PushJob:
 
     def _fail(self, code: str, message: str | None = None,
               retry_after: int | None = None) -> JobFailed:
-        text = message or _copy(code, kitchen=self.kitchen_name, project=self.project_id,
+        text = message or _copy(code, instance=self.instance_name, project=self.project_id,
                                 retry_after=retry_after) or code
         return JobFailed(text, {"code": code, "retry_after": retry_after})
 
     def _steps(self, bundle: Path, manifest: Path) -> dict:
         write = self.write
         write.phase("preparing")
-        kitchen = self._kitchen_row()
+        instance = self._instance_row()
         cloud_id = self._cloud_id()
         if self.data:
             self._check_volume_names()
@@ -248,10 +248,10 @@ class _PushJob:
                 write.phase("starting")
                 local_restart = self._restart()
         write.phase("sending")
-        push_id, token = self._send(kitchen, cloud_id, bundle, size)
+        push_id, token = self._send(instance, cloud_id, bundle, size)
         write.phase("waiting")
-        result = self._wait(kitchen["console_hostname"], push_id, token)
-        return self._finish(kitchen, result, local_restart)
+        result = self._wait(instance["console_hostname"], push_id, token)
+        return self._finish(instance, result, local_restart)
 
     def _service(self, fn):
         try:
@@ -265,11 +265,11 @@ class _PushJob:
                 raise self._fail(e.code, retry_after=e.retry_after) from None
             raise self._fail("cloud_error", e.message) from None
 
-    def _kitchen_row(self) -> dict:
+    def _instance_row(self) -> dict:
         reply = self._service(self.s._cloud.transfer_targets)
-        for row in reply.get("kitchens") or []:
+        for row in reply.get("instances") or []:
             if row.get("id") == self.instance_id:
-                self.kitchen_name = row.get("display_name") or row["console_hostname"]
+                self.instance_name = row.get("display_name") or row["console_hostname"]
                 return row
         raise self._fail("instance_not_found")
 
@@ -287,9 +287,9 @@ class _PushJob:
         return found["cloud_id"]
 
     def _check_volume_names(self) -> None:
-        before = self.s._kitchen_pushes.for_project(self.project_id).get(self.instance_id) or {}
-        # Without a compose name the kitchen names volumes after its own project id.
-        compose_name = str(self.compose.get("name") or before.get("kitchen_project")
+        before = self.s._instance_pushes.for_project(self.project_id).get(self.instance_id) or {}
+        # Without a compose name the instance names volumes after its own project id.
+        compose_name = str(self.compose.get("name") or before.get("instance_project")
                            or self.project_id)
         outside = rules.volume_outside(self.compose, compose_name, self.plan.volumes)
         if outside:
@@ -343,49 +343,49 @@ class _PushJob:
             return "failed"
         return "ok"
 
-    def _remember(self, kitchen: dict) -> None:
-        before = self.s._kitchen_pushes.for_project(self.project_id).get(self.instance_id) or {}
-        self.s._kitchen_pushes.record(
-            self.project_id, self.instance_id, console_hostname=kitchen["console_hostname"],
-            kitchen_project=before.get("kitchen_project"), urls=before.get("urls", []),
+    def _remember(self, instance: dict) -> None:
+        before = self.s._instance_pushes.for_project(self.project_id).get(self.instance_id) or {}
+        self.s._instance_pushes.record(
+            self.project_id, self.instance_id, console_hostname=instance["console_hostname"],
+            instance_project=before.get("instance_project"), urls=before.get("urls", []),
             secrets_missing=before.get("secrets_missing", 0), at=self.s._clock())
 
-    def _kitchen_failure(self, e: KitchenError) -> JobFailed:
-        if e.code == "kitchen_disk_full":
-            return self._fail(e.code, f"{self.kitchen_name} doesn't have room: {e.message} "
+    def _instance_failure(self, e: InstanceError) -> JobFailed:
+        if e.code == "instance_disk_full":
+            return self._fail(e.code, f"{self.instance_name} doesn't have room: {e.message} "
                                       "Try without data, or free space there.")
-        if e.code in KITCHEN_CODES:
+        if e.code in INSTANCE_CODES:
             return self._fail(e.code)
         return self._fail(e.code, e.message)
 
-    def _send(self, kitchen: dict, cloud_id: str, bundle: Path, size: int) -> tuple[str, str]:
-        host = kitchen["console_hostname"]
+    def _send(self, instance: dict, cloud_id: str, bundle: Path, size: int) -> tuple[str, str]:
+        host = instance["console_hostname"]
         ticket_retried, unreachable = False, 0
         while True:
             ticket = self._service(lambda token: self.s._cloud.mint_transfer_ticket(
                 token, self.instance_id, cloud_id))["ticket"]
             try:
-                opened = self.s._kitchen.open(host, ticket=ticket, size=size,
+                opened = self.s._instance.open(host, ticket=ticket, size=size,
                                              data=self.data, replace=self.replace)
                 self.write(f"sending {size} bytes to {host}\n")
                 self.write.progress(0, size)
-                self.s._kitchen.upload(host, opened["push_id"], opened["token"], bundle,
+                self.s._instance.upload(host, opened["push_id"], opened["token"], bundle,
                                       lambda done: self.write.progress(done, size))
-            except KitchenUnreachable as e:
+            except InstanceUnreachable as e:
                 unreachable += 1
                 self.write(f"{host} did not answer: {e}\n")
                 if unreachable >= UNREACHABLE_ATTEMPTS:
-                    raise self._fail("kitchen_unreachable") from None
+                    raise self._fail("instance_unreachable") from None
                 self.s._sleep(RETRY_DELAY)
                 continue
-            except KitchenError as e:
+            except InstanceError as e:
                 if e.code == "transfer_ticket_invalid" and not ticket_retried:
                     ticket_retried = True
                     continue
-                if e.code in ("already_on_kitchen", "confirm_replace_data"):
-                    self._remember(kitchen)
-                raise self._kitchen_failure(e) from None
-            self._remember(kitchen)
+                if e.code in ("already_on_instance", "confirm_replace_data"):
+                    self._remember(instance)
+                raise self._instance_failure(e) from None
+            self._remember(instance)
             return opened["push_id"], opened["token"]
 
     def _wait(self, host: str, push_id: str, token: str) -> dict:
@@ -394,46 +394,46 @@ class _PushJob:
         first_miss = None
         while True:
             if clock() >= deadline:
-                raise self._fail("kitchen_timeout")
+                raise self._fail("instance_timeout")
             try:
-                status = self.s._kitchen.status(host, push_id, token)
-            except (KitchenUnreachable, KitchenError) as e:
-                if isinstance(e, KitchenError) and e.status < 500:
-                    # The kitchen keeps jobs in memory: a restart forgets the push.
+                status = self.s._instance.status(host, push_id, token)
+            except (InstanceUnreachable, InstanceError) as e:
+                if isinstance(e, InstanceError) and e.status < 500:
+                    # The instance keeps jobs in memory: a restart forgets the push.
                     if e.status == 404:
-                        raise self._fail("kitchen_restarted") from None
-                    raise self._kitchen_failure(e) from None
-                # The bundle is in: a kitchen busy importing may answer slowly or not at all.
+                        raise self._fail("instance_restarted") from None
+                    raise self._instance_failure(e) from None
+                # The bundle is in: an instance busy importing may answer slowly or not at all.
                 first_miss = clock() if first_miss is None else first_miss
                 if clock() - first_miss >= STATUS_GRACE:
-                    raise self._fail("kitchen_unreachable") from None
+                    raise self._fail("instance_unreachable") from None
                 self.s._sleep(STATUS_INTERVAL)
                 continue
             first_miss = None
             if status.get("state") == DONE:
                 return status.get("result") or {}
             if status.get("state") == FAILED:
-                code = (status.get("result") or {}).get("code") or "kitchen_failed"
+                code = (status.get("result") or {}).get("code") or "instance_failed"
                 raise self._fail(code, status.get("detail")
                                  or "The kitchen could not import the project.")
             if status.get("phase"):
                 self.write.phase(status["phase"])
             self.s._sleep(STATUS_INTERVAL)
 
-    def _finish(self, kitchen: dict, result: dict, local_restart: str | None) -> dict:
-        kitchen_project = result.get("kitchen_project")
+    def _finish(self, instance: dict, result: dict, local_restart: str | None) -> dict:
+        instance_project = result.get("instance_project")
         urls = list(result.get("urls") or [])
         missing = int(result.get("secrets_missing") or 0)
-        self.s._kitchen_pushes.record(
-            self.project_id, self.instance_id, console_hostname=kitchen["console_hostname"],
-            kitchen_project=kitchen_project, urls=urls, secrets_missing=missing,
+        self.s._instance_pushes.record(
+            self.project_id, self.instance_id, console_hostname=instance["console_hostname"],
+            instance_project=instance_project, urls=urls, secrets_missing=missing,
             at=self.s._clock())
         open_secrets_url = None
-        if missing > 0 and kitchen_project and kitchen.get("open_console_url"):
-            open_secrets_url = (kitchen["open_console_url"] + "&return_path="
-                                + urllib.parse.quote(f"/p/{kitchen_project}/secrets", safe=""))
-        self.write(f"pushed to {self.kitchen_name}\n")
-        return {"instance_id": self.instance_id, "kitchen": self.kitchen_name,
-                "kitchen_project": kitchen_project, "urls": urls,
+        if missing > 0 and instance_project and instance.get("open_console_url"):
+            open_secrets_url = (instance["open_console_url"] + "&return_path="
+                                + urllib.parse.quote(f"/p/{instance_project}/secrets", safe=""))
+        self.write(f"pushed to {self.instance_name}\n")
+        return {"instance_id": self.instance_id, "instance_name": self.instance_name,
+                "instance_project": instance_project, "urls": urls,
                 "secrets_missing": missing, "open_secrets_url": open_secrets_url,
                 "local_restart": local_restart}

@@ -9,12 +9,12 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-# A proxy's own error page, not the kitchen: the kitchen always answers with
+# A proxy's own error page, not the instance: the instance always answers with
 # its JSON error body.
 _GATEWAY = {502, 503, 504}
 
 
-class KitchenError(Exception):
+class InstanceError(Exception):
     def __init__(self, code: str, message: str, status: int, body: dict | None = None):
         super().__init__(f"{code}: {message}")
         self.code = code
@@ -23,7 +23,7 @@ class KitchenError(Exception):
         self.body = body or {}
 
 
-class KitchenUnreachable(Exception):
+class InstanceUnreachable(Exception):
     pass
 
 
@@ -69,7 +69,7 @@ def _envelope(raw: bytes) -> dict | None:
         return None
 
 
-class KitchenClient:
+class InstanceClient:
     def __init__(self, *, opener=None, ca_file: Path | None = None,
                  timeout: float = 30.0):
         self._open = opener or _default_opener(ca_file)
@@ -86,33 +86,33 @@ class KitchenClient:
                 raw = response.read()
         except urllib.error.HTTPError as e:
             if 300 <= e.code < 400:
-                raise KitchenUnreachable(f"the kitchen answered {e.code}") from None
+                raise InstanceUnreachable(f"the kitchen answered {e.code}") from None
             raise self._error(e.code, e.read(), older_is_unreachable) from None
         except (OSError, http.client.HTTPException) as e:
-            raise KitchenUnreachable(str(e)) from None
+            raise InstanceUnreachable(str(e)) from None
         if not raw:
             return None
         try:
             return json.loads(raw)
         except ValueError:
-            raise KitchenError("bad_response",
+            raise InstanceError("bad_response",
                                "the kitchen sent something that is not JSON",
                                200) from None
 
     @staticmethod
     def _error(status: int, raw: bytes, older: bool) -> Exception:
         error = _envelope(raw)
-        # An older kitchen has no transfer route: it 404s, or its browser
+        # An older instance has no transfer route: it 404s, or its browser
         # checks (Origin, then sign-in) answer first.
         if older and (status == 404 or (error and error["code"] in (
                 "not_signed_in", "forbidden_origin"))):
-            return KitchenUnreachable("older")
+            return InstanceUnreachable("older")
         if error:
-            return KitchenError(error["code"], error["message"], status, error)
+            return InstanceError(error["code"], error["message"], status, error)
         if status in _GATEWAY:
-            return KitchenUnreachable(f"the kitchen answered {status}")
+            return InstanceUnreachable(f"the kitchen answered {status}")
         text = raw.decode("utf-8", errors="replace").strip()[:200]
-        return KitchenError(f"http_{status}", text or f"status {status}", status)
+        return InstanceError(f"http_{status}", text or f"status {status}", status)
 
     def open(self, host: str, *, ticket: str, size: int, data: bool,
              replace: str) -> dict:

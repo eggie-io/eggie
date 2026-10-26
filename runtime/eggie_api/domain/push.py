@@ -1,4 +1,4 @@
-"""Rules for pushing a local project to a kitchen: what travels, what counts as data, how secrets merge. No I/O."""
+"""Rules for pushing a local project to an instance: what travels, what counts as data, how secrets merge. No I/O."""
 from __future__ import annotations
 
 import posixpath
@@ -114,7 +114,7 @@ def docker_volume_name(compose: dict, compose_name: str, key: str) -> str:
 
 def volume_outside(compose: dict, compose_name: str,
                    keys) -> tuple[str, str] | None:
-    """(key, docker name) of the first volume a kitchen refuses: restoring removes
+    """(key, docker name) of the first volume an instance refuses: restoring removes
     each volume first, so it only takes names under the project's compose name."""
     for key in keys:
         name = docker_volume_name(compose, compose_name, key)
@@ -133,7 +133,7 @@ def check_replace(exists: bool, data: bool, replace: str) -> str | None:
     if not exists:
         return None
     if replace == REPLACE_NONE:
-        return "already_on_kitchen"
+        return "already_on_instance"
     if data and replace != REPLACE_ALL:
         return "confirm_replace_data"
     return None
@@ -157,7 +157,7 @@ def merge_secret_names(pushed: dict[str, str], stored: set[str], requested: set[
 
 
 def pinned_project_yml(project_yml: dict, project_id: str) -> dict | None:
-    """project.yml with its id set to the kitchen's, or None when nothing
+    """project.yml with its id set to the instance's, or None when nothing
     needs writing: an id there would otherwise name the project."""
     current = project_yml.get("id")
     if not current or _slug(str(current)) == project_id:
@@ -165,7 +165,7 @@ def pinned_project_yml(project_yml: dict, project_id: str) -> dict | None:
     return {**project_yml, "id": project_id}
 
 
-def kitchen_project_id(name: str, taken: set[str]) -> str:
+def instance_project_id(name: str, taken: set[str]) -> str:
     base = _slug(name) or "project"
     candidate, n = base, 2
     while candidate in taken:

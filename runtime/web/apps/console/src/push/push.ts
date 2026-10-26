@@ -1,6 +1,6 @@
 import type { Project } from "../projects/types";
 
-export type TargetKitchen = {
+export type TargetInstance = {
   id: string;
   display_name: string;
   console_hostname: string;
@@ -14,20 +14,20 @@ export type TargetKitchen = {
 export type PushRecord = {
   pushed_at: number;
   console_hostname: string;
-  kitchen_project: string | null;
+  instance_project: string | null;
   urls: string[];
   secrets_missing: number;
 };
 
 export type PushTargets = {
-  kitchens: TargetKitchen[];
-  create_kitchen_url: string;
+  instances: TargetInstance[];
+  create_instance_url: string;
   pushed: Record<string, PushRecord>;
   databases: { service: string; image: string; floating: boolean }[];
   running: boolean;
 };
 
-export type KitchenRow = {
+export type InstanceRow = {
   id: string;
   label: string;
   host: string;
@@ -37,7 +37,7 @@ export type KitchenRow = {
   manageUrl: string | null;
 };
 
-function rowNote(k: TargetKitchen): { note: string | null; manageUrl: string | null } {
+function rowNote(k: TargetInstance): { note: string | null; manageUrl: string | null } {
   if (!k.is_owner) return { note: "Owned by a teammate", manageUrl: null };
   switch (k.readiness) {
     case "ready":
@@ -53,8 +53,8 @@ function rowNote(k: TargetKitchen): { note: string | null; manageUrl: string | n
   }
 }
 
-export function kitchenRows(t: PushTargets): KitchenRow[] {
-  return t.kitchens.map((k) => {
+export function instanceRows(t: PushTargets): InstanceRow[] {
+  return t.instances.map((k) => {
     const { note, manageUrl } = rowNote(k);
     return {
       id: k.id,
@@ -68,19 +68,19 @@ export function kitchenRows(t: PushTargets): KitchenRow[] {
   });
 }
 
-export function defaultData(row: KitchenRow): boolean {
+export function defaultData(row: InstanceRow): boolean {
   return row.pushedAt === null;
 }
 
-// A repeat push with data overwrites the kitchen's data, so it waits for an explicit confirmation.
-export function pushChoice(row: KitchenRow, data: boolean, confirmed: boolean) {
+// A repeat push with data overwrites the instance's data, so it waits for an explicit confirmation.
+export function pushChoice(row: InstanceRow, data: boolean, confirmed: boolean) {
   const repeat = row.pushedAt !== null;
   const needsConfirm = repeat && data;
   return { repeat, needsConfirm, canPush: row.pickable && (!needsConfirm || confirmed) };
 }
 
-export function secretsUrl(openConsoleUrl: string, kitchenProject: string): string {
-  return `${openConsoleUrl}&return_path=${encodeURIComponent(`/p/${kitchenProject}/secrets`)}`;
+export function secretsUrl(openConsoleUrl: string, instanceProject: string): string {
+  return `${openConsoleUrl}&return_path=${encodeURIComponent(`/p/${instanceProject}/secrets`)}`;
 }
 
 export function floatingWarnings(t: PushTargets): string[] {

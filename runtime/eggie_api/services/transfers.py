@@ -1,4 +1,4 @@
-"""The kitchen's side of a push: who may open one, where its bundle lands, and
+"""The instance's side of a push: who may open one, where its bundle lands, and
 the import that puts the pushed files in place of the project's own."""
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ BUSY = "This kitchen is busy with this project. Try again in a minute."
 NOT_READY = "This kitchen isn't signed in to Eggie."
 CLOUD_UNAVAILABLE = "The kitchen couldn't reach the Eggie service."
 REFUSALS = {
-    "already_on_kitchen": "This project is already on this kitchen. Pushing again replaces it.",
+    "already_on_instance": "This project is already on this kitchen. Pushing again replaces it.",
     "confirm_replace_data": "Confirm that the kitchen's data should be replaced.",
 }
 
@@ -206,11 +206,11 @@ class Transfers:
                            f"A push may be at most {_gb(self._config.max_upload_bytes)}.")
         # Traefik replaces a client's own X-Forwarded-For with the address it came from.
         sender = forwarded_for.split(",", 1)[0].strip() or peer
-        # A full kitchen refuses before tracking a sender; a refused sender
+        # A full instance refuses before tracking a sender; a refused sender
         # takes nothing from the shared window.
         if not (self._window.has_room() and self._per_sender.take(sender)
                 and self._window.take()):
-            raise TooMany("kitchen_busy", "Too many pushes to this kitchen right now. "
+            raise TooMany("instance_busy", "Too many pushes to this kitchen right now. "
                                           "Try again in a minute.")
         grant = self._redeem(ticket)
         with self._lock:
@@ -219,17 +219,17 @@ class Transfers:
             self._drop_waiting(grant.cloud_id)
             row = self._pushed.by_cloud_id(grant.cloud_id)
             exists = row is not None
-            local_id = row["local_id"] if exists else rules.kitchen_project_id(
+            local_id = row["local_id"] if exists else rules.instance_project_id(
                 grant.name, self._taken())
             if not self._locks.acquire(local_id):
-                raise Conflict("kitchen_busy", BUSY)
+                raise Conflict("instance_busy", BUSY)
             try:
                 refusal = rules.check_replace(exists, data, replace)
                 if refusal:
                     raise Conflict(refusal, REFUSALS[refusal])
                 need, free = 2 * size + DISK_MARGIN, self._free_bytes()
                 if free < need:
-                    raise DiskFull("kitchen_disk_full",
+                    raise DiskFull("instance_disk_full",
                                    f"it needs {_gb(need)} and has {_gb(free)} free.")
                 # Claimed first: a sync pass must never see an unclaimed new project.
                 self._pushed.claim(local_id, grant.cloud_id, grant.source_device_id, now)
@@ -456,7 +456,7 @@ class _ImportJob:
         if missing:
             self.s._projects.set_start_when_ready(self.pid, True)
             write(f"{self.pid} starts once its {missing} secret(s) are set\n")
-        return {"kitchen_project": self.pid, "urls": self._urls(row["domain"]),
+        return {"instance_project": self.pid, "urls": self._urls(row["domain"]),
                 "secrets_missing": missing}
 
     def _unpack(self) -> tuple[rules.Manifest, dict]:
@@ -561,7 +561,7 @@ class _ImportJob:
                     src, dst = aside / rel, target / rel
                     if not os.path.lexists(src) or not _no_links_above(aside, rel):
                         continue
-                    # A link in the pushed tree would carry the kitchen's data out of it.
+                    # A link in the pushed tree would carry the instance's data out of it.
                     if not _no_links_above(target, rel) or os.path.lexists(dst):
                         raise Invalid("bad_bundle", f"The pushed files have their own {rel}, "
                                                     "which the kitchen keeps.")

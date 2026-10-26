@@ -143,8 +143,8 @@ and a host release. Prefer additive changes.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; the manifest always lists volumes and data_paths)
-  in a root helper container, then sends it with `infra/kitchen.py` (`KitchenClient`, TLS always
-  verified, `EGGIE_KITCHEN_CA_FILE` adds trust for staging certs). Kitchen side: `services/transfers.py`
+  in a root helper container, then sends it with `infra/instance.py` (`InstanceClient`, TLS always
+  verified, `EGGIE_INSTANCE_CA_FILE` adds trust for staging certs). Kitchen side: `services/transfers.py`
   and `rest/routers/transfers.py` (`POST /api/transfers`, `PUT .../bundle`, `GET .../{push_id}`,
   `GET /api/ready`), site only, with their own auth branch in `rest/auth.py` (ticket and push token in
   `Eggie-Transfer-*` headers, never URL or log). The kitchen unpacks with
@@ -155,7 +155,7 @@ and a host release. Prefer additive changes.
   database bind is config, not data. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
   in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten), refuses a bundle whose data flag differs from the open
   header (`bad_bundle`), and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
-  sync; `kitchen_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
+  sync; `instance_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
   the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
 ## Testing

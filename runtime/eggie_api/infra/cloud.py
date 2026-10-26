@@ -124,7 +124,7 @@ class Cloud:
         return self.call("DELETE", self._public_url_path(cloud_id), token=token)
 
     def list_instances(self, token: str):
-        """Every kitchen on the account, whichever device made it."""
+        """Every instance on the account, whichever device made it."""
         return self.call("GET", "/v1/instances", token=token)
 
     def instance_certificate(self, token: str):

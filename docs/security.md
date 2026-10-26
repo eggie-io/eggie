@@ -164,7 +164,7 @@ root-equivalent — plus:
   another kitchen project's.
 - What leaves the user's machine: the project files (including `.env`), volume and database data
   when ticked, and secret names with their hints. Never secret values.
-- TLS to the kitchen is always verified; `EGGIE_KITCHEN_CA_FILE` adds trust for dev (staging)
+- TLS to the kitchen is always verified; `EGGIE_INSTANCE_CA_FILE` adds trust for dev (staging)
   certificates.
 
 ## Before adding a way in

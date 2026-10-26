@@ -49,7 +49,7 @@ def run_pass(account, cloud, repos: Repos, clock=time.time) -> None:
         org_id = account.load_identity()
         local_ids = ({row["id"] for row in repos.projects.list()}
                      - {VERIFY_PROJECT_ID} - repos.pushed_projects.local_ids())
-        keep = frozenset(repos.kitchen_pushes.pushed_ids())
+        keep = frozenset(repos.instance_pushes.pushed_ids())
         actions = plan(local_ids, repos.cloud_projects.mapping(), org_id, keep)
         errors = apply(actions, account=account, cloud=cloud, repos=repos,
                        org_id=org_id)

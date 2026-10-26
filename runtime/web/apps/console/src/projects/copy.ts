@@ -17,7 +17,7 @@ export function phaseCaption(phase: string, firstRun: boolean): string {
   }
 }
 
-// Local phases, then the kitchen's own (mirrored while waiting); both sides have a "stopping".
+// Local phases, then the instance's own (mirrored while waiting); both sides have a "stopping".
 export function pushPhaseCaption(phase: string): string {
   switch (phase) {
     case "preparing":

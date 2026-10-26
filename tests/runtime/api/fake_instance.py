@@ -1,4 +1,4 @@
-class FakeKitchen:
+class FakeInstance:
     """Replays scripted answers per method, in order, like FakeCloud: an
     exception is raised, a callable is called with the call's arguments.
     Records every call as (method, *args)."""

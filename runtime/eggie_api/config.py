@@ -63,9 +63,9 @@ class ApiConfig:
     tls_dir: Path = Path(f"{constants.GUEST_ROOT}/tls")
     # A token pair the service leaves before first boot, imported once.
     account_seed: Path = Path(f"{constants.GUEST_ROOT}/account.json")
-    # Extra trust anchor for a kitchen's certificate (a dev CA); the system
+    # Extra trust anchor for an instance's certificate (a dev CA); the system
     # roots are always used and verification is never switched off.
-    kitchen_ca_file: Path | None = None
+    instance_ca_file: Path | None = None
     # Where bundles are staged before a push or after an incoming one.
     transfers_root: Path = Path(f"{constants.GUEST_ROOT}/transfers")
     version: str = __version__
@@ -113,8 +113,8 @@ class ApiConfig:
             tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",
                                       f"{constants.GUEST_ROOT}/account.json")),
-            kitchen_ca_file=(Path(env["EGGIE_KITCHEN_CA_FILE"])
-                             if env.get("EGGIE_KITCHEN_CA_FILE") else None),
+            instance_ca_file=(Path(env["EGGIE_INSTANCE_CA_FILE"])
+                             if env.get("EGGIE_INSTANCE_CA_FILE") else None),
             transfers_root=Path(env.get("EGGIE_TRANSFERS_ROOT",
                                         f"{constants.GUEST_ROOT}/transfers")),
             version=env.get("EGGIE_SERVICE_VERSION", __version__),

@@ -179,13 +179,13 @@ def test_tx_rolls_back_a_failed_transaction_so_the_next_commit_is_clean(tmp_path
     assert repos.projects.get("a")["status"] == "stopped"
 
 
-def test_kitchen_push_record_upserts_and_lists_by_instance(tmp_path):
+def test_instance_push_record_upserts_and_lists_by_instance(tmp_path):
     repos = Repos.open(Database(tmp_path / "s.db"))
-    repos.kitchen_pushes.record("shop", "k1", console_hostname="a.eggie.io", kitchen_project=None, urls=[], secrets_missing=0, at=1.0)
-    repos.kitchen_pushes.record("shop", "k1", console_hostname="a.eggie.io", kitchen_project="shop", urls=["https://u"], secrets_missing=2, at=2.0)
-    assert repos.kitchen_pushes.for_project("shop") == {"k1": {"pushed_at": 2.0, "console_hostname": "a.eggie.io",
-        "kitchen_project": "shop", "urls": ["https://u"], "secrets_missing": 2}}
-    assert repos.kitchen_pushes.pushed_ids() == {"shop"}
+    repos.instance_pushes.record("shop", "k1", console_hostname="a.eggie.io", instance_project=None, urls=[], secrets_missing=0, at=1.0)
+    repos.instance_pushes.record("shop", "k1", console_hostname="a.eggie.io", instance_project="shop", urls=["https://u"], secrets_missing=2, at=2.0)
+    assert repos.instance_pushes.for_project("shop") == {"k1": {"pushed_at": 2.0, "console_hostname": "a.eggie.io",
+        "instance_project": "shop", "urls": ["https://u"], "secrets_missing": 2}}
+    assert repos.instance_pushes.pushed_ids() == {"shop"}
 
 
 def test_pushed_project_claim_keeps_first_pushed_at(tmp_path):

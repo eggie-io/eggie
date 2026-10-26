@@ -28,9 +28,9 @@ def test_github_client_id_can_be_overridden_for_a_fork():
     assert ApiConfig.from_env({}).github_client_id == "Ov23lie5k9VqSCKI52Ci"
 
 
-def test_kitchen_ca_file_empty_means_none_and_transfers_root_is_overridable():
-    assert ApiConfig.from_env({"EGGIE_KITCHEN_CA_FILE": ""}).kitchen_ca_file is None
-    config = ApiConfig.from_env({"EGGIE_KITCHEN_CA_FILE": "/ca.pem",
+def test_instance_ca_file_empty_means_none_and_transfers_root_is_overridable():
+    assert ApiConfig.from_env({"EGGIE_INSTANCE_CA_FILE": ""}).instance_ca_file is None
+    config = ApiConfig.from_env({"EGGIE_INSTANCE_CA_FILE": "/ca.pem",
                                  "EGGIE_TRANSFERS_ROOT": "/srv/t"})
-    assert config.kitchen_ca_file == Path("/ca.pem")
+    assert config.instance_ca_file == Path("/ca.pem")
     assert config.transfers_root == Path("/srv/t")

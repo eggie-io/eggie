@@ -2,7 +2,7 @@ import { delay, http, HttpResponse } from "msw";
 import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
-import type { PushRecord, TargetKitchen } from "../push/push";
+import type { PushRecord, TargetInstance } from "../push/push";
 import { baseName, joinPath, parentOf } from "../uploads/paths";
 
 export const SCENARIOS = [
@@ -42,17 +42,17 @@ export const SCENARIOS = [
   "secrets",
   "site",
   "site-signed-out",
-  "kitchens",
-  "no-kitchens",
-  "kitchens-down",
+  "instances",
+  "no-instances",
+  "instances-down",
   "push-no-account",
   "push-offline",
-  "push-no-kitchens",
-  "push-kitchens",
+  "push-no-instances",
+  "push-instances",
   "push-running",
   "push-done-secrets",
   "push-rate-limited",
-  "kitchen-waiting-secrets",
+  "instance-waiting-secrets",
   "handoff-new",
   "handoff-github",
   "handoff-folder",
@@ -149,7 +149,7 @@ export function handlersFor(scenario: Scenario) {
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
         ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]), unused: new Set<string>() }
-        : scenario === "kitchen-waiting-secrets" && id === "weekend-shop"
+        : scenario === "instance-waiting-secrets" && id === "weekend-shop"
         ? {
             names: new Map([["MAIL_PASSWORD", nowSec() - 3600], ["OLD_SENTRY_DSN", nowSec() - 86_400]]),
             requested: new Map([
@@ -331,7 +331,7 @@ export function handlersFor(scenario: Scenario) {
     seedFile(p.id, "README.md", 2048, hoursAgo(30));
   }
 
-  if (scenario === "kitchen-waiting-secrets") {
+  if (scenario === "instance-waiting-secrets") {
     const shop = projects.get("weekend-shop");
     if (shop) shop.secrets_requested = secretsOf("weekend-shop").requested.size;
   }
@@ -364,22 +364,22 @@ export function handlersFor(scenario: Scenario) {
   const traversal = (path: string) => path.startsWith("/") || path.split("/").includes("..");
 
   const WEB_APP = "https://app.eggie.io";
-  const kitchen = (id: string, name: string, over: Partial<TargetKitchen> = {}): TargetKitchen => ({
+  const instance = (id: string, name: string, over: Partial<TargetInstance> = {}): TargetInstance => ({
     id, display_name: name, console_hostname: `${id}.eggie.io`, site_hostname: `${id}.eggie.space`, readiness: "ready",
     is_owner: true, open_console_url: `${WEB_APP}/kitchens/open?host=${id}.eggie.io`, manage_url: `${WEB_APP}/kitchens/${id}`, ...over,
   });
-  const kitchens: TargetKitchen[] =
-    scenario === "push-no-kitchens" ? []
-    : scenario === "push-kitchens" ? [
-      kitchen("shop", "Shop"),
-      kitchen("spare", "Spare"),
-      kitchen("new", "Fresh one", { readiness: "starting" }),
-      kitchen("broken", "Broken", { readiness: "failed" }),
-      kitchen("lost", "Lost login", { readiness: "signed_out" }),
-      kitchen("team", "Team box", { is_owner: false }),
-      kitchen("odd", "Odd one", { readiness: "maintenance" }),
+  const instances: TargetInstance[] =
+    scenario === "push-no-instances" ? []
+    : scenario === "push-instances" ? [
+      instance("shop", "Shop"),
+      instance("spare", "Spare"),
+      instance("new", "Fresh one", { readiness: "starting" }),
+      instance("broken", "Broken", { readiness: "failed" }),
+      instance("lost", "Lost login", { readiness: "signed_out" }),
+      instance("team", "Team box", { is_owner: false }),
+      instance("odd", "Odd one", { readiness: "maintenance" }),
     ]
-    : [kitchen("shop", "Shop"), kitchen("spare", "Spare")];
+    : [instance("shop", "Shop"), instance("spare", "Spare")];
   const pushed = new Map<string, Record<string, PushRecord>>();
   const pushedOf = (id: string) => {
     let entry = pushed.get(id);
@@ -388,15 +388,15 @@ export function handlersFor(scenario: Scenario) {
   };
   let freshReadyAt = 0;
   // Spare already holds recipe-box although this computer has no record of it.
-  let spareHasIt = scenario === "push-kitchens";
+  let spareHasIt = scenario === "push-instances";
 
-  function recordPush(target: Project, k: TargetKitchen, record: Omit<PushRecord, "console_hostname">) {
+  function recordPush(target: Project, k: TargetInstance, record: Omit<PushRecord, "console_hostname">) {
     pushedOf(target.id)[k.id] = { ...record, console_hostname: k.console_hostname };
     target.push = { ...target.push, last: { instance_id: k.id, console_hostname: k.console_hostname, pushed_at: record.pushed_at } };
   }
 
   // `midway` starts the job 40% into sending, as if it had been running a while.
-  function startPush(target: Project, k: TargetKitchen, data: boolean, midway = false): Job {
+  function startPush(target: Project, k: TargetInstance, data: boolean, midway = false): Job {
     const id = Math.random().toString(16).slice(2, 14);
     const total = data ? 180 * 1024 ** 2 : 24 * 1024 ** 2;
     const local = data && target.status === "started_ok" ? ["preparing", "stopping", "packing", "starting"] : ["preparing", "packing"];
@@ -423,8 +423,8 @@ export function handlersFor(scenario: Scenario) {
         if (scenario === "push-rate-limited") return fail("transfer_rate_limited", "Too many pushes. Try again in 2 minutes.", 120);
         if (k.id === "spare" && spareHasIt && target.id === "recipe-box") {
           spareHasIt = false;
-          recordPush(target, k, { pushed_at: nowSec(), kitchen_project: target.id, urls: [], secrets_missing: 0 });
-          return fail("already_on_kitchen", `${target.id} is already on ${k.display_name}. Pushing again replaces it there.`);
+          recordPush(target, k, { pushed_at: nowSec(), instance_project: target.id, urls: [], secrets_missing: 0 });
+          return fail("already_on_instance", `${target.id} is already on ${k.display_name}. Pushing again replaces it there.`);
         }
         phase("sending");
         job.progress = { done: 0, total };
@@ -453,12 +453,12 @@ export function handlersFor(scenario: Scenario) {
       }
       const missing = quick ? 2 : 0;
       const urls = [`https://${target.id}.${k.site_hostname}`];
-      recordPush(target, k, { pushed_at: nowSec(), kitchen_project: target.id, urls, secrets_missing: missing });
+      recordPush(target, k, { pushed_at: nowSec(), instance_project: target.id, urls, secrets_missing: missing });
       target.job = null;
       job.state = "done";
       job.finished_at = nowSec();
       job.result = {
-        instance_id: k.id, kitchen: k.display_name, kitchen_project: target.id, urls, secrets_missing: missing,
+        instance_id: k.id, instance_name: k.display_name, instance_project: target.id, urls, secrets_missing: missing,
         open_secrets_url: missing > 0 ? `${k.open_console_url}&return_path=${encodeURIComponent(`/p/${target.id}/secrets`)}` : null,
         local_restart: local.includes("starting") ? "ok" : null,
       };
@@ -472,12 +472,12 @@ export function handlersFor(scenario: Scenario) {
     if (scenario === "push-no-account") {
       for (const p of projects.values()) p.push = { blocked: "signed_out", last: null };
     }
-    if (scenario === "push-kitchens") {
-      recordPush(box, kitchens[0], {
-        pushed_at: nowSec() - 3 * 86_400, kitchen_project: "recipe-box", urls: ["https://recipe-box.shop.eggie.space"], secrets_missing: 2,
+    if (scenario === "push-instances") {
+      recordPush(box, instances[0], {
+        pushed_at: nowSec() - 3 * 86_400, instance_project: "recipe-box", urls: ["https://recipe-box.shop.eggie.space"], secrets_missing: 2,
       });
     }
-    if (scenario === "push-running") startPush(box, kitchens[0], false, true);
+    if (scenario === "push-running") startPush(box, instances[0], false, true);
   }
 
   const guard = () => (signedIn ? null : notSignedIn());
@@ -509,10 +509,10 @@ export function handlersFor(scenario: Scenario) {
       });
     }),
     http.get("/api/instances", () => {
-      if (scenario === "kitchens-down") {
+      if (scenario === "instances-down") {
         return refuse("cloud_unavailable", "The Eggie service can't be reached. Check the internet connection and try again.", 503);
       }
-      if (scenario === "no-kitchens") return HttpResponse.json({ instances: [] });
+      if (scenario === "no-instances") return HttpResponse.json({ instances: [] });
       const row = (id: string, name: string, over: Record<string, unknown> = {}) => ({
         id, display_name: name, console_hostname: `${id}.eggie.io`, status: "running",
         signed_out: false, is_owner: true, current: false, ...over,
@@ -732,10 +732,10 @@ export function handlersFor(scenario: Scenario) {
       if (target.push.blocked === "signed_out") return refuse("not_signed_in", "Push needs an Eggie account. Sign in to use it.", 409);
       if (scenario === "push-offline") return refuse("cloud_unavailable", "The Eggie service couldn't be reached. Check the internet connection.", 503);
       if (freshReadyAt === 0) freshReadyAt = Date.now() + 12_000;
-      const shown = kitchens.map((k) => (k.readiness === "starting" && Date.now() >= freshReadyAt ? { ...k, readiness: "ready" } : k));
+      const shown = instances.map((k) => (k.readiness === "starting" && Date.now() >= freshReadyAt ? { ...k, readiness: "ready" } : k));
       return HttpResponse.json({
-        kitchens: shown,
-        create_kitchen_url: `${WEB_APP}/kitchens/new`,
+        instances: shown,
+        create_instance_url: `${WEB_APP}/kitchens/new`,
         pushed: pushedOf(target.id),
         databases: target.id === "recipe-box"
           ? [{ service: "db", image: "postgres:latest", floating: true }, { service: "cache", image: "redis:7", floating: false }]
@@ -750,7 +750,7 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       if (target.job) return busy();
       const body = (await request.json()) as { instance_id: string; data: boolean; replace_data: boolean };
-      const k = kitchens.find((each) => each.id === body.instance_id);
+      const k = instances.find((each) => each.id === body.instance_id);
       if (!k) return refuse("instance_not_found", "That kitchen is gone.", 404);
       if (body.data && pushedOf(target.id)[k.id] && !body.replace_data) {
         return refuse("confirm_replace_data", "Confirm that the kitchen's data should be replaced.", 409);

@@ -7,7 +7,7 @@ import urllib.response
 
 import pytest
 
-from eggie_api.infra.kitchen import KitchenClient, KitchenError, KitchenUnreachable
+from eggie_api.infra.instance import InstanceClient, InstanceError, InstanceUnreachable
 
 
 class _Response(io.BytesIO):
@@ -45,7 +45,7 @@ def _http_error(status, code, message="m"):
 
 def test_open_sends_ticket_only_in_a_header():
     opener = FakeOpener({"push_id": "p1", "token": "t1"})
-    out = KitchenClient(opener=opener).open("k.example", ticket="SECRET", size=7,
+    out = InstanceClient(opener=opener).open("k.example", ticket="SECRET", size=7,
                                             data=True, replace="files")
     request = opener.requests[0]
     assert out == {"push_id": "p1", "token": "t1"}
@@ -63,7 +63,7 @@ def test_upload_reports_progress_and_sends_content_length(tmp_path):
     bundle.write_bytes(b"abcdefghij")
     opener = FakeOpener(None)
     seen = []
-    KitchenClient(opener=opener).upload("k.example", "a/b", "TOK", bundle, seen.append)
+    InstanceClient(opener=opener).upload("k.example", "a/b", "TOK", bundle, seen.append)
     request = opener.requests[0]
     headers = {k.lower(): v for k, v in request.header_items()}
     assert request.full_url == "https://k.example/api/transfers/a%2Fb/bundle"
@@ -73,27 +73,27 @@ def test_upload_reports_progress_and_sends_content_length(tmp_path):
     assert seen == [4, 8, 10]
 
 
-def test_ticket_refusal_is_a_kitchen_error_with_the_service_code():
+def test_ticket_refusal_is_a_instance_error_with_the_service_code():
     opener = FakeOpener(_http_error(403, "transfer_ticket_invalid", "no"))
-    with pytest.raises(KitchenError) as raised:
-        KitchenClient(opener=opener).open("k", ticket="t", size=1, data=False, replace="none")
+    with pytest.raises(InstanceError) as raised:
+        InstanceClient(opener=opener).open("k", ticket="t", size=1, data=False, replace="none")
     assert raised.value.code == "transfer_ticket_invalid"
     assert raised.value.status == 403
 
 
-def test_old_kitchen_and_connection_errors_are_unreachable():
-    client = lambda reply: KitchenClient(opener=FakeOpener(reply))
+def test_old_instance_and_connection_errors_are_unreachable():
+    client = lambda reply: InstanceClient(opener=FakeOpener(reply))
     call = lambda c: c.open("k", ticket="t", size=1, data=False, replace="none")
-    with pytest.raises(KitchenUnreachable, match="older"):
+    with pytest.raises(InstanceUnreachable, match="older"):
         call(client(_http_error(401, "not_signed_in")))
-    with pytest.raises(KitchenUnreachable, match="older"):
+    with pytest.raises(InstanceUnreachable, match="older"):
         call(client(_http_error(404, "not_found")))
-    with pytest.raises(KitchenUnreachable, match="older"):
+    with pytest.raises(InstanceUnreachable, match="older"):
         call(client(_http_error(403, "forbidden_origin")))
-    with pytest.raises(KitchenUnreachable):
+    with pytest.raises(InstanceUnreachable):
         call(client(urllib.error.URLError("refused")))
     # Only open() reads a 401 as "older": elsewhere it is a real answer.
-    with pytest.raises(KitchenError):
+    with pytest.raises(InstanceError):
         client(_http_error(401, "not_signed_in")).status("k", "p", "t")
 
 
@@ -109,6 +109,6 @@ def test_a_redirect_is_unreachable_and_never_followed(monkeypatch):
         return response
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", redirect)
-    with pytest.raises(KitchenUnreachable):
-        KitchenClient().status("k.example", "p1", "TOK")
+    with pytest.raises(InstanceUnreachable):
+        InstanceClient().status("k.example", "p1", "TOK")
     assert sent == ["https://k.example/api/transfers/p1"]

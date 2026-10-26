@@ -168,7 +168,7 @@ export function usePushTargets(id: string, open: boolean) {
     staleTime: 0,
     refetchInterval: (query) => {
       if (offline(query.state.error)) return OFFLINE_MS;
-      return open && query.state.data?.kitchens.some((k) => k.readiness === "starting") ? STARTING_MS : false;
+      return open && query.state.data?.instances.some((k) => k.readiness === "starting") ? STARTING_MS : false;
     },
   });
 }

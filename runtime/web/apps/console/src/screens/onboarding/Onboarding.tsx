@@ -82,10 +82,10 @@ export function Progress() {
   );
 }
 
-export function SkipButton({ className }: { className?: string }) {
+export function SkipButton() {
   const { finish } = useOnboarding();
   return (
-    <Button variant="ghost" className={className} onClick={() => finish()}>
+    <Button variant="ghost" onClick={() => finish()}>
       Skip for now
     </Button>
   );

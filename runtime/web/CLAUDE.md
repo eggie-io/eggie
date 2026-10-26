@@ -5,7 +5,7 @@ React + Vite + TypeScript npm workspace, shipped as the `eggie-web` nginx image.
 it in the Python package. Not to be confused with `host/desktop/ui/` (the native window's local
 screens); don't share code or assets with it.
 
-## Commands (Node ≥ 22.22)
+## Commands (Node ≥ 24)
 
 ```bash
 npm install

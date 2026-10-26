@@ -41,7 +41,7 @@ updates `Level:` and confirms in one line.
 | Technical decisions | agent decides, says what | agent decides, says what and why in a sentence | agent asks when the choice is real; owner's pick wins |
 | Brainstorm | today's interview | today's interview | tech words fine; a named stack goes to *Stack wishes* |
 | Stack | ladder | ladder, explained | asks once; owner-named stack wins, recorded as their choice, one warning |
-| Plan | not shown | not shown | offered |
+| Plan | not shown | not shown | path given once written |
 
 `just-results` is today's behaviour exactly. Eggie's own rules — `eggie up` only, no stray dev
 servers, secrets via `eggie secret request`, `gh` via **Connect GitHub** — hold at every level.
@@ -63,7 +63,7 @@ servers, secrets via `eggie secret request`, `gh` via **Connect GitHub** — hol
   below `developer`. A `developer` with no wish is asked once. A stack they name wins:
   *Ladder step* reads `Owner's choice: <stack>.`, *Rejected* holds the ladder's pick with one
   sentence on the cost; no further arguing. Below `developer`, *Stack wishes* is just a need.
-- `eggie-plan`: offer the plan to a `developer`.
+- `eggie-plan`: give a `developer` the plan's path.
 - `eggie-rules/assets/AGENTS.md`: "Talking to the owner" points at `~/.eggie/owner.md` instead
   of restating "no technical questions" — otherwise every project's `AGENTS.md` overrides the
   profile.

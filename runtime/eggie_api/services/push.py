@@ -84,6 +84,13 @@ def _running(row: dict) -> bool:
     return row["status"] != "stopped"
 
 
+def _volumes(row: dict, compose: dict) -> dict[str, str]:
+    """Docker name per compose key of every volume a push would copy."""
+    compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
+    return {key: rules.docker_volume_name(compose, compose_name, key)
+            for key in rules.data_plan(compose).volumes}
+
+
 class _LogOnly:
     """Forwards log lines but not phases, so the restart inside a push keeps
     the push's own phase captions."""
@@ -150,7 +157,13 @@ class PushService:
                 "create_instance_url": reply.get("create_instance_url"),
                 "pushed": self._instance_pushes.for_project(project_id),
                 "floating": [asdict(f) for f in rules.floating(compose)],
-                "stops": _running(row) and bool(rules.data_plan(compose).volumes)}
+                "stops": _running(row) and self._any_volume_exists(row, compose)}
+
+    def _any_volume_exists(self, row: dict, compose: dict) -> bool:
+        names = docker.volume_names(self._runner)
+        wanted = _volumes(row, compose).values()
+        # When docker cannot say, the push may still stop the project: keep the notice.
+        return any(names is None or name in names for name in wanted)
 
     def start(self, project_id: str, instance_id: str, *, replace: bool) -> str:
         row = self._loader.require(project_id)
@@ -187,9 +200,7 @@ class _PushJob:
         self.replace = replace
         self.compose = compose
         self.plan = rules.data_plan(compose)
-        compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
-        self.volumes = {key: rules.docker_volume_name(compose, compose_name, key)
-                        for key in self.plan.volumes}
+        self.volumes = _volumes(row, compose)
         self.instance_name = "The kitchen"
         self.write = None
 
@@ -217,8 +228,8 @@ class _PushJob:
         write.phase("preparing")
         instance = self._instance_row()
         cloud_id = self._cloud_id()
-        self._check_volume_names()
         self._keep_existing_volumes()
+        self._check_volume_names()
         self._check_disk()
         stopped = False
         if self.volumes and _running(self.s._projects.get(self.project_id)):
@@ -281,7 +292,7 @@ class _PushJob:
         # Without a compose name the instance names volumes after its own project id.
         compose_name = str(self.compose.get("name") or before.get("instance_project")
                            or self.project_id)
-        outside = rules.volume_outside(self.compose, compose_name, self.plan.volumes)
+        outside = rules.volume_outside(self.compose, compose_name, self.volumes)
         if outside:
             key, name = outside
             raise self._fail("bad_bundle", (

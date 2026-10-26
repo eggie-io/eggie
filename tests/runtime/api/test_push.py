@@ -344,6 +344,7 @@ def test_a_project_without_volumes_keeps_running_during_a_push(env):
 def test_a_volume_named_outside_the_project_fails_before_anything_stops(env):
     compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
     (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
+    env.runner.volumes = Completed(0, "blog_db-data\n", "")
     env.repos.projects.set_status("shop", "started_ok")
     script(env)
 
@@ -355,10 +356,24 @@ def test_a_volume_named_outside_the_project_fails_before_anything_stops(env):
     assert env.instance.calls == []
 
 
+def test_a_volume_never_made_here_neither_travels_nor_blocks_the_push(env):
+    # Its explicit name would be refused by the kitchen, but nothing of it is sent.
+    compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
+    (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
+    env.repos.projects.set_status("shop", "started_ok")
+    script(env, targets=(TARGETS, TARGETS), mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[DONE])
+
+    assert env.browser.get("/api/projects/shop/push").json()["stops"] is False
+    assert push(env)["state"] == "done"
+    assert not [argv for argv in env.runner.calls if "down" in argv]
+
+
 def test_a_repeat_push_checks_volume_names_against_the_instance_project(env):
     # Without a compose name the instance names volumes after its own project id.
     compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: my-shop_db-data}")
     (env.config.projects_root / "shop" / "docker-compose.yml").write_text(compose)
+    env.runner.volumes = Completed(0, "my-shop_db-data\n", "")
     env.repos.instance_pushes.record("shop", "k1", console_hostname="k1.eggie.io",
                                     instance_project="my-shop", urls=[], secrets_missing=0,
                                     at=1792510000)

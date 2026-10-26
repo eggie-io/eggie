@@ -50,14 +50,13 @@ MAX_TICKET = 512
 MAX_MANIFEST = 1024 ** 2
 
 OPENED, UPLOADING, IMPORTING, ENDED = "opened", "uploading", "importing", "ended"
-REPLACE_MODES = (rules.REPLACE_NONE, rules.REPLACE_FILES, rules.REPLACE_ALL)
+REPLACE_MODES = (rules.REPLACE_NONE, rules.REPLACE_ALL)
 
 BUSY = "This kitchen is busy with this project. Try again in a minute."
 NOT_READY = "This kitchen isn't signed in to Eggie."
 CLOUD_UNAVAILABLE = "The kitchen couldn't reach the Eggie service."
 REFUSALS = {
     "already_on_instance": "This project is already on this kitchen. Pushing again replaces it.",
-    "confirm_replace_data": "Confirm that the kitchen's data should be replaced.",
 }
 
 
@@ -122,7 +121,6 @@ class _Push:
     cloud_id: str
     ticket_id: str
     size: int
-    data: bool
     created: bool
     state: str = OPENED
     timer: object | None = None
@@ -192,7 +190,7 @@ class Transfers:
         if not self.ready():
             raise Unavailable("not_ready", "This kitchen isn't ready for a push.")
 
-    def open(self, *, ticket: str, size: int, data: bool, replace: str,
+    def open(self, *, ticket: str, size: int, replace: str,
              forwarded_for: str, peer: str) -> dict:
         if not (0 < len(ticket) <= MAX_TICKET and ticket.isascii() and ticket.isprintable()
                 and " " not in ticket):
@@ -224,7 +222,7 @@ class Transfers:
             if not self._locks.acquire(local_id):
                 raise Conflict("instance_busy", BUSY)
             try:
-                refusal = rules.check_replace(exists, data, replace)
+                refusal = rules.check_replace(exists, replace)
                 if refusal:
                     raise Conflict(refusal, REFUSALS[refusal])
                 need, free = 2 * size + DISK_MARGIN, self._free_bytes()
@@ -246,8 +244,7 @@ class Transfers:
             token = tokens.token_urlsafe(32)
             push = _Push(id=tokens.token_hex(8), token_hash=_digest(token),
                          local_id=local_id, cloud_id=grant.cloud_id,
-                         ticket_id=grant.ticket_id, size=size, data=data,
-                         created=not exists)
+                         ticket_id=grant.ticket_id, size=size, created=not exists)
             self._pushes[push.id] = push
             push.timer = self._timer(UPLOAD_WINDOW, lambda: self._expire(push.id))
             push.timer.start()
@@ -445,8 +442,8 @@ class _ImportJob:
             except JobFailed as e:
                 raise _failed("stop_failed", f"{self.pid} could not be stopped: {e}") from None
         write.phase("replacing")
-        self._replace(self.s._loader.dir(self.pid), manifest)
-        if manifest.data:
+        self._replace(self.s._loader.dir(self.pid))
+        if manifest.volumes:
             write.phase("restoring data")
             self._restore(compose, manifest, write)
         missing = self.s._secrets.apply_pushed(self.pid, manifest.secrets)
@@ -485,10 +482,6 @@ class _ImportJob:
             raise Invalid("bad_manifest", "The bundle's manifest is not JSON.") from None
         compose = self.s._loader.parse_yaml(compose_path)
         manifest = rules.parse_manifest(raw, compose)
-        # The overwrite rules were checked against what open() was told.
-        if manifest.data != self.push.data:
-            raise Invalid("bad_bundle", "The bundle's data does not match what the push "
-                                        "was opened with.")
         for hint in manifest.secrets.values():
             if hint:
                 try:
@@ -498,8 +491,7 @@ class _ImportJob:
         # Compose takes `name:` as its project: another project's would have this
         # import stop and start that project's containers.
         compose_name = self._own_compose_name(compose)
-        if manifest.data:
-            self._check_volumes(compose, compose_name, manifest)
+        self._check_volumes(compose, compose_name, manifest)
         self._pin_project_id(files)
         return manifest, compose
 
@@ -547,29 +539,16 @@ class _ImportJob:
                 raise OSError(f"could not move {src} to {dst}: "
                               f"{(result.stderr or result.stdout).strip()}") from None
 
-    def _replace(self, target: Path, manifest: rules.Manifest) -> None:
+    def _replace(self, target: Path) -> None:
         new, aside = self.staging / "files", self.staging / "old"
         had_old = os.path.lexists(target)
-        placed, kept = False, []
         if had_old:
             self._move(target, aside)
         try:
             self._move(new, target)
-            placed = True
-            if had_old and not manifest.data:
-                for rel in manifest.data_paths:
-                    src, dst = aside / rel, target / rel
-                    if not os.path.lexists(src) or not _no_links_above(aside, rel):
-                        continue
-                    # A link in the pushed tree would carry the instance's data out of it.
-                    if not _no_links_above(target, rel) or os.path.lexists(dst):
-                        raise Invalid("bad_bundle", f"The pushed files have their own {rel}, "
-                                                    "which the kitchen keeps.")
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    self._move(src, dst)
-                    kept.append(rel)
         except BaseException as e:
-            self._put_back(target, new, aside, kept, placed=placed, had_old=had_old)
+            if had_old:
+                self._put_back(aside, target)
             if os.path.lexists(aside):
                 raise self._keep_old(aside, e) from None
             raise
@@ -592,15 +571,9 @@ class _ImportJob:
         return _failed(code, f"{reason} The project's previous files could not be put back; "
                              f"they are kept in {kept_at}.")
 
-    def _put_back(self, target: Path, new: Path, aside: Path, kept: list[str], *,
-                  placed: bool, had_old: bool) -> None:
+    def _put_back(self, aside: Path, target: Path) -> None:
         try:
-            for rel in reversed(kept):
-                self._move(target / rel, aside / rel)
-            if placed:
-                self._move(target, new)
-            if had_old:
-                self._move(aside, target)
+            self._move(aside, target)
         except Exception:
             log.exception("could not put %s back after a failed push", target)
 

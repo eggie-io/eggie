@@ -6,7 +6,7 @@ import tarfile
 
 import pytest
 
-from eggie_api.domain.push import build_manifest, data_plan
+from eggie_api.domain.push import build_manifest
 from eggie_api.infra.bundle import (
     main, pack_argv, restore_volume, unpack, unpack_argv, write_bundle)
 from eggie_api.infra.files import BadArchiveError, PathTraversalError
@@ -32,26 +32,12 @@ def _names(out):
 def test_bundle_has_manifest_files_and_no_excluded_paths(tmp_path):
     project = _project(tmp_path / "p")
     out = tmp_path / "b.tar"
-    write_bundle(out, project, {"format": 1}, volumes={}, data_paths=[],
-                 include_data=False)
+    write_bundle(out, project, {"format": 1}, volumes={})
     names = _names(out)
     assert {"manifest.json", "files/src/app.py", "files/.eggie/project.yml",
             "files/.env"} <= names
     assert not any("node_modules" in n or ".git/" in n or "overlay.yml" in n
                    for n in names)
-
-
-def test_data_paths_only_with_include_data(tmp_path):
-    project = _project(tmp_path / "p")
-    vol = tmp_path / "vol"
-    vol.mkdir()
-    (vol / "f").write_text("v")
-    kwargs = dict(volumes={"dbv": vol}, data_paths=["pgdata"])
-    without, with_ = tmp_path / "a.tar", tmp_path / "b.tar"
-    write_bundle(without, project, {}, include_data=False, **kwargs)
-    write_bundle(with_, project, {}, include_data=True, **kwargs)
-    assert not any("pgdata" in n or n.startswith("volumes/") for n in _names(without))
-    assert {"files/pgdata/base/1", "volumes/dbv/f"} <= _names(with_)
 
 
 def test_symlinks_are_stored_as_links_not_followed(tmp_path):
@@ -62,7 +48,7 @@ def test_symlinks_are_stored_as_links_not_followed(tmp_path):
     (project / "out").symlink_to(elsewhere / "secret.txt")
     (project / "dirlink").symlink_to(elsewhere)
     out = tmp_path / "b.tar"
-    write_bundle(out, project, {}, volumes={}, data_paths=[], include_data=False)
+    write_bundle(out, project, {}, volumes={})
     with tarfile.open(out) as tar:
         assert tar.getmember("files/out").issym()
         assert tar.getmember("files/dirlink").issym()
@@ -88,39 +74,22 @@ def test_pack_argv_mounts_project_read_only_and_runs_the_module():
     argv = pack_argv("img", out_dir="/opt/eggie/transfers/out",
                      project_dir="/opt/eggie/projects/shop",
                      volumes={"dbv": "shop_dbv"}, out_name="j1.tar",
-                     manifest_path="/out/j1.json", include_data=True)
+                     manifest_path="/out/j1.json")
     assert "/opt/eggie/projects/shop:/src:ro" in argv and "shop_dbv:/vol/dbv:ro" in argv
     assert argv[argv.index("img") + 1:argv.index("img") + 4] == ["-m", "eggie_api.infra.bundle", "pack"]
 
 
-_COMPOSE = {"services": {"db": {"image": "postgres:16", "volumes": ["./pgdata:/d", "dbv:/x"]}},
-            "volumes": {"dbv": {}}}
-
-
-def _pack_cli(tmp_path, data):
+def test_cli_pack_sends_every_file_including_bind_folders_and_the_volumes(tmp_path):
     project = _project(tmp_path / "p")
     vol = tmp_path / "vol"
     vol.mkdir()
     (vol / "f").write_text("v")
     manifest = tmp_path / "m.json"
-    manifest.write_text(json.dumps(
-        build_manifest(data=data, plan=data_plan(_COMPOSE), secrets={})))
-    out = tmp_path / f"{data}.tar"
-    args = ["pack", "--out", str(out), "--project", str(project),
-            "--manifest", str(manifest), "--volume", f"dbv={vol}"]
-    assert main(args + (["--data"] if data else [])) == 0
-    return _names(out)
-
-
-def test_cli_pack_without_data_leaves_database_dirs_out(tmp_path):
-    names = _pack_cli(tmp_path, False)
-    assert "files/src/app.py" in names
-    assert not any("pgdata" in n or n.startswith("volumes/") for n in names)
-
-
-def test_cli_pack_with_data_includes_database_dirs_and_volumes(tmp_path):
-    names = _pack_cli(tmp_path, True)
-    assert {"files/pgdata/base/1", "volumes/dbv/f"} <= names
+    manifest.write_text(json.dumps(build_manifest(volumes={"dbv": "shop_dbv"}, secrets={})))
+    out = tmp_path / "b.tar"
+    assert main(["pack", "--out", str(out), "--project", str(project),
+                 "--manifest", str(manifest), "--volume", f"dbv={vol}"]) == 0
+    assert {"files/src/app.py", "files/pgdata/base/1", "volumes/dbv/f"} <= _names(out)
 
 
 def test_restore_volume_with_missing_source_keeps_the_target(tmp_path):
@@ -132,12 +101,6 @@ def test_restore_volume_with_missing_source_keeps_the_target(tmp_path):
     assert (target / "keep.txt").exists()
 
 
-def test_pack_argv_without_data_mounts_no_volumes():
-    argv = pack_argv("img", out_dir="/o", project_dir="/p", volumes={"dbv": "shop_dbv"},
-                     out_name="j.tar", manifest_path="/out/j.json", include_data=False)
-    assert not any("shop_dbv" in a or a == "--volume" for a in argv)
-
-
 def test_bundle_round_trips_through_unpack(tmp_path):
     project = _project(tmp_path / "p")
     vol = tmp_path / "vol"
@@ -145,8 +108,7 @@ def test_bundle_round_trips_through_unpack(tmp_path):
     (vol / "f").write_text("v")
     out, dest = tmp_path / "b.tar", tmp_path / "dest"
     dest.mkdir()
-    write_bundle(out, project, {"format": 1}, volumes={"dbv": vol},
-                 data_paths=["pgdata"], include_data=True)
+    write_bundle(out, project, {"format": 1}, volumes={"dbv": vol})
     unpack(out, dest)
     assert (dest / "files/src/app.py").read_text() == "print()"
     assert (dest / "files/pgdata/base/1").exists()
@@ -211,7 +173,7 @@ def test_unpack_keeps_hard_links_inside_the_bundle(tmp_path):
     assert (dest / "files/b").read_text() == "x"
 
 
-def test_unpack_makes_project_files_group_writable_and_keeps_data_modes(tmp_path):
+def test_unpack_makes_project_files_group_writable_and_keeps_volume_modes(tmp_path):
     project = _project(tmp_path / "p")
     (project / "run.sh").write_text("#!/bin/sh\n")
     (project / "run.sh").chmod(0o755)
@@ -226,8 +188,7 @@ def test_unpack_makes_project_files_group_writable_and_keeps_data_modes(tmp_path
     (vol / "tool").chmod(0o4755)
     out, dest = tmp_path / "b.tar", tmp_path / "dest"
     dest.mkdir()
-    write_bundle(out, project, {"format": 1, "data_paths": ["pgdata"]}, volumes={"dbv": vol},
-                 data_paths=["pgdata"], include_data=True)
+    write_bundle(out, project, {"format": 1}, volumes={"dbv": vol})
 
     unpack(out, dest)
 
@@ -237,8 +198,9 @@ def test_unpack_makes_project_files_group_writable_and_keeps_data_modes(tmp_path
     assert mode("files") == 0o2775
     assert mode("files/src") == 0o2775
     assert mode("files/run.sh") == 0o775
-    assert mode("files/pgdata") == 0o700
-    assert mode("files/pgdata/base/1") == 0o600
+    # A bind folder is a project file like any other, whatever mounts it.
+    assert mode("files/pgdata") == 0o2770
+    assert mode("files/pgdata/base/1") == 0o660
     assert mode("volumes/dbv/shared") == 0o664
     assert mode("volumes/dbv/tool") == 0o755
 

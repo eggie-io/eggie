@@ -396,8 +396,12 @@ export function handlersFor(scenario: Scenario) {
   }
 
   // `midway` starts the job 40% into sending, as if it had been running a while.
-  function startPush(target: Project, k: TargetInstance, data: boolean, midway = false): Job {
+  // Only recipe-box has volumes in the mock, so only it carries data and stops while packing.
+  const hasVolumes = (target: Project) => target.id === "recipe-box";
+
+  function startPush(target: Project, k: TargetInstance, midway = false): Job {
     const id = Math.random().toString(16).slice(2, 14);
+    const data = hasVolumes(target);
     const total = data ? 180 * 1024 ** 2 : 24 * 1024 ** 2;
     const local = data && target.status === "started_ok" ? ["preparing", "stopping", "packing", "starting"] : ["preparing", "packing"];
     const remote = data ? ["waiting", "unpacking", "restoring data", "completing"] : ["waiting", "unpacking", "completing"];
@@ -424,7 +428,7 @@ export function handlersFor(scenario: Scenario) {
         if (k.id === "spare" && spareHasIt && target.id === "recipe-box") {
           spareHasIt = false;
           recordPush(target, k, { pushed_at: nowSec(), instance_project: target.id, urls: [], secrets_missing: 0 });
-          return fail("already_on_instance", `${target.id} is already on ${k.display_name}. Pushing again replaces it there.`);
+          return fail("already_on_instance", `${target.id} is already on ${k.display_name}. Confirm that it should be replaced, then push again.`);
         }
         phase("sending");
         job.progress = { done: 0, total };
@@ -477,7 +481,7 @@ export function handlersFor(scenario: Scenario) {
         pushed_at: nowSec() - 3 * 86_400, instance_project: "recipe-box", urls: ["https://recipe-box.shop.eggie.space"], secrets_missing: 2,
       });
     }
-    if (scenario === "push-running") startPush(box, instances[0], false, true);
+    if (scenario === "push-running") startPush(box, instances[0], true);
   }
 
   const guard = () => (signedIn ? null : notSignedIn());
@@ -737,10 +741,8 @@ export function handlersFor(scenario: Scenario) {
         instances: shown,
         create_instance_url: `${WEB_APP}/kitchens/new`,
         pushed: pushedOf(target.id),
-        databases: target.id === "recipe-box"
-          ? [{ service: "db", image: "postgres:latest", floating: true }, { service: "cache", image: "redis:7", floating: false }]
-          : [],
-        running: target.status === "started_ok",
+        floating: hasVolumes(target) ? [{ service: "db", image: "postgres:latest" }] : [],
+        stops: hasVolumes(target) && target.status === "started_ok",
       });
     }),
     http.post("/api/projects/:id/push", async ({ params, request }) => {
@@ -749,13 +751,13 @@ export function handlersFor(scenario: Scenario) {
       const target = find(String(params.id));
       if (!target) return notFound(String(params.id));
       if (target.job) return busy();
-      const body = (await request.json()) as { instance_id: string; data: boolean; replace_data: boolean };
+      const body = (await request.json()) as { instance_id: string; replace: boolean };
       const k = instances.find((each) => each.id === body.instance_id);
       if (!k) return refuse("instance_not_found", "That kitchen is gone.", 404);
-      if (body.data && pushedOf(target.id)[k.id] && !body.replace_data) {
-        return refuse("confirm_replace_data", "Confirm that the kitchen's data should be replaced.", 409);
+      if (pushedOf(target.id)[k.id] && !body.replace) {
+        return refuse("already_on_instance", `${target.id} is already on that kitchen. Confirm that its files and data there should be replaced.`, 409);
       }
-      return HttpResponse.json({ job_id: startPush(target, k, body.data).job_id }, { status: 202 });
+      return HttpResponse.json({ job_id: startPush(target, k).job_id }, { status: 202 });
     }),
     http.post("/api/projects/:id/start-when-ready", ({ params }) => {
       const denied = guard();

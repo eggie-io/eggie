@@ -20,7 +20,6 @@ def build_console(s: Services) -> APIRouter:
 
     @router.post("/projects/{project_id}/push", status_code=202)
     def push_start(project_id: str, body: PushRequest) -> dict:
-        return {"job_id": s.push.start(project_id, body.instance_id, data=body.data,
-                                       replace_data=body.replace_data)}
+        return {"job_id": s.push.start(project_id, body.instance_id, replace=body.replace)}
 
     return router

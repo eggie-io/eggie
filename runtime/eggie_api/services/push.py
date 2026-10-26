@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import time
 import urllib.parse
 from dataclasses import asdict
@@ -42,13 +41,13 @@ PACK_MARGIN = 512 * 1024 ** 2
 NOT_SIGNED_IN = "Push needs an Eggie account. Sign in to use it."
 CLOUD_UNAVAILABLE = "The Eggie service couldn't be reached. Check the internet connection."
 NOT_REGISTERED = "This project isn't linked to your account yet. Try again in a minute."
-CONFIRM_REPLACE = "Confirm that the kitchen's data should be replaced."
+CONFIRM_REPLACE = ("{project} is already on that kitchen. Confirm that its files and data "
+                   "there should be replaced.")
 DISK_FULL = "This computer doesn't have room to pack the project."
 
 MINT_CODES = {"project_not_found", "instance_not_running", "instance_forbidden",
               "instance_not_found", "transfer_rate_limited"}
-INSTANCE_CODES = {"transfer_ticket_invalid", "instance_busy", "already_on_instance",
-                 "confirm_replace_data"}
+INSTANCE_CODES = {"transfer_ticket_invalid", "instance_busy", "already_on_instance"}
 
 
 def _wait_text(retry_after: int | None) -> str:
@@ -71,8 +70,7 @@ def _copy(code: str, *, instance: str, project: str, retry_after: int | None) ->
         "transfer_ticket_invalid": "The kitchen didn't accept the push. Try again.",
         "instance_busy": f"{instance} is busy with this project. Try again in a minute.",
         "already_on_instance": (f"{project} is already on {instance}. "
-                               "Pushing again replaces it there."),
-        "confirm_replace_data": CONFIRM_REPLACE,
+                               "Confirm that it should be replaced, then push again."),
         "instance_unreachable": (f"{instance} isn't answering, or runs an older Eggie. "
                                 "Try again in a minute."),
         "instance_restarted": "The kitchen restarted during the push. Push again.",
@@ -151,18 +149,17 @@ class PushService:
         return {"instances": reply.get("instances") or [],
                 "create_instance_url": reply.get("create_instance_url"),
                 "pushed": self._instance_pushes.for_project(project_id),
-                "databases": [asdict(d) for d in rules.databases(compose)],
-                "running": _running(row)}
+                "floating": [asdict(f) for f in rules.floating(compose)],
+                "stops": _running(row) and bool(rules.data_plan(compose).volumes)}
 
-    def start(self, project_id: str, instance_id: str, *, data: bool,
-              replace_data: bool) -> str:
+    def start(self, project_id: str, instance_id: str, *, replace: bool) -> str:
         row = self._loader.require(project_id)
         compose = self._loader.compose(project_id)
         pushed_before = instance_id in self._instance_pushes.for_project(project_id)
-        if data and pushed_before and not replace_data:
-            raise Conflict("confirm_replace_data", CONFIRM_REPLACE)
-        job = _PushJob(self, row, compose, instance_id, data=data,
-                       replace=rules.replace_mode(pushed_before, data))
+        if pushed_before and not replace:
+            raise Conflict("already_on_instance", CONFIRM_REPLACE.format(project=project_id))
+        job = _PushJob(self, row, compose, instance_id,
+                       replace=rules.REPLACE_ALL if replace else rules.REPLACE_NONE)
         return self._lifecycle.submit_locked(project_id, job.run, "push")
 
     def summary(self, project_id: str) -> dict:
@@ -183,20 +180,13 @@ class _PushJob:
     """One push, run on the job's thread with the project lock held."""
 
     def __init__(self, service: PushService, row: dict, compose: dict, instance_id: str,
-                 *, data: bool, replace: str):
+                 *, replace: str):
         self.s = service
         self.project_id = row["id"]
         self.instance_id = instance_id
-        self.data = data
         self.replace = replace
         self.compose = compose
-        plan = rules.data_plan(compose)
-        folder = service._loader.dir(self.project_id)
-        # A one-file bind is config and travels with the files. A missing source
-        # stays data: Docker makes it a directory, and the instance may have one.
-        self.plan = rules.DataPlan(plan.volumes, tuple(
-            p for p in plan.data_paths
-            if (folder / p).is_dir() or not os.path.lexists(folder / p)), plan.external)
+        self.plan = rules.data_plan(compose)
         compose_name = row.get("compose_name") or str(compose.get("name") or row["id"])
         self.volumes = {key: rules.docker_volume_name(compose, compose_name, key)
                         for key in self.plan.volumes}
@@ -227,11 +217,11 @@ class _PushJob:
         write.phase("preparing")
         instance = self._instance_row()
         cloud_id = self._cloud_id()
-        if self.data:
-            self._check_volume_names()
+        self._check_volume_names()
+        self._keep_existing_volumes()
         self._check_disk()
         stopped = False
-        if self.data and _running(self.s._projects.get(self.project_id)):
+        if self.volumes and _running(self.s._projects.get(self.project_id)):
             write.phase("stopping")
             write(f"stopping {self.project_id} while its data is copied\n")
             try:
@@ -296,11 +286,22 @@ class _PushJob:
             key, name = outside
             raise self._fail("bad_bundle", (
                 f"Volume {key} is named {name}, and a kitchen only takes volumes whose "
-                f"names start with {compose_name}_. Push without data, or rename the volume."))
+                f"names start with {compose_name}_. Rename the volume."))
+
+    def _keep_existing_volumes(self) -> None:
+        """A volume the project never made has nothing to send, and mounting it
+        to pack would make an empty one here."""
+        names = docker.volume_names(self.s._runner)
+        if names is None:
+            raise self._fail("pack_failed", "Docker couldn't list this computer's volumes.")
+        missing = sorted(key for key, name in self.volumes.items() if name not in names)
+        if missing:
+            self.write(f"not copying volumes that don't exist yet: {', '.join(missing)}\n")
+        self.volumes = {k: n for k, n in self.volumes.items() if n in names}
 
     def _check_disk(self) -> None:
         need = files.tree_stats(self.s._loader.dir(self.project_id))["bytes"] + PACK_MARGIN
-        if self.data:
+        if self.volumes:
             sizes = docker.volume_sizes(self.s._runner)
             need += sum(sizes.get(name, 0) for name in self.volumes.values())
         if disk.usage(self.s._staging)["free_bytes"] < need:
@@ -317,17 +318,17 @@ class _PushJob:
         if not image:
             raise self._fail("pack_failed", "The Eggie service could not find its own "
                                             "image to pack the project with.")
-        if self.data and self.plan.external:
+        if self.plan.external:
             self.write("not copying external volumes: "
                        f"{', '.join(self.plan.external)}\n")
         self.s._staging.mkdir(parents=True, exist_ok=True)
         manifest.write_text(json.dumps(rules.build_manifest(
-            data=self.data, plan=self.plan, secrets=self._secret_names())))
-        self.write(f"packing {self.project_id}" + (" with its data\n" if self.data else "\n"))
+            volumes=self.volumes, secrets=self._secret_names())))
+        self.write(f"packing {self.project_id}" + (" with its data\n" if self.volumes else "\n"))
         result = self.s._runner.exec(pack_argv(
             image, out_dir=self.s._staging, project_dir=self.s._loader.dir(self.project_id),
             volumes=self.volumes, out_name=bundle.name,
-            manifest_path=f"/out/{manifest.name}", include_data=self.data), root=True)
+            manifest_path=f"/out/{manifest.name}"), root=True)
         if not result.ok:
             raise self._fail("pack_failed", (result.stderr or result.stdout).strip()
                              or "packing the project failed")
@@ -353,7 +354,7 @@ class _PushJob:
     def _instance_failure(self, e: InstanceError) -> JobFailed:
         if e.code == "instance_disk_full":
             return self._fail(e.code, f"{self.instance_name} doesn't have room: {e.message} "
-                                      "Try without data, or free space there.")
+                                      "Free space there and push again.")
         if e.code in INSTANCE_CODES:
             return self._fail(e.code)
         return self._fail(e.code, e.message)
@@ -366,7 +367,7 @@ class _PushJob:
                 token, self.instance_id, cloud_id))["ticket"]
             try:
                 opened = self.s._instance.open(host, ticket=ticket, size=size,
-                                             data=self.data, replace=self.replace)
+                                               replace=self.replace)
                 self.write(f"sending {size} bytes to {host}\n")
                 self.write.progress(0, size)
                 self.s._instance.upload(host, opened["push_id"], opened["token"], bundle,
@@ -382,7 +383,7 @@ class _PushJob:
                 if e.code == "transfer_ticket_invalid" and not ticket_retried:
                     ticket_retried = True
                     continue
-                if e.code in ("already_on_instance", "confirm_replace_data"):
+                if e.code == "already_on_instance":
                     self._remember(instance)
                 raise self._instance_failure(e) from None
             self._remember(instance)

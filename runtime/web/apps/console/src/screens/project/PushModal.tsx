@@ -7,7 +7,6 @@ import { size } from "../../projects/format";
 import { useJob, usePushTargets, useStartPush } from "../../projects/queries";
 import type { Job, Project } from "../../projects/types";
 import {
-  defaultData,
   floatingWarnings,
   instanceRows,
   pushChoice,
@@ -28,7 +27,7 @@ type PushResult = {
   local_restart: "ok" | "failed" | null;
 };
 
-type Pick = { id: string; data: boolean; confirmed: boolean };
+type Pick = { id: string; confirmed: boolean };
 
 const secretsLabel = (n: number) => `Enter ${n} secret${n === 1 ? "" : "s"} on the kitchen`;
 
@@ -75,18 +74,16 @@ export function PushModal({ project, open, onClose }: { project: Project; open: 
 
   const rows = targets.data ? instanceRows(targets.data) : [];
   const chosen = rows.find((r) => r.pickable && r.id === pick?.id) ?? rows.find((r) => r.pickable) ?? null;
-  const own = pick !== null && chosen !== null && pick.id === chosen.id ? pick : null;
-  const data = own ? own.data : chosen ? defaultData(chosen) : false;
-  const confirmed = own?.confirmed ?? false;
-  const choice = chosen ? pushChoice(chosen, data, confirmed) : null;
+  const confirmed = pick !== null && chosen !== null && pick.id === chosen.id && pick.confirmed;
+  const choice = chosen ? pushChoice(chosen, confirmed) : null;
 
-  const select = (row: InstanceRow) => setPick({ id: row.id, data: defaultData(row), confirmed: false });
+  const select = (row: InstanceRow) => setPick({ id: row.id, confirmed: false });
   const push = () => {
-    if (!chosen) return;
-    setPick({ id: chosen.id, data, confirmed });
+    if (!chosen || !choice) return;
+    setPick({ id: chosen.id, confirmed });
     setSentTo(chosen.label);
     start.mutate(
-      { instance_id: chosen.id, data, replace_data: data && confirmed },
+      { instance_id: chosen.id, replace: choice.repeat && confirmed },
       {
         onSuccess: ({ job_id }) => setFollowed(job_id),
         onError: () => void refetch(),
@@ -195,28 +192,21 @@ export function PushModal({ project, open, onClose }: { project: Project; open: 
         <Button variant="ghost" size="sm" icon="plus" className={s.newInstance} onClick={() => openExternal(t.create_instance_url)}>
           Create a new kitchen
         </Button>
-        {chosen && choice && (
+        {chosen && choice?.repeat && (
           <>
-            {choice.repeat && (
-              <Notice tone="warning">This replaces {project.id}'s files on {chosen.label}. Changes made there are lost.</Notice>
-            )}
+            <Notice tone="warning">
+              {project.id} is already on {chosen.label}. Pushing replaces its files and data there with what's on this
+              computer. Changes made on the kitchen are lost.
+            </Notice>
             <Choice
               type="checkbox"
-              label="Move data (databases)"
-              checked={data}
-              onChange={(e) => setPick({ id: chosen.id, data: e.target.checked, confirmed: false })}
+              label={`Replace ${project.id} on ${chosen.label}`}
+              checked={confirmed}
+              onChange={(e) => setPick({ id: chosen.id, confirmed: e.target.checked })}
             />
-            {choice.needsConfirm && (
-              <Choice
-                type="checkbox"
-                label="Replace the kitchen's data with the data on this computer"
-                checked={confirmed}
-                onChange={(e) => setPick({ id: chosen.id, data, confirmed: e.target.checked })}
-              />
-            )}
-            {data && t.running && <Notice>{project.id} stops while its data is copied, then starts again.</Notice>}
           </>
         )}
+        {chosen && t.stops && <Notice>{project.id} stops while its data is copied, then starts again.</Notice>}
         {floatingWarnings(t).map((warning) => <Notice key={warning} tone="warning">{warning}</Notice>)}
         {recordLink && (
           <Notice title={`${missing} ${missing === 1 ? "secret" : "secrets"} still to enter on ${chosen?.label}`}>

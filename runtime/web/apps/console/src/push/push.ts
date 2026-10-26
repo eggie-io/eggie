@@ -23,8 +23,9 @@ export type PushTargets = {
   instances: TargetInstance[];
   create_instance_url: string;
   pushed: Record<string, PushRecord>;
-  databases: { service: string; image: string; floating: boolean }[];
-  running: boolean;
+  floating: { service: string; image: string }[];
+  // The project is up and has volumes to copy, so the push stops it for a while.
+  stops: boolean;
 };
 
 export type InstanceRow = {
@@ -68,15 +69,10 @@ export function instanceRows(t: PushTargets): InstanceRow[] {
   });
 }
 
-export function defaultData(row: InstanceRow): boolean {
-  return row.pushedAt === null;
-}
-
-// A repeat push with data overwrites the instance's data, so it waits for an explicit confirmation.
-export function pushChoice(row: InstanceRow, data: boolean, confirmed: boolean) {
+// A repeat push replaces the instance's files and data, so it waits for an explicit confirmation.
+export function pushChoice(row: InstanceRow, confirmed: boolean) {
   const repeat = row.pushedAt !== null;
-  const needsConfirm = repeat && data;
-  return { repeat, needsConfirm, canPush: row.pickable && (!needsConfirm || confirmed) };
+  return { repeat, canPush: row.pickable && (!repeat || confirmed) };
 }
 
 export function secretsUrl(openConsoleUrl: string, instanceProject: string): string {
@@ -84,12 +80,9 @@ export function secretsUrl(openConsoleUrl: string, instanceProject: string): str
 }
 
 export function floatingWarnings(t: PushTargets): string[] {
-  return t.databases
-    .filter((d) => d.floating)
-    .map(
-      (d) =>
-        `${d.service} uses ${d.image}. The kitchen may download a newer version that can't read this data. ${pinAdvice(d.image)}`,
-    );
+  return t.floating.map(
+    (d) => `${d.service} uses ${d.image}. The kitchen may download a newer version that can't read this data. ${pinAdvice(d.image)}`,
+  );
 }
 
 function pinAdvice(image: string): string {

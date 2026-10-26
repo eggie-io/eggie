@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  defaultData,
   floatingWarnings,
   instanceRows,
   menuPush,
@@ -27,8 +26,8 @@ const targets = (instances: TargetInstance[], over: Partial<PushTargets> = {}): 
   instances,
   create_instance_url: "https://app.eggie.io/kitchens/new",
   pushed: {},
-  databases: [],
-  running: false,
+  floating: [],
+  stops: false,
   ...over,
 });
 
@@ -54,16 +53,14 @@ describe("instanceRows", () => {
     ]);
   });
 
-  it("a pushed instance defaults data off and marks the row", () => {
+  it("a pushed instance's row carries when it was pushed", () => {
     const [fresh, pushed] = instanceRows(
       targets([instance("a"), instance("b")], {
         pushed: { b: { pushed_at: 1700000000, console_hostname: "b.eggie.io", instance_project: "p", urls: [], secrets_missing: 0 } },
       }),
     );
     expect(fresh.pushedAt).toBeNull();
-    expect(defaultData(fresh)).toBe(true);
     expect(pushed.pushedAt).toBe(1700000000);
-    expect(defaultData(pushed)).toBe(false);
   });
 });
 
@@ -72,15 +69,14 @@ describe("pushChoice", () => {
   const freshRow = { ...base, pushedAt: null };
   const pushedRow = { ...base, pushedAt: 5 };
 
-  it("data on a repeat push needs the confirmation", () => {
-    expect(pushChoice(pushedRow, true, false)).toEqual({ repeat: true, needsConfirm: true, canPush: false });
-    expect(pushChoice(pushedRow, true, true).canPush).toBe(true);
-    expect(pushChoice(pushedRow, false, false).canPush).toBe(true);
-    expect(pushChoice(freshRow, true, false)).toEqual({ repeat: false, needsConfirm: false, canPush: true });
+  it("a repeat push needs the replace confirmation; a first push does not", () => {
+    expect(pushChoice(pushedRow, false)).toEqual({ repeat: true, canPush: false });
+    expect(pushChoice(pushedRow, true).canPush).toBe(true);
+    expect(pushChoice(freshRow, false)).toEqual({ repeat: false, canPush: true });
   });
 
   it("an unpickable row can never push", () => {
-    expect(pushChoice({ ...freshRow, pickable: false }, false, true).canPush).toBe(false);
+    expect(pushChoice({ ...pushedRow, pickable: false }, true).canPush).toBe(false);
   });
 });
 
@@ -90,12 +86,11 @@ it("secretsUrl appends an encoded return path", () =>
   ));
 
 describe("floatingWarnings", () => {
-  it("warns only for floating tags, with a pin suggestion", () => {
+  it("names each image with a pin suggestion", () => {
     const t = targets([], {
-      databases: [
-        { service: "db", image: "postgres:latest", floating: true },
-        { service: "cache", image: "redis:7", floating: false },
-        { service: "q", image: "rabbitmq", floating: true },
+      floating: [
+        { service: "db", image: "postgres:latest" },
+        { service: "q", image: "rabbitmq" },
       ],
     });
     expect(floatingWarnings(t)).toEqual([

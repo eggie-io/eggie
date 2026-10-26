@@ -124,7 +124,7 @@ def test_a_pass_keeps_the_service_record_of_a_pushed_project(tmp_path):
     assert cloud.calls == [] and repos.cloud_projects.mapping() == {}
 
 
-def test_a_instance_never_registers_a_pushed_project(tmp_path):
+def test_an_instance_never_registers_a_pushed_project(tmp_path):
     cloud = FakeCloud()
     repos, account = setup(tmp_path, cloud, ["shop"])
     repos.pushed_projects.claim("shop", "c-shop", "dev-1", 1.0)

@@ -1,9 +1,9 @@
 import pytest
 
 from eggie_api.domain.push import (
-    DEFAULT_HINT, DataPlan, Database, Manifest, build_manifest, check_replace, data_plan,
-    databases, docker_volume_name, is_excluded, is_floating, instance_project_id,
-    merge_secret_names, parse_manifest, replace_mode, safe_return_path)
+    DEFAULT_HINT, DataPlan, Floating, Manifest, build_manifest, check_replace, data_plan,
+    docker_volume_name, floating, is_excluded, is_floating, instance_project_id,
+    merge_secret_names, parse_manifest, safe_return_path)
 from eggie_api.errors import Invalid
 
 
@@ -20,36 +20,24 @@ def test_floating_tags():
     assert is_floating("registry.local:5000/postgres")
 
 
-def test_databases_found_by_last_path_segment():
-    compose = {"services": {"db": {"image": "postgis/postgis:16-3.4"},
-                            "cache": {"image": "docker.io/library/redis"},
-                            "web": {"image": "nginx"}, "app": {"build": "."}}}
-    assert databases(compose) == [Database("cache", "docker.io/library/redis", True),
-                                  Database("db", "postgis/postgis:16-3.4", False)]
-
-
-def test_data_plan_named_volumes_external_skipped_and_db_bind_paths_only():
+def test_data_is_every_named_volume_a_service_mounts_and_binds_are_files():
     compose = {"services": {
         "db": {"image": "postgres:16", "volumes": ["./pgdata:/var/lib/postgresql/data", "dbv:/x"]},
-        "web": {"image": "node", "volumes": ["./src:/app", {"type": "volume", "source": "uploads", "target": "/u"}]},
+        "web": {"image": "node", "volumes": ["./src:/app", "~/cache:/c", "/anon",
+                                             {"type": "volume", "source": "uploads", "target": "/u"}]},
         "ext": {"image": "x", "volumes": ["shared:/s"]}},
         "volumes": {"dbv": {}, "uploads": None, "shared": {"external": True}, "unused": {}}}
-    assert data_plan(compose) == DataPlan(volumes=("dbv", "uploads"), data_paths=("pgdata",), external=("shared",))
+    assert data_plan(compose) == DataPlan(volumes=("dbv", "uploads"), external=("shared",))
 
 
-def test_db_bind_mount_outside_the_project_is_not_data():
-    compose = {"services": {"db": {"image": "mysql:8", "volumes": ["/srv/mysql:/var/lib/mysql", "../up:/u"]}}}
-    assert data_plan(compose).data_paths == ()
-
-
-def test_read_only_db_binds_are_config_not_data():
-    compose = {"services": {"db": {"image": "postgres:16", "volumes": [
-        "./init.sql:/docker-entrypoint-initdb.d/init.sql:ro",
-        "./conf:/etc/postgresql:ro,z",
-        {"type": "bind", "source": "./certs", "target": "/certs", "read_only": True},
-        "./pgdata:/var/lib/postgresql/data:rw",
-        {"type": "bind", "source": "./wal", "target": "/wal"}]}}}
-    assert data_plan(compose).data_paths == ("pgdata", "wal")
+def test_floating_warns_only_where_a_copied_volume_meets_a_moving_tag():
+    compose = {"services": {
+        "db": {"image": "postgres", "volumes": ["dbv:/var/lib/postgresql/data"]},
+        "pinned": {"image": "redis:7", "volumes": ["cache:/data"]},
+        "web": {"image": "nginx:latest", "volumes": ["./site:/usr/share/nginx/html"]},
+        "ext": {"image": "mongo", "volumes": ["shared:/data/db"]}},
+        "volumes": {"dbv": {}, "cache": {}, "shared": {"external": True}}}
+    assert floating(compose) == [Floating("db", "postgres")]
 
 
 def test_docker_volume_name_honours_compose_and_volume_names():
@@ -58,13 +46,10 @@ def test_docker_volume_name_honours_compose_and_volume_names():
     assert docker_volume_name(compose, "shop", "pinned") == "real-name"
 
 
-def test_replace_rules():
-    assert replace_mode(False, True) == "none" and replace_mode(True, False) == "files"
-    assert replace_mode(True, True) == "files-and-data"
-    assert check_replace(False, True, "none") is None
-    assert check_replace(True, False, "none") == "already_on_instance"
-    assert check_replace(True, True, "files") == "confirm_replace_data"
-    assert check_replace(True, True, "files-and-data") is None
+def test_only_an_unannounced_replace_is_refused():
+    assert check_replace(True, "none") == "already_on_instance"
+    assert check_replace(True, "all") is None
+    assert check_replace(False, "none") is None and check_replace(False, "all") is None
 
 
 def test_secret_merge_table():
@@ -88,12 +73,11 @@ def test_safe_return_path_keeps_a_query():
 
 
 def test_manifest_round_trip_and_refusals():
-    compose = {"services": {"db": {"image": "postgres:16", "volumes": ["./pgdata:/d", "dbv:/x"]}}, "volumes": {"dbv": {}}}
-    raw = build_manifest(data=True, plan=data_plan(compose), secrets={"API_KEY": "hint"})
-    assert parse_manifest(raw, compose) == Manifest(True, ("dbv",), ("pgdata",), {"API_KEY": "hint"})
-    no_data = build_manifest(data=False, plan=data_plan(compose), secrets={})
-    assert parse_manifest(no_data, compose) == Manifest(False, ("dbv",), ("pgdata",), {})
-    for broken in ({**raw, "format": 2}, {**raw, "volumes": ["nope"]}, {**raw, "data_paths": ["../etc"]},
+    compose = {"services": {"db": {"image": "postgres:16", "volumes": ["./pgdata:/d", "dbv:/x"]}},
+               "volumes": {"dbv": {}}}
+    raw = build_manifest(volumes={"dbv": "shop_dbv"}, secrets={"API_KEY": "hint"})
+    assert parse_manifest(raw, compose) == Manifest(("dbv",), {"API_KEY": "hint"})
+    for broken in ({**raw, "format": 2}, {**raw, "volumes": ["nope"]}, {**raw, "volumes": "dbv"},
                    {**raw, "secrets": [{"name": "PATH", "hint": ""}]}):
         with pytest.raises(Invalid):
             parse_manifest(broken, compose)

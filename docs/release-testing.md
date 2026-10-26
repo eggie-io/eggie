@@ -105,9 +105,9 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | S10 | `curl -X POST -H 'Origin: https://<site host>' https://<site host>/api/account/sign-out -b <console cookie>` (or the bearer route on loopback) | `403` with code `site_account`; the console stays signed in | |
 | S11 | Open the console from the web app a second time with the first link (already used) | "Open the console from the web app again"; the service records one redemption for the first open and refuses the second | |
 | S12 | On the service, confirm the device pair seeded in user data was rotated at first boot | The seeded refresh token is spent; `curl 169.254.169.254/metadata/v1/user-data` from the droplet shell still shows it, and it no longer works | |
-| S13 | In the local console, Push a project with a database to a running kitchen with data ticked | Progress runs through packing, sending, unpacking, restoring data; the kitchen shows the project with its data and a working URL | |
-| S14 | Push the same project again with data unticked | The repeat-push warning appears; after it the kitchen's database content is unchanged and the files are the new ones | |
-| S15 | Push it again with data ticked | The dialog asks to confirm replacing the kitchen's data; without confirming nothing changes; confirmed, the data is replaced | |
+| S13 | In the local console, Push a running project with a database in a named volume to a running kitchen | The local project stops while packing and starts again; progress runs through packing, sending, unpacking, restoring data; the kitchen shows the project with its data and a working URL | |
+| S14 | Change a file and a database row locally, then Push to the same kitchen again | The dialog warns that files and data there are replaced and Push stays disabled until "Replace … on …" is ticked; after the push the kitchen has the new file and the local row | |
+| S15 | Retired: the "Move data" choice is gone, every push sends data (S14 covers the repeat push) | — | |
 | S16 | Push a project that needs a secret not set on the kitchen, then open Start on it there | The card shows "Needs N secrets" and Start opens the secrets form; saving the last requested value starts the project | |
 | S17 | Open the push result's secrets link | It signs in if needed and lands on the project's secrets form on the kitchen | |
 | S18 | Delete the project locally after a push | The web app still lists the project; the kitchen copy keeps running | |

@@ -1,7 +1,7 @@
-"""Rules for pushing a local project to an instance: what travels, what counts as data, how secrets merge. No I/O."""
+"""Rules for pushing a local project to an instance: what travels, how a repeat
+push replaces, how secrets merge. No I/O."""
 from __future__ import annotations
 
-import posixpath
 from dataclasses import dataclass
 
 from ..errors import Invalid
@@ -11,13 +11,8 @@ from .secrets import SecretError, check_name
 EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "__pycache__"})
 EXCLUDED_FILES = frozenset({".eggie/overlay.yml", ".DS_Store"})
 
-DATABASE_IMAGES = frozenset({
-    "postgres", "postgis", "mysql", "mariadb", "mongo", "redis", "valkey", "elasticsearch",
-    "opensearch", "clickhouse-server", "couchdb", "influxdb", "neo4j"})
-
 REPLACE_NONE = "none"
-REPLACE_FILES = "files"
-REPLACE_ALL = "files-and-data"
+REPLACE_ALL = "all"
 
 DEFAULT_HINT = "Set on your computer. Enter its value for the kitchen."
 
@@ -48,63 +43,49 @@ def is_floating(image: str) -> bool:
 
 
 @dataclass(frozen=True)
-class Database:
-    service: str
-    image: str
-    floating: bool
-
-
-def databases(compose: dict) -> list[Database]:
-    found = []
-    for name, svc in sorted((compose.get("services") or {}).items()):
-        image = (svc or {}).get("image")
-        if not isinstance(image, str):
-            continue
-        repo, _ = _split_image(image)
-        if repo.rsplit("/", 1)[-1] in DATABASE_IMAGES:
-            found.append(Database(name, image, is_floating(image)))
-    return found
-
-
-@dataclass(frozen=True)
 class DataPlan:
     volumes: tuple[str, ...]
-    data_paths: tuple[str, ...]
     external: tuple[str, ...]
 
 
-def _mounts(svc: dict):
-    """Yield (kind, source, read_only) for each mount, kind being 'bind' or 'volume'."""
+def _named_volumes(svc: dict) -> set[str]:
+    """Sources of the service's named-volume mounts; binds are project files."""
+    found = set()
     for entry in svc.get("volumes") or []:
         if isinstance(entry, str):
-            parts = entry.split(":")
-            if len(parts) < 2:
-                continue
-            src = parts[0]
-            options = parts[2].split(",") if len(parts) > 2 else []
-            yield ("bind" if src.startswith((".", "/")) else "volume"), src, "ro" in options
-        elif isinstance(entry, dict) and isinstance(entry.get("source"), str):
-            if entry.get("type") in ("bind", "volume"):
-                yield entry["type"], entry["source"], entry.get("read_only") is True
+            src, sep, _ = entry.partition(":")
+            if sep and not src.startswith((".", "/", "~")):
+                found.add(src)
+        elif isinstance(entry, dict) and entry.get("type") == "volume" \
+                and isinstance(entry.get("source"), str):
+            found.add(entry["source"])
+    return found
 
 
 def data_plan(compose: dict) -> DataPlan:
     declared = compose.get("volumes") or {}
-    used: set[str] = set()
-    paths: set[str] = set()
-    db_services = {d.service for d in databases(compose)}
-    for name, svc in (compose.get("services") or {}).items():
-        for kind, src, read_only in _mounts(svc or {}):
-            if kind == "volume":
-                used.add(src)
-            # A database never writes through a read-only bind: that is config.
-            elif name in db_services and not read_only:
-                path = posixpath.normpath(src)
-                if path != "." and path != ".." and not path.startswith(("../", "/")):
-                    paths.add(path)
-    external = {k for k in used if k in declared and (declared[k] or {}).get("external")}
-    volumes = {k for k in used if k in declared} - external
-    return DataPlan(tuple(sorted(volumes)), tuple(sorted(paths)), tuple(sorted(external)))
+    used = {k for svc in (compose.get("services") or {}).values()
+            for k in _named_volumes(svc or {}) if k in declared}
+    external = {k for k in used if (declared[k] or {}).get("external")}
+    return DataPlan(tuple(sorted(used - external)), tuple(sorted(external)))
+
+
+@dataclass(frozen=True)
+class Floating:
+    service: str
+    image: str
+
+
+def floating(compose: dict) -> list[Floating]:
+    """Services whose data travels but whose image may be a newer major version
+    on the instance, one that cannot read it."""
+    copied = set(data_plan(compose).volumes)
+    found = []
+    for name, svc in sorted((compose.get("services") or {}).items()):
+        image = (svc or {}).get("image")
+        if isinstance(image, str) and is_floating(image) and _named_volumes(svc) & copied:
+            found.append(Floating(name, image))
+    return found
 
 
 def docker_volume_name(compose: dict, compose_name: str, key: str) -> str:
@@ -123,20 +104,8 @@ def volume_outside(compose: dict, compose_name: str,
     return None
 
 
-def replace_mode(pushed_before: bool, data: bool) -> str:
-    if not pushed_before:
-        return REPLACE_NONE
-    return REPLACE_ALL if data else REPLACE_FILES
-
-
-def check_replace(exists: bool, data: bool, replace: str) -> str | None:
-    if not exists:
-        return None
-    if replace == REPLACE_NONE:
-        return "already_on_instance"
-    if data and replace != REPLACE_ALL:
-        return "confirm_replace_data"
-    return None
+def check_replace(exists: bool, replace: str) -> str | None:
+    return "already_on_instance" if exists and replace == REPLACE_NONE else None
 
 
 @dataclass(frozen=True)
@@ -184,21 +153,17 @@ def safe_return_path(path: object) -> str | None:
     return path
 
 
-def build_manifest(*, data: bool, plan: DataPlan, secrets: dict[str, str]) -> dict:
+def build_manifest(*, volumes, secrets: dict[str, str]) -> dict:
     return {
         "format": MANIFEST_FORMAT,
-        "data": data,
-        "volumes": list(plan.volumes),
-        "data_paths": list(plan.data_paths),
+        "volumes": sorted(volumes),
         "secrets": [{"name": n, "hint": secrets[n]} for n in sorted(secrets)],
     }
 
 
 @dataclass(frozen=True)
 class Manifest:
-    data: bool
     volumes: tuple[str, ...]
-    data_paths: tuple[str, ...]
     secrets: dict[str, str]
 
 
@@ -216,13 +181,9 @@ def _str_list(raw: dict, key: str) -> list[str]:
 def parse_manifest(raw: object, compose: dict) -> Manifest:
     if not isinstance(raw, dict) or raw.get("format") != MANIFEST_FORMAT:
         raise _bad("unsupported manifest format")
-    data = raw.get("data")
-    if not isinstance(data, bool):
-        raise _bad("manifest data must be true or false")
-    volumes, paths = _str_list(raw, "volumes"), _str_list(raw, "data_paths")
-    plan = data_plan(compose)
-    if not set(volumes) <= set(plan.volumes) or not set(paths) <= set(plan.data_paths):
-        raise _bad("manifest names data the compose file does not have")
+    volumes = _str_list(raw, "volumes")
+    if not set(volumes) <= set(data_plan(compose).volumes):
+        raise _bad("manifest names volumes the compose file does not have")
     entries = raw.get("secrets")
     if not isinstance(entries, list):
         raise _bad("manifest secrets must be a list")
@@ -238,4 +199,4 @@ def parse_manifest(raw: object, compose: dict) -> Manifest:
         if entry["name"] in secrets:
             raise _bad(f"secret {entry['name']} listed twice")
         secrets[entry["name"]] = entry["hint"]
-    return Manifest(data, tuple(volumes), tuple(paths), secrets)
+    return Manifest(tuple(volumes), secrets)

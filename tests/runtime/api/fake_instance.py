@@ -21,8 +21,8 @@ class FakeInstance:
     def names(self):
         return [call[0] for call in self.calls]
 
-    def open(self, host, *, ticket, size, data, replace):
-        return self._next("open", host, ticket, size, data, replace)
+    def open(self, host, *, ticket, size, replace):
+        return self._next("open", host, ticket, size, replace)
 
     def upload(self, host, push_id, token, path, on_progress):
         reply = self._next("upload", host, push_id, token, path)

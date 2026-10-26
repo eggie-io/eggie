@@ -114,13 +114,11 @@ class InstanceClient:
         text = raw.decode("utf-8", errors="replace").strip()[:200]
         return InstanceError(f"http_{status}", text or f"status {status}", status)
 
-    def open(self, host: str, *, ticket: str, size: int, data: bool,
-             replace: str) -> dict:
+    def open(self, host: str, *, ticket: str, size: int, replace: str) -> dict:
         return self._call("POST", host, "/api/transfers", {
             "Accept": "application/json",
             "Eggie-Transfer-Ticket": ticket,
             "Eggie-Transfer-Size": str(size),
-            "Eggie-Transfer-Data": "yes" if data else "no",
             "Eggie-Transfer-Replace": replace,
         }, older_is_unreachable=True)
 

@@ -44,5 +44,4 @@ class CloneRepo(BaseModel):
 
 class PushRequest(BaseModel):
     instance_id: str = Field(min_length=1, max_length=256)
-    data: bool = False
-    replace_data: bool = False
+    replace: bool = False

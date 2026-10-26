@@ -60,6 +60,8 @@ class FakeRunner:
         self.own_image = Completed(0, "eggie-api:test\n", "")
         # Answers `docker run` (the root helper container) when set.
         self.on_docker_run = None
+        # Every local volume, unfiltered; `docker volume ls --filter` gets the default.
+        self.volumes = Completed(0, "", "")
 
     def exec(self, argv, *, root=False, env=None):
         self.calls.append(argv)
@@ -72,6 +74,8 @@ class FakeRunner:
             return self.on_docker_run(argv)
         if argv[1:4] == ["inspect", "--format", "{{.Config.Image}}"]:
             return self.own_image
+        if argv[1:] == ["volume", "ls", "--format", "{{.Name}}"]:
+            return self._reply(self.volumes)
         if argv[1] == "version":
             return self._reply(self.docker_version)
         if argv[1] == "exec":

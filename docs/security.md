@@ -158,12 +158,12 @@ root-equivalent — plus:
 - Unpacking runs in a root helper container (`python -m eggie_api.infra.bundle unpack`): it refuses
   absolute names, devices, FIFOs and hard links that escape the tree. Project files get the staging
   folder's group (the VM's `docker`, inherited through `/opt/eggie`'s setgid bit) and setgid
-  directories; data keeps the sender's owners. A bundle whose data flag differs
-  from the `Eggie-Transfer-Data` header accepted at open is refused (`bad_bundle`), as is a volume
-  whose explicit `name:` is outside `<compose_name>_`, or (data or not) a compose `name:` that is
-  another kitchen project's.
-- What leaves the user's machine: the project files (including `.env`), volume and database data
-  when ticked, and secret names with their hints. Never secret values.
+  directories; volumes keep the sender's owners. A volume whose explicit `name:` is outside
+  `<compose_name>_` is refused (`bad_bundle`), as is a compose `name:` that is another kitchen
+  project's.
+- What leaves the user's machine: the project files (including `.env` and any folder a service
+  mounts), every named volume that exists locally, and secret names with their hints. Never
+  secret values.
 - TLS to the kitchen is always verified; `EGGIE_INSTANCE_CA_FILE` adds trust for dev (staging)
   certificates.
 

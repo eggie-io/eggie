@@ -46,7 +46,7 @@ def _http_error(status, code, message="m"):
 def test_open_sends_ticket_only_in_a_header():
     opener = FakeOpener({"push_id": "p1", "token": "t1"})
     out = InstanceClient(opener=opener).open("k.example", ticket="SECRET", size=7,
-                                            data=True, replace="files")
+                                            replace="all")
     request = opener.requests[0]
     assert out == {"push_id": "p1", "token": "t1"}
     assert request.full_url == "https://k.example/api/transfers"
@@ -54,8 +54,7 @@ def test_open_sends_ticket_only_in_a_header():
     headers = {k.lower(): v for k, v in request.header_items()}
     assert headers["eggie-transfer-ticket"] == "SECRET"
     assert headers["eggie-transfer-size"] == "7"
-    assert headers["eggie-transfer-data"] == "yes"
-    assert headers["eggie-transfer-replace"] == "files"
+    assert headers["eggie-transfer-replace"] == "all"
 
 
 def test_upload_reports_progress_and_sends_content_length(tmp_path):
@@ -73,17 +72,17 @@ def test_upload_reports_progress_and_sends_content_length(tmp_path):
     assert seen == [4, 8, 10]
 
 
-def test_ticket_refusal_is_a_instance_error_with_the_service_code():
+def test_ticket_refusal_is_an_instance_error_with_the_service_code():
     opener = FakeOpener(_http_error(403, "transfer_ticket_invalid", "no"))
     with pytest.raises(InstanceError) as raised:
-        InstanceClient(opener=opener).open("k", ticket="t", size=1, data=False, replace="none")
+        InstanceClient(opener=opener).open("k", ticket="t", size=1, replace="none")
     assert raised.value.code == "transfer_ticket_invalid"
     assert raised.value.status == 403
 
 
 def test_old_instance_and_connection_errors_are_unreachable():
     client = lambda reply: InstanceClient(opener=FakeOpener(reply))
-    call = lambda c: c.open("k", ticket="t", size=1, data=False, replace="none")
+    call = lambda c: c.open("k", ticket="t", size=1, replace="none")
     with pytest.raises(InstanceUnreachable, match="older"):
         call(client(_http_error(401, "not_signed_in")))
     with pytest.raises(InstanceUnreachable, match="older"):

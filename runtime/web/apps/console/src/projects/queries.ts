@@ -176,7 +176,7 @@ export function usePushTargets(id: string, open: boolean) {
 export function useStartPush(id: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { instance_id: string; data: boolean; replace_data: boolean }) =>
+    mutationFn: (body: { instance_id: string; replace: boolean }) =>
       api.post<{ job_id: string }>(`${projectPath(id)}/push`, body),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });

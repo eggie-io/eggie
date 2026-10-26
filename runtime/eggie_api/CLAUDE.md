@@ -142,19 +142,18 @@ and a host release. Prefer additive changes.
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
-  (tar: `manifest.json`, `files/`, `volumes/<key>/`; the manifest always lists volumes and data_paths)
+  (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)
   in a root helper container, then sends it with `infra/instance.py` (`InstanceClient`, TLS always
   verified, `EGGIE_INSTANCE_CA_FILE` adds trust for staging certs). Kitchen side: `services/transfers.py`
   and `rest/routers/transfers.py` (`POST /api/transfers`, `PUT .../bundle`, `GET .../{push_id}`,
   `GET /api/ready`), site only, with their own auth branch in `rest/auth.py` (ticket and push token in
   `Eggie-Transfer-*` headers, never URL or log). The kitchen unpacks with
   `python -m eggie_api.infra.bundle unpack` (root container, `filter="tar"`; refuses absolute names,
-  devices, FIFOs, escaping hard links). Only `volumes/` and the manifest's `data_paths` keep the
-  sender's numeric owners and modes; every other project file gets the staging folder's group (the
-  VM's `docker`, via `/opt/eggie`'s setgid) and `g+rwX`, directories setgid. A read-only or one-file
-  database bind is config, not data. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
-  in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten), refuses a bundle whose data flag differs from the open
-  header (`bad_bundle`), and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
+  devices, FIFOs, escaping hard links). Only `volumes/` keeps the sender's numeric owners and modes;
+  every project file gets the staging folder's group (the VM's `docker`, via `/opt/eggie`'s setgid)
+  and `g+rwX`, directories setgid. A repeat push sends `Eggie-Transfer-Replace: all` only after the
+  console's confirmation and replaces files and volumes alike. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
+  in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten) and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
   sync; `instance_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
   the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
@@ -181,6 +180,10 @@ and a host release. Prefer additive changes.
 - Anything the API creates inside a project must be group-writable: login users are never the
   API's uid. `install.sh`'s default ACL on `/opt/eggie/projects` handles that under the API's
   umask 022; `clone_argv`'s `umask 002` predates it and is harmless.
+- A database whose data sits in a project folder (`./pgdata:/var/lib/postgresql/data`) travels as
+  project files: a push replaces the kitchen's copy and gives it the project files' group and modes,
+  which Postgres refuses (it wants its own user and 0700). Data belongs in a named volume, as the
+  `eggie-setup` skill says.
 - An API restart during a kitchen import's replace step loses `transfers/in/<push>/old` (the sweep
   deletes it); a put-back that fails moves it to `transfers/kept/<project>-<push>` instead; a failed volume restore leaves that volume empty (it is removed before copying).
 - A top-level directory or module in `eggie_api/` must not share a name with a stdlib module (`http`,

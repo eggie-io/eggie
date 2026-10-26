@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 TICKET = "Eggie-Transfer-Ticket"
 SIZE = "Eggie-Transfer-Size"
-DATA = "Eggie-Transfer-Data"
 REPLACE = "Eggie-Transfer-Replace"
 TOKEN = "Eggie-Transfer-Token"
 MAX_DIGITS = 19
@@ -42,13 +41,6 @@ def _size(request: Request) -> int:
     return size
 
 
-def _data(request: Request) -> bool:
-    value = _header(request, DATA)
-    if value not in ("yes", "no"):
-        raise bad_transfer(DATA)
-    return value == "yes"
-
-
 def build(s: Services) -> APIRouter:
     # Mounted only on a site. rest/auth.py lets these through with no session:
     # the ticket and the push token are the only credentials they take.
@@ -58,7 +50,7 @@ def build(s: Services) -> APIRouter:
     @router.post("/api/transfers", status_code=201)
     def open_transfer(request: Request) -> dict:
         return s.transfers.open(size=_size(request), ticket=_header(request, TICKET),
-                                data=_data(request), replace=_header(request, REPLACE),
+                                replace=_header(request, REPLACE),
                                 forwarded_for=request.headers.get("x-forwarded-for", ""),
                                 peer=getattr(request.client, "host", ""))
 

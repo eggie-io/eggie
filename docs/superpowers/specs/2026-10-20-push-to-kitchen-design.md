@@ -5,6 +5,13 @@ Status: design, 2026-10-20. Service contract:
 includes the readiness probe, the `complete` failure rule and records that outlive local copies.
 The service is not live: everything is built against fakes until it is.
 
+Revised 2026-10-26 (PR #92 review): every push sends data. The "Move data" checkbox, the database
+image list and `data_paths` are gone; a repeat push replaces files and volumes after one
+confirmation. Code says "instance" where this text says kitchen (`instance_pushes`,
+`InstanceClient`, `already_on_instance`, `EGGIE_INSTANCE_CA_FILE`, the service's `instances` and
+`create_instance_url`); "kitchen" is only the word users see. Code updates without data are left to
+a later git-based deploy.
+
 ## 1. Intent
 
 A user picks a kitchen in the local console and pushes a project to it. The kitchen might become
@@ -18,10 +25,9 @@ single-use ticket that the kitchen redeems.
 ## 2. Goals, non-goals, anti-goals
 
 Goals:
-- One "Push to Kitchen" action per project (the wording isn't final), with a kitchen picker and a
-  "Move data (databases)" checkbox.
-- A repeat push replaces the kitchen's copy, with a warning. Data is replaced only when it is sent,
-  and only after an explicit confirmation.
+- One "Push to Kitchen" action per project (the wording isn't final), with a kitchen picker.
+- A push sends the project's files and data. A repeat push replaces the kitchen's files and data,
+  only after an explicit confirmation.
 - Secret names travel; secret values never leave the machine. On the kitchen, a pushed project with
   unset secrets waits for them instead of starting broken.
 - After the push, show the kitchen URL and a one-click way to the kitchen's secrets form.
@@ -67,16 +73,14 @@ It fetches `GET /api/projects/{id}/push` every time it opens (§4.1).
   A kitchen this project was already pushed to carries "Pushed <date>". The first pickable kitchen
   is selected. Under the list, a "Create a new kitchen" link opens `create_kitchen_url` in the
   system browser too.
-- **Move data (databases)** checkbox: on by default for a first push to the selected kitchen, off
-  for a repeat push. The default resets when the selection changes.
-- **Repeat push**: a warning notice is always shown: "This replaces <project>'s files on <kitchen>.
-  Changes made there are lost." When data is ticked for a repeat push, a second checkbox appears,
-  "Replace the kitchen's data with the data on this computer", and Push stays disabled until it is
-  ticked.
-- **Data ticked, project running**: "<project> stops while its data is copied, then starts again."
-- **Floating database tag**: for each database service whose image has a floating tag (§4.3): "db
-  uses postgres:latest. The kitchen may download a newer version that can't read this data. Pin a
-  version, e.g. postgres:16." Shown whether or not data is ticked; it does not block the push.
+- **Repeat push**: a warning: "<project> is already on <kitchen>. Pushing replaces its files and data
+  there with what's on this computer. Changes made on the kitchen are lost." and a checkbox
+  "Replace <project> on <kitchen>"; Push stays disabled until it is ticked. The choice resets when
+  the selection changes.
+- **Project running with volumes**: "<project> stops while its data is copied, then starts again."
+- **Floating tag**: for each service with a floating tag (§4.3) that mounts a volume the push copies:
+  "db uses postgres:latest. The kitchen may download a newer version that can't read this data. Pin
+  a version, e.g. postgres:16." It does not block the push.
 - **Progress**: after Push, the dialog shows the job, the same way `StartingBody` shows a start: a
   phase caption, elapsed time, and a progress bar showing bytes while sending. Closing the dialog
   doesn't cancel the push, and reopening the dialog shows the push still running.
@@ -100,18 +104,18 @@ It fetches `GET /api/projects/{id}/push` every time it opens (§4.1).
   "pushed": { "<instance_id>": { "pushed_at": 1792510000, "kitchen_project": "my-shop",
                                  "urls": ["https://my-shop.k7x2m9p4qa.eggie.space"],
                                  "secrets_missing": 2 } },
-  "databases": [ { "service": "db", "image": "postgres:latest", "floating": true } ],
-  "running": true
+  "floating": [ { "service": "db", "image": "postgres:latest" } ],
+  "stops": true
 }
 ```
 
 Errors: `not_signed_in` (409), `cloud_unavailable` (503), and any other service error as
 `cloud_error`.
 
-`POST /api/projects/{id}/push` with body `{"instance_id": "…", "data": true, "replace_data": true}`
-returns `{"job_id": "…"}`. If `data` is set, the project was pushed to that kitchen before, and
-`replace_data` isn't true, it answers 409 `confirm_replace_data`. The local check drives the UI. The
-kitchen is the authority, because the local record can be missing (§5.1).
+`POST /api/projects/{id}/push` with body `{"instance_id": "…", "replace": true}` returns
+`{"job_id": "…"}`. If the project was pushed to that kitchen before and `replace` isn't true, it
+answers 409 `already_on_kitchen`. The local check drives the UI. The kitchen is the authority,
+because the local record can be missing (§5.1).
 
 ### 4.2 The push job (`services/push.py`, job kind `push`)
 
@@ -121,7 +125,8 @@ Steps and phases:
 
 1. `preparing`: the project must be in `cloud_projects`. If it isn't, wake the sync loop and wait up
    to 15 s; then fail with `not_registered`.
-2. `stopping` (data ticked and the project running): `compose down`.
+2. `stopping` (the project is not stopped and has volumes to copy): `compose down`. Volumes that
+   don't exist locally yet are left out (mounting one to pack it would create it).
 3. `packing`: write the bundle (§4.3) to `/opt/eggie/transfers/out/<job>.tar`. A throwaway root
    container of the API's own image does the work (as `remove_tree_as_root` does today), so files
    owned by root are readable. Check local free disk first and fail with `disk_full`.
@@ -132,7 +137,7 @@ Steps and phases:
    the kitchen accepts the upload. Retries, with a fresh ticket each time:
    - `transfer_ticket_invalid`: once.
    - `kitchen_unreachable`: up to three attempts in total.
-   - `already_on_kitchen` or `confirm_replace_data` from the kitchen: never. Write the
+   - `already_on_kitchen` from the kitchen: never. Write the
      `kitchen_pushes` row, so the dialog shows the repeat-push warning, and fail the job with that
      code.
 6. `waiting`: poll the kitchen's status every 2 s and mirror its phase (`unpacking`,
@@ -150,14 +155,14 @@ One uncompressed tar:
 ```
 manifest.json
 files/<project tree>
-volumes/<compose volume key>/        # only when data is sent: the volume's contents
+volumes/<compose volume key>/        # the volume's contents
 ```
 
 `manifest.json`:
 
 ```json
-{ "format": 1, "data": true,
-  "volumes": ["db-data"], "data_paths": ["pgdata"],
+{ "format": 1,
+  "volumes": ["db-data"],
   "secrets": [ { "name": "STRIPE_KEY", "hint": "…" } ] }
 ```
 
@@ -165,12 +170,8 @@ volumes/<compose volume key>/        # only when data is sent: the volume's cont
   `.eggie/overlay.yml`. These are the same sets the folder import and `host/client.py` use, with
   one Python definition on the runtime side. The project's `.env` goes in.
 - **Data** is every named volume the compose file declares and a service mounts (`external: true`
-  volumes are skipped and listed in the job log), plus every bind-mounted folder inside the project
-  that a *database service* mounts (`data_paths`). Data paths go into `files/` only when data is
-  sent. Otherwise they are left out, and the kitchen keeps its own copy.
-- **A database service** is one whose image repository's last path segment is one of: `postgres`,
-  `postgis`, `mysql`, `mariadb`, `mongo`, `redis`, `valkey`, `elasticsearch`, `opensearch`,
-  `clickhouse-server`, `couchdb`, `influxdb`, `neo4j`. Pure function in `domain/push.py`.
+  volumes are skipped and listed in the job log). A bind-mounted folder inside the project is a
+  project file, whatever mounts it.
 - **Floating tag**: no tag, or a tag with no digit (`latest`, `alpine`). A `@sha256:` digest is
   pinned.
 - **Secrets**: the names of stored secrets, plus the outstanding requests with their hints. Never
@@ -180,7 +181,7 @@ volumes/<compose volume key>/        # only when data is sent: the volume's cont
 
 New table `kitchen_pushes(local_id, instance_id, console_hostname, kitchen_project, pushed_at,
 urls_json, secrets_missing)`, with primary key `(local_id, instance_id)`. It drives the "Pushed"
-mark, the default for the data checkbox, the repeat-push warning and the confirmation. The rows
+mark, the repeat-push warning and the confirmation. The rows
 stay when the local project is deleted, so a recreated project with the same id still gets the
 warning. The row is written when the kitchen accepts the upload, and again when the push ends.
 
@@ -214,9 +215,8 @@ There are two requests, so a refused ticket or a full disk is answered before an
 `POST /api/transfers`, with no body. Headers:
 - `Eggie-Transfer-Ticket: <ticket>`;
 - `Eggie-Transfer-Size: <bundle bytes>`;
-- `Eggie-Transfer-Data: yes|no`;
-- `Eggie-Transfer-Replace: none|files|files-and-data`. This is what the user confirmed: `none` for a
-  first push, `files` after the repeat-push warning, `files-and-data` after the data confirmation.
+- `Eggie-Transfer-Replace: none|all`. This is what the user confirmed: `none` for a first push,
+  `all` after the repeat-push confirmation.
 
 In order:
 1. A limit of 10 attempts a minute per sender address (first `X-Forwarded-For` entry, else the
@@ -227,8 +227,7 @@ In order:
 3. Resolve the kitchen project from the grant (§5.2) and take its project lock. If it is held,
    answer 409 `kitchen_busy`.
 4. **The kitchen enforces the overwrite rules.** If the project already exists here and Replace is
-   `none`, answer 409 `already_on_kitchen`. If data is sent to an existing project and Replace
-   isn't `files-and-data`, answer 409 `confirm_replace_data`.
+   `none`, answer 409 `already_on_kitchen`.
 5. Free disk must be at least 2 × size + 1 GiB. Otherwise answer 507 `kitchen_disk_full`, with the
    needed and free bytes in the message.
 6. Answer 201 `{"push_id", "token"}`. `token` is 32 random url-safe bytes; only its hash is kept, in
@@ -267,13 +266,11 @@ unlinked, as the contract says. Deleting a pushed project on the kitchen removes
 
 1. `unpacking`: extract into `/opt/eggie/transfers/in/<push_id>/` with `extract_archive` (data
    filter plus the absolute-path check). Check the manifest: format 1, secret names pass
-   `check_name`, and the volume keys and `data_paths` exist in the pushed compose file and stay
-   inside the project.
+   `check_name`, and the volume keys exist in the pushed compose file.
 2. Stop the kitchen project if it is running.
-3. Replace the files. Move the old folder aside, move the new tree in, and if data was not sent,
-   move the old folder's `data_paths` back into the new tree. Then remove the old folder (root
-   helper container). If any step fails, put the old folder back.
-4. `restoring data` (data sent): for each volume, remove the existing `<compose name>_<key>`
+3. Replace the files. Move the old folder aside and move the new tree in, then remove the old
+   folder (root helper container). If the move fails, put the old folder back.
+4. `restoring data` (volumes in the bundle): for each volume, remove the existing `<compose name>_<key>`
    volume, create it, and untar into it through the root helper container.
 5. Merge secret names (§5.4).
 6. Call `POST /v1/transfers/{ticket_id}/complete`, retrying three times on `CloudUnavailable`.
@@ -339,10 +336,9 @@ also serves `/api/transfers`.
 | `instance_not_found` (mint) | That kitchen is gone. (the list is fetched again) |
 | `transfer_rate_limited` (mint) | Too many pushes. Try again in N minutes. (from `Retry-After`) |
 | `transfer_ticket_invalid` (kitchen, after the one retry) | The kitchen didn't accept the push. Try again. |
-| `kitchen_disk_full` | <kitchen> doesn't have room: it needs X GB and has Y GB free. Try without data, or free space there. |
+| `kitchen_disk_full` | <kitchen> doesn't have room: it needs X GB and has Y GB free. Free space there and push again. |
 | `kitchen_busy` | <kitchen> is busy with this project. Try again in a minute. |
-| `already_on_kitchen` (kitchen) | <project> is already on <kitchen>. Pushing again replaces it there. (the dialog switches to the repeat-push warning) |
-| `confirm_replace_data` (local or kitchen) | Confirm that the kitchen's data should be replaced. |
+| `already_on_kitchen` (local or kitchen) | <project> is already on <kitchen>. Confirm that it should be replaced, then push again. (the dialog switches to the repeat-push confirmation) |
 | `kitchen_unreachable` (connect or TLS failure, or a kitchen 404 on `/api/transfers`) | <kitchen> isn't answering, or runs an older Eggie. Try again in a minute. |
 | `disk_full` (local) | This computer doesn't have room to pack the project. |
 
@@ -354,9 +350,9 @@ also serves `/api/transfers`.
   (mixed readiness, one pushed before), `push-running`, `push-done-secrets`, `push-rate-limited`,
   `kitchen-waiting-secrets`.
 - A live run waits for the service.
-- Tests that earn their keep: the data and database detection and floating-tag rule; bundle
-  contents (exclusions, data paths in or out, no secret values); the secret-name merge table; the
-  kitchen replace keeping `data_paths` when no data is sent and rolling back on failure;
+- Tests that earn their keep: which volumes are data and the floating-tag rule; bundle contents
+  (exclusions, bind folders as files, volumes, no secret values); the secret-name merge table; the
+  kitchen replace rolling back on failure;
   `transfer_ticket_invalid` retried exactly once; sync `Forget` for pushed projects; the kitchen's
   sync skipping pushed projects; `return_path` validation on both sides; the transfer route refusing
   the API token, a session and a wrong Host, and never reading the body when the ticket fails;
@@ -365,13 +361,12 @@ also serves `/api/transfers`.
 ## 8. Docs
 
 - `security.md`: the transfer entry point (its own auth, ticket in a header, rate limit, redeem
-  before reading, safe unpack, Host check), what leaves the machine (files including `.env`, data
-  when ticked, secret names, never values), and the push token.
+  before reading, safe unpack, Host check), what leaves the machine (files including `.env`,
+  volumes, secret names, never values), and the push token.
 - `site-mode.md`: the transfers endpoints the kitchen calls, `/api/transfers`, `/api/ready`,
   `return_path`, pushed projects kept out of sync.
 - `release-testing.md`: new cases with fresh IDs (S-series, appended), covering a first push with
-  data, a repeat push without data (kitchen data kept), a repeat push with data (confirmation
-  required), unset secrets leading to waiting then a start on save, the secrets link landing on the
+  data, a repeat push (confirmation required, files and data replaced), unset secrets leading to waiting then a start on save, the secrets link landing on the
   form, and a local delete after a push (the web app still lists the project).
 - `runtime/eggie_api/CLAUDE.md`: a "Push" feature-area entry.
 
@@ -386,5 +381,6 @@ The exact phase captions and copy (the wording isn't final), compression (the ki
 bundle with `r:*` either way), the local free-disk estimate, the root helper container's exact
 commands, and the dialog layout within the existing `@eggie/ui` kit.
 
-Known limits: one push must finish within Traefik's 30 min `readTimeout` on the kitchen. SQLite
-files inside the project folder are files, not data, so a repeat push replaces them.
+Known limits: one push must finish within Traefik's 30 min `readTimeout` on the kitchen. A
+database kept in a project folder travels as files and loses its owner and 0700 mode, which
+Postgres refuses; data belongs in a named volume.

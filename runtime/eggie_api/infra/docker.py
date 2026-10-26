@@ -173,6 +173,14 @@ def volume_sizes(runner) -> dict[str, int]:
     return sizes
 
 
+def volume_names(runner) -> set[str] | None:
+    """None when docker cannot say, so a caller never mistakes that for no volumes."""
+    result = runner.exec([DOCKER, "volume", "ls", "--format", "{{.Name}}"], root=True)
+    if not result.ok:
+        return None
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def remove_tree_as_root(runner, path) -> Completed:
     """The API runs as uid 1000, and containers write root-owned files into
     bind-mounted project folders. Removes `path` from a throwaway container of

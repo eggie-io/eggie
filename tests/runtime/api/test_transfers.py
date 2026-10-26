@@ -10,7 +10,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from eggie_api.domain.push import build_manifest, data_plan
+from eggie_api.domain.push import build_manifest
 from eggie_api.infra import bundle as bundle_io
 from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.runner import Completed
@@ -78,6 +78,9 @@ class Helper:
             os.rename(src, dst)
             os.chmod(dst, mode)
         elif "rm" in argv:
+            # Root ignores modes; an unprivileged test has to lift them first.
+            for current, _dirs, _files in os.walk(argv[-1]):
+                os.chmod(current, 0o755)
             shutil.rmtree(argv[-1], ignore_errors=True)
         return Completed(0, "", "")
 
@@ -130,12 +133,10 @@ def local_project(k, compose=COMPOSE_SHOP, files=None):
         (k.local / rel).write_text(text)
 
 
-def make_bundle(k, *, data=False, secrets=None, volumes=None, name="b.tar"):
-    plan = data_plan(yaml.safe_load((k.local / "docker-compose.yml").read_text()))
-    manifest = build_manifest(data=data, plan=plan, secrets=secrets or {})
+def make_bundle(k, *, secrets=None, volumes=None, name="b.tar"):
+    manifest = build_manifest(volumes=volumes or {}, secrets=secrets or {})
     out = k.local.parent / name
-    bundle_io.write_bundle(out, k.local, manifest, volumes=volumes or {},
-                           data_paths=plan.data_paths, include_data=data)
+    bundle_io.write_bundle(out, k.local, manifest, volumes=volumes or {})
     return out
 
 
@@ -152,10 +153,10 @@ def instance_project(k, pid="my-shop", cloud_id="c-1", files=None, status="stopp
     return folder
 
 
-def open_push(k, *, ticket="tk-1", size=1000, data="no", replace="none", **extra):
+def open_push(k, *, ticket="tk-1", size=1000, replace="none", **extra):
     headers = {"Eggie-Transfer-Ticket": ticket,
                "Eggie-Transfer-Size": None if size is None else str(size),
-               "Eggie-Transfer-Data": data, "Eggie-Transfer-Replace": replace}
+               "Eggie-Transfer-Replace": replace}
     headers.update(extra)
     return k.http.post("/api/transfers", headers={k: v for k, v in headers.items()
                                                   if v is not None})
@@ -178,10 +179,10 @@ def finished(k, opened) -> dict:
     raise AssertionError("the import never finished")
 
 
-def push(k, path, *, data="no", replace="none", ticket_id="t-1", complete=(None,)):
+def push(k, path, *, replace="none", ticket_id="t-1", complete=(None,)):
     k.cloud.replies.update(redeem_transfer_ticket=[grant(ticket_id=ticket_id)],
                            complete_transfer=list(complete))
-    opened = open_push(k, size=path.stat().st_size, data=data, replace=replace)
+    opened = open_push(k, size=path.stat().st_size, replace=replace)
     assert opened.status_code == 201, opened.text
     assert upload(k, opened.json(), path).status_code == 202
     return finished(k, opened.json())
@@ -226,8 +227,7 @@ def test_api_token_and_session_are_not_credentials(instance):
 
     for creds in ({"Authorization": "Bearer test-token"}, session):
         resp = instance.http.post("/api/transfers", headers={
-            **creds, "Eggie-Transfer-Size": "10", "Eggie-Transfer-Data": "no",
-            "Eggie-Transfer-Replace": "none"})
+            **creds, "Eggie-Transfer-Size": "10", "Eggie-Transfer-Replace": "none"})
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "bad_transfer"
     assert instance.cloud.calls == []
@@ -235,8 +235,7 @@ def test_api_token_and_session_are_not_credentials(instance):
 
 def test_missing_size_is_length_required_and_bad_values_are_bad_transfer(instance):
     assert open_push(instance, size=None).status_code == 411
-    for bad in ({"size": "12abc"}, {"data": "maybe"}, {"replace": "everything"},
-                {"ticket": ""}):
+    for bad in ({"size": "12abc"}, {"replace": "files"}, {"ticket": ""}):
         resp = open_push(instance, **bad)
         assert resp.json()["error"]["code"] == "bad_transfer", bad
     assert instance.cloud.calls == []
@@ -267,19 +266,11 @@ def test_existing_project_needs_replace(instance):
     assert instance.services.locks.acquire("my-shop")
 
 
-def test_data_into_existing_needs_files_and_data(instance):
-    instance_project(instance)
-    instance.cloud.replies["redeem_transfer_ticket"] = [grant(), grant()]
-    resp = open_push(instance, data="yes", replace="files")
-    assert resp.json()["error"]["code"] == "confirm_replace_data"
-    assert open_push(instance, data="yes", replace="files-and-data").status_code == 201
-
-
 def test_a_held_project_lock_is_instance_busy(instance):
     instance_project(instance)
     instance.services.locks.acquire("my-shop")
     instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
-    resp = open_push(instance, replace="files")
+    resp = open_push(instance, replace="all")
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "instance_busy"
 
@@ -298,7 +289,7 @@ def test_disk_check_uses_twice_the_size_plus_a_gib(instance):
     assert open_push(instance, size=1000).status_code == 201
 
 
-def test_name_taken_by_a_instance_project_gets_a_suffix(instance):
+def test_name_taken_by_an_instance_project_gets_a_suffix(instance):
     instance.repos.projects.add("my-shop", "/x", "foo.eggie.space")
     instance.cloud.replies["redeem_transfer_ticket"] = [grant()]
     assert open_push(instance).status_code == 201
@@ -322,7 +313,7 @@ def test_a_push_into_a_taken_name_is_named_by_the_instance_not_its_project_yml(i
     assert pushed == {"id": "my-shop-2", "web": [{"service": "web", "port": 80}]}
 
 
-def test_full_import_replaces_files_keeps_data_paths_and_completes(instance):
+def test_full_import_replaces_every_file_and_completes(instance):
     folder = instance_project(instance, status="started_ok")
     local_project(instance)
     old_file_at_down = []
@@ -335,7 +326,7 @@ def test_full_import_replaces_files_keeps_data_paths_and_completes(instance):
 
     instance.runner.exec = watch
 
-    status = push(instance, make_bundle(instance), replace="files")
+    status = push(instance, make_bundle(instance), replace="all")
 
     assert status["state"] == "done", status
     assert status["result"] == {"instance_project": "my-shop",
@@ -343,7 +334,8 @@ def test_full_import_replaces_files_keeps_data_paths_and_completes(instance):
                                 "secrets_missing": 0}
     assert not (folder / "src" / "old.py").exists()
     assert (folder / "src" / "app.py").read_text() == "print('new')\n"
-    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
+    # A bind folder is a project file: what is on the kitchen gives way too.
+    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on my laptop\n"
     # The old stack was stopped before its files went away.
     assert old_file_at_down == [True]
     assert instance.cloud.calls[-1] == ("complete_transfer", "at", "t-1")
@@ -353,28 +345,28 @@ def test_full_import_replaces_files_keeps_data_paths_and_completes(instance):
     assert instance.runner.argv_containing("up")
 
 
-def test_a_data_folder_the_api_cannot_move_goes_through_the_root_helper(instance):
+def test_a_project_folder_the_api_cannot_move_goes_through_the_root_helper(instance):
     folder = instance_project(instance)
-    # A database's data folder is 0700 and owned by the database's user.
-    (folder / "pgdata").chmod(0o500)
+    # Moving a directory rewrites its `..`, which needs write access to it.
+    folder.chmod(0o555)
     local_project(instance)
 
-    status = push(instance, make_bundle(instance), replace="files")
+    status = push(instance, make_bundle(instance), replace="all")
 
     assert status["state"] == "done", status
-    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
-    assert any(dst == str(folder / "pgdata") for _, dst in instance.helper.moves)
+    assert (folder / "src" / "app.py").read_text() == "print('new')\n"
+    assert any(src == str(folder) for src, _ in instance.helper.moves)
 
 
-def test_a_data_push_replaces_files_and_restores_each_volume(instance, tmp_path):
+def test_an_import_replaces_files_and_restores_each_volume(instance, tmp_path):
     folder = instance_project(instance)
     local_project(instance)
     source = tmp_path / "vol-db-data"
     source.mkdir()
     (source / "dump.sql").write_text("select 1;\n")
 
-    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
-                  data="yes", replace="files-and-data")
+    status = push(instance, make_bundle(instance, volumes={"db-data": source}),
+                  replace="all")
 
     assert status["state"] == "done", status
     assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on my laptop\n"
@@ -417,7 +409,7 @@ def test_a_failed_import_stops_then_starts_again_a_project_that_was_up(instance,
     folder = instance_project(instance, status=status)
     local_project(instance)
 
-    result = push(instance, make_bundle(instance), replace="files",
+    result = push(instance, make_bundle(instance), replace="all",
                   complete=[CloudError("project_not_found", "gone", 404)])
     settle(instance, "my-shop")
 
@@ -431,7 +423,7 @@ def test_a_failed_import_with_missing_secrets_waits_for_them(instance):
     instance_project(instance, status="started_ok")
     local_project(instance)
 
-    result = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": ""}), replace="files",
+    result = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": ""}), replace="all",
                   complete=[CloudError("project_not_found", "gone", 404)])
     settle(instance, "my-shop")
 
@@ -450,7 +442,7 @@ def test_complete_is_retried_three_times_on_an_unreachable_service(instance):
 
     settle(instance, "my-shop")
     instance.sleeps.clear()
-    gone = push(instance, path, replace="files", complete=[CloudUnavailable("x")] * 4)
+    gone = push(instance, path, replace="all", complete=[CloudUnavailable("x")] * 4)
     assert gone["result"] == {"code": "cloud_unavailable"}
     assert instance.sleeps == [1, 3, 9]
 
@@ -460,12 +452,10 @@ def test_a_bad_manifest_fails_before_touching_files_or_the_stack(instance):
     # The manifest names a volume the pushed compose file does not have.
     local_project(instance, compose="services:\n  web:\n    image: nginx\n")
     path = instance.local.parent / "bad.tar"
-    bundle_io.write_bundle(path, instance.local, {"format": 1, "data": False,
-                                                 "volumes": ["db-data"], "data_paths": [],
-                                                 "secrets": []},
-                           volumes={}, data_paths=[], include_data=False)
+    bundle_io.write_bundle(path, instance.local,
+                           {"format": 1, "volumes": ["db-data"], "secrets": []}, volumes={})
 
-    status = push(instance, path, replace="files")
+    status = push(instance, path, replace="all")
 
     assert status["result"] == {"code": "bad_manifest"}
     assert (folder / "src" / "old.py").exists()
@@ -475,50 +465,48 @@ def test_a_bad_manifest_fails_before_touching_files_or_the_stack(instance):
     assert instance.runner.argv_containing("up") == []
 
 
-@pytest.mark.parametrize("status, starts", [("stopped", False), ("started_ok", True)])
-def test_a_failed_replace_puts_the_old_folder_back(instance, status, starts):
-    compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
-    folder = instance_project(instance, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"},
-                             status=status)
-    (folder / "docker-compose.yml").write_text(compose)
-    # The pushed tree's `data` is a link out of the project; moving the
-    # instance's data/pg through it would write outside the tree.
-    local_project(instance, compose=compose, files={"src/app.py": "new\n"})
-    (instance.local / "data").symlink_to("/tmp")
+def _failing_moves(monkeypatch, folder, *, put_back_too=False):
+    rename = os.rename
 
-    status = push(instance, make_bundle(instance), replace="files")
+    def stuck(src, dst):
+        placing = str(dst) == str(folder) and str(src).endswith("/files")
+        putting_back = str(dst) == str(folder) and str(src).endswith("/old")
+        if placing or (put_back_too and putting_back):
+            raise OSError(5, "Input/output error")
+        rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", stuck)
+
+
+@pytest.mark.parametrize("status, starts", [("stopped", False), ("started_ok", True)])
+def test_a_failed_replace_puts_the_old_folder_back(instance, monkeypatch, status, starts):
+    folder = instance_project(instance, status=status)
+    local_project(instance, files={"src/app.py": "new\n"})
+    _failing_moves(monkeypatch, folder)
+
+    status = push(instance, make_bundle(instance), replace="all")
 
     assert status["state"] == "failed"
     assert (folder / "src" / "old.py").exists()
     assert not (folder / "src" / "app.py").exists()
-    assert (folder / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
+    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
     settle(instance, "my-shop")
     assert bool(instance.runner.argv_containing("up")) is starts
     assert instance.services.locks.acquire("my-shop")
 
 
 def test_a_failed_put_back_keeps_the_old_folder_outside_the_inbox(instance, monkeypatch):
-    compose = COMPOSE_SHOP.replace("./pgdata", "./data/pg")
-    folder = instance_project(instance, files={"src/old.py": "old\n", "data/pg/PG_VERSION": "16\n"})
-    (folder / "docker-compose.yml").write_text(compose)
-    local_project(instance, compose=compose, files={"src/app.py": "new\n"})
-    (instance.local / "data").symlink_to("/tmp")
-    rename = os.rename
+    folder = instance_project(instance)
+    local_project(instance, files={"src/app.py": "new\n"})
+    _failing_moves(monkeypatch, folder, put_back_too=True)
 
-    def stuck(src, dst):
-        if str(dst) == str(folder) and str(src).endswith("/old"):
-            raise OSError(5, "Input/output error")
-        rename(src, dst)
-
-    monkeypatch.setattr(os, "rename", stuck)
-
-    status = push(instance, make_bundle(instance), replace="files")
+    status = push(instance, make_bundle(instance), replace="all")
 
     assert status["state"] == "failed"
-    assert status["result"] == {"code": "bad_bundle"}
+    assert status["result"] == {"code": "import_failed"}
     [kept] = (instance.config.transfers_root / "kept").glob("my-shop-*")
     assert (kept / "src" / "old.py").read_text() == "old\n"
-    assert (kept / "data" / "pg" / "PG_VERSION").read_text() == "16\n"
+    assert (kept / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
     assert str(kept) in status["detail"]
     assert list((instance.config.transfers_root / "in").iterdir()) == []
 
@@ -537,7 +525,7 @@ def test_the_bundle_is_gone_once_unpacked_while_the_import_goes_on(instance):
 
     instance.runner.exec = watch
 
-    status = push(instance, make_bundle(instance), replace="files")
+    status = push(instance, make_bundle(instance), replace="all")
 
     assert status["state"] == "done", status
     assert bundles_at_down == [[]]
@@ -616,21 +604,6 @@ def test_a_wrong_token_upload_writes_nothing_and_keeps_the_push(instance):
     assert finished(instance, opened)["state"] == "done"
 
 
-def test_a_bundle_with_data_the_open_did_not_declare_is_refused(instance, tmp_path):
-    folder = instance_project(instance)
-    local_project(instance)
-    source = tmp_path / "vol"
-    source.mkdir()
-
-    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
-                  data="no", replace="files")
-
-    assert status["result"] == {"code": "bad_bundle"}
-    assert (folder / "src" / "old.py").exists()
-    assert (folder / "pgdata" / "PG_VERSION").read_text() == "16 on the kitchen\n"
-    assert not [a for a in instance.runner.calls if a[1:3] == ["volume", "rm"]]
-
-
 def test_a_volume_named_outside_the_project_is_refused(instance, tmp_path):
     compose = COMPOSE_SHOP.replace("db-data: {}", "db-data: {name: blog_db-data}")
     instance_project(instance)
@@ -638,8 +611,8 @@ def test_a_volume_named_outside_the_project_is_refused(instance, tmp_path):
     source = tmp_path / "vol"
     source.mkdir()
 
-    status = push(instance, make_bundle(instance, data=True, volumes={"db-data": source}),
-                  data="yes", replace="files-and-data")
+    status = push(instance, make_bundle(instance, volumes={"db-data": source}),
+                  replace="all")
 
     assert status["result"] == {"code": "bad_bundle"}
     assert not [a for a in instance.runner.calls if a[1:3] == ["volume", "rm"]]
@@ -725,7 +698,7 @@ def test_ticket_never_reaches_a_log_line(instance, caplog):
     assert opened["token"] not in caplog.text
 
 
-def test_deleting_a_instance_project_forgets_that_it_was_pushed(instance):
+def test_deleting_an_instance_project_forgets_that_it_was_pushed(instance):
     instance_project(instance)
     assert instance.client.delete("/projects/my-shop").status_code == 200
     assert instance.repos.pushed_projects.by_cloud_id("c-1") is None

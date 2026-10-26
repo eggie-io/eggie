@@ -171,14 +171,15 @@ with a link to the web app's kitchens list, instead of a sign-in button that can
 The local console's Push uploads a project to a kitchen; the kitchen side is `/api/transfers`,
 mounted on a site only.
 
-- `POST /api/transfers` (headers `Eggie-Transfer-Ticket`, `-Size`, `-Data: yes|no`,
-  `-Replace: none|files|files-and-data`) redeems the ticket, resolves the project from the grant,
-  checks overwrite rules and disk, and answers 201 `{push_id, token}`. An opened push with no upload
+- `POST /api/transfers` (headers `Eggie-Transfer-Ticket`, `-Size`, `-Replace: none|all`) redeems
+  the ticket, resolves the project from the grant, refuses `none` for a project it already has,
+  checks disk, and answers 201 `{push_id, token}`. An import replaces all the project's files and
+  every volume in the bundle. An opened push with no upload
   in 10 minutes is dropped; a new open replaces it.
 - `PUT /api/transfers/{push_id}/bundle` and `GET /api/transfers/{push_id}` take `Eggie-Transfer-Token`.
 - Errors: `transfer_ticket_invalid`, `instance_busy` (429 past 10 opens a minute from one address
-  or 60 in all; 409 while the project is busy), `already_on_instance`,
-  `confirm_replace_data`, `instance_disk_full` (507), `bad_bundle`, `not_ready`, `cloud_unavailable`.
+  or 60 in all; 409 while the project is busy), `already_on_instance`, `instance_disk_full` (507),
+  `bad_bundle`, `not_ready`, `cloud_unavailable`.
 - `GET /api/ready` (open) answers 200 `{"ready": true}` when signed in and Docker answers, else 503
   `not_ready`. The service probes it before marking a kitchen running, so a release with it also
   serves `/api/transfers`.

@@ -72,6 +72,7 @@ def env(tmp_path):
         ns.repos.account.update(access_token="at", refresh_token="rt",
                                 access_expires_at=10**12, org_id="org-1")
         ns.runner.on_docker_run = _pack_hook(ns, tmp_path)
+        ns.runner.volumes = Completed(0, "shop_db-data\nother_cache\n", "")
         code = ns.client.post("/sessions/handoff").json()["code"]
         ns.browser = TestClient(ns.app, headers={**BROWSER, **ORIGIN})
         assert ns.browser.post("/api/session", json={"code": code}).status_code == 200
@@ -96,8 +97,7 @@ def _pack_hook(env, tmp_path):
                 volumes[key] = tmp_path / "vol" / key
                 volumes[key].mkdir(parents=True, exist_ok=True)
         write_bundle(out / arg("--out"), env.config.projects_root / "shop", manifest,
-                     volumes=volumes, data_paths=manifest["data_paths"],
-                     include_data="--data" in argv)
+                     volumes=volumes)
         return Completed(0, "", "")
     return hook
 
@@ -109,10 +109,9 @@ def script(env, *, targets=(TARGETS,), mints=(), opens=(), uploads=(), statuses=
                                status=list(statuses))
 
 
-def push(env, *, data=True, replace_data=False) -> dict:
+def push(env, *, replace=False) -> dict:
     resp = env.browser.post("/api/projects/shop/push",
-                            json={"instance_id": "k1", "data": data,
-                                  "replace_data": replace_data})
+                            json={"instance_id": "k1", "replace": replace})
     assert resp.status_code == 202, resp.text
     job_id = resp.json()["job_id"]
     env.jobs.wait(job_id, timeout=5)
@@ -134,9 +133,8 @@ def test_targets_merge_service_instances_with_local_records(env):
     assert body["instances"] == [INSTANCE]
     assert body["create_instance_url"] == TARGETS["create_instance_url"]
     assert body["pushed"]["k1"]["instance_project"] == "shop"
-    assert body["databases"] == [{"service": "db", "image": "postgres:latest",
-                                  "floating": True}]
-    assert body["running"] is False
+    assert body["floating"] == [{"service": "db", "image": "postgres:latest"}]
+    assert body["stops"] is False
 
 
 def test_push_happy_path_mints_opens_uploads_and_records(env):
@@ -149,8 +147,8 @@ def test_push_happy_path_mints_opens_uploads_and_records(env):
     assert env.cloud.calls == [("transfer_targets", "at"),
                                ("mint_transfer_ticket", "at", "k1", "c-shop")]
     assert env.instance.names() == ["open", "upload", "status", "status"]
-    _, host, sent_ticket, size, data, replace = env.instance.calls[0]
-    assert (host, sent_ticket, data, replace) == ("k1.eggie.io", "tk-1", True, "none")
+    _, host, sent_ticket, size, replace = env.instance.calls[0]
+    assert (host, sent_ticket, replace) == ("k1.eggie.io", "tk-1", "none")
     assert job["progress"] == {"done": size, "total": size}
     assert env.repos.instance_pushes.for_project("shop")["k1"]["instance_project"] == "shop"
     assert job["result"]["instance_name"] == "My kitchen"
@@ -177,15 +175,13 @@ def test_bundle_carries_secret_names_never_values(env):
     assert b"sk-very-secret" not in seen["bytes"]
 
 
-def test_a_one_file_db_bind_ships_as_a_file_not_as_data(env):
+def test_every_push_sends_bind_folders_as_files_and_only_volumes_that_exist(env):
     folder = env.config.projects_root / "shop"
-    (folder / "docker-compose.yml").write_text(
-        "services:\n  db:\n    image: postgres:16\n    volumes:\n"
-        "      - ./pgdata:/var/lib/postgresql/data\n      - ./postgres.conf:/etc/postgres.conf\n"
-        "      - ./fresh:/fresh\n")
+    (folder / "docker-compose.yml").write_text(COMPOSE_SHOP.replace(
+        '["db-data:/var/lib/postgresql/data"]', '["db-data:/d", "never-made:/n", "./pgdata:/p"]'
+    ).replace("db-data: {}", "db-data: {}\n  never-made: {}"))
     (folder / "pgdata").mkdir()
     (folder / "pgdata" / "PG_VERSION").write_text("16\n")
-    (folder / "postgres.conf").write_text("max_connections = 20\n")
     seen = {}
 
     def upload(host, push_id, token, path):
@@ -195,11 +191,21 @@ def test_a_one_file_db_bind_ships_as_a_file_not_as_data(env):
 
     script(env, mints=[ticket()], opens=[OPENED], uploads=[upload], statuses=[DONE])
 
-    assert push(env, data=False)["state"] == "done"
-    # A source not there yet is still data: Docker creates it as a directory.
-    assert seen["manifest"]["data_paths"] == ["fresh", "pgdata"]
-    assert "files/postgres.conf" in seen["names"]
-    assert "files/pgdata/PG_VERSION" not in seen["names"]
+    assert push(env)["state"] == "done"
+    assert seen["manifest"]["volumes"] == ["db-data"]
+    assert {"files/pgdata/PG_VERSION", "volumes/db-data"} <= seen["names"]
+    # Mounting a volume to pack it would make it here when it isn't.
+    assert not any("shop_never-made" in " ".join(argv) for argv in env.runner.calls)
+
+
+def test_a_push_fails_when_docker_cannot_list_volumes(env):
+    env.runner.volumes = Completed(1, "", "cannot connect")
+    script(env)
+
+    job = push(env)
+
+    assert job["result"]["code"] == "pack_failed"
+    assert env.instance.calls == []
 
 
 def test_record_is_written_when_the_instance_accepts_the_upload(env):
@@ -245,15 +251,22 @@ def test_an_import_still_running_after_two_hours_times_out(env):
     assert job["detail"] == "My kitchen is still importing. Open the kitchen to check on shop."
 
 
-def test_repeat_push_with_data_needs_confirmation(env):
+def test_a_repeat_push_needs_the_replace_confirmation(env):
     record(env)
 
-    resp = env.browser.post("/api/projects/shop/push",
-                            json={"instance_id": "k1", "data": True})
+    resp = env.browser.post("/api/projects/shop/push", json={"instance_id": "k1"})
 
     assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "confirm_replace_data"
+    assert resp.json()["error"]["code"] == "already_on_instance"
     assert env.cloud.calls == []
+
+
+def test_a_confirmed_repeat_push_tells_the_instance_to_replace(env):
+    record(env)
+    script(env, mints=[ticket()], opens=[OPENED], uploads=[None], statuses=[DONE])
+
+    assert push(env, replace=True)["state"] == "done"
+    assert env.instance.calls[0][-1] == "all"
 
 
 def test_ticket_refused_is_retried_exactly_once(env):
@@ -299,13 +312,13 @@ def test_rate_limit_reports_retry_after(env):
 
 
 @pytest.mark.parametrize("status", ["started_ok", "crash_looping", "failed_to_start"])
-def test_data_push_stops_and_restarts_any_project_not_stopped(env, status):
+def test_a_push_with_volumes_stops_and_restarts_any_project_not_stopped(env, status):
     env.repos.projects.set_status("shop", status)
     script(env, targets=(TARGETS, TARGETS), mints=[ticket()], opens=[OPENED], uploads=[None],
            statuses=[DONE])
 
     # The dialog's "stops while its data is copied" notice reads the same flag.
-    assert env.browser.get("/api/projects/shop/push").json()["running"] is True
+    assert env.browser.get("/api/projects/shop/push").json()["stops"] is True
     job = push(env)
 
     words = [" ".join(argv) for argv in env.runner.calls]
@@ -314,6 +327,18 @@ def test_data_push_stops_and_restarts_any_project_not_stopped(env, status):
     up = next(i for i, w in enumerate(words) if w.endswith("up -d"))
     assert down < pack < up
     assert job["result"]["local_restart"] == "ok"
+
+
+def test_a_project_without_volumes_keeps_running_during_a_push(env):
+    (env.config.projects_root / "shop" / "docker-compose.yml").write_text(
+        "services:\n  web:\n    image: nginx\n")
+    env.repos.projects.set_status("shop", "started_ok")
+    script(env, targets=(TARGETS, TARGETS), mints=[ticket()], opens=[OPENED], uploads=[None],
+           statuses=[DONE])
+
+    assert env.browser.get("/api/projects/shop/push").json()["stops"] is False
+    assert push(env)["state"] == "done"
+    assert not [argv for argv in env.runner.calls if "down" in argv]
 
 
 def test_a_volume_named_outside_the_project_fails_before_anything_stops(env):
@@ -339,7 +364,7 @@ def test_a_repeat_push_checks_volume_names_against_the_instance_project(env):
                                     at=1792510000)
     script(env, mints=[ticket()], opens=[OPENED], uploads=[None], statuses=[DONE])
 
-    assert push(env, replace_data=True)["state"] == "done"
+    assert push(env, replace=True)["state"] == "done"
 
 
 def test_unregistered_project_fails_with_not_registered(env):

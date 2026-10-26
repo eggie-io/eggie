@@ -11,18 +11,13 @@ import posixpath
 import shutil
 import sys
 import tarfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from pathlib import Path
 
 from ..domain.push import is_excluded
 from .docker import DOCKER
 from .files import BadArchiveError, PathTraversalError
 
-MAX_MANIFEST = 1024 ** 2
-
-
-def _is_data(rel: str, data_paths: Sequence[str]) -> bool:
-    return any(rel == p or rel.startswith(p + "/") for p in data_paths)
 
 
 def _walk(root: Path, skip) -> Iterator[tuple[Path, str]]:
@@ -45,23 +40,19 @@ def _walk(root: Path, skip) -> Iterator[tuple[Path, str]]:
 
 
 def write_bundle(out: Path, project_dir: Path, manifest: dict, *,
-                 volumes: dict[str, Path], data_paths: Sequence[str],
-                 include_data: bool) -> int:
+                 volumes: dict[str, Path]) -> int:
     payload = json.dumps(manifest).encode("utf-8")
     with tarfile.open(out, "w") as tar:
         info = tarfile.TarInfo("manifest.json")
         info.size = len(payload)
         tar.addfile(info, io.BytesIO(payload))
         tar.add(project_dir, arcname="files", recursive=False)
-        for path, rel in _walk(project_dir, lambda r: is_excluded(r) or (
-                not include_data and _is_data(r, data_paths))):
+        for path, rel in _walk(project_dir, is_excluded):
             tar.add(path, arcname=f"files/{rel}", recursive=False)
-        if include_data:
-            for key, source in volumes.items():
-                tar.add(source, arcname=f"volumes/{key}", recursive=False)
-                for path, rel in _walk(source, lambda _r: False):
-                    tar.add(path, arcname=f"volumes/{key}/{rel}",
-                            recursive=False)
+        for key, source in volumes.items():
+            tar.add(source, arcname=f"volumes/{key}", recursive=False)
+            for path, rel in _walk(source, lambda _r: False):
+                tar.add(path, arcname=f"volumes/{key}/{rel}", recursive=False)
     return out.stat().st_size
 
 
@@ -82,35 +73,19 @@ def restore_volume(source: Path, target: Path) -> None:
                      follow_symlinks=False)
 
 
-def _manifest_data_paths(tar: tarfile.TarFile) -> tuple[str, ...]:
-    """Best effort: the API vets the manifest after unpacking and refuses a bad one."""
-    try:
-        member = tar.getmember("manifest.json")
-        if not member.isreg() or member.size > MAX_MANIFEST:
-            return ()
-        paths = json.loads(tar.extractfile(member).read()).get("data_paths")
-    except (KeyError, ValueError, AttributeError):
-        return ()
-    if not isinstance(paths, list):
-        return ()
-    return tuple(posixpath.normpath(p) for p in paths if isinstance(p, str))
-
-
-def _ownership_filter(data_paths: Sequence[str], gid: int):
-    """Data (volumes and data_paths) keeps the sender's owners and modes, less the
-    high bits; every other project file joins `gid`, group-writable, and its
-    directories are setgid so what is made in them later joins it too."""
+def _ownership_filter(gid: int):
+    """Volumes keep the sender's owners and modes, less the high bits; project
+    files join `gid`, group-writable, and their directories are setgid so what
+    is made in them later joins it too."""
     def apply(member: tarfile.TarInfo, dest: str) -> tarfile.TarInfo:
         mode = member.mode
         member = tarfile.tar_filter(member, dest)
         name = posixpath.normpath(member.name)
-        rel = name.removeprefix("files/") if name.startswith("files/") else None
         if mode is None or member.mode is None:
             return member
-        if name == "volumes" or name.startswith("volumes/") or (
-                rel is not None and _is_data(rel, data_paths)):
+        if name == "volumes" or name.startswith("volumes/"):
             return member.replace(mode=mode & 0o777, deep=False)
-        if name == "files" or rel is not None:
+        if name == "files" or name.startswith("files/"):
             extra = 0o2010 if member.isdir() else 0o010 if member.mode & 0o111 else 0
             return member.replace(mode=member.mode | 0o060 | extra, gid=gid, deep=False)
         return member
@@ -133,7 +108,7 @@ def unpack(bundle: Path, dest: Path) -> None:
                     raise PathTraversalError(f"hard link escapes bundle: {m.name}")
         # The image's /etc/group is not the VM's: the staging dir has the VM's
         # docker group, through the setgid bit install.sh sets on /opt/eggie.
-        apply = _ownership_filter(_manifest_data_paths(tar), os.stat(dest).st_gid)
+        apply = _ownership_filter(os.stat(dest).st_gid)
         try:
             tar.extractall(dest, members=members, filter=apply, numeric_owner=True)
         except tarfile.FilterError as e:
@@ -141,11 +116,9 @@ def unpack(bundle: Path, dest: Path) -> None:
 
 
 def pack_argv(image: str, *, out_dir, project_dir, volumes: dict[str, str],
-              out_name: str, manifest_path: str, include_data: bool) -> list[str]:
+              out_name: str, manifest_path: str) -> list[str]:
     argv = [DOCKER, "run", "--rm", "--user", "0", "--entrypoint", "python",
             "-v", f"{project_dir}:/src:ro", "-v", f"{out_dir}:/out"]
-    # Docker would silently create a missing volume, so mount only when shipping data.
-    volumes = volumes if include_data else {}
     for key, name in volumes.items():
         argv += ["-v", f"{name}:/vol/{key}:ro"]
     argv += [image, "-m", "eggie_api.infra.bundle", "pack",
@@ -153,8 +126,6 @@ def pack_argv(image: str, *, out_dir, project_dir, volumes: dict[str, str],
              "--manifest", manifest_path]
     for key in volumes:
         argv += ["--volume", f"{key}=/vol/{key}"]
-    if include_data:
-        argv.append("--data")
     return argv
 
 
@@ -181,7 +152,6 @@ def main(argv: list[str]) -> int:
     pack.add_argument("--project", required=True)
     pack.add_argument("--manifest", required=True)
     pack.add_argument("--volume", action="append", default=[])
-    pack.add_argument("--data", action="store_true")
     restore = sub.add_parser("restore")
     restore.add_argument("--source", required=True)
     restore.add_argument("--target", required=True)
@@ -197,9 +167,7 @@ def main(argv: list[str]) -> int:
         return 0
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     volumes = {k: Path(v) for k, _, v in (s.partition("=") for s in args.volume)}
-    write_bundle(Path(args.out), Path(args.project), manifest, volumes=volumes,
-                 data_paths=manifest.get("data_paths", []),
-                 include_data=args.data)
+    write_bundle(Path(args.out), Path(args.project), manifest, volumes=volumes)
     return 0
 
 

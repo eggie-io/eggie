@@ -160,7 +160,7 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 
 - **Runtime.** At every VM boot, `eggie-update.service` runs `get.sh` in update mode. It moves to the
   newest tag whose `api` is in `host.json`, pulls images before touching anything, and rolls back
-  if `install.sh` fails. A host that sees an API it can't speak triggers the update at once.
+  if `install.sh` fails. A running `tunnel` container is recreated on the new cloudflared image. A host that sees an API it can't speak triggers the update at once.
 - **Desktop app.** On launch it checks `app-vX.Y.Z` GitHub releases and offers **Update**.
 - **Two version numbers.** The release number lives only in the tag. `API_VERSION` is the
   wire protocol; bump it only for an incompatible change to a route the host calls, and ship a

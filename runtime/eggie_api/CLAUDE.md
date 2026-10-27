@@ -169,7 +169,8 @@ and a host release. Prefer additive changes.
 
 - The `tunnel` service is behind a compose profile. A plain `docker compose -f stack.yml up -d` or
   `pull` never touches it; the API's own compose calls pass `--profile tunnel`, and so must anything
-  else that means to include it.
+  else that means to include it. `_reconcile_client` never restarts a running client, so an image
+  change reaches it only through the installer's `lib/tunnel-recreate.sh`.
 - A project's `status` in `state.db` is the last start/stop outcome, not a live reading. Projects
   get no restart policy, so after a VM reboot only `LifecycleService.resume_all()` (run from `__main__`)
   brings the `started_ok` ones back; without it Traefik answers 404 under a "running" badge.

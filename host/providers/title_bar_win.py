@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 # Held equal to the --raised, --ink-2 and --line tokens in desktop/ui/app.css.
 COLORS = {
     "light": {"caption": "#fefbf7", "text": "#6a5848", "border": "#efe6d9"},
-    "dark": {"caption": "#211a14", "text": "#cdb9a4", "border": "#3a2f25"},
+    "dark": {"caption": "#1c1a33", "text": "#bdb8d8", "border": "#332f52"},
 }
 
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20

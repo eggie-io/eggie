@@ -88,6 +88,15 @@ def test_stack_yml_pins_exact_image_tags():
     assert ":latest" not in _text()
 
 
+def test_the_tunnel_client_is_pinned_past_the_emudhra_fix():
+    # cloudflared before 2026.10.2 trusts eight eMudhra intermediates with
+    # weak private keys. An exact tag, so a cached older image is never reused.
+    image = yaml.safe_load(_text())["services"]["tunnel"]["image"]
+    match = re.fullmatch(r"cloudflare/cloudflared:(\d+)\.(\d+)\.(\d+)", image)
+    assert match, image
+    assert tuple(map(int, match.groups())) >= (2026, 10, 2), image
+
+
 def test_both_eggie_images_run_the_version_the_install_recorded():
     services = yaml.safe_load(_text())["services"]
     for name, image in (("api", "eggie-api"), ("web", "eggie-web")):

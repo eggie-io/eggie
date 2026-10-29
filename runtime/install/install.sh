@@ -160,8 +160,7 @@ chmod 640 /opt/eggie/api.token
 # 7. traefik, the API and the web page, as one compose stack.
 # Always pull: this is how an API update reaches an already-provisioned VM,
 # so both the first install and every update need the network.
-# --profile tunnel: the first public URL must not wait on an image download,
-# and a running tunnel client is recreated on the new image after `up -d`.
+# --profile tunnel: the first public URL must not wait on an image download.
 install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
 
 # 7a. site mode: where the API puts the certificate and Traefik reads it.
@@ -213,7 +212,6 @@ if (( TOKEN_CREATED || REPAIR )); then
   /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d --force-recreate api
 fi
 /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d
-bash "$INSTALL_DIR/lib/tunnel-recreate.sh" -f /opt/eggie/stack.yml $SITE_STACK
 
 # 8. git for `eggie clone`, gh for GitHub work, Node for `npx skills`.
 if ! dpkg -s git >/dev/null 2>&1; then

@@ -88,7 +88,6 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B4 | Inside the VM, `eggie new` / `eggie up` from a coding agent | The project shows up in the console | |
 | B5 | In a running project: `eggie secret set API_KEY` (pipe a value), put `API_KEY=other` in the project's `.env`, then restart it | `docker exec <container> env` shows the secret's value, not the `.env` one; a compose `${KEY:?}` reference still lets `eggie logs` and stop/down work | |
 | B6 | Clone a repo with no docker-compose.yml, then a folder whose compose fails | Both show Needs set-up with a prompt (the second with Docker's message); after the agent runs `eggie up` successfully, a later failure shows Something's wrong | |
-| B7 | Turn a public URL on, then update the runtime to a release with a new cloudflared tag (or run **Repair**). Inside the VM: `sudo docker inspect --format '{{.Config.Image}}' $(sudo docker compose -f /opt/eggie/stack.yml --profile tunnel ps -q tunnel)` | It prints the tag `stack.yml` names, not the old one; the public URL answers again within a minute | |
 
 ## Site mode (a droplet from the snapshot; see `site-mode.md`)
 

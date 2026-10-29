@@ -120,15 +120,6 @@ def test_the_stack_comes_up_without_the_tunnel_profile():
     assert ups and not any("--profile" in l for l in ups)
 
 
-def test_an_update_moves_a_running_tunnel_onto_the_new_image():
-    # The profile-less `up -d` skips the tunnel and the API leaves a running
-    # one alone, so this call is the only thing that replaces an old cloudflared.
-    (plain,) = [i for i, l in enumerate(_commands()) if l.endswith("$SITE_STACK up -d")]
-    recreate = _index_of('lib/tunnel-recreate.sh" -f /opt/eggie/stack.yml $SITE_STACK')
-    assert recreate > plain
-    assert (INSTALL.parent / "lib" / "tunnel-recreate.sh").is_file()
-
-
 def test_install_makes_opt_eggie_writable_before_the_api_starts():
     # The API runs as a non-root user whose only shared credential with the VM
     # is the docker group. Root-owned 0755 here means it cannot create

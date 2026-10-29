@@ -11,8 +11,7 @@ release — if it does, the logic is on the wrong side of the seam (see the root
   overridable with `EGGIE_API_IMAGE` / `EGGIE_WEB_IMAGE`. A fourth service, `tunnel`
   (cloudflared, for public URLs), sits behind the `tunnel` compose **profile**: a plain `up -d` or
   `pull` never touches it, so pass `--profile tunnel` when you mean to include it. The api starts
-  and stops it, but leaves a running one alone; `install.sh` pulls it up front and
-  force-recreates a running one (`install/lib/tunnel-recreate.sh`), so an update reaches it. `stack.debug.yml` is an override that
+  and stops it; `install.sh` pulls it up front. `stack.debug.yml` is an override that
   swaps in the debugpy api build; `stack.yml` itself must stay identical to what runs in production.
   `stack.site.yml` is the override for a site (Traefik on 443 with TLS from `/opt/eggie/tls`); `install.sh` adds it to every stack command when `/opt/eggie/site.env` exists.
 - `eggie_api/` — the FastAPI service. Own CLAUDE.md.

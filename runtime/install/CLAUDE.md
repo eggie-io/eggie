@@ -2,7 +2,7 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_swap.py`, `test_install_agents.py`, `test_install_skills.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`, `test_tunnel_recreate.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -59,8 +59,7 @@ any other ref runs `EGGIE_IMAGE_VERSION` when set, else the images ghcr holds un
 name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=dev` runs the `dev`
 images `build.sh --push --tag dev` pushed — else the newest release's; a private package reads as
 absent, and ghcr not answering at all is a failure, not a silent release) into `.env` for `stack.yml` → token (only if absent) → the compose stack
-(always pulls, `--profile tunnel` included; recreates the api on a new token or repair; then
-`lib/tunnel-recreate.sh` force-recreates a running `tunnel` on the new image, not fatal) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 24 from NodeSource →
+(always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 24 from NodeSource →
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root; then `lib/wsl-conf.py` enforces `[automount] enabled=false` and `[interop] appendWindowsPath=false` (no Windows drives, no Windows `PATH`), rewriting those keys every run and leaving every other line alone → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`

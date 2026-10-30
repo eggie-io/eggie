@@ -38,8 +38,9 @@
 .public { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--ink-2); }
 .public svg { color: var(--accent); }
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); }
-/* A ghost button's ink sits inside its sm padding; cancel it so every gap in the row looks the same. */
-.ghost { margin-inline: calc(-1 * var(--space-3)); }
+/* Ghost buttons draw no edge, so their padding reads as extra gap. Trim it and cancel the rest:
+   the visible gaps match, and two ghosts side by side touch without overlapping. */
+.actions .ghost { padding-inline: var(--space-2); margin-inline: calc(-1 * var(--space-2)); }
 .rowError { grid-column: 1 / -1; }
 
 .footnote { margin: 0; display: flex; align-items: center; gap: var(--space-2); font-size: 13px; line-height: 18px; color: var(--ink-2); }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Icon, cx } from "@eggie/ui";
+import { BrandMark, Icon, cx } from "@eggie/ui";
 import { NO_AGENT, atSentenceStart } from "../../agents/current";
 import s from "./WhatNext.module.css";
 
@@ -15,7 +15,7 @@ function Row({ mark, name, mine = false, children }: { mark: ReactNode; name: st
 
 const egg = (
   <span className={s.egg} aria-hidden="true">
-    <span className={s.yolk} />
+    <BrandMark size={14} />
   </span>
 );
 

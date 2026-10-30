@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Badge, Button, Icon, Notice, StateBadge } from "@eggie/ui";
+import { Badge, Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
 import { useCurrentAgent } from "../../agents/queries";
 import { NO_AGENT, atSentenceStart } from "../../agents/current";
 import { Elapsed } from "../../components/Elapsed";
@@ -63,7 +63,6 @@ export function ProjectRow({ project }: { project: Project }) {
             variant="ghost"
             size="sm"
             icon="stop"
-            className={s.ghost}
             disabled={lifecycle.isPending}
             onClick={() => lifecycle.mutate("down")}
           >
@@ -133,9 +132,7 @@ export function ProjectRow({ project }: { project: Project }) {
 
   // wrong/setup/gone/waiting already lead to the page through their only action.
   const settings = view.kind !== "wrong" && view.kind !== "setup" && view.kind !== "gone" && view.kind !== "waiting" && (
-    <Button aria-label={`Settings for ${project.id}`} variant="ghost" size="sm" icon="settings" className={s.ghost} onClick={look}>
-      Settings
-    </Button>
+    <IconButton icon="settings" label={`Settings for ${project.id}`} size="sm" onClick={look} />
   );
 
   return (
@@ -158,7 +155,8 @@ export function ProjectRow({ project }: { project: Project }) {
           </span>
         )}
       </div>
-      <div className={s.actions}><StateBadge state={view.badge} />{actions}{settings}</div>
+      <div className={s.state}><StateBadge state={view.badge} /></div>
+      <div className={s.actions}>{actions}{settings}</div>
       {(lifecycle.error ?? startWhenReady.error) && (
         <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error ?? startWhenReady.error)}</Notice>
       )}

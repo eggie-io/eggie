@@ -341,12 +341,14 @@ details.log {
   background:var(--gold-soft); border-right:1px solid var(--line);
 }
 .brand-word {
-  position:absolute; left:28px; top:28px; display:flex; align-items:center; gap:8px;
-  font:650 18px/24px var(--font-sans); font-variation-settings:var(--font-wide);
-  letter-spacing:-.01em; color:var(--ink);
+  position:absolute; left:28px; top:28px; display:flex; align-items:center; gap:.3em;
+  font:200 22px/1 var(--font-sans); letter-spacing:-.01em; color:var(--ink);
 }
-.brand-mark, .art-egg { border-radius:50% 50% 46% 46% / 58% 58% 42% 42%; background:var(--gold); }
-.brand-mark { width:20px; height:20px; box-shadow:inset -2.5px -2.5px 0 var(--orange); }
+.brand-mark {
+  flex:none; width:.76em; height:.92em; background:currentColor;
+  -webkit-mask:url('logo.svg') center / contain no-repeat; mask:url('logo.svg') center / contain no-repeat;
+}
+.art-egg { border-radius:50% 50% 46% 46% / 58% 58% 42% 42%; background:var(--gold); }
 .brand-art { position:absolute; left:0; top:50%; width:300px; height:285px; margin-top:-142px; }
 .brand-art > span { position:absolute; }
 .art-egg { left:83px; top:34px; width:138px; height:174px; box-shadow:inset -16px -16px 0 var(--orange); }

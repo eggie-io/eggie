@@ -101,8 +101,7 @@ body {
   }
 }
 
-/* Glyph drawn as a currentColor mask. Inline data: URIs because the page is
-   loaded over file://, where an external mask image is refused. */
+/* Glyph drawn as a currentColor mask from an inline data: URI. */
 .ic, .tiles button::before, .btn-copy::before {
   content:''; flex:none; display:inline-block; width:16px; height:16px; background:currentColor;
   -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat;

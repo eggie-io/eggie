@@ -63,7 +63,11 @@ class WinTray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit Eggie", _guarded(on_quit)),
         )
-        self._icon = pystray.Icon("Eggie", Image.open(self._paths), "Eggie", menu)
+        image = Image.open(self._paths)
+        # Pillow opens an ICO at its largest frame; the tray needs the 32px one,
+        # drawn with a heavier stroke than the big art scaled down.
+        image.size = (32, 32)
+        self._icon = pystray.Icon("Eggie", image, "Eggie", menu)
         # The Win32 backend runs its own message loop, so it can live off the
         # main thread that webview.start() owns.
         threading.Thread(target=self._icon.run, kwargs={"setup": self._setup},

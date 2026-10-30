@@ -21,7 +21,7 @@ import { DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
-import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
+import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboarding/Onboarding";
 import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
@@ -123,7 +123,6 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
       nav={welcome ? <Progress /> : <Tabs />}
       trailing={
         <>
-          {welcome && <SkipLink />}
           <AccountMenu onSignedOut={onSignedOut} />
         </>
       }

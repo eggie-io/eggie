@@ -65,7 +65,7 @@ fetch the installer from somewhere else, set `EGGIE_RUNTIME_URL`.
 
 ## Web console (`runtime/web/`)
 
-Needs Node **22.22+**.
+Needs Node **24+**.
 
 ```bash
 cd runtime/web

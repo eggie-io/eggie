@@ -82,12 +82,11 @@ export function Progress() {
   );
 }
 
-export function SkipLink() {
+export function SkipButton() {
   const { finish } = useOnboarding();
   return (
-    <Button variant="ghost" size="sm" aria-label="Skip for now" onClick={() => finish()}>
-      {/* One flex item, so the button's gap doesn't split the words. */}
-      <span>Skip<span className={s.skipTail}> for now</span></span>
+    <Button variant="ghost" onClick={() => finish()}>
+      Skip for now
     </Button>
   );
 }

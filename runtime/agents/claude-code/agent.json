@@ -25,18 +25,19 @@
       ]
     },
     "cloud": {
+      "warning": "<p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
       "tagline": "SSH connection",
       "card": [
         {"label": "SSH host", "value": "{user}@{host}"},
         {"label": "SSH port", "value": "{port}"},
-        {"label": "SSH key", "value": "The private key you downloaded from Eggie", "hint": "The private key file you saved when you made your SSH key in the Eggie web app. It is usually in your .ssh folder, named like eggie-…_ed25519."}
+        {"label": "SSH key", "value": "The unzipped eggie-…_ed25519 file (not .pub)", "hint": "Unzip the eggie-…_ed25519.zip you downloaded from Eggie. It is usually in your Downloads folder. Use the file without .pub at the end."}
       ],
       "steps": [
         {"title": "Watch how to connect", "body": "The video shows every step below.", "alt": "Video · connecting Claude Code to Eggie over SSH", "media": ["media/mac-claude-code.mp4"]},
         {"title": "Open Claude Code", "body": "Open the Claude desktop app and click <b>&lt;/&gt;</b> at the top to switch to Claude Code.", "alt": "Screenshot · Claude Code switch at the top of the sidebar", "media": ["media/mac-claude-code-0.png"]},
         {"title": "Create a new environment", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Select <b>New environment</b>.</li></ol>", "alt": "Screenshot · environment menu with New environment", "media": ["media/mac-claude-code-1.png", "media/mac-claude-code-2.png"]},
         {"title": "Add an SSH connection", "body": "<ol><li>Open the <b>SSH</b> tab.</li><li>Name it <b>Eggie</b>.</li><li>Click <b>Choose a host</b>.</li><li>Select <b>Add SSH connection…</b></li></ol>", "alt": "Screenshot · New environment, SSH tab, Add SSH connection", "media": ["media/mac-claude-code-3.png"]},
-        {"title": "Enter the details", "body": "<p>Name it <b>Eggie</b>, then copy the <b>SSH host</b> and <b>SSH port</b> from the card below.</p><p>For <b>SSH key</b>, enter the path to the private key file you downloaded from Eggie.</p>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-claude-code-4.png"]},
+        {"title": "Enter the details", "body": "<p>Name it <b>Eggie</b>, then copy the <b>SSH host</b> and <b>SSH port</b> from the card below.</p><p>For <b>SSH key</b>, enter the path to the unzipped key file, the one without <code>.pub</code>.</p>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-claude-code-4.png"]},
         {"title": "Save the connection", "body": "<p>Click <b>Test connection</b> and wait while Claude Code installs what it needs. When it says the host is ready, click <b>Add SSH connection</b>.</p>", "alt": "Screenshot · Test connection and Add SSH connection buttons", "media": ["media/mac-claude-code-5.png"]},
         {"title": "Choose the projects folder", "body": "<ol><li>Under <b>Folders</b>, click <b>Choose…</b></li><li>Open the <b>projects</b> folder.</li><li>Click <b>Select folder</b>.</li></ol>", "alt": "Screenshot · Select remote folder, projects", "media": ["media/mac-claude-code-6.png", "media/mac-claude-code-7.png", "media/mac-claude-code-8.png"]},
         {"title": "Create the environment", "body": "Click <b>Create environment</b>, then tell Claude Code what to build.", "alt": "Screenshot · New environment, Create environment button", "media": ["media/mac-claude-code-9.png"]}

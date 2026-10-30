@@ -22,8 +22,8 @@ def test_light_title_bar_sets_caption_text_border_and_light_buttons():
 def test_dark_title_bar_uses_dark_tokens_and_dark_buttons():
     calls = []
     apply(7, True, lambda h, a, v: calls.append((a, v)))
-    assert dict(calls) == {20: 1, 34: colorref("#3a2f25"),
-                           35: colorref("#211a14"), 36: colorref("#cdb9a4")}
+    assert dict(calls) == {20: 1, 34: colorref("#332f52"),
+                           35: colorref("#1c1a33"), 36: colorref("#bdb8d8")}
 
 
 def test_an_unsupported_attribute_does_not_stop_the_others():

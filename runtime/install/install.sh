@@ -26,8 +26,9 @@ SKILLS_CLI=skills@1.5.26
 # Unpinned on purpose: pinning a tag here is a value change, not a code change.
 # Until it is pinned, a box's skills are not identifiable from runtime.version.
 SKILLS_SOURCE="${EGGIE_SKILLS_SOURCE:-eggie-io/eggie-skills}"
-# skills@1.5.26 declares node >=22.20.0; Ubuntu 24.04's own nodejs is 18.
-NODE_MIN=22.20.0
+# Ubuntu 24.04's own nodejs is 18 and `npx skills` needs a newer one, so install from NodeSource.
+# The NodeSource repo below follows this major.
+NODE_MIN=24.0.0
 TOKEN_CREATED=0
 
 # A failed reinstall must not look installed; get.sh already resolved the ref.
@@ -271,13 +272,13 @@ if ! node_ok; then
   install -m 0755 -d /etc/apt/keyrings
   if ! curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
       | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg; then
-    echo "could not reach NodeSource to install Node.js 22" >&2
+    echo "could not reach NodeSource to install Node.js ${NODE_MIN%%.*}" >&2
     exit 1
   fi
-  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MIN%%.*}.x nodistro main" \
     > /etc/apt/sources.list.d/nodesource.list
   if ! { apt-get update && apt-get install -y nodejs; }; then
-    echo "could not reach NodeSource to install Node.js 22" >&2
+    echo "could not reach NodeSource to install Node.js ${NODE_MIN%%.*}" >&2
     exit 1
   fi
   node_ok || { echo "Node.js $NODE_MIN or newer did not install" >&2; exit 1; }

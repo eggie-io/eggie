@@ -1,5 +1,6 @@
 {
   "name": "Claude Code",
+  "vendor": "Anthropic",
   "icon": "icon.webp",
   "home": ".claude",
   "instructions": ["/etc/claude-code/CLAUDE.md"],

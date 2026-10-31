@@ -32,6 +32,8 @@
 .cardText { display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
 .cardName { font-size: 16px; line-height: 22px; font-weight: 600; }
 .cardTagline { font-size: 13px; line-height: 18px; color: var(--ink-2); }
+/* The company behind an agent, after its name in the picker and the menu. */
+.vendor { font-weight: 400; color: var(--ink-2); }
 
 /* The ring is drawn over the icon, so an icon with its own background still gets the edge. */
 .mark {

@@ -3,8 +3,9 @@
 `index.json` orders the agents; `<id>/agent.json` describes one. Adding an agent is a folder plus
 one line in `index.json` — no code changes. Two readers, each validating only what it uses:
 
-- the console (`runtime/web/apps/console/src/agents/catalog.ts`) reads `name`, `icon`,
-  `platforms` (the guide) and whether `setup` exists; served at `/agent-guides/`;
+- the console (`runtime/web/apps/console/src/agents/catalog.ts`) reads `name`, `vendor`, `icon`,
+  `platforms` (the guide) and whether `setup` exists; served at `/agent-guides/`. `vendor` is the
+  company, shown after `name` in the agent list and menu; sentences use `name` alone;
 - `runtime/install/lib/agents.py` reads the install-side fields below, on the VM.
 
 | Field | Meaning |

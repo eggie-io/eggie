@@ -11,7 +11,8 @@ export interface Step { title: string; body: Rich[]; media: Media[]; alt: string
 export interface CardField { label: string; value: string; hint?: string }
 // `card` is null for a guide with nothing to copy.
 export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
-export interface Agent { id: string; name: string; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
+// `vendor` is the company behind the agent, shown beside its name in lists; null when the manifest has none.
+export interface Agent { id: string; name: string; vendor: string | null; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
   vm: "wsl" | "lima" | "site" | "other";
   ssh: { host: string; port: number; user: string; key_file: string | null } | null;
@@ -89,6 +90,7 @@ export function parseAgent(id: string, value: unknown, base: string): Agent | nu
   if (!ID.test(id) || !isObject(value) || !text(value.name) || !path(value.icon) || !isObject(value.platforms)) {
     return null;
   }
+  if (value.vendor !== undefined && !text(value.vendor)) return null;
   const folder = `${base}/${id}`;
   const platforms: Agent["platforms"] = {};
   for (const platform of PLATFORMS) {
@@ -97,7 +99,7 @@ export function parseAgent(id: string, value: unknown, base: string): Agent | nu
     if (guide === null) return null;
     platforms[platform] = guide;
   }
-  return { id, name: value.name, icon: `${folder}/${value.icon}`, platforms, hasSetup: isObject(value.setup) };
+  return { id, name: value.name, vendor: value.vendor ?? null, icon: `${folder}/${value.icon}`, platforms, hasSetup: isObject(value.setup) };
 }
 
 export function platformFor(connect: Connect | undefined, userAgent: string): Platform {

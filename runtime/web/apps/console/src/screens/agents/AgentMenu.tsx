@@ -42,7 +42,10 @@ export function AgentMenu({ agents, current, base }: { agents: Agent[]; current:
               onClick={() => setOpen(false)}
             >
               <AgentMark agent={agent} small />
-              <span className={s.menuName}>{agent.name}</span>
+              <span className={s.menuName}>
+                {agent.name}
+                {agent.vendor && <span className={s.vendor}> by {agent.vendor}</span>}
+              </span>
               {agent.id === current.id && <Icon name="check" />}
             </Link>
           ))}

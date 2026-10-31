@@ -65,6 +65,13 @@ describe("parseAgent", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ card: [] }) } }, "/a")).toBeNull();
   });
 
+  it("reads the vendor, and drops an agent whose vendor is not text", () => {
+    const agent = (vendor: unknown) => parseAgent("codex", { name: "Codex", vendor, icon: "i.svg", platforms: { mac: guide() } }, "/a");
+    expect(agent("OpenAI")?.vendor).toBe("OpenAI");
+    expect(agent(undefined)?.vendor).toBeNull();
+    for (const bad of ["", " ", 42]) expect(agent(bad)).toBeNull();
+  });
+
   it("drops an agent that is not an object, such as the SPA's index.html", () => {
     expect(parseAgent("codex", "<!doctype html>", "/agents")).toBeNull();
   });

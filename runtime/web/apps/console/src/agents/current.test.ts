@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Agent } from "./catalog";
 import { currentAgent } from "./current";
 
-const agent = (id: string, name: string): Agent => ({ id, name, icon: `/agent-guides/${id}/icon.webp`, platforms: {}, hasSetup: false });
+const agent = (id: string, name: string): Agent => ({ id, name, vendor: null, icon: `/agent-guides/${id}/icon.webp`, platforms: {}, hasSetup: false });
 const AGENTS = [agent("claude-code", "Claude Code"), agent("codex", "Codex"), agent("cursor", "Cursor")];
 const FALLBACK = { name: "your coding agent", connected: false, id: null };
 

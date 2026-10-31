@@ -1,5 +1,6 @@
 {
   "name": "Codex",
+  "vendor": "OpenAI",
   "icon": "icon.webp",
   "home": ".codex",
   "instructions": ["~/.codex/AGENTS.md", "/opt/eggie/projects/AGENTS.md"],

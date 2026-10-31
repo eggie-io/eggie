@@ -1,6 +1,5 @@
 {
   "name": "Cursor",
-  "vendor": "Anysphere",
   "icon": "icon.webp",
   "home": [".cursor", ".cursor-server"],
   "instructions": ["~/.cursor/AGENTS.md"],

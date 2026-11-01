@@ -17,8 +17,6 @@ DWMWA_BORDER_COLOR = 34
 DWMWA_CAPTION_COLOR = 35
 DWMWA_TEXT_COLOR = 36
 
-_PERSONALIZE_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-
 
 def colorref(hex_colour: str) -> int:
     # COLORREF is 0x00BBGGRR, the reverse of CSS order.
@@ -52,12 +50,3 @@ def dwm_set_attribute(hwnd: int, attr: int, value: int) -> None:
     if hresult != 0:
         raise OSError(f"DwmSetWindowAttribute({attr}) failed: HRESULT {hresult & 0xFFFFFFFF:#x}")
 
-
-def os_uses_dark() -> bool:
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _PERSONALIZE_KEY) as handle:
-            value, _kind = winreg.QueryValueEx(handle, "AppsUseLightTheme")
-        return value == 0
-    except Exception:
-        return False

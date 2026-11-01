@@ -52,8 +52,10 @@ def resource_dir() -> Path:
     return Path(__file__).resolve().parent / "resources"
 
 
-def icon_path() -> Path:
-    return resource_dir() / "icon.ico"
+def tray_icons():
+    from host.core.provider import TrayIcons
+    return TrayIcons(on_light=resource_dir() / "tray-on-light.ico",
+                     on_dark=resource_dir() / "tray-on-dark.ico")
 
 
 def _default_create(**kwargs):
@@ -111,7 +113,7 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     # import, icon) must not leave a windowless app with an unseen traceback.
     tray = None
     try:
-        tray = desktop.tray(icon=icon_path(), on_open=controller.show,
+        tray = desktop.tray(icons=tray_icons(), on_open=controller.show,
                              on_settings=lambda: controller.open_route("settings"),
                              on_quit=lambda: controller.open_route("quit"))
         tray.start()

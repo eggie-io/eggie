@@ -30,18 +30,44 @@ def taskbar_is_light() -> bool:
 
 
 def wait_for_personalize_change() -> Callable[[], None]:
-    """Returns a call that blocks until a value under the key changes."""
+    """Returns a call that blocks until a value under the key changes.
+
+    Must be called on the thread that waits: the registration ends with it.
+    """
     import ctypes
     import winreg
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32")
+    kernel32 = ctypes.WinDLL("kernel32")
+    advapi32.RegNotifyChangeKeyValue.argtypes = [
+        wintypes.HKEY, wintypes.BOOL, wintypes.DWORD, wintypes.HANDLE, wintypes.BOOL]
+    advapi32.RegNotifyChangeKeyValue.restype = wintypes.LONG
+    kernel32.CreateEventW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
+    kernel32.CreateEventW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
 
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, PERSONALIZE_KEY, 0, winreg.KEY_NOTIFY)
-    REG_NOTIFY_CHANGE_LAST_SET = 0x4
+    event = kernel32.CreateEventW(None, False, False, None)
+    if not event:
+        raise ctypes.WinError()
+    REG_NOTIFY_CHANGE_LAST_SET, INFINITE = 0x4, 0xFFFFFFFF
 
-    def wait() -> None:
-        status = ctypes.windll.advapi32.RegNotifyChangeKeyValue(
-            int(key), False, REG_NOTIFY_CHANGE_LAST_SET, None, False)
+    def arm() -> None:
+        status = advapi32.RegNotifyChangeKeyValue(
+            int(key), False, REG_NOTIFY_CHANGE_LAST_SET, event, True)
         if status != 0:
             raise OSError(f"RegNotifyChangeKeyValue failed: {status}")
+
+    def wait() -> None:
+        if kernel32.WaitForSingleObject(event, INFINITE) != 0:
+            raise ctypes.WinError()
+        # Re-armed before the subscribers run: Settings writes the apps and
+        # taskbar values one after the other, and the second must wake us too.
+        arm()
+
+    arm()
     return wait
 
 

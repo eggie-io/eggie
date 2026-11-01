@@ -38,8 +38,8 @@ def wait_for_personalize_change() -> Callable[[], None]:
     import winreg
     from ctypes import wintypes
 
-    advapi32 = ctypes.WinDLL("advapi32")
-    kernel32 = ctypes.WinDLL("kernel32")
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     advapi32.RegNotifyChangeKeyValue.argtypes = [
         wintypes.HKEY, wintypes.BOOL, wintypes.DWORD, wintypes.HANDLE, wintypes.BOOL]
     advapi32.RegNotifyChangeKeyValue.restype = wintypes.LONG
@@ -51,7 +51,7 @@ def wait_for_personalize_change() -> Callable[[], None]:
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, PERSONALIZE_KEY, 0, winreg.KEY_NOTIFY)
     event = kernel32.CreateEventW(None, False, False, None)
     if not event:
-        raise ctypes.WinError()
+        raise ctypes.WinError(ctypes.get_last_error())
     REG_NOTIFY_CHANGE_LAST_SET, INFINITE = 0x4, 0xFFFFFFFF
 
     def arm() -> None:
@@ -62,7 +62,7 @@ def wait_for_personalize_change() -> Callable[[], None]:
 
     def wait() -> None:
         if kernel32.WaitForSingleObject(event, INFINITE) != 0:
-            raise ctypes.WinError()
+            raise ctypes.WinError(ctypes.get_last_error())
         # Re-armed before the subscribers run: Settings writes the apps and
         # taskbar values one after the other, and the second must wake us too.
         arm()

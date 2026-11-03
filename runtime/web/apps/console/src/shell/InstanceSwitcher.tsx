@@ -44,7 +44,7 @@ export function InstanceSwitcher() {
 
   const instances = data?.instances;
   const current = instances?.find((instance) => instance.current);
-  const label = site === null ? "This computer" : (current?.display_name ?? site ?? "Kitchen");
+  const label = site === null ? "This computer" : (current?.display_name ?? site ?? "Cloud");
   const entries = instances ? switcherEntries({ instances, site }) : [];
   const listed = instances?.length ?? 0;
 

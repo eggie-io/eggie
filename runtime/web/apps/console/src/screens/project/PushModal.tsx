@@ -166,7 +166,7 @@ export function PushModal({ project, open, onClose }: { project: Project; open: 
       <>
         {failure && <Notice tone="danger">{failure}</Notice>}
         {targets.isError && <Notice tone="danger">{targets.error.message}</Notice>}
-        <ul className={s.instances} aria-label="Kitchens">
+        <ul className={s.instances} aria-label="Clouds">
           {rows.map((row) => {
             const notes = [row.note, row.pushedAt !== null ? pushedOn(row.pushedAt) : null].filter(Boolean).join(" · ");
             const manage = row.manageUrl;

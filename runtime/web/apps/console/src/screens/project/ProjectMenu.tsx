@@ -103,7 +103,7 @@ export function ProjectMenu({ id, project, push, onOpen }: {
                 title={push.disabled ? (push.note ?? undefined) : undefined}
                 onClick={() => onOpen("push")}
               >
-                <Label icon="upload" note={push.note}>Push to Kitchen</Label>
+                <Label icon="upload" note={push.note}>Push to Cloud</Label>
               </button>
             )}
           </nav>

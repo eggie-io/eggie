@@ -114,10 +114,10 @@ export function InstanceSwitcher() {
                   openExternal(instancesPage);
                 }}
               >
-                Kitchens are created in the Eggie web app
+                Clouds are created in the Eggie web app
               </a>
             ) : (
-              "Kitchens are created in the Eggie web app"
+              "Clouds are created in the Eggie web app"
             )}
           </span>
         )}

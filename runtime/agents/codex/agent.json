@@ -1,6 +1,6 @@
 {
   "name": "Codex",
-  "vendor": "OpenAI",
+  "note": "(in ChatGPT)",
   "icon": "icon.webp",
   "home": ".codex",
   "instructions": ["~/.codex/AGENTS.md", "/opt/eggie/projects/AGENTS.md"],

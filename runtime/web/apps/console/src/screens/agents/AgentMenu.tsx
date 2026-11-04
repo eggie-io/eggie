@@ -44,7 +44,7 @@ export function AgentMenu({ agents, current, base }: { agents: Agent[]; current:
               <AgentMark agent={agent} small />
               <span className={s.menuName}>
                 {agent.name}
-                {agent.vendor && <span className={s.vendor}> by {agent.vendor}</span>}
+                {agent.note && <span className={s.nameNote}> {agent.note}</span>}
               </span>
               {agent.id === current.id && <Icon name="check" />}
             </Link>

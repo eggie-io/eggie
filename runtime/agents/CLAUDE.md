@@ -3,10 +3,10 @@
 `index.json` orders the agents; `<id>/agent.json` describes one. Adding an agent is a folder plus
 one line in `index.json` — no code changes. Two readers, each validating only what it uses:
 
-- the console (`runtime/web/apps/console/src/agents/catalog.ts`) reads `name`, `vendor`, `icon`,
-  `platforms` (the guide) and whether `setup` exists; served at `/agent-guides/`. `vendor` is the
-  company, shown after `name` in the agent list and menu; sentences use `name` alone. Leave it
-  out when the company goes by the product's name (Cursor), or the list reads "Cursor by Cursor";
+- the console (`runtime/web/apps/console/src/agents/catalog.ts`) reads `name`, `note`, `icon`,
+  `platforms` (the guide) and whether `setup` exists; served at `/agent-guides/`. `note` is shown
+  as written after `name` in the agent list and menu; sentences use `name` alone. Only for an agent
+  that lives inside another app, as Codex does in ChatGPT; the others leave it out;
 - `runtime/install/lib/agents.py` reads the install-side fields below, on the VM.
 
 | Field | Meaning |

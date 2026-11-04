@@ -115,7 +115,8 @@ and a host release. Prefer additive changes.
   `{vm, ssh}`; the SSH port is `host/providers/eggie.yaml`'s `ssh.localPort`, held equal by
   `tests/test_constants_agree.py`.
 - **Account / cloud sync** (`infra/cloud.py`, `services/account.py`, `services/sync.py`) — the Eggie service
-  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Device-code sign-in, tokens in
+  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Every call sends
+  `User-Agent: Eggie/<version> (<host OS from connect.json>)`. Device-code sign-in, tokens in
   `state.db`; `sync.py` gives each local project a service record
   (`client_ref = <device_id>/<local_id>`) on a thread. Only the console is locked until sign-in —
   the CLI and agents never wait on it. Service gaps are **not** worked around here; see

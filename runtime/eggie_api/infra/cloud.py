@@ -5,6 +5,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Callable
 
 # A proxy's own error page, not the service: the service always answers with
 # its JSON error body.
@@ -47,15 +48,18 @@ def _error_from(status: int, raw: bytes, headers=None) -> Exception:
 
 
 class Cloud:
-    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0):
+    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0,
+                 user_agent: Callable[[], str] = lambda: "Eggie"):
         self._base = base_url.rstrip("/")
+        self._user_agent = user_agent
         self._open = opener or urllib.request.urlopen
         self._timeout = timeout
 
     def call(self, method: str, path: str, *, body: dict | None = None,
              token: str | None = None):
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Accept": "application/json"}
+        # urllib's default names Python, which the service shows on device sign-in.
+        headers = {"Accept": "application/json", "User-Agent": self._user_agent()}
         if data is not None:
             headers["Content-Type"] = "application/json"
         if token:

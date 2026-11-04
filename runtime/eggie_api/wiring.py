@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import ApiConfig
 from .errors import EggieError
-from .infra import disk
+from .infra import connect, disk
 from .infra.cloud import Cloud
 from .infra.db import Database
 from .infra.github import GitHub
@@ -99,7 +99,9 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     store.sweep()
     uploads = UploadService(store, loader, locks)
     secrets = SecretService(repos.secrets, loader)
-    cloud = cloud or Cloud(config.cloud_url)
+    # Read per call: install.sh records the VM kind after the api first starts.
+    cloud = cloud or Cloud(config.cloud_url, user_agent=lambda: (
+        f"Eggie/{config.version} ({connect.host_os(config.connect_path)})"))
     account = account or Account(repos.account, repos.cloud_projects, cloud,
                                  managed=config.site_host is not None)
     public = public or Public(

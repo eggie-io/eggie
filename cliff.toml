@@ -1,0 +1,35 @@
+# Release notes for both streams; the workflows pass the tag pattern and paths.
+# One line per merged PR, taken from its title. Branch commits never appear.
+
+[changelog]
+header = ""
+# Group names carry a sort key in an HTML comment; striptags drops it.
+body = """
+{% for group, commits in commits | filter(attribute="merge_commit", value=true) | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.breaking %}⚠️ **breaking** {% endif %}{{ commit.message | upper_first }}
+{%- endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+filter_commits = true
+split_commits = false
+# GitHub's merge commit is "Merge pull request #N from <branch>" with the PR
+# title as its body; turn it into "<title> (#N)" so it parses as conventional.
+commit_preprocessors = [
+  { pattern = '^Merge pull request #(\d+) from \S+\s+([^\n]+)[\s\S]*', replace = '${2} (#${1})' },
+]
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->New" },
+  { message = "^fix", group = "<!-- 1 -->Fixed" },
+  { message = "^perf", group = "<!-- 2 -->Improved" },
+  # A breaking change is news whatever its type, e.g. `refactor!:` for an API bump.
+  { message = '^[a-z]+(\([^)]*\))?!:', group = "<!-- 0 -->New" },
+  { message = ".*", skip = true },
+]

@@ -57,6 +57,22 @@ jobs:
             exit 1
           fi
 
+      - name: Release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: >-
+            --unreleased --tag app-v${{ inputs.version }} --tag-pattern '^app-v'
+            --include-path 'host/**' --include-path 'packaging/windows/**'
+            --include-path 'packaging/macos/**' --include-path 'pyproject.toml' --strip all
+        env:
+          OUTPUT: NOTES.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: NOTES.md
+          if-no-files-found: error
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -125,6 +141,9 @@ jobs:
           pattern: app-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
 
       - name: Create the release
         working-directory: dist
@@ -133,8 +152,9 @@ jobs:
         run: |
           sha256sum EggieSetup-* > SHA256SUMS
           cat SHA256SUMS
+          [[ -s ../NOTES.md ]] || echo "No user-facing changes." > ../NOTES.md
           gh release create "app-v$VERSION" EggieSetup-* SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Eggie $VERSION" \
-            --notes "Eggie desktop app $VERSION."
+            --notes-file ../NOTES.md

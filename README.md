@@ -13,13 +13,13 @@ a link to open it in your browser.
 ## What you get
 
 - **A safe sandbox.** Projects and coding agents run inside a separate Linux machine (a VM), not on
-  your computer itself. Nothing from your own files is shared with it.
+  your computer itself. Your drives and folders are not shared with it by default.
 - **Any project runs.** Anything packaged with Docker Compose starts with one click, whatever
   language or framework it uses.
 - **A link for every project**, such as `http://my-shop.local.eggie.space:39080`. No ports or
   config files to manage.
 - **A console in your browser** to add, start, stop and watch projects, connect GitHub, fill in
-  secrets (API keys, passwords) and check logs.
+  secrets (API keys, passwords) and see the logs when something fails.
 - **Coding agents that know the setup.** Eggie connects Claude Code, Codex or Cursor to the VM and
   gives them instructions, so they build and run projects the Eggie way and hand you the link.
 - **Optional sharing.** Sign in to an Eggie account to turn on a public URL for a project, or push
@@ -28,7 +28,7 @@ a link to open it in your browser.
 ## Getting started
 
 1. Download the installer from [Releases](../../releases): `EggieSetup-<version>.exe` for Windows,
-   or the `.pkg` for your Mac (`arm64` for Apple Silicon, `x86_64` for Intel).
+   or the `.pkg` for your Mac (`arm64` for Apple Silicon, `x86_64` for Intel, untested).
 2. Run it and open Eggie. The first start builds the VM and installs everything inside. It takes
    a few minutes, and on Windows it may ask you to restart once to turn on WSL.
 3. When setup finishes, the Eggie window shows the console. Add a project there (upload a folder,
@@ -71,6 +71,7 @@ the app.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pip install "fastapi>=0.110" "uvicorn[standard]>=0.30" pyyaml httpx  # for API tests
 .venv/bin/python -m pytest -q          # Python tests (host + API), no VM needed
 
 cd runtime/web && npm install && npm run dev   # console on a mock API

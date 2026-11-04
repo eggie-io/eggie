@@ -34,7 +34,7 @@ export function AgentPicker({ base }: { base: AgentBase }) {
                 <span className={s.cardText}>
                   <span className={s.cardName}>
                     {agent.name}
-                    {agent.vendor && <span className={s.vendor}> by {agent.vendor}</span>}
+                    {agent.note && <span className={s.nameNote}> {agent.note}</span>}
                   </span>
                   <span className={s.cardTagline}>{agent.platforms[platform]!.tagline}</span>
                 </span>

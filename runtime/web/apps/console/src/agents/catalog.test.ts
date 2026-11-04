@@ -65,10 +65,10 @@ describe("parseAgent", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ card: [] }) } }, "/a")).toBeNull();
   });
 
-  it("reads the vendor, and drops an agent whose vendor is not text", () => {
-    const agent = (vendor: unknown) => parseAgent("codex", { name: "Codex", vendor, icon: "i.svg", platforms: { mac: guide() } }, "/a");
-    expect(agent("OpenAI")?.vendor).toBe("OpenAI");
-    expect(agent(undefined)?.vendor).toBeNull();
+  it("reads the note, and drops an agent whose note is not text", () => {
+    const agent = (note: unknown) => parseAgent("codex", { name: "Codex", note, icon: "i.svg", platforms: { mac: guide() } }, "/a");
+    expect(agent("(in ChatGPT)")?.note).toBe("(in ChatGPT)");
+    expect(agent(undefined)?.note).toBeNull();
     for (const bad of ["", " ", 42]) expect(agent(bad)).toBeNull();
   });
 

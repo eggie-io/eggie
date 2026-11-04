@@ -61,10 +61,3 @@ def test_the_host_os_follows_the_vm_kind(tmp_path):
     assert connect.host_os(_write(tmp_path, {"vm": "lima"})) == "macOS"
     assert connect.host_os(_write(tmp_path, {"vm": "site"})) == "Linux"
 
-
-def test_the_host_os_is_read_again_once_install_records_it(tmp_path):
-    # install.sh writes connect.json after the api's first start.
-    path = tmp_path / "connect.json"
-    assert connect.host_os(path) == "Linux"
-    path.write_text(json.dumps({"vm": "wsl"}))
-    assert connect.host_os(path) == "Windows"

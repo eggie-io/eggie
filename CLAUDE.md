@@ -93,6 +93,22 @@ In the WSL sandbox `/tmp/pytest-of-$USER` is root-owned, which breaks `tmp_path`
 - Gotchas go in the CLAUDE.md of the layer they belong to, under "Things that will bite you". Add
   one when you hit it.
 
+## Commits
+
+PRs land as merge commits, and release notes (`cliff.toml`) take one line per merged PR from its
+**PR title**. The rule below is for the PR title; CI (`.github/workflows/pr-title.yml`) rejects
+one that breaks it. Commits inside a branch never reach the notes and can stay free-form.
+
+- Conventional Commits: `type(scope)?: subject`, optional `!` before the colon.
+- The subject goes into release notes verbatim: say what changed for the user, not the code.
+- `feat` = new user-visible behaviour, `fix` = user-facing bug, `perf` = faster/lighter.
+- `chore`, `refactor`, `test`, `docs`, `ci`, `build`, `revert` never appear in notes.
+- `!` marks an incompatible change, e.g. an `API_VERSION` bump: `feat!: …`.
+- Good: `fix(console): Projects list no longer jumps when a project starts`
+- Bad: `fix: handle null in useProjects` (code, not user), `[Runtime][Bug] No link to the kitchen`
+  (the issue title, not a change).
+- A PR that changes both host and runtime shows up in both streams' notes.
+
 ## Docs
 
 - `docs/README.md` indexes the human how-tos: `development.md`, `building.md`, `releasing.md`,

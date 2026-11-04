@@ -14,6 +14,7 @@ from .loader import ProjectLoader
 log = logging.getLogger("eggie.instance_projects")
 
 HEARTBEAT = 10 * 60
+# Retries ride the sync loop, so its period is the real floor of the backoff.
 FIRST_BACKOFF = 5.0
 MAX_BACKOFF = 300.0
 # The service's limits; a project over them would get the whole list refused.
@@ -52,7 +53,8 @@ class InstanceProjects:
             return None
         try:
             urls = self._loader.urls_for(self._loader.load(row["id"]), row["domain"])
-        except EggieError:
+        except (EggieError, OSError, UnicodeError):
+            # A file the API cannot read must not hold back every other project.
             return None
         return urls[0] if urls else None
 

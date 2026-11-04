@@ -316,7 +316,8 @@ The kitchen's full project list, so the web app can show it (contract:
 `eggie-web/docs/superpowers/specs/2026-11-04-instance-projects-contract.md`). `ref` and `name` are
 the project id; `public_url` is the primary web address while the project runs, `null` otherwise.
 Sent from the sync loop when the list changes (a start or stop wakes it) and every 10 minutes;
-5xx backs off from 5 s to 5 min; any other refusal is not resent until the list changes.
+5xx, 429, a 401 that survives a refresh or no answer back off (up to 5 min); any other 4xx is not
+resent until the list changes.
 
 ### Lifecycle
 

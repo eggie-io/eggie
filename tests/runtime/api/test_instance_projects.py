@@ -161,3 +161,32 @@ def test_a_kitchen_reports_its_projects_from_the_sync_loop(tmp_path):
 
 def test_a_local_vm_never_reports_projects(tmp_path):
     assert not _pass_reports(tmp_path)
+
+
+def test_an_unreadable_project_file_does_not_stop_the_report(tmp_path):
+    cloud = FakeCloud(report_instance_projects=[None])
+    report, _, _ = make(tmp_path, cloud, {"odd": (STARTED_OK, WEB), "shop": (STARTED_OK, WEB)})
+    (tmp_path / "projects" / "odd" / "docker-compose.yml").write_bytes(b"\xff\xfe")
+    report.report()
+    assert [p["public_url"] for p in sent(cloud)[0]] == [
+        None, "https://shop.foo.eggie.space"]
+
+
+def test_a_project_pushed_here_is_reported(tmp_path):
+    cloud = FakeCloud(report_instance_projects=[None])
+    report, repos, _ = make(tmp_path, cloud, {"shop": (STARTED_OK, WEB)})
+    repos.pushed_projects.claim("shop", "c-shop", "device-1", 0.0)
+    report.report()
+    assert [p["ref"] for p in sent(cloud)[0]] == ["shop"]
+
+
+def test_a_401_after_the_refresh_backs_off_instead_of_refusing(tmp_path):
+    expired = CloudError("invalid_token", "expired", 401)
+    cloud = FakeCloud(report_instance_projects=[expired, expired, None],
+                      refresh=[{"access_token": "at-2", "refresh_token": "rt-2",
+                                "expires_in": 900}])
+    report, _, clock = make(tmp_path, cloud, {})
+    report.report()
+    clock.now += 5
+    report.report()
+    assert len(sent(cloud)) == 3, "an unchanged list is retried after a token failure"

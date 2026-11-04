@@ -176,6 +176,27 @@ def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():
     assert request.get_header("Authorization") == "Bearer at-1"
 
 
+def test_the_project_list_replaces_the_kitchens_copy_with_one_put():
+    projects = [{"ref": "shop", "name": "shop", "public_url": None}]
+    opener = Opener((204, b""))
+    assert Cloud("https://svc/api", opener=opener).report_instance_projects(
+        "at-1", projects) is None
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("PUT", "https://svc/api/v1/instances/me/projects")
+    assert json.loads(request.data) == {"projects": projects}
+    assert request.get_header("Authorization") == "Bearer at-1"
+
+
+def test_every_service_call_names_eggie_as_the_client():
+    opener = Opener((200, b"{}"), (200, b"{}"))
+    agents = iter(["Eggie/1.2.3 (Linux)", "Eggie/1.2.3 (Windows)"])
+    cloud = Cloud("https://svc/api", opener=opener, user_agent=lambda: next(agents))
+    cloud.device_code("Eggie")
+    cloud.me("at-1")
+    assert [r.get_header("User-agent") for r in opener.requests] == [
+        "Eggie/1.2.3 (Linux)", "Eggie/1.2.3 (Windows)"]
+
+
 def test_rate_limit_error_carries_retry_after():
     opener = Opener((429, _error("transfer_rate_limited"), {"Retry-After": "120"}))
     with pytest.raises(CloudError) as raised:

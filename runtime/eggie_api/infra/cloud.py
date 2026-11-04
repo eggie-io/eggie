@@ -5,6 +5,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Callable
 
 # A proxy's own error page, not the service: the service always answers with
 # its JSON error body.
@@ -47,15 +48,18 @@ def _error_from(status: int, raw: bytes, headers=None) -> Exception:
 
 
 class Cloud:
-    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0):
+    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0,
+                 user_agent: Callable[[], str] = lambda: "Eggie"):
         self._base = base_url.rstrip("/")
+        self._user_agent = user_agent
         self._open = opener or urllib.request.urlopen
         self._timeout = timeout
 
     def call(self, method: str, path: str, *, body: dict | None = None,
              token: str | None = None):
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Accept": "application/json"}
+        # urllib's default names Python, which the service shows on device sign-in.
+        headers = {"Accept": "application/json", "User-Agent": self._user_agent()}
         if data is not None:
             headers["Content-Type"] = "application/json"
         if token:
@@ -126,6 +130,11 @@ class Cloud:
     def list_instances(self, token: str):
         """Every instance on the account, whichever device made it."""
         return self.call("GET", "/v1/instances", token=token)
+
+    def report_instance_projects(self, token: str, projects: list[dict]) -> None:
+        """Replaces the kitchen's whole project list on the service."""
+        self.call("PUT", "/v1/instances/me/projects", token=token,
+                  body={"projects": projects})
 
     def instance_certificate(self, token: str):
         """The site's certificate, issued and renewed by the service."""

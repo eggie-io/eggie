@@ -85,7 +85,10 @@ and a host release. Prefer additive changes.
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;
   `connect.facts` knows `"site"`; `Public` reports `not_available`. Browser allowlist and `Secure`
-  cookie: `rest/auth.py::cookie_options`.
+  cookie: `rest/auth.py::cookie_options`. `InstanceProjects.report`
+  (`services/instance_projects.py`) is a site-only sync pass: it `PUT`s the full project list to
+  `/v1/instances/me/projects` on change and every 10 minutes; `public_url` only while
+  `started_ok`. Lifecycle status writes wake the loop (`on_status`).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service
@@ -112,7 +115,8 @@ and a host release. Prefer additive changes.
   `{vm, ssh}`; the SSH port is `host/providers/eggie.yaml`'s `ssh.localPort`, held equal by
   `tests/test_constants_agree.py`.
 - **Account / cloud sync** (`infra/cloud.py`, `services/account.py`, `services/sync.py`) — the Eggie service
-  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Device-code sign-in, tokens in
+  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Every call sends
+  `User-Agent: Eggie/<version> (<host OS from connect.json>)`. Device-code sign-in, tokens in
   `state.db`; `sync.py` gives each local project a service record
   (`client_ref = <device_id>/<local_id>`) on a thread. Only the console is locked until sign-in —
   the CLI and agents never wait on it. Service gaps are **not** worked around here; see

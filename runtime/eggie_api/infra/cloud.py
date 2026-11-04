@@ -127,6 +127,11 @@ class Cloud:
         """Every instance on the account, whichever device made it."""
         return self.call("GET", "/v1/instances", token=token)
 
+    def report_instance_projects(self, token: str, projects: list[dict]) -> None:
+        """Replaces the kitchen's whole project list on the service."""
+        self.call("PUT", "/v1/instances/me/projects", token=token,
+                  body={"projects": projects})
+
     def instance_certificate(self, token: str):
         """The site's certificate, issued and renewed by the service."""
         return self.call("GET", "/v1/instances/me/certificate", token=token)

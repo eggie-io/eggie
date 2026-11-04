@@ -23,6 +23,7 @@ from .services.certificate import Certificate
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
+from .services.instance_projects import InstanceProjects
 from .services.instances import Instances
 from .services.jobs import JobRegistry
 from .services.lifecycle import LifecycleService
@@ -122,6 +123,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
     if certificate is not None:
         passes.append(certificate.refresh)
+    if config.site_host:
+        passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
     sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
@@ -132,6 +135,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     lifecycle = LifecycleService(config, runner, loader, repos.projects, secrets,
                                  jobs, locks, http_probe)
     secrets.on_all_set = lambda pid: _start_quietly(lifecycle, pid)
+    lifecycle.on_status = sync.wake
     push = PushService(
         config, runner, loader, repos.projects, secrets, lifecycle, locks, account, cloud,
         instance or InstanceClient(ca_file=config.instance_ca_file), repos.cloud_projects,

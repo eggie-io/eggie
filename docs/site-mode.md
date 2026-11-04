@@ -304,6 +304,20 @@ request: {"code": "k3x9m2p7qa…"}
 single-use, short-lived (a minute is plenty), bound to one server, and consumed on redemption
 even if the server then fails to set a cookie. Codes the service mints never start with `lh_`.
 
+### `PUT /v1/instances/me/projects`
+
+```json
+request: {"projects": [{"ref": "shop", "name": "shop", "public_url": "https://shop.foo.eggie.space"},
+                       {"ref": "blog", "name": "blog", "public_url": null}]}
+204
+```
+
+The kitchen's full project list, so the web app can show it (contract:
+`eggie-web/docs/superpowers/specs/2026-11-04-instance-projects-contract.md`). `ref` and `name` are
+the project id; `public_url` is the primary web address while the project runs, `null` otherwise.
+Sent from the sync loop when the list changes (a start or stop wakes it) and every 10 minutes;
+5xx backs off from 5 s to 5 min; any other refusal is not resent until the list changes.
+
 ### Lifecycle
 
 - Renew the certificate at least 30 days before `not_after`.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Iterator
+from typing import Callable, Iterator
 
 from ..config import ApiConfig
 from ..domain.project import FAILED_TO_START, STARTED_OK
@@ -36,6 +36,11 @@ class LifecycleService:
         self._jobs = jobs
         self._locks = locks
         self._probe = http_probe
+        self.on_status: Callable[[], None] = lambda: None
+
+    def _set_status(self, project_id: str, status: str) -> None:
+        self._projects.set_status(project_id, status)
+        self.on_status()
 
     def submit_locked(self, project_id: str, work, kind: str | None = None) -> str:
         """The job releases the lock itself, in its own `finally`."""
@@ -95,7 +100,7 @@ class LifecycleService:
                         traefik_host=self._config.traefik_host,
                         http_probe=self._probe,
                         timeout=self._config.ready_timeout)
-                self._projects.set_status(project_id, status)
+                self._set_status(project_id, status)
                 if diagnosis is None:
                     if status == FAILED_TO_START and detail:
                         self._projects.set_problem(project_id, FAILED_TO_START,
@@ -140,7 +145,7 @@ class LifecycleService:
         if not result.ok:
             raise JobFailed((result.stderr or result.stdout).strip()
                             or "compose down failed")
-        self._projects.set_status(project_id, "stopped")
+        self._set_status(project_id, "stopped")
 
     def start_when_ready(self, project_id: str) -> dict:
         self._loader.require(project_id)
@@ -164,7 +169,7 @@ class LifecycleService:
                 if not result.ok:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
-                self._projects.set_status(project_id, "stopped")
+                self._set_status(project_id, "stopped")
                 return {"status": "stopped"}
             finally:
                 self._locks.release(project_id)

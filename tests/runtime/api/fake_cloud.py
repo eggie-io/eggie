@@ -51,6 +51,9 @@ class FakeCloud:
     def list_instances(self, token):
         return self._next("list_instances", token)
 
+    def report_instance_projects(self, token, projects):
+        return self._next("report_instance_projects", token, projects)
+
     def instance_certificate(self, token):
         return self._next("instance_certificate", token)
 

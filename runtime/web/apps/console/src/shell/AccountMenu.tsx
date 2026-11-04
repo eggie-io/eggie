@@ -8,7 +8,8 @@ import { browserLink, openExternal } from "../desktop/desktop";
 import { REVOKE_URL, useDisconnectGitHub, useGitHub } from "../github/github";
 import { githubView } from "../github/view";
 import { GitHubModal } from "../screens/github/GitHubModal";
-import { useSite } from "../site/SiteContext";
+import { webAppAccount } from "../site/signIn";
+import { useSite, useWebApp } from "../site/SiteContext";
 import s from "./Shell.module.css";
 
 const api = createApi((input, init) => fetch(input, init));
@@ -22,6 +23,7 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
   const panelId = useId();
   const home = useDesktopHome();
   const site = useSite();
+  const accountPage = webAppAccount(useWebApp());
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["account"],
@@ -92,6 +94,12 @@ export function AccountMenu({ onSignedOut }: { onSignedOut: () => void }) {
         )}
         <span className={s.rule} aria-hidden="true" />
         <GitHubLine onConnect={() => { setOpen(false); setGitHub(true); }} />
+        {accountPage && (
+          <button type="button" className={s.item} onClick={() => { setOpen(false); openExternal(accountPage); }}>
+            <Icon name="settings" />
+            <span className={s.itemLabel}>Account settings</span>
+          </button>
+        )}
         {home && <OpenInBrowser />}
         {site === null && (
           <>

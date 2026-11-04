@@ -29,5 +29,7 @@ commit_parsers = [
   { message = "^feat", group = "<!-- 0 -->New" },
   { message = "^fix", group = "<!-- 1 -->Fixed" },
   { message = "^perf", group = "<!-- 2 -->Improved" },
+  # A breaking change is news whatever its type, e.g. `refactor!:` for an API bump.
+  { message = '^[a-z]+(\([^)]*\))?!:', group = "<!-- 0 -->New" },
   { message = ".*", skip = true },
 ]

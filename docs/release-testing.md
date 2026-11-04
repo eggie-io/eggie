@@ -96,7 +96,7 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | # | Action | Pass when | Result |
 |---|---|---|---|
 | S1 | Build the snapshot (install, `snapshot-prep.sh`, image) and provision a droplet from it with the service | `https://<site host>` answers within two minutes of boot with a valid certificate; `/opt/eggie/account.json` is gone | |
-| S2 | "Open console" from the web app | The console opens signed in; the account menu has no sign-out; projects page has no public-address tile | |
+| S2 | "Open console" from the web app | The console opens signed in; the account menu has no sign-out; projects page has no public-address tile; the top-left back arrow opens this kitchen's page in the web app | |
 | S3 | Add a project and start it | Its URL is `https://<id>.<site domain>` and answers with the same certificate | |
 | S4 | SSH in as the login account; `eggie status` | The CLI works over loopback; the agents card in the console shows the site host, port 22, no key file | |
 | S5 | Reboot the droplet | The stack comes back on 443; the boot update moves `runtime.version` if a newer release exists; projects resume | |

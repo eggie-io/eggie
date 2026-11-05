@@ -63,7 +63,7 @@ matched transcript (`docs/security.md`).
 ## `install.sh` — numbered steps, order matters
 
 a 4 GiB `/swapfile` when the VM has no swap (`lib/swap.sh`; Lima and cloud images ship none, WSL
-has its own; not fatal) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
+has its own; not fatal; existing swap or `/swapfile` of any size is never touched — a droplet's 1 GB one comes from the snapshot) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`;
 any other ref runs `EGGIE_IMAGE_VERSION` when set, else the images ghcr holds under the ref's own
 name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=dev` runs the `dev`

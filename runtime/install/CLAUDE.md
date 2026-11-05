@@ -2,7 +2,7 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_swap.py`, `test_install_agents.py`, `test_install_skills.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`, `test_claude_reaper.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -49,6 +49,16 @@ the network comes up after the unit starts, then runs it with `EGGIE_RUNTIME_UPD
 Site mode only (step 7b): a oneshot unit ordered before `docker.service` that adds an idempotent
 `DROP` for `169.254.169.254` to the `DOCKER-USER` chain, so containers cannot read the droplet's
 user data (which seeded `account.json`).
+
+### `lib/claude-reaper.sh` + `systemd/eggie-claude-reaper.{service,timer}`
+
+Every install, both modes (step 11d): every 30 minutes, `SIGTERM` to Claude Code Desktop processes
+(`~/.claude/remote/ccd-cli/*`) whose `--session-id`/`--resume` transcript under
+`~/.claude/projects/*/` is older than `EGGIE_REAPER_IDLE_MIN`. Settings in
+`/opt/eggie/claude-reaper.env`, written commented-out only when absent. It depends on Desktop's
+binary path, cmdline and transcript layout, which any Desktop release may change: it then
+stops nothing (a new binary path even silently), and the fix ships as a runtime release. Never kill on anything but a
+matched transcript (`docs/security.md`).
 
 ## `install.sh` — numbered steps, order matters
 

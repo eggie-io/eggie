@@ -90,6 +90,8 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B4 | Inside the VM, `eggie new` / `eggie up` from a coding agent | The project shows up in the console | |
 | B5 | In a running project: `eggie secret set API_KEY` (pipe a value), put `API_KEY=other` in the project's `.env`, then restart it | `docker exec <container> env` shows the secret's value, not the `.env` one; a compose `${KEY:?}` reference still lets `eggie logs` and stop/down work | |
 | B6 | Clone a repo with no docker-compose.yml, then a folder whose compose fails | Both show Needs set-up with a prompt (the second with Docker's message); after the agent runs `eggie up` successfully, a later failure shows Something's wrong | |
+| B7 | On WSL, Lima and a site, with Claude Code Desktop connected over SSH: `systemctl list-timers eggie-claude-reaper.timer`, then (after a run) `journalctl -t eggie-reaper` | The timer is listed with a next run; every `~/.claude/remote/ccd-cli/` process (`ps -eo pid,args \| grep ccd-cli`) has a line with its `idle_min`, none says `skip` | |
+| B8 | On WSL, Lima and a site: put `EGGIE_REAPER_IDLE_MIN=2` in `/opt/eggie/claude-reaper.env`, open a Desktop session, wait 3 minutes, `systemctl start eggie-claude-reaper.service`; then send a message in that session | The journal shows `reap pid=<pid>` and the process is gone; the message gets an answer from a new process with the same `--session-id`. Remove the line afterwards | |
 
 ## Site mode (a droplet from the snapshot; see `site-mode.md`)
 

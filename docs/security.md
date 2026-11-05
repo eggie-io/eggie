@@ -115,6 +115,12 @@ Two things hold that up, and neither is enforced inside the VM:
 
 A project shared by public URL is exposed to the internet with whatever auth it has itself.
 
+The idle-session reaper (`vm.md`) runs as root and can stop any user's process, so it stops only
+a Claude Code Desktop process it can tie to a session transcript: no `ccd-cli` binary, no session
+id or no transcript, and the process is left alone and logged. Ending sessions with logind's
+`KillUserProcesses=yes` or `StopIdleSessionSec` is ruled out: both end Desktop's SSH session when
+the user disconnects, which kills the task they meant to leave running.
+
 ## Site mode (a server the service provisions)
 
 On a site the boundary is the server's firewall, which the service manages: 22, 80 and 443

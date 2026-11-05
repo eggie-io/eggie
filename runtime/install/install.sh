@@ -376,6 +376,21 @@ systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
 systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
 
+# 11d. stop Claude Code Desktop sessions idle for hours: Desktop keeps one
+# process per session alive for 30 days. Settings live in an env file a run
+# never overwrites; commented out so a new release's defaults still apply.
+if [[ ! -f /opt/eggie/claude-reaper.env ]]; then
+  cat > /opt/eggie/claude-reaper.env <<'EOF'
+# Read by eggie-claude-reaper.service on each run; no restart needed.
+# EGGIE_REAPER_IDLE_MIN=120
+# EGGIE_REAPER_DRY=1
+EOF
+fi
+install -m 644 "$INSTALL_DIR/systemd/eggie-claude-reaper.service" \
+  "$INSTALL_DIR/systemd/eggie-claude-reaper.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now eggie-claude-reaper.timer
+
 # 12. what the console's "Connect an agent" guide needs to know.
 # sed, not head: head exiting early would SIGPIPE the pipeline under pipefail.
 agent_user=$(getent passwd | bash "$INSTALL_DIR/lib/login-users.sh" /etc/shells | cut -d: -f1 | sed -n 1p)

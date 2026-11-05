@@ -535,6 +535,15 @@ def test_only_a_site_install_enables_the_metadata_guard():
     assert text.count("eggie-metadata-guard") == block.count("eggie-metadata-guard")
 
 
+def test_every_install_enables_the_reaper_and_keeps_its_settings():
+    # Local VMs pile up Desktop sessions too, so it is not a site-only step; a
+    # rewritten env file would undo IDLE_MIN/DRY set by hand on a machine.
+    text = INSTALL.read_text()
+    (block,) = re.findall(r"# 11d\..*?enable --now eggie-claude-reaper\.timer\n", text, re.S)
+    assert "SITE" not in block
+    assert "if [[ ! -f /opt/eggie/claude-reaper.env ]]" in block
+
+
 def test_the_wsl_account_exists_before_accounts_are_provisioned():
     # Created after step 10, the account would miss the docker group, its
     # ACLs and the skills until the next install.

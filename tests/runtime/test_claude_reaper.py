@@ -120,7 +120,7 @@ def test_dry_run_logs_the_reap_but_kills_nothing(box):
     assert p.poll() is None and "dry=1" in log
 
 
-@pytest.mark.parametrize("value", ["2h", "0"])
+@pytest.mark.parametrize("value", ["2h", "0", "010"])
 def test_an_unusable_idle_setting_kills_nothing(box, value):
     p = box.process()
     box.transcript(age_min=600)

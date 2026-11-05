@@ -12,8 +12,9 @@ DRY=${EGGIE_REAPER_DRY:-0}
 
 log() { logger -t eggie-reaper "$*"; }
 
-# A non-number would read as 0 in (( )) and reap every session.
-if [[ ! $IDLE_MIN =~ ^[0-9]+$ ]] || (( IDLE_MIN < 1 )); then
+# A non-number would read as 0 in (( )) and reap every session; a leading
+# zero would read as octal.
+if [[ ! $IDLE_MIN =~ ^[1-9][0-9]*$ ]]; then
   log "EGGIE_REAPER_IDLE_MIN=$IDLE_MIN is not a positive number of minutes, nothing reaped"
   exit 1
 fi
@@ -38,7 +39,9 @@ for d in "$PROC"/[0-9]*; do
   home=$(getent passwd "$(stat -c %u "$d")" | cut -d: -f6)
   f=$(ls -t "$home"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)
   [[ -n $home && -n $f ]] || { log "pid=$pid session=$sid no transcript, skip"; continue; }
-  idle=$(( (now - $(stat -c %Y "$f")) / 60 ))
+  # Gone since ls (the session was deleted): nothing to judge it by.
+  mtime=$(stat -c %Y "$f" 2>/dev/null) || continue
+  idle=$(( (now - mtime) / 60 ))
   log "pid=$pid session=$sid idle_min=$idle"
   if (( idle >= IDLE_MIN )); then
     (( DRY )) || kill -TERM "$pid" 2>/dev/null

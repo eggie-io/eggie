@@ -82,7 +82,7 @@ class FakeRunner:
             return self.proc_net
         if "-q" in argv:
             return self.container_id
-        if argv[-2:] == ["up", "-d"]:
+        if argv[-3:] == ["up", "-d", "--force-recreate"]:
             if self.up_gate is not None:
                 assert self.up_gate.wait(5), "the up job was never released"
             return self.up

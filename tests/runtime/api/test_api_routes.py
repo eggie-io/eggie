@@ -142,7 +142,7 @@ def test_up_returns_a_job_id_and_runs_compose_with_both_files(env):
     assert env.client.get("/projects/blog").json()["status"] == "started_ok"
 
     up = env.runner.argv_containing("up")[-1]
-    assert up.count("-f") == 2 and up[-2:] == ["up", "-d"]
+    assert up.count("-f") == 2 and up[-3:] == ["up", "-d", "--force-recreate"]
     ps = env.runner.argv_containing("ps")[-1]
     assert ps.count("-f") == 1, "compose ps runs against the base file only"
 

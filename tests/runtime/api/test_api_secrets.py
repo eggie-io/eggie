@@ -70,7 +70,7 @@ def test_start_hands_every_secret_to_compose_up_and_writes_no_value(env):
     folder = _project(env)
     env.client.put("/projects/blog/secrets/API_KEY", json={"value": SECRET})
     _run_to_completion(env, env.client.post("/projects/blog/up"))
-    ups = [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-2:] == ["up", "-d"]]
+    ups = [e for a, e in zip(env.runner.calls, env.runner.envs) if a[-3:] == ["up", "-d", "--force-recreate"]]
     assert ups == [{"API_KEY": SECRET}]
     assert all(SECRET not in word for argv in env.runner.calls for word in argv)
     assert SECRET not in "".join(p.read_text(errors="replace")
@@ -245,7 +245,7 @@ def _request(env, name):
 
 
 def _ups(env):
-    return [a for a in env.runner.calls if a[-2:] == ["up", "-d"]]
+    return [a for a in env.runner.calls if a[-3:] == ["up", "-d", "--force-recreate"]]
 
 
 def _settle(env):

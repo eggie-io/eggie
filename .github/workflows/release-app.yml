@@ -161,7 +161,22 @@ jobs:
             -s -k "$kc_pass" "$KEYCHAIN" >/dev/null
           security find-identity -v "$KEYCHAIN"
 
+          # Pasted secrets pick up stray whitespace and Windows line endings.
+          NOTARY_KEY_ID="$(printf '%s' "$NOTARY_KEY_ID" | tr -d '[:space:]')"
+          NOTARY_ISSUER="$(printf '%s' "$NOTARY_ISSUER" | tr -d '[:space:]')"
+          [[ ${#NOTARY_KEY_ID} -eq 10 ]] || {
+            echo "NOTARY_KEY_ID must be 10 characters, got ${#NOTARY_KEY_ID}." >&2; exit 1; }
+          [[ "$NOTARY_ISSUER" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]] || {
+            echo "NOTARY_ISSUER is not a UUID." >&2; exit 1; }
+
           p8="$RUNNER_TEMP/notary.p8"
+          printf '%s\n' "$NOTARY_KEY_P8" | tr -d '\r' > "$p8"
+          grep -q -- "-----BEGIN PRIVATE KEY-----" "$p8" && grep -q -- "-----END PRIVATE KEY-----" "$p8" || {
+            echo "NOTARY_KEY_P8 must be the .p8 file's text, BEGIN and END lines included." >&2; exit 1; }
+
+          xcrun notarytool store-credentials eggie-notary \
+            --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"
+          rm -f "$p8"
           printf '%s\n' "$NOTARY_KEY_P8" > "$p8"
           xcrun notarytool store-credentials eggie-notary \
             --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"

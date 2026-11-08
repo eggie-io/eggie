@@ -104,3 +104,69 @@ def test_a_symlinked_overlay_file_is_refused(root, tmp_path):
         cli.prepare_overlay_dir(project, os.getgid())
 
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def _refuse_on(monkeypatch, *paths):
+    """Make chown/chmod fail on `paths` the way they do on a file someone
+    else owns: the test user owns every file, so ownership can't be faked."""
+    refused = {str(p) for p in paths}
+    real_chown, real_chmod = os.chown, os.chmod
+
+    def chown(path, *args, **kwargs):
+        if str(path) in refused:
+            raise PermissionError(1, "Operation not permitted")
+        return real_chown(path, *args, **kwargs)
+
+    def chmod(path, *args, **kwargs):
+        if str(path) in refused:
+            raise PermissionError(1, "Operation not permitted")
+        return real_chmod(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "chown", chown)
+    monkeypatch.setattr(os, "chmod", chmod)
+
+
+def test_an_overlay_the_api_already_can_write_is_left_alone(root, monkeypatch):
+    # Issue #101: the API created overlay.yml, so it isn't ours, but group
+    # docker can already write it. Nothing needs changing, so nothing may fail.
+    project = root / "blog"
+    eggie_dir = project / ".eggie"
+    eggie_dir.mkdir(parents=True)
+    eggie_dir.chmod(0o2775)
+    overlay = eggie_dir / "overlay.yml"
+    overlay.write_text("services: {}\n")
+    overlay.chmod(0o664)
+    _refuse_on(monkeypatch, eggie_dir, overlay)
+
+    cli.prepare_overlay_dir(project, os.getgid())
+
+    assert overlay.read_text() == "services: {}\n"
+
+
+def test_an_overlay_someone_else_owns_is_replaced_with_our_own_copy(root, monkeypatch):
+    project = root / "blog"
+    eggie_dir = project / ".eggie"
+    eggie_dir.mkdir(parents=True)
+    eggie_dir.chmod(0o2775)
+    overlay = eggie_dir / "overlay.yml"
+    overlay.write_text("services: {}\n")
+    overlay.chmod(0o644)
+    _refuse_on(monkeypatch, overlay)
+
+    cli.prepare_overlay_dir(project, os.getgid())
+
+    assert overlay.read_text() == "services: {}\n"
+    assert stat.S_IMODE(overlay.stat().st_mode) == 0o664
+    assert overlay.stat().st_gid == os.getgid()
+    assert sorted(p.name for p in eggie_dir.iterdir()) == ["overlay.yml"]
+
+
+def test_a_folder_we_cannot_fix_names_itself_and_its_owner(root, monkeypatch):
+    project = root / "blog"
+    eggie_dir = project / ".eggie"
+    eggie_dir.mkdir(parents=True)
+    eggie_dir.chmod(0o755)
+    _refuse_on(monkeypatch, eggie_dir)
+
+    with pytest.raises(cli.EggieError, match=r"\.eggie.*owned by"):
+        cli.prepare_overlay_dir(project, os.getgid())

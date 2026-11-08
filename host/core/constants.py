@@ -12,7 +12,7 @@ the runtime cannot end up pointing at different files.
 
 # The desktop app's own version, shown on the status screen and in the
 # diagnostics text. Bumped with pyproject.toml's.
-APP_VERSION = "0.2.9"
+APP_VERSION = "0.2.10"
 
 # Desktop app releases are tagged app-vX.Y.Z on this repository. runtime-v*
 # releases share the list and only its first page is read, so ask for the max.

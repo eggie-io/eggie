@@ -174,13 +174,16 @@ jobs:
           grep -q -- "-----BEGIN PRIVATE KEY-----" "$p8" && grep -q -- "-----END PRIVATE KEY-----" "$p8" || {
             echo "NOTARY_KEY_P8 must be the .p8 file's text, BEGIN and END lines included." >&2; exit 1; }
 
+          echo "Key fingerprint (public part, safe to print):"
+          openssl pkey -in "$p8" -pubout | shasum -a 256
+
+          xcrun notarytool history --verbose \
+            --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" || true
+
           xcrun notarytool store-credentials eggie-notary \
             --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"
           rm -f "$p8"
-          printf '%s\n' "$NOTARY_KEY_P8" > "$p8"
-          xcrun notarytool store-credentials eggie-notary \
-            --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"
-          rm -f "$p8"
+          
 
       - name: Build, sign and notarize the package
         env:

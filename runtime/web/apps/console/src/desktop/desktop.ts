@@ -79,7 +79,7 @@ export const takeDesktopAdded = (location: Pick<Location, "hash">, store: Store 
   takeAgentIds(location, store, "added", "eggie.desktopAdded");
 
 // The desktop screen that connects `agent`, then reopens `back` here. The
-// window checks both again and asks the user before it changes anything.
+// window checks both again, adds the connection and comes straight back.
 export function desktopConnectUrl(home: string, agent: string, back: string): string {
   const url = new URL(home);
   url.hash = new URLSearchParams({ connect: agent, back }).toString();

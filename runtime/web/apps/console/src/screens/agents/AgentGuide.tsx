@@ -81,8 +81,8 @@ function useConnectOffer(agent: Agent): { url: string; added: boolean } | undefi
 }
 
 // The automatic list's connect step, drawn in the picture frame: the button
-// is the step. It opens the desktop window's own screen, which asks before it
-// changes anything and then brings the user back here.
+// is the step. It sends the desktop window to its own screen, which adds the
+// connection and brings the user straight back here.
 function ConnectCard({ agent, step, offer }: { agent: Agent; step: Step; offer: { url: string; added: boolean } }) {
   const go = () => window.location.assign(offer.url);
   return (

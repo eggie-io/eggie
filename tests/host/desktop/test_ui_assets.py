@@ -356,7 +356,7 @@ def test_every_connectable_agent_has_words_on_the_connect_screen():
     assert CONNECTABLE_AGENTS, "nothing to check"
     for agent in CONNECTABLE_AGENTS:
         assert f'data-when="{agent}"' in screen, agent
-    assert 'data-screen="agent-connect:done"' in markup
+    assert 'data-screen="agent-connect:failed"' in markup
 
 
 def test_the_connect_route_is_handled_and_its_actions_exist():

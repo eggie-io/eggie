@@ -2,8 +2,8 @@ from __future__ import annotations
 
 # The "Eggie" SSH connection in Claude Code's ~/.claude/settings.json, so the
 # Claude desktop app lists the VM without the user adding it by hand. Written
-# when the user asks for it from Claude Code's guide in the console (the
-# desktop app's agent-connect screen), never at setup: Claude Code may be
+# when the user clicks "Add Eggie to Claude Code" in its guide in the console
+# (the desktop app's agent-connect screen does the work), never at setup: Claude Code may be
 # installed long after Eggie.
 #
 # Claude Code keeps its SSH connections in the `sshConfigs` list of that file.

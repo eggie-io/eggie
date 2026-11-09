@@ -357,23 +357,22 @@
 
 <template data-screen="agent-connect">
   <section class="pad centered">
+    <span class="spinner" aria-hidden="true"></span>
     <div data-when="claude-code">
-      <h2 class="title">Add Eggie to Claude Code</h2>
-      <p class="lede">Eggie adds an SSH connection named Eggie to Claude Code's settings. Then pick Eggie when you choose where Claude Code works.</p>
-    </div>
-    <div class="row">
-      <button class="btn-primary" data-action="connect-agent"><span class="ic ic-check-circle" aria-hidden="true"></span>Add the connection</button>
-      <button class="btn-secondary" data-action="connect-back">Cancel</button>
+      <h2 class="title">Adding Eggie to Claude Code…</h2>
+      <p class="lede">You'll be back in the guide in a moment.</p>
     </div>
   </section>
 </template>
 
-<template data-screen="agent-connect:done">
+<template data-screen="agent-connect:failed">
   <section class="pad centered">
-    <h2 class="title">Connection added</h2>
+    <h2 class="title">Couldn't add the connection</h2>
     <p class="lede" data-field="message"></p>
-    <p class="hint">If Claude Code is open, restart it to see Eggie.</p>
-    <div class="row"><button class="btn-primary" data-action="connect-back">Back to the guide</button></div>
+    <div class="row">
+      <button class="btn-primary" data-action="connect-agent">Try again</button>
+      <button class="btn-secondary" data-action="connect-back">Back to the guide</button>
+    </div>
   </section>
 </template>
 

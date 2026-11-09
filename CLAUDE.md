@@ -116,9 +116,8 @@ one that breaks it. Commits inside a branch never reach the notes and can stay f
   changes.
 - Internal docs live in the private sibling repo `../eggie-resources/`, never here:
   `../eggie-resources/ops/release-testing.md`, `../eggie-resources/ops/macos-status.md`,
-  `../eggie-resources/ops/releasing-internal.md` (first-release checklist),
-  `../eggie-resources/service/` (site-mode service contract, full site security notes) and
-  `../eggie-resources/design/` (the old web UI board).
+  `../eggie-resources/ops/releasing-internal.md` (first-release checklist) and
+  `../eggie-resources/service/` (site-mode service contract, full site security notes).
 - Superpowers specs and plans do NOT live in this repo (it is public). Always write them to
   the sibling repo `../eggie-resources/superpowers/`:
   - specs: `../eggie-resources/superpowers/specs/YYYY-MM-DD-<topic>-design.md`

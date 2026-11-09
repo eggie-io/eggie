@@ -141,8 +141,7 @@ and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names.
 
 On a site server the memory limits for login accounts, the swap size and swappiness, the disabled
 dynamic motd and the sshd hardening come from the service's snapshot, not from the
-runtime; leave them as they are. The service also picks the server size: 2 GB was not enough
-for an agent plus a project with headless Chrome, which runs fine on 4 GB.
+runtime; leave them as they are.
 
 ## Troubleshooting
 

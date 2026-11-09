@@ -25,7 +25,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 
 - `packages/ui` — the kit: tokens, fonts, components, drawn from the Eggie design system
   (claude.ai/design project "Omelet: Linux VM Setup UI": `Eggie Host + Console v3.dc.html` and
-  `_ds/eggie-console-design-system-…`), never from `host/desktop/ui` or the old `../eggie-resources/design/` board.
+  `_ds/eggie-console-design-system-…`), never from `host/desktop/ui`.
   Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
   - Every icon is `<Icon name=…>`; the glyphs (the design system's 24px stroke set) are paths in
     `src/icons.ts`, so a new one is added there, not drawn inline. `Button`, `IconButton`, `Badge`

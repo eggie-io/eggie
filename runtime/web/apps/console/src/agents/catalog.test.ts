@@ -126,6 +126,13 @@ describe("parseAgent", () => {
     expect(agent({ steps: [button], card: [{ label: "Port", value: "{nope}" }] })).toBeNull();
   });
 
+  it("reads a card field's copy mark, which can only be true", () => {
+    const agent = (field: unknown) => parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { windows: guide({ card: [field] }) } }, "/a");
+    expect(agent({ label: "Folder", value: "C:\\x", copy: true })?.platforms.windows?.card).toEqual([{ label: "Folder", value: "C:\\x", copy: true }]);
+    expect(agent({ label: "Folder", value: "C:\\x" })?.platforms.windows?.card).toEqual([{ label: "Folder", value: "C:\\x" }]);
+    expect(agent({ label: "Folder", value: "C:\\x", copy: false })).toBeNull();
+  });
+
   it("refuses the connect button in the steps done by hand", () => {
     const steps = [{ title: "Add it", body: "One click.", alt: "Button", action: "connect" }];
     expect(parseAgent("claude-code", { name: "Claude Code", icon: "i.svg", platforms: { mac: guide({ steps }) } }, "/a")).toBeNull();

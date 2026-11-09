@@ -41,7 +41,7 @@
     },
     "windows": {
       "card": [
-        {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects"}
+        {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects", "copy": true}
       ],
       "tagline": "Inside WSL",
       "warning": "<p>Because of a limitation in <b>Codex</b> on Windows, it takes a few more steps to set up than the other agents: <b>eggie-vm</b> has to become your default WSL distro.</p><p>If you don't know what WSL is, or you don't use any other WSL distro, you can safely ignore this.</p>",
@@ -53,7 +53,7 @@
       ],
       "auto": {
         "card": [
-          {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects"}
+          {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects", "copy": true}
         ],
         "steps": [
           {"title": "Make eggie-vm the default", "action": "connect", "button": "Make eggie-vm the default", "done": "eggie-vm is your default WSL distro", "body": "One click: Eggie runs <code>wsl --set-default eggie-vm</code> for you and brings you back here. If Codex is already open, restart it afterwards.", "alt": "Eggie makes eggie-vm the default WSL distro"},

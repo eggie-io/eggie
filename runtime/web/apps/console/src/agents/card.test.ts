@@ -63,6 +63,11 @@ describe("cardRows", () => {
     expect(cardRows(guide, site)).toEqual([{ label: "SSH key", value: "The key you downloaded", copy: false, hint: "Saved earlier." }]);
   });
 
+  it("offers a copy for a fixed value the manifest marks as one", () => {
+    const guide: Guide = { card: [{ label: "Projects folder", value: "\\\\wsl.localhost\\eggie-vm", copy: true }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
+    expect(cardRows(guide, { vm: "wsl", ssh: null })).toEqual([{ label: "Projects folder", value: "\\\\wsl.localhost\\eggie-vm", copy: true }]);
+  });
+
   it("shows no card on a server that could not say its SSH facts, rather than the local VM's", () => {
     expect(cardRows(userAtHost, { vm: "site", ssh: null })).toBeNull();
   });

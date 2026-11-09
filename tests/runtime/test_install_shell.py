@@ -398,7 +398,7 @@ def test_install_enables_the_boot_update_without_running_it_now():
     # Starting it here would run an update inside every install.
     text = INSTALL.read_text()
     assert "systemctl enable eggie-update.service" in text
-    assert "enable --now eggie-update" not in text
+    assert "enable --now eggie-update.service" not in text
     assert "start eggie-update" not in text
 
 
@@ -548,3 +548,19 @@ def test_the_wsl_account_exists_before_accounts_are_provisioned():
     # Created after step 10, the account would miss the docker group, its
     # ACLs and the skills until the next install.
     assert _index_of("lib/wsl-user.sh") < _index_of("done < <(accounts)")
+
+
+def test_install_enables_the_update_units_but_never_starts_the_updater():
+    text = INSTALL.read_text()
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/update" in text
+    marker = text.index(f"> {constants.RUNTIME_MARKER}")
+    for unit in ("eggie-update-now.path", "eggie-update-check.timer"):
+        assert text.index(f"systemctl enable --now {unit}") < marker
+    # Starting it here would run an update inside this install.
+    assert "start eggie-update-now" not in text
+
+
+def test_the_update_scripts_are_valid_bash():
+    for name in ("update-check.sh", "update-now.sh"):
+        script = INSTALL.parent / "lib" / name
+        assert subprocess.run(["bash", "-n", str(script)]).returncode == 0, name

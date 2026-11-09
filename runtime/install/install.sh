@@ -365,6 +365,18 @@ install -m 644 "$INSTALL_DIR/systemd/eggie-update.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable eggie-update.service
 
+# 11b-2. the update check and the root-side runner the API pokes by bumping
+# `request`. Never started here: that would run an update inside this install.
+install -d -m 2770 -o root -g docker /opt/eggie/update
+chmod 2770 /opt/eggie/update
+install -m 644 "$INSTALL_DIR/systemd/eggie-update-check.service" \
+  "$INSTALL_DIR/systemd/eggie-update-check.timer" \
+  "$INSTALL_DIR/systemd/eggie-update-now.path" \
+  "$INSTALL_DIR/systemd/eggie-update-now.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now eggie-update-now.path
+systemctl enable --now eggie-update-check.timer
+
 # 11c. coding agents: the root-side runner the API pokes to detect connected
 # agents and run their setup. The API writes counters here, never into a home.
 install -d -m 2770 -o root -g docker /opt/eggie/agent-status /opt/eggie/agent-status/setup

@@ -1,0 +1,7 @@
+[Unit]
+Description=Check whether a newer Eggie runtime release is available
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/update-check.sh

@@ -31,7 +31,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $py = Join-Path $root '.venv\Scripts\python.exe'
-$eggie = Join-Path $root '.venv\Scripts\eggie.exe'
+# The host CLI as a module, not .venv\Scripts\eggie.exe: that shim exists only
+# if the venv was installed after the entry point got its current name.
+function Eggie { & $py -m host.cli @args }
 $tag = 'local'
 $stage = '/opt/eggie/dev'    # mirror of the checkout parts build.sh needs
 
@@ -98,16 +100,16 @@ try {
     if (-not $known) {
         if (-not $Full) { Fail "no VM '$vm' yet; run: .\scripts\dev -Full" }
         Say "No VM yet: creating it with the released runtime first (several minutes)"
-        & $eggie setup --headless
+        Eggie setup --headless
         if ($LASTEXITCODE -ne 0) { Fail "setup failed" }
     }
     # Always, not only when stopped: a distro that nothing holds open ends seconds
     # after the last wsl.exe exits, and the commands below would boot it unheld.
-    & $eggie vm start
+    Eggie vm start
     if ($LASTEXITCODE -ne 0) { Fail "the VM did not start" }
 
     if ((Invoke-Vm @('test', '-x', '/usr/bin/docker')) -ne 0) {
-        Fail "the VM has no Docker yet; run: $eggie setup --headless, then this again"
+        Fail "the VM has no Docker yet; run: .venv\Scripts\python.exe -m host.cli setup --headless, then this again"
     }
 
     # --- sync the checkout into the VM ---------------------------------------

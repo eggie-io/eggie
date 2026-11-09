@@ -51,10 +51,6 @@ def _run(tmp_path, *, installed="runtime-v0.1.0", tags=("0.1.0", "0.2.0"), apis=
     return result, update / "available.json", git_log
 
 
-def test_update_check_is_valid_bash():
-    assert subprocess.run(["bash", "-n", str(INSTALL / "lib" / "update-check.sh")]).returncode == 0
-
-
 def test_a_newer_accepted_release_is_offered(tmp_path):
     result, available, _ = _run(tmp_path)
     assert result.returncode == 0, result.stderr

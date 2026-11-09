@@ -4,4 +4,5 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+TimeoutStartSec=15min
 ExecStart=/bin/bash /opt/eggie/runtime/install/lib/update-check.sh

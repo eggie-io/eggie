@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Asks the runtime repo whether a newer release than the installed one exists
-# that this machine's host accepts, and records the answer for the console.
-# Run as root by eggie-update-check.service and update-now.sh.
+# Records in available.json whether a newer runtime release the host accepts exists.
 #   update-check.sh [update-dir]
 set -euo pipefail
 
@@ -14,7 +12,7 @@ write_available() {
   python3 -c 'import json,sys,time
 ref=sys.argv[1]
 print(json.dumps({"available": ref or None, "checked_at": int(time.time())}))' "$ref" > "$tmp"
-  chmod 644 "$tmp"
+  chmod 640 "$tmp"
   mv "$tmp" "$DIR/available.json"
 }
 

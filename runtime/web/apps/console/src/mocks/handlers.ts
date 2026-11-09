@@ -56,6 +56,9 @@ export const SCENARIOS = [
   "handoff-new",
   "handoff-github",
   "handoff-folder",
+  "update-available",
+  "update-failed",
+  "updating",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -499,7 +502,25 @@ export function handlersFor(scenario: Scenario) {
       return HttpResponse.json({ job_id: startJob(target, action).job_id }, { status: 202 });
     });
 
+  const offered = scenario === "update-available" || scenario === "update-failed" || scenario === "updating";
+  let runtimeUpdate = {
+    installed: "0.2.0",
+    available: offered ? "0.3.0" : (null as string | null),
+    state: scenario === "updating" ? "running" : scenario === "update-failed" ? "failed" : "idle",
+    error: scenario === "update-failed" ? "could not pull the new images" : (null as string | null),
+  };
+
   return [
+    http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
+    http.post("/api/runtime/update", () => {
+      if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);
+      if (runtimeUpdate.available === null) return refuse("update_not_available", "there is nothing newer to install", 409);
+      runtimeUpdate = { ...runtimeUpdate, state: "running", error: null };
+      setTimeout(() => {
+        runtimeUpdate = { installed: "0.3.0", available: null, state: "idle", error: null };
+      }, 8000);
+      return HttpResponse.json(runtimeUpdate);
+    }),
     http.get("/api/health", () => {
       if (scenario === "down") return HttpResponse.error();
       if (scenario === "wrong-host") return refuse("forbidden_host", "this address isn't allowed", 403);

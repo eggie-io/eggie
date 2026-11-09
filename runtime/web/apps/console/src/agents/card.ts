@@ -22,9 +22,10 @@ export function cardRows(guide: Guide, connect: Connect | undefined): CardRow[] 
     ? { host: ssh.host, port: String(ssh.port), user: ssh.user, key_file: ssh.key_file }
     : FALLBACK;
   const rows: CardRow[] = [];
-  for (const { label, value, hint } of guide.card) {
-    // Plain text, such as "the key you downloaded", is guidance, not a value.
-    let known = PLACEHOLDER.test(value);
+  for (const { label, value, hint, copy } of guide.card) {
+    // Plain text, such as "the key you downloaded", is guidance, not a value,
+    // unless the manifest says it is one (a fixed path).
+    let known = copy === true || PLACEHOLDER.test(value);
     let applies = true;
     const filled = value.replace(/\{([^}]*)\}/g, (_, name: Fact) => {
       const fact = facts[name];

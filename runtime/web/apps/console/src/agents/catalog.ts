@@ -14,7 +14,8 @@ export interface Step {
 }
 // One line of the card: a label and a template over the API's SSH facts, with
 // an optional explanation shown on demand.
-export interface CardField { label: string; value: string; hint?: string }
+// `copy` marks a plain-text value that is a value to paste, not guidance.
+export interface CardField { label: string; value: string; hint?: string; copy?: true }
 // `card` is null for a guide with nothing to copy. `auto` is the shorter list
 // shown when the desktop window can add the connection itself, null when the
 // manifest has none; `steps` stays the way to do it by hand. `autoCard` is the
@@ -83,9 +84,14 @@ function parseStep(value: unknown, folder: string, actions = false): Step | null
 function parseCardField(value: unknown): CardField | null {
   if (!isObject(value) || !text(value.label) || !text(value.value)) return null;
   if (value.hint !== undefined && !text(value.hint)) return null;
+  if (value.copy !== undefined && value.copy !== true) return null;
   const names = [...value.value.matchAll(PLACEHOLDER)].map((match) => match[1]);
   if (!names.every((name) => (SSH_FACTS as readonly string[]).includes(name))) return null;
-  return { label: value.label, value: value.value, ...(value.hint !== undefined && { hint: value.hint }) };
+  return {
+    label: value.label, value: value.value,
+    ...(value.hint !== undefined && { hint: value.hint }),
+    ...(value.copy === true && { copy: true as const }),
+  };
 }
 
 // Null when absent, undefined when present but wrong.

@@ -34,8 +34,8 @@ key the user downloaded from the web app.
   with that step's title and body and the "Add Eggie to <agent>" button, so the step needs no
   `media` (any it has is not shown). That step alone may set `button` (the label) and `done` (the
   heading once it has run) when "Add Eggie to …" / "Eggie is in …'s connections" would be wrong.
-  No other step may have an `action`. The list shows no card unless `auto` has its own `card`. `steps` stays complete: a plain browser, the cloud and "Set it up by
-  hand instead" all use it.
+  No other step may have an `action`. The list shows no card unless `auto` has its own `card`. `steps` stays complete: a plain browser, the cloud and "Set it up
+  manually" all use it.
 - `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1
   (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.
 - `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything
@@ -44,7 +44,8 @@ key the user downloaded from the web app.
   details on Mac, a fixed path on Windows. Each is `{label, value}`, where `value` is plain text
   or a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
   `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent. A
-  plain-text value is guidance and gets no copy button; an optional `hint` adds an info tooltip.
+  plain-text value is guidance and gets no copy button, unless it has `"copy": true` (a fixed value
+  to paste, like Codex's Windows projects folder); an optional `hint` adds an info tooltip.
 
 ## Things that will bite you
 

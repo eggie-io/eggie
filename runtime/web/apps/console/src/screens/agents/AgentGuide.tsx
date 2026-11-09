@@ -194,7 +194,7 @@ function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
         </ol>
         {offer && shown.auto && (
           <button type="button" className={s.otherWay} onClick={() => setByHand(!byHand)}>
-            {auto ? "Set it up by hand instead" : "Let Eggie add the connection"}
+            {auto ? "Set it up manually" : "Let Eggie add the connection"}
           </button>
         )}
         <AgentStatusLine agent={agent} />

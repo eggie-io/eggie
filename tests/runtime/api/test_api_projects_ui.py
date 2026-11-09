@@ -90,9 +90,9 @@ def test_restart_stops_before_it_starts(env):
     _write_compose(env, "blog")
     _run_to_completion(env, env.client.post("/projects/blog/restart"))
     compose = [a for a in env.runner.calls
-               if "compose" in a and ("down" in a or a[-2:] == ["up", "-d"])]
+               if "compose" in a and ("down" in a or a[-3:] == ["up", "-d", "--force-recreate"])]
     assert "down" in compose[0]
-    assert compose[-1][-2:] == ["up", "-d"]
+    assert compose[-1][-3:] == ["up", "-d", "--force-recreate"]
 
 
 def test_a_failed_teardown_fails_restart_without_starting(env):
@@ -104,7 +104,7 @@ def test_a_failed_teardown_fails_restart_without_starting(env):
     result = _run_to_completion(env, env.client.post("/projects/blog/restart"))
     assert result["state"] == "failed"
     assert "container busy" in result["detail"]
-    assert not any(a[-2:] == ["up", "-d"] for a in env.runner.calls)
+    assert not any(a[-3:] == ["up", "-d", "--force-recreate"] for a in env.runner.calls)
 
 
 def test_delete_never_reads_the_compose_file(env):

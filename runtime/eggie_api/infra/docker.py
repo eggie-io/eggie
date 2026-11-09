@@ -23,10 +23,14 @@ PROJECT_LABEL = "com.docker.compose.project"
 
 
 def _compose_argv(directory) -> list[str]:
+    # Always recreate: a plain `up -d` leaves a running container alone when
+    # its compose service is unchanged, so a `command:` that installs
+    # dependencies (e.g. `npm install && npm run dev`) never runs again after
+    # a `git pull` adds packages. `eggie up` promises a start or restart.
     return [DOCKER, "compose",
             "-f", f"{directory}/{COMPOSE_FILE}",
             "-f", f"{directory}/.eggie/overlay.yml",
-            "up", "-d"]
+            "up", "-d", "--force-recreate"]
 
 
 def _write_overlay(provider, project: Project, directory, domain: str, *,

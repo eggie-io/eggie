@@ -324,7 +324,7 @@ def test_a_push_with_volumes_stops_and_restarts_any_project_not_stopped(env, sta
     words = [" ".join(argv) for argv in env.runner.calls]
     down = next(i for i, w in enumerate(words) if " down" in w)
     pack = next(i for i, w in enumerate(words) if " run " in w and " pack " in w)
-    up = next(i for i, w in enumerate(words) if w.endswith("up -d"))
+    up = next(i for i, w in enumerate(words) if w.endswith("up -d --force-recreate"))
     assert down < pack < up
     assert job["result"]["local_restart"] == "ok"
 

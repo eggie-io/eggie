@@ -17,7 +17,7 @@ import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
 import { SignedOut } from "./screens/SignedOut";
 import { WrongHost } from "./screens/WrongHost";
-import { DesktopConnect, DesktopHome } from "./desktop/DesktopContext";
+import { DesktopAdded, DesktopConnect, DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
@@ -29,15 +29,19 @@ export function App({
   handoff,
   home = null,
   connect = [],
+  added = [],
 }: {
   handoff: string | null;
   home?: string | null;
   connect?: readonly string[];
+  added?: readonly string[];
 }) {
   return (
     <DesktopHome.Provider value={home}>
       <DesktopConnect.Provider value={home ? connect : []}>
-        <Screens handoff={handoff} />
+        <DesktopAdded.Provider value={home ? added : []}>
+          <Screens handoff={handoff} />
+        </DesktopAdded.Provider>
       </DesktopConnect.Provider>
     </DesktopHome.Provider>
   );

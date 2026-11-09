@@ -296,8 +296,12 @@ def test_setup_leaves_claude_code_alone(tmp_path):
 
 def test_connecting_claude_code_writes_the_host_and_the_entry(tmp_path):
     from host.providers import claude_ssh
-    message = _provider(tmp_path).connect_agent("claude-code")
+    provider = _provider(tmp_path)
+    assert not provider.agent_connected("claude-code")
+    message = provider.connect_agent("claude-code")
     assert "Claude Code" in message
+    assert provider.agent_connected("claude-code")
+    assert not provider.agent_connected("codex")
     assert ssh_alias.installed(tmp_path / ".ssh" / "config")
     assert claude_ssh.installed(tmp_path / ".claude")
 
@@ -314,3 +318,4 @@ def test_wsl_offers_no_agent_to_connect():
     assert Wsl2Provider.agent_connections == ()
     with pytest.raises(ValueError):
         Wsl2Provider.connect_agent(object(), "claude-code")
+    assert Wsl2Provider.agent_connected(object(), "claude-code") is False

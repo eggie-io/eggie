@@ -95,7 +95,7 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   (`providers/ssh_alias.py`). `Host eggie` is written into `~/.ssh/config` itself, because
   Cursor's host list ignores `Include`.
 - Setup never touches a coding agent's own settings: the agent may be installed later. The
-  provider's `agent_connections` / `connect_agent(id)` do it when the user asks from the console's
+  provider's `agent_connections` / `connect_agent(id)` / `agent_connected(id)` do it when the user asks from the console's
   guide (see `desktop/CLAUDE.md`). On Lima, `claude-code` refreshes `Host eggie` and adds an
   `"Eggie"` entry (id `eggie`) to `sshConfigs` in `~/.claude/settings.json`
   (`providers/claude_ssh.py`); a file it cannot parse is never rewritten. `destroy()` removes it.

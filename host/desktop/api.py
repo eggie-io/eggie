@@ -180,6 +180,10 @@ class DesktopApi:
             agents = connectable(self._agents())
             if agents:
                 url += f"&connect={','.join(agents)}"
+            # Those that have it already: their guide starts past the button.
+            added = [a for a in agents if self._added(a)]
+            if added:
+                url += f"&added={','.join(added)}"
         # The page navigates itself: pywebview resolves this call's promise
         # with evaluate_js after we return, and a page loaded meanwhile lacks
         # the callback.
@@ -202,6 +206,14 @@ class DesktopApi:
             log.warning("connecting %s failed: %s", agent_id, e)
             return {"ok": False, "message": f"{e}"}
         return {"ok": True, "message": message}
+
+    def _added(self, agent_id: str) -> bool:
+        try:
+            return bool(self._provider.agent_connected(agent_id))
+        except Exception as e:
+            # Only decides which steps show first; never block the console.
+            log.warning("checking %s's connection failed: %s", agent_id, e)
+            return False
 
     def _agents(self):
         # Every real provider has it (test_provider_surface); fakes need not.

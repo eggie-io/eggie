@@ -99,9 +99,15 @@ def test_a_resumed_install_never_enters_the_console(tmp_path):
 class ConnectingProvider:
     agent_connections = ("claude-code",)
 
-    def __init__(self, error=None):
+    def __init__(self, error=None, added=False):
         self.connected = []
         self._error = error
+        self._added = added
+
+    def agent_connected(self, agent_id):
+        if isinstance(self._added, Exception):
+            raise self._added
+        return self._added
 
     def connect_agent(self, agent_id):
         if self._error:
@@ -120,6 +126,18 @@ def _connecting(tmp_path, provider, home="http://127.0.0.1:53817/"):
 def test_the_console_is_told_which_agents_the_window_can_connect(tmp_path):
     url = _connecting(tmp_path, ConnectingProvider()).enter_console()["url"]
     assert url.endswith("&connect=claude-code")
+
+
+def test_the_console_is_told_which_agents_have_the_connection_already(tmp_path):
+    url = _connecting(tmp_path, ConnectingProvider(added=True)).enter_console()["url"]
+    assert url.endswith("&connect=claude-code&added=claude-code")
+
+
+def test_a_failed_check_still_opens_the_console(tmp_path):
+    api = _connecting(tmp_path, ConnectingProvider(added=OSError("permission denied")))
+    result = api.enter_console()
+    assert result["ok"] is True
+    assert "added=" not in result["url"]
 
 
 def test_no_window_address_means_no_connect_offer(tmp_path):

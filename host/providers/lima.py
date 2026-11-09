@@ -420,6 +420,11 @@ class LimaProvider:
         claude_ssh.install(self.claude_dir)
         return "Claude Code now lists Eggie as an SSH connection."
 
+    def agent_connected(self, agent_id: str) -> bool:
+        """Whether connect_agent's entry is there, so the guide can skip the
+        button. Only the entry: it says nothing about whether the agent uses it."""
+        return agent_id == "claude-code" and claude_ssh.installed(self.claude_dir)
+
     def _control(self, verb: str, guest_port: int, host_port: int) -> Completed:
         return self._spawn(["ssh", "-F", str(self._ssh_config()),
                             "-O", verb, "-L", f"{host_port}:{LOOPBACK}:{guest_port}",

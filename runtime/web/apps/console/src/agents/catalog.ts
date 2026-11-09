@@ -5,12 +5,15 @@ const PLATFORMS: Platform[] = ["windows", "mac", "cloud"];
 
 export interface Media { kind: "image" | "video"; src: string }
 // `media` is empty for a step that shows a placeholder; more than one makes a slider.
-export interface Step { title: string; body: Rich[]; media: Media[]; alt: string }
+// `action: "connect"` puts the desktop window's "Add Eggie to …" button in the step.
+export interface Step { title: string; body: Rich[]; media: Media[]; alt: string; action: "connect" | null }
 // One line of the card: a label and a template over the API's SSH facts, with
 // an optional explanation shown on demand.
 export interface CardField { label: string; value: string; hint?: string }
-// `card` is null for a guide with nothing to copy.
-export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[] }
+// `card` is null for a guide with nothing to copy. `auto` is the shorter list
+// shown when the desktop window can add the connection itself, null when the
+// manifest has none; `steps` stays the way to do it by hand.
+export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[]; auto: Step[] | null }
 // `note` says where the agent lives, shown beside its name in lists; null when the manifest has none.
 export interface Agent { id: string; name: string; note: string | null; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
@@ -49,14 +52,15 @@ function parseMedia(value: unknown, folder: string): Media | null {
   return kind ? { kind, src: `${folder}/${value}` } : null;
 }
 
-function parseStep(value: unknown, folder: string): Step | null {
+function parseStep(value: unknown, folder: string, actions = false): Step | null {
   if (!isObject(value) || !text(value.title) || !text(value.body) || !text(value.alt)) return null;
+  if (value.action !== undefined && !(actions && value.action === "connect")) return null;
   const body = parseRich(value.body);
   const files = value.media ?? [];
   if (body === null || !Array.isArray(files)) return null;
   const media = files.map((file) => parseMedia(file, folder));
   if (media.some((item) => item === null)) return null;
-  return { title: value.title, body, alt: value.alt, media: media as Media[] };
+  return { title: value.title, body, alt: value.alt, media: media as Media[], action: value.action === "connect" ? "connect" : null };
 }
 
 function parseCardField(value: unknown): CardField | null {
@@ -68,7 +72,7 @@ function parseCardField(value: unknown): CardField | null {
 }
 
 function parseGuide(value: unknown, folder: string): Guide | null {
-  if (!isObject(value) || !text(value.tagline) || !Array.isArray(value.steps)) return null;
+  if (!isObject(value) || !text(value.tagline)) return null;
   let card: CardField[] | null = null;
   if (value.card !== undefined) {
     if (!Array.isArray(value.card)) return null;
@@ -81,9 +85,34 @@ function parseGuide(value: unknown, folder: string): Guide | null {
     warning = text(value.warning) ? parseRich(value.warning) : null;
     if (warning === null) return null;
   }
-  const steps = value.steps.map((step) => parseStep(step, folder));
-  if (steps.length === 0 || steps.some((step) => step === null)) return null;
-  return { card, tagline: value.tagline, warning, steps: steps as Step[] };
+  const steps = parseSteps(value.steps, folder, false);
+  if (steps === null) return null;
+  let auto: Step[] | null = null;
+  if (value.auto !== undefined) {
+    auto = isObject(value.auto) ? parseSteps(value.auto.steps, folder, true) : null;
+    // Without exactly one button the list could not be followed.
+    if (auto === null || auto.filter((step) => step.action === "connect").length !== 1) return null;
+  }
+  return { card, tagline: value.tagline, warning, steps, auto };
+}
+
+function parseSteps(value: unknown, folder: string, actions: boolean): Step[] | null {
+  if (!Array.isArray(value)) return null;
+  const steps = value.map((step) => parseStep(step, folder, actions));
+  return steps.length === 0 || steps.some((step) => step === null) ? null : (steps as Step[]);
+}
+
+// The steps to show: the automatic list when the desktop window offers to
+// connect this agent and the user has not asked to do it by hand.
+export function guideSteps(guide: Guide, offered: boolean, byHand: boolean): { steps: Step[]; auto: boolean } {
+  return guide.auto && offered && !byHand ? { steps: guide.auto, auto: true } : { steps: guide.steps, auto: false };
+}
+
+// Where the list opens: past the button once the connection is there, so
+// coming back from the desktop window lands on what to do next.
+export function firstStep(steps: Step[], added: boolean): number {
+  const at = steps.findIndex((step) => step.action === "connect");
+  return added && at !== -1 ? Math.min(at + 1, steps.length - 1) : 0;
 }
 
 export function parseAgent(id: string, value: unknown, base: string): Agent | null {

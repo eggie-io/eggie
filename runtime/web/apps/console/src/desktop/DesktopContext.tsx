@@ -9,3 +9,8 @@ export const useDesktopHome = () => useContext(DesktopHome);
 export const DesktopConnect = createContext<readonly string[]>([]);
 
 export const useDesktopConnect = () => useContext(DesktopConnect);
+
+// Those of them that have the connection already.
+export const DesktopAdded = createContext<readonly string[]>([]);
+
+export const useDesktopAdded = () => useContext(DesktopAdded);

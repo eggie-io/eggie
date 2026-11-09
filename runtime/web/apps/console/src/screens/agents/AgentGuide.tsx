@@ -1,12 +1,12 @@
 import { useId, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
-import type { Agent, Connect, Guide } from "../../agents/catalog";
+import { firstStep, guideSteps, type Agent, type Connect, type Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
 import { desktopConnectUrl } from "../../desktop/desktop";
-import { useDesktopConnect, useDesktopHome } from "../../desktop/DesktopContext";
+import { useDesktopAdded, useDesktopConnect, useDesktopHome } from "../../desktop/DesktopContext";
 import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
@@ -18,6 +18,7 @@ import s from "./Agents.module.css";
 export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
+  const [byHand, setByHand] = useState(false);
 
   if (error)
     return (
@@ -40,8 +41,16 @@ export function AgentGuide({ base }: { base: AgentBase }) {
         <h1 className={s.guideTitle}>Connect a coding agent</h1>
         <AgentMenu agents={agents} current={agent} base={base} />
       </div>
-      {/* Keyed so switching agent starts again at step 1. */}
-      <Steps key={agent.id} agent={agent} guide={agent.platforms[platform]!} connect={connect} welcome={base === "/welcome"} />
+      {/* Keyed so switching agent, or between the two ways, starts the list again. */}
+      <Steps
+        key={`${agent.id}:${byHand}`}
+        agent={agent}
+        guide={agent.platforms[platform]!}
+        connect={connect}
+        welcome={base === "/welcome"}
+        byHand={byHand}
+        setByHand={setByHand}
+      />
     </div>
   );
 }
@@ -59,19 +68,31 @@ function Hint({ label, text }: { label: string; text: string }) {
   );
 }
 
-// Inside the desktop window, for an agent it can connect by itself: one click
-// there instead of the manual steps. The window asks before it changes anything.
-function ConnectForMe({ agent }: { agent: Agent }) {
+// The desktop window, for an agent it can connect by itself. Undefined in a
+// plain browser or for any other agent: the guide then shows only the manual steps.
+function useConnectOffer(agent: Agent): { url: string; added: boolean } | undefined {
   const home = useDesktopHome();
   const connect = useDesktopConnect();
+  const added = useDesktopAdded();
   const { pathname } = useLocation();
-  if (!home || !connect.includes(agent.id)) return null;
+  if (!home || !connect.includes(agent.id)) return undefined;
+  return { url: desktopConnectUrl(home, agent.id, pathname), added: added.includes(agent.id) };
+}
+
+// The automatic list's button. It opens the desktop window's own screen,
+// which asks before it changes anything and then brings the user back here.
+function ConnectForMe({ agent, offer }: { agent: Agent; offer: { url: string; added: boolean } }) {
+  const go = () => window.location.assign(offer.url);
+  if (offer.added)
+    return (
+      <div className={s.connectForMe}>
+        <p className={s.connectDone}><Icon name="check-circle" />Eggie is in {agent.name}'s connections.</p>
+        <Button variant="ghost" size="sm" onClick={go}>Add it again</Button>
+      </div>
+    );
   return (
     <div className={s.connectForMe}>
-      <p className={s.muted}>Eggie can add the connection to {agent.name} for you.</p>
-      <Button variant="primary" size="sm" icon="check-circle" onClick={() => window.location.assign(desktopConnectUrl(home, agent.id, pathname))}>
-        Add Eggie to {agent.name}
-      </Button>
+      <Button variant="primary" size="sm" icon="check-circle" onClick={go}>Add Eggie to {agent.name}</Button>
     </div>
   );
 }
@@ -83,8 +104,19 @@ const CHECK_TEXT: Record<"notYet" | "unreachable", (name: string) => string> = {
   unreachable: () => "Couldn't reach your kitchen just now. Check again in a moment.",
 };
 
-function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide; connect: Connect | undefined; welcome: boolean }) {
-  const [active, setActiveStep] = useState(0);
+function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
+  agent: Agent;
+  guide: Guide;
+  connect: Connect | undefined;
+  welcome: boolean;
+  byHand: boolean;
+  setByHand: (byHand: boolean) => void;
+}) {
+  const offer = useConnectOffer(agent);
+  const { steps, auto } = guideSteps(shown, offer !== undefined, byHand);
+  // The automatic list needs nothing copied, so it drops the card.
+  const guide = { ...shown, steps, card: auto ? null : shown.card };
+  const [active, setActiveStep] = useState(() => (auto ? firstStep(steps, offer!.added) : 0));
   const [check, setCheck] = useState<Check>("idle");
   const navigate = useNavigate();
   const { finish } = useOnboarding();
@@ -145,10 +177,15 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
               </button>
               {/* Outside the button: a list is not allowed inside one. */}
               {index === active && <div className={cx(s.stepBody, s.rich)}><RichText nodes={item.body} /></div>}
-              {index === 0 && active === 0 && <ConnectForMe agent={agent} />}
+              {index === active && item.action === "connect" && offer && <ConnectForMe agent={agent} offer={offer} />}
             </li>
           ))}
         </ol>
+        {offer && shown.auto && (
+          <button type="button" className={s.otherWay} onClick={() => setByHand(!byHand)}>
+            {auto ? "Set it up by hand instead" : "Let Eggie add the connection"}
+          </button>
+        )}
         <AgentStatusLine agent={agent} />
         {rows && (
           <section className={s.key} aria-label="Connection details">

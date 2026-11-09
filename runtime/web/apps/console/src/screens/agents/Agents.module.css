@@ -97,6 +97,13 @@
 .stepActive .stepTitle { color: var(--ink); }
 /* 50px lines the body up under the title: 14px padding, 24px dot, 12px gap. */
 .connectForMe { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 14px 12px 50px; }
+.connectDone { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink); }
+.otherWay {
+  align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 18px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px;
+}
+.otherWay:hover { color: var(--ink); }
+.otherWay:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
 .stepBody { margin-top: -10px; padding: 0 14px 12px 50px; font-size: 13px; line-height: 18px; color: var(--ink-2); text-wrap: pretty; }
 
 .rich p, .rich ul, .rich ol { margin: 0; }

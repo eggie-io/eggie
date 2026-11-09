@@ -39,7 +39,8 @@ a handoff code). The console's own top bar links back to the local screens and o
 system browser — there is no native menu.
 
 Connecting a coding agent is a round trip through that link. `enter_console` adds
-`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for);
+`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for)
+and `&added=<ids>` (those whose `agent_connected` is true, so the guide opens past the button);
 the console's guide then sends the window to `<local>#connect=<id>&back=<guide path>`. The local
 `agent-connect` screen asks first, `connect_agent` does the work, and `enter_console(back)` reopens
 the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/<id>`). Both values come

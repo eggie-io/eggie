@@ -28,6 +28,11 @@ key the user downloaded from the web app.
   folder, e.g. `["mac/3a.png", "mac/3b.png", "mac/3.mp4"]`. The kind comes from the extension
   (png jpg jpeg webp gif svg avif / mp4 webm; a video plays muted on a loop). More than one makes a
   slider; none gives a placeholder showing `alt`, which is also each image's alt text.
+- `auto` (optional): `{"steps": [...]}`, a shorter list shown instead of `steps` when the desktop
+  window can add the connection itself (`connect=` in its link; Claude Code on Mac). Exactly one
+  of its steps has `"action": "connect"`, which shows the "Add Eggie to <agent>" button; no other
+  step may have an `action`. `steps` stays complete: a plain browser, the cloud and "Set it up by
+  hand instead" all use it.
 - `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1
   (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.
 - `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything

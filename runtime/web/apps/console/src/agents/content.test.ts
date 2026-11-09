@@ -16,7 +16,7 @@ describe("shipped agent content", () => {
     const agent = parseAgent(id, read(`${id}/agent.json`), "");
     expect(agent).not.toBeNull();
     expect(Object.keys(agent!.platforms).sort()).toEqual(["cloud", "mac", "windows"]);
-    const files = [agent!.icon, ...Object.values(agent!.platforms).flatMap((g) => g!.steps.flatMap((s) => s.media.map((m) => m.src)))];
+    const files = [agent!.icon, ...Object.values(agent!.platforms).flatMap((g) => [...g!.steps, ...(g!.auto ?? [])].flatMap((s) => s.media.map((m) => m.src)))];
     for (const file of files) if (file) expect(existsSync(join(ROOT, file)), file).toBe(true);
   });
 });

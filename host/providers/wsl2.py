@@ -467,6 +467,9 @@ class Wsl2Provider:
     def connect_agent(self, agent_id: str) -> str:
         raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
 
+    def agent_connected(self, agent_id: str) -> bool:
+        return False
+
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs
         turned on is `remediable` above, not a download."""

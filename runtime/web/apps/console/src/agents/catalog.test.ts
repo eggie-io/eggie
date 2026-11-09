@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadCatalog, parseAgent, parseIndex, platformFor } from "./catalog";
+import { firstStep, guideSteps, loadCatalog, parseAgent, parseIndex, platformFor, type Guide } from "./catalog";
 
 const guide = (over = {}) => ({
   tagline: "SSH connection",
@@ -92,6 +92,22 @@ describe("parseAgent", () => {
     expect(Object.keys(agent?.platforms ?? {})).toEqual(["mac"]);
   });
 
+  it("reads the automatic list, which needs exactly one connect button", () => {
+    const button = { title: "Add it", body: "One click.", alt: "Button", action: "connect" };
+    const next = { title: "Open it", body: "Sign in.", alt: "Start screen" };
+    const agent = (auto: unknown) => parseAgent("claude-code", { name: "Claude Code", icon: "i.svg", platforms: { mac: guide({ auto }) } }, "/a");
+    expect(agent({ steps: [button, next] })?.platforms.mac?.auto?.map((step) => step.action)).toEqual(["connect", null]);
+    expect(agent(undefined)?.platforms.mac?.auto).toBeNull();
+    for (const bad of [[button], { steps: [] }, { steps: [next] }, { steps: [button, button] }, { steps: [{ ...button, action: "run" }] }]) {
+      expect(agent(bad)).toBeNull();
+    }
+  });
+
+  it("refuses the connect button in the steps done by hand", () => {
+    const steps = [{ title: "Add it", body: "One click.", alt: "Button", action: "connect" }];
+    expect(parseAgent("claude-code", { name: "Claude Code", icon: "i.svg", platforms: { mac: guide({ steps }) } }, "/a")).toBeNull();
+  });
+
   it("refuses a path that climbs out of the agent's folder", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "../../x.svg", platforms: { mac: guide() } }, "/agents")).toBeNull();
   });
@@ -132,5 +148,26 @@ describe("loadCatalog", () => {
       return files[url];
     };
     expect((await loadCatalog(fetchJson)).map((a) => a.id)).toEqual(["claude-code"]);
+  });
+});
+
+describe("guideSteps and firstStep", () => {
+  const step = (title: string, action: "connect" | null = null) => ({ title, body: [], media: [], alt: title, action });
+  const byHand = [step("Open"), step("Fill in"), step("Save")];
+  const auto = [step("Add", "connect"), step("Open"), step("Choose")];
+  const withAuto: Guide = { card: null, tagline: "SSH", warning: null, steps: byHand, auto };
+
+  it("shows the automatic list only when the window offers it and the user has not chosen by hand", () => {
+    expect(guideSteps(withAuto, true, false)).toEqual({ steps: auto, auto: true });
+    expect(guideSteps(withAuto, true, true)).toEqual({ steps: byHand, auto: false });
+    expect(guideSteps(withAuto, false, false)).toEqual({ steps: byHand, auto: false });
+    expect(guideSteps({ ...withAuto, auto: null }, true, false)).toEqual({ steps: byHand, auto: false });
+  });
+
+  it("opens past the button once the connection is there", () => {
+    expect(firstStep(auto, false)).toBe(0);
+    expect(firstStep(auto, true)).toBe(1);
+    expect(firstStep([step("Add", "connect")], true)).toBe(0);
+    expect(firstStep(byHand, true)).toBe(0);
   });
 });

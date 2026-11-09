@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
-import { browserLink, desktopConnectUrl, desktopHome, takeDesktopConnect, takeDesktopHome } from "./desktop";
+import { browserLink, desktopConnectUrl, desktopHome, takeDesktopAdded, takeDesktopConnect, takeDesktopHome } from "./desktop";
 
 const HOME = "http://127.0.0.1:53817/index.html";
 
@@ -104,6 +104,22 @@ describe("takeDesktopConnect", () => {
   it("refuses an id that is not an agent id", () => {
     expect(takeDesktopConnect(link(encodeURIComponent("claude-code,../x")), store())).toEqual([]);
     expect(desktopHome(store())).toBeNull();
+  });
+});
+
+describe("takeDesktopAdded", () => {
+  it("takes the agents that have the connection, apart from those it can connect", () => {
+    const s = store();
+    const link = { hash: "#handoff=abc&connect=claude-code,codex&added=claude-code" };
+    expect(takeDesktopConnect(link, s)).toEqual(["claude-code", "codex"]);
+    expect(takeDesktopAdded(link, s)).toEqual(["claude-code"]);
+  });
+
+  it("takes a fresh link's word over what it remembered", () => {
+    const s = store();
+    takeDesktopAdded({ hash: "#added=claude-code" }, s);
+    expect(takeDesktopAdded({ hash: "#added=" }, s)).toEqual([]);
+    expect(takeDesktopAdded({ hash: "" }, s)).toEqual([]);
   });
 });
 

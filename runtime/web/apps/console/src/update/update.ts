@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api } from "../api/client";
+import { api } from "../api/client";
 
 const KEY = ["runtime-update"] as const;
 const UPDATING_POLL_MS = 3_000;
@@ -18,12 +18,14 @@ export type UpdateView =
   | { kind: "updating" }
   | { kind: "done" };
 
-export function updateView(status: RuntimeUpdate | undefined, startedFrom: string | null): UpdateView {
+// baseline is the first installed release this tab ever saw. install.sh
+// removes runtime.version early, so installed is null for most of an update.
+export function updateView(status: RuntimeUpdate | undefined, baseline: string | null): UpdateView {
   if (!status) return { kind: "hidden" };
-  if (startedFrom !== null && status.state !== "running" && status.installed !== startedFrom) {
+  if (status.state === "running") return { kind: "updating" };
+  if (status.installed !== null && baseline !== null && status.installed !== baseline) {
     return { kind: "done" };
   }
-  if (status.state === "running") return { kind: "updating" };
   if (status.available === null) return { kind: "hidden" };
   return {
     kind: "offer",
@@ -33,26 +35,19 @@ export function updateView(status: RuntimeUpdate | undefined, startedFrom: strin
   };
 }
 
-// A tab that only watched someone else's update still needs to know where
-// it started, so it reloads once the release moves.
-export function latchStart(view: UpdateView, startedFrom: string | null, installed: string | null): string | null {
-  return view.kind === "updating" && startedFrom === null ? installed : startedFrom;
-}
-
-// The request failed for good, as opposed to an answer lost while the API restarts.
-export function refusedStart(error: unknown): boolean {
-  return error instanceof ApiError && (error.code === "update_not_available" || error.code === "update_unavailable");
+export function nextBaseline(baseline: string | null, installed: string | null): string | null {
+  return baseline ?? installed;
 }
 
 // The API and web containers are recreated mid-update, so fetches fail for a
 // while; the query keeps its last data and the poll carries on.
-export function useRuntimeUpdate(startedFrom: string | null, starting: boolean) {
+export function useRuntimeUpdate(baseline: string | null, starting: boolean) {
   return useQuery({
     queryKey: KEY,
     queryFn: () => api.get<RuntimeUpdate>("/api/runtime/update"),
     retry: false,
     refetchInterval: (query) =>
-      starting || updateView(query.state.data, startedFrom).kind === "updating" ? UPDATING_POLL_MS : IDLE_POLL_MS,
+      starting || updateView(query.state.data, baseline).kind === "updating" ? UPDATING_POLL_MS : IDLE_POLL_MS,
   });
 }
 

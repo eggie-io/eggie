@@ -2,22 +2,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, Icon } from "@eggie/ui";
 import { UpdatingOverlay } from "../screens/UpdatingOverlay";
-import { latchStart, refusedStart, updateView, useRuntimeUpdate, useStartUpdate } from "../update/update";
+import { nextBaseline, updateView, useRuntimeUpdate, useStartUpdate } from "../update/update";
 import s from "./Shell.module.css";
 
 export function UpdateButton() {
   const [open, setOpen] = useState(false);
-  const [startedFrom, setStartedFrom] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const start = useStartUpdate();
-  const { data } = useRuntimeUpdate(startedFrom, start.isPending);
-  const view = updateView(data, startedFrom);
+  const { data } = useRuntimeUpdate(baseline, start.isPending);
+  const view = updateView(data, baseline);
   const client = useQueryClient();
 
   useEffect(() => {
-    setStartedFrom((was) => latchStart(view, was, data?.installed ?? null));
-  }, [view, data?.installed]);
+    setBaseline((was) => nextBaseline(was, data?.installed ?? null));
+  }, [data?.installed]);
 
   useEffect(() => {
     if (view.kind === "done") window.location.reload();
@@ -43,10 +43,8 @@ export function UpdateButton() {
   if (view.kind !== "offer") return null;
 
   const begin = () => {
-    setStartedFrom(view.installed);
     start.mutate(undefined, {
-      onError: (error) => {
-        if (refusedStart(error)) setStartedFrom(null);
+      onError: () => {
         void client.invalidateQueries({ queryKey: ["runtime-update"] });
       },
     });

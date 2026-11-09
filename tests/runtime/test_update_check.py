@@ -83,3 +83,12 @@ def test_an_unreachable_repo_keeps_the_last_answer(tmp_path):
     result, available, _ = _run(tmp_path, git_code=128, previous=previous)
     assert result.returncode != 0
     assert available.read_text() == previous
+
+
+def test_a_fallback_to_an_older_tag_keeps_the_offer(tmp_path):
+    previous = '{"available": "runtime-v0.2.0", "checked_at": 1}'
+    result, available, _ = _run(
+        tmp_path, tags=("0.0.9", "0.1.0", "0.2.0"), previous=previous,
+        apis={"runtime-v0.1.0": 2, "runtime-v0.2.0": 2})
+    assert result.returncode != 0
+    assert available.read_text() == previous

@@ -16,7 +16,7 @@ print(json.dumps({"available": ref or None, "checked_at": int(time.time())}))' "
   mv "$tmp" "$DIR/available.json"
 }
 
-main() {
+check_main() {
   local installed api ref
   installed="$(cat /opt/eggie/runtime.version 2>/dev/null || true)"
   # A pinned branch is never moved to a tag, so there is nothing to offer.
@@ -33,6 +33,13 @@ main() {
   source "$LIB/../get.sh"
   unset EGGIE_RUNTIME_REF EGGIE_RUNTIME_REPAIR
   ref="$(EGGIE_RUNTIME_API="$api" resolve_ref "$EGGIE_RUNTIME_REPO" /dev/null)"
+  # A failed release.json fetch lands resolve_ref on an older tag; that says
+  # nothing about what is available, so keep the last answer.
+  if [[ "$ref" != "$installed" \
+        && "$(printf '%s\n' "$installed" "$ref" | sort -V | tail -n 1)" == "$installed" ]]; then
+    echo "resolved $ref, older than installed $installed; keeping the last answer" >&2
+    return 1
+  fi
   if [[ "$ref" != "$installed" \
         && "$(printf '%s\n' "$installed" "$ref" | sort -V | tail -n 1)" == "$ref" ]]; then
     write_available "$ref"
@@ -41,4 +48,4 @@ main() {
   fi
 }
 
-main
+check_main

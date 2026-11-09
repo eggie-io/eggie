@@ -42,9 +42,10 @@ for _ in 1 2 3 4 5; do
   (( n > handled )) || break
 
   write_status "$n" running || exit 1
-  bash "$LIB/boot-update.sh" 2> >(tee "$err" >&2)
+  # No tee: a process install.sh leaves holding stderr would block a pipe forever.
+  bash "$LIB/boot-update.sh" 2>"$err"
   rc=$?
-  wait # the tee must finish before the file is read
+  cat "$err" >&2
   if (( rc == 0 )); then
     state=done
     reason=""

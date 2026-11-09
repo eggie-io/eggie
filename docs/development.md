@@ -58,12 +58,13 @@ install: it finds a Python, builds `.venv`, downloads the Ubuntu rootfs into
 `%LOCALAPPDATA%\Eggie\cache`, creates the VM and drops an `eggie.cmd` shim in the repo. Flags:
 `-Rootfs <path>` reuses a rootfs you already have; `-NoCreate` skips creating the VM.
 
-### Host + runtime from your checkout together (macOS)
+### Host + runtime from your checkout together
 
-`scripts/dev.sh` runs this working tree's runtime in the VM and its host window against it, with
-nothing pushed. It copies `runtime/` into the VM, builds `eggie-api` and `eggie-web` there (tag
-`local`, Docker's cache makes an unchanged rebuild take seconds), restarts them, rebuilds the
-in-VM `eggie` CLI and opens `python -m host.desktop`. Re-run it after each change.
+`scripts/dev.sh` (macOS) and `scripts/dev.ps1` (Windows) run this working tree's runtime in the VM
+and its host window against it, with nothing pushed. They copy `runtime/` into the VM, build
+`eggie-api` and `eggie-web` there (tag `local`, Docker's cache makes an unchanged rebuild take
+seconds), restart them, rebuild the in-VM `eggie` CLI and open `python -m host.desktop`. Re-run
+after each change.
 
 ```bash
 scripts/dev.sh                # fast loop
@@ -73,10 +74,19 @@ scripts/dev.sh --no-window    # update the VM only
 scripts/dev.sh --release      # back to the latest released runtime
 ```
 
+On Windows, run it from PowerShell (not WSL) after `.\setup.ps1 -NoCreate` has built `.venv`. The
+flags are `-Full`, `-Only web`, `-NoWindow` and `-Release`. The checkout can live on a Windows
+drive or inside a WSL distro (`\\wsl.localhost\...`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+```
+
 The VM then reports runtime `local`. Neither the host's bootstrap nor the boot updater replaces a
 non-release runtime, so it stays until `--release`. Quit the installed Eggie app first: both
-windows drive the same VM, and its Quit stops it. `--full` runs `install.sh` with
-`EGGIE_SKIP_PULL=1`, which skips the ghcr pull for the images built in the VM.
+windows drive the same VM, and its Quit stops it. On Windows the dev window would only bring the
+installed one forward, so `dev.ps1` refuses to run while it is open. `--full` runs `install.sh`
+with `EGGIE_SKIP_PULL=1`, which skips the ghcr pull for the images built in the VM.
 
 To install a runtime other than the latest release, set `EGGIE_RUNTIME_REF=<branch|tag>`. A branch
 runs the images pushed under its name (`packaging/images/build.sh --push --tag <branch>`) when ghcr

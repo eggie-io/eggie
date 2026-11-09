@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Dev loop on macOS: run this checkout's runtime in the Eggie VM and this
-# checkout's host window against it. Nothing is pushed; the images are built
-# inside the VM from your working tree. Re-run it after every change.
+# Dev loop on macOS (Windows: scripts/dev.ps1): run this checkout's runtime in
+# the Eggie VM and this checkout's host window against it. Nothing is pushed;
+# images are built in the VM from your working tree. Re-run after every change.
 #
 #   scripts/dev.sh                 # fast: sync runtime/, rebuild api + web, restart them, open the window
 #   scripts/dev.sh --full          # also run the whole install.sh (CLI, agents, skills, systemd units);

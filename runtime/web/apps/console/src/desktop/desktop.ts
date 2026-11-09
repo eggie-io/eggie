@@ -39,6 +39,53 @@ export function takeDesktopHome(location: Pick<Location, "hash">, store: Store |
   return home;
 }
 
+const AGENT_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+function agentIds(value: string | null): string[] | null {
+  if (value === null) return null;
+  const ids = value.split(",").filter((id) => id !== "");
+  return ids.every((id) => AGENT_ID.test(id)) ? ids : null;
+}
+
+// A list of agent ids from the handoff link, remembered like Home so a reload
+// inside the window keeps it. Empty in a plain browser.
+function takeAgentIds(location: Pick<Location, "hash">, store: Store | null, param: string, key: string): string[] {
+  const given = agentIds(new URLSearchParams(location.hash.replace(/^#/, "")).get(param));
+  if (given !== null) {
+    try {
+      store?.setItem(key, given.join(","));
+    } catch {
+      // As for Home: a reload inside the window loses it, nothing else.
+    }
+    return given;
+  }
+  let stored: string | null = null;
+  try {
+    stored = store?.getItem(key) ?? null;
+  } catch {
+    // Blocked storage: nothing remembered.
+  }
+  return agentIds(stored) ?? [];
+}
+
+// The agents the desktop window can connect by itself (`connect=`).
+// Read before takeHandoff() clears the fragment.
+export const takeDesktopConnect = (location: Pick<Location, "hash">, store: Store | null): string[] =>
+  takeAgentIds(location, store, "connect", "eggie.desktopConnect");
+
+// Those of them that have the connection already (`added=`). Every link the
+// window makes carries it, so coming back from connecting brings it fresh.
+export const takeDesktopAdded = (location: Pick<Location, "hash">, store: Store | null): string[] =>
+  takeAgentIds(location, store, "added", "eggie.desktopAdded");
+
+// The desktop screen that connects `agent`, then reopens `back` here. The
+// window checks both again, adds the connection and comes straight back.
+export function desktopConnectUrl(home: string, agent: string, back: string): string {
+  const url = new URL(home);
+  url.hash = new URLSearchParams({ connect: agent, back }).toString();
+  return url.toString();
+}
+
 export async function browserLink(api: Pick<Api, "post">, origin: string): Promise<string> {
   try {
     const { code } = await api.post<{ code: string }>("/api/sessions/handoff");

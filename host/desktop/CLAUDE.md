@@ -38,6 +38,20 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
+Connecting a coding agent is a round trip through that link. `enter_console` adds
+`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for)
+and `&added=<ids>` (those whose `agent_connected` is true, so the guide opens past the button);
+the console's guide then sends the window to `<local>#connect=<id>&back=<guide path>`. The local
+`agent-connect` screen is only a spinner: it calls `connect_agent` at once and `enter_console(back)`
+reopens the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/<id>`), so the user
+clicks once, in the guide. `agent-connect:failed` (Try again / Back to the guide) shows only on an
+error. Both values come from a VM-served page and are checked in `view.py`. There is no local
+confirmation, so a page could send the window there unasked: that is accepted only because the
+write is fixed (the agent's entry for this VM, or for Codex on WSL making this VM the default distro;
+allowlisted agents only). A connect step that could
+write anything a page chose would need a local confirmation again. A new connectable agent needs a
+`data-when="<id>"` section in the `agent-connect` template.
+
 ## Things that will bite you
 
 - **The title bar is recoloured by `DesktopPlatform.style_title_bar` on `events.before_show`.** DWM

@@ -62,7 +62,12 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     mode with no React in it. One `POST /projects/{id}/files` request, no resume; the API unpacks
     it with Python's `tarfile`.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
-    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
+    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser", and
+    `connect=` (agent ids the window can connect by itself) and `added=` (those already connected):
+    those agents' guides then show the manifest's `auto` steps, whose `"action": "connect"` step
+    fills the picture frame with a card (`ConnectCard`) whose "Add Eggie to <agent>" (or the step's `button`) sends the window to its `#connect=` screen (`desktopConnectUrl`),
+    with "Set it up manually" switching to the ordinary `steps`. With `added=` the list opens
+    past the button. All three are empty in a plain browser, which gets only `steps`.
   - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
     connection" last step. `onboarding/onboarding.ts` decides: shown only when no agent is connected,
     the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.

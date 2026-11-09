@@ -5,6 +5,8 @@ declares on every start; a reinstall is a new VM either way. A known_hosts
 entry for the old keys then blocks every client -- including Cursor's, which
 ignores StrictHostKeyChecking -- so the entries are replaced, not bypassed.
 """
+import json
+
 from host.core.install import default_steps
 from host.providers import ssh_alias
 from host.providers.lima import LimaProvider
@@ -263,10 +265,15 @@ def test_destroy_takes_the_host_and_its_keys_away(tmp_path):
     config = tmp_path / ".ssh" / "config"
     config.parent.mkdir()
     config.write_text(USER_CONFIG)
+    (tmp_path / ".claude").mkdir()
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"model": "opus"}')
     provider = _provider(tmp_path, runner=Lima())
     provider.ssh_shortcut()()
+    provider.connect_agent("claude-code")
     provider.destroy()
     assert config.read_text() == USER_CONFIG
+    assert json.loads(settings.read_text()) == {"model": "opus"}
     assert "39022" not in (tmp_path / ".ssh" / "known_hosts").read_text()
 
 
@@ -275,3 +282,44 @@ def test_the_step_follows_create_vm_on_lima_and_is_absent_on_wsl(tmp_path):
     lima = [s.name for s in default_steps(_provider(tmp_path), **kwargs)]
     assert lima[lima.index("create_vm") + 1] == "ssh_alias"
     assert Wsl2Provider().ssh_shortcut() is None
+
+
+
+# --- Claude Code's "Eggie" connection, added from the agent guide ---
+
+def test_setup_leaves_claude_code_alone(tmp_path):
+    # Claude Code may be installed after Eggie; the guide's button adds it.
+    (tmp_path / ".claude").mkdir()
+    assert _provider(tmp_path).ssh_shortcut()() == "Connect with: ssh eggie"
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+
+
+def test_connecting_claude_code_writes_the_host_and_the_entry(tmp_path):
+    from host.providers import claude_ssh
+    provider = _provider(tmp_path)
+    assert not provider.agent_connected("claude-code")
+    message = provider.connect_agent("claude-code")
+    assert "Claude Code" in message
+    assert provider.agent_connected("claude-code")
+    assert not provider.agent_connected("codex")
+    assert ssh_alias.installed(tmp_path / ".ssh" / "config")
+    assert claude_ssh.installed(tmp_path / ".claude")
+
+
+def test_connecting_an_agent_lima_does_not_offer_is_refused(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        _provider(tmp_path).connect_agent("codex")
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_wsl_offers_only_codex_to_connect():
+    # Claude Code on Windows reaches the distro through WSL; nothing to write.
+    import pytest
+    calls = []
+    provider = Wsl2Provider(runner=calls.append)
+    assert provider.agent_connections == ("codex",)
+    with pytest.raises(ValueError):
+        provider.connect_agent("claude-code")
+    assert provider.agent_connected("claude-code") is False
+    assert calls == []

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadCatalog, parseAgent, parseIndex, platformFor } from "./catalog";
+import { firstStep, guideSteps, loadCatalog, parseAgent, parseIndex, platformFor, type Guide } from "./catalog";
 
 const guide = (over = {}) => ({
   tagline: "SSH connection",
@@ -92,6 +92,52 @@ describe("parseAgent", () => {
     expect(Object.keys(agent?.platforms ?? {})).toEqual(["mac"]);
   });
 
+  it("reads the automatic list, which needs exactly one connect button", () => {
+    const button = { title: "Add it", body: "One click.", alt: "Button", action: "connect" };
+    const next = { title: "Open it", body: "Sign in.", alt: "Start screen" };
+    const agent = (auto: unknown) => parseAgent("claude-code", { name: "Claude Code", icon: "i.svg", platforms: { mac: guide({ auto }) } }, "/a");
+    expect(agent({ steps: [button, next] })?.platforms.mac?.auto?.map((step) => step.action)).toEqual(["connect", null]);
+    expect(agent(undefined)?.platforms.mac?.auto).toBeNull();
+    for (const bad of [[button], { steps: [] }, { steps: [next] }, { steps: [button, button] }, { steps: [{ ...button, action: "run" }] }]) {
+      expect(agent(bad)).toBeNull();
+    }
+  });
+
+  it("lets the connect step name its button and what it shows once done", () => {
+    const button = { title: "Set it", body: "One click.", alt: "Button", action: "connect", button: "Make it the default", done: "It is the default" };
+    const next = { title: "Open it", body: "Sign in.", alt: "Start screen" };
+    const agent = (steps: unknown[]) => parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { windows: guide({ auto: { steps } }) } }, "/a");
+    const [first, second] = agent([button, next])?.platforms.windows?.auto ?? [];
+    expect([first?.button, first?.done]).toEqual(["Make it the default", "It is the default"]);
+    expect([second?.button, second?.done]).toEqual([null, null]);
+    expect(agent([{ ...button, button: undefined, done: undefined }, next])?.platforms.windows?.auto?.[0]?.button).toBeNull();
+    // Only the connect step has a button to name, and the words must be there.
+    expect(agent([button, { ...next, button: "Go" }])).toBeNull();
+    expect(agent([{ ...button, done: "" }, next])).toBeNull();
+  });
+
+  it("gives the automatic list only the card it names", () => {
+    const button = { title: "Set it", body: "One click.", alt: "Button", action: "connect" };
+    const card = [{ label: "Projects folder", value: "\\\\wsl.localhost\\eggie-vm" }];
+    const agent = (auto: unknown) => parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { windows: guide({ auto }) } }, "/a");
+    expect(agent({ steps: [button], card })?.platforms.windows?.autoCard).toEqual(card);
+    expect(agent({ steps: [button] })?.platforms.windows?.autoCard).toBeNull();
+    expect(agent({ steps: [button], card: [] })).toBeNull();
+    expect(agent({ steps: [button], card: [{ label: "Port", value: "{nope}" }] })).toBeNull();
+  });
+
+  it("reads a card field's copy mark, which can only be true", () => {
+    const agent = (field: unknown) => parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { windows: guide({ card: [field] }) } }, "/a");
+    expect(agent({ label: "Folder", value: "C:\\x", copy: true })?.platforms.windows?.card).toEqual([{ label: "Folder", value: "C:\\x", copy: true }]);
+    expect(agent({ label: "Folder", value: "C:\\x" })?.platforms.windows?.card).toEqual([{ label: "Folder", value: "C:\\x" }]);
+    expect(agent({ label: "Folder", value: "C:\\x", copy: false })).toBeNull();
+  });
+
+  it("refuses the connect button in the steps done by hand", () => {
+    const steps = [{ title: "Add it", body: "One click.", alt: "Button", action: "connect" }];
+    expect(parseAgent("claude-code", { name: "Claude Code", icon: "i.svg", platforms: { mac: guide({ steps }) } }, "/a")).toBeNull();
+  });
+
   it("refuses a path that climbs out of the agent's folder", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "../../x.svg", platforms: { mac: guide() } }, "/agents")).toBeNull();
   });
@@ -132,5 +178,26 @@ describe("loadCatalog", () => {
       return files[url];
     };
     expect((await loadCatalog(fetchJson)).map((a) => a.id)).toEqual(["claude-code"]);
+  });
+});
+
+describe("guideSteps and firstStep", () => {
+  const step = (title: string, action: "connect" | null = null) => ({ title, body: [], media: [], alt: title, action, button: null, done: null });
+  const byHand = [step("Open"), step("Fill in"), step("Save")];
+  const auto = [step("Add", "connect"), step("Open"), step("Choose")];
+  const withAuto: Guide = { card: null, tagline: "SSH", warning: null, steps: byHand, auto, autoCard: null };
+
+  it("shows the automatic list only when the window offers it and the user has not chosen by hand", () => {
+    expect(guideSteps(withAuto, true, false)).toEqual({ steps: auto, auto: true });
+    expect(guideSteps(withAuto, true, true)).toEqual({ steps: byHand, auto: false });
+    expect(guideSteps(withAuto, false, false)).toEqual({ steps: byHand, auto: false });
+    expect(guideSteps({ ...withAuto, auto: null, autoCard: null }, true, false)).toEqual({ steps: byHand, auto: false });
+  });
+
+  it("opens past the button once the connection is there", () => {
+    expect(firstStep(auto, false)).toBe(0);
+    expect(firstStep(auto, true)).toBe(1);
+    expect(firstStep([step("Add", "connect")], true)).toBe(0);
+    expect(firstStep(byHand, true)).toBe(0);
   });
 });

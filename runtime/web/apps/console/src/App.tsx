@@ -17,7 +17,7 @@ import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
 import { SignedOut } from "./screens/SignedOut";
 import { WrongHost } from "./screens/WrongHost";
-import { DesktopHome } from "./desktop/DesktopContext";
+import { DesktopAdded, DesktopConnect, DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { UpdateButton } from "./shell/UpdateButton";
 import { Shell } from "./shell/Shell";
@@ -26,10 +26,24 @@ import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboardin
 import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
-export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
+export function App({
+  handoff,
+  home = null,
+  connect = [],
+  added = [],
+}: {
+  handoff: string | null;
+  home?: string | null;
+  connect?: readonly string[];
+  added?: readonly string[];
+}) {
   return (
     <DesktopHome.Provider value={home}>
-      <Screens handoff={handoff} />
+      <DesktopConnect.Provider value={home ? connect : []}>
+        <DesktopAdded.Provider value={home ? added : []}>
+          <Screens handoff={handoff} />
+        </DesktopAdded.Provider>
+      </DesktopConnect.Provider>
     </DesktopHome.Provider>
   );
 }

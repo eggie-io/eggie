@@ -33,6 +33,7 @@ disposable.
 | W16 | After W14, connect each agent by its Windows guide: Claude Code, Codex, Cursor. Then in a `wsl -d eggie-vm --cd ~` shell run `claude` once | Each agent signs in from its Windows app, opens the projects folder in the VM and runs a command there. Any login link it prints opens when copied into a Windows browser | |
 | W17 | On Windows 11, set the OS theme to light then dark, and open Eggie each time | The title bar is cream (light) / navy (dark) with matching text and border. On Windows 10 the app still opens with the default title bar | |
 | W18 | **Other distros keep interop.** Open a terminal in another WSL distro (e.g. Ubuntu) and keep it open. Run `cmd.exe /c ver` in it after `eggie-vm` starts (open Eggie), restarts (`wsl --terminate eggie-vm`, open Eggie) and stops (quit Eggie, `wsl --terminate eggie-vm`) | Prints the Windows version every time | |
+| W20 | Make another distro the default first (`wsl --set-default Ubuntu`). In the window: Agents → Codex. Click **Make eggie-vm the default**, then follow steps 2–4 | The guide shows the automatic list with the projects-folder card; the click shows "Making eggie-vm your default WSL distro…" briefly with no further click; `wsl -l -v` marks `eggie-vm` with `*`; the guide reopens by itself at step 2 with step 1 marked done; Codex in WSL mode opens the projects folder. Reopening the guide starts at step 2. **Set it up manually** shows the 4 manual steps | |
 | W19 | Start Eggie hidden (sign in with T4's login item on), switch the OS theme between light and dark, then open the window | The title bar and border match the current theme without a restart; the tray egg is black on a light taskbar and white on a dark one, and swaps as the theme changes | |
 
 ## macOS (`EggieSetup-<version>-<arch>.pkg`)
@@ -58,6 +59,8 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | M13 | Update from the previous host release via the **Update** button | The window closes on its own after the download; Installer.app opens and asks for the admin password (as on a first install); reopening Eggie afterwards shows the new version in the footer | |
 | M14 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | M15 | Boot with the network off | The VM starts on its old runtime; `journalctl -u eggie-update` explains why | |
+| M16 | In the window: Agents → Claude Code. Click **Add Eggie to Claude Code**. Follow steps 2–4 | The guide shows 4 steps (not 8); the click shows "Adding Eggie to Claude Code…" briefly with no further click; `~/.claude/settings.json` has an `sshConfigs` entry with id `eggie` and the rest of the file is unchanged; the guide reopens by itself at step 2 with step 1 marked added; Claude Code lists **Eggie** under **SSH** and opens in `projects`. **Set it up manually** shows the 8 manual steps | |
+| M17 | **Destructive.** After M16, `eggie uninstall --purge` (M11's script runs it) | The `eggie` entry is gone from `~/.claude/settings.json`; the rest of the file remains | |
 
 ## Tray and open at login
 

@@ -60,7 +60,7 @@ install: it finds a Python, builds `.venv`, downloads the Ubuntu rootfs into
 
 ### Host + runtime from your checkout together
 
-`scripts/dev.sh` (macOS) and `scripts/dev.ps1` (Windows) run this working tree's runtime in the VM
+`scripts/dev.sh` (macOS) and `scripts\dev.cmd` (Windows) run this working tree's runtime in the VM
 and its host window against it, with nothing pushed. They copy `runtime/` into the VM, build
 `eggie-api` and `eggie-web` there (tag `local`, Docker's cache makes an unchanged rebuild take
 seconds), restart them, rebuild the in-VM `eggie` CLI and open `python -m host.desktop`. Re-run
@@ -74,18 +74,20 @@ scripts/dev.sh --no-window    # update the VM only
 scripts/dev.sh --release      # back to the latest released runtime
 ```
 
-On Windows, run it from PowerShell (not WSL) after `.\setup.ps1 -NoCreate` has built `.venv`. The
-flags are `-Full`, `-Only web`, `-NoWindow` and `-Release`. The checkout can live on a Windows
-drive or inside a WSL distro (`\\wsl.localhost\...`).
+On Windows, run it from PowerShell (not WSL) after `.\setup.ps1 -NoCreate` has built `.venv`.
+`dev.cmd` starts `dev-windows.ps1` past the execution policy, which blocks `.ps1` files by
+default. The flags are `-Full`, `-Only web`, `-NoWindow` and `-Release`. The checkout can live on a
+Windows drive or inside a WSL distro (`\\wsl.localhost\...`).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+.\scripts\dev                # fast loop
+.\scripts\dev -Only web      # rebuild one image
 ```
 
 The VM then reports runtime `local`. Neither the host's bootstrap nor the boot updater replaces a
 non-release runtime, so it stays until `--release`. Quit the installed Eggie app first: both
 windows drive the same VM, and its Quit stops it. On Windows the dev window would only bring the
-installed one forward, so `dev.ps1` refuses to run while it is open. `--full` runs `install.sh`
+installed one forward, so the script refuses to run while it is open. `--full` runs `install.sh`
 with `EGGIE_SKIP_PULL=1`, which skips the ghcr pull for the images built in the VM.
 
 To install a runtime other than the latest release, set `EGGIE_RUNTIME_REF=<branch|tag>`. A branch

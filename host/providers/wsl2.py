@@ -461,6 +461,33 @@ class Wsl2Provider:
         """None: the distro runs no sshd, so there is no host to name."""
         return None
 
+    # The agents reach the distro through WSL itself. Codex on Windows runs
+    # only in the default distro, so connecting it makes this one the default.
+    agent_connections = ("codex",)
+
+    def connect_agent(self, agent_id: str) -> str:
+        if agent_id not in self.agent_connections:
+            raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
+        self._require(self._meta(["--set-default", self.distro]),
+                      f"'{self.distro}' could not be made the default WSL distro")
+        return f"{self.distro} is now your default WSL distro."
+
+    def agent_connected(self, agent_id: str) -> bool:
+        """Whether this distro is the default, so the guide can skip the button."""
+        return agent_id == "codex" and self._default_distro() == self.distro
+
+    def _default_distro(self) -> str | None:
+        # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",
+        # which Windows translates. Neither boots a distro.
+        out = self._meta(["-l", "-v"])
+        if not out.ok:
+            return None
+        for line in out.stdout.replace("\x00", "").splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[0] == "*":
+                return fields[1]
+        return None
+
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs
         turned on is `remediable` above, not a download."""

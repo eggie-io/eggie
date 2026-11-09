@@ -3,15 +3,17 @@
   Dev loop on Windows: run this checkout's runtime in the Eggie VM and this
   checkout's host window against it. The Windows twin of scripts/dev.sh.
   Nothing is pushed; the images are built inside the VM from your working
-  tree. Re-run it after every change. Run it from PowerShell, not from WSL.
+  tree. Re-run it after every change. Run it from PowerShell, not from WSL,
+  through scripts\dev.cmd: the execution policy blocks a bare .ps1, and
+  PowerShell would pick a dev.ps1 over dev.cmd for `.\scripts\dev`.
 
 .EXAMPLE
-  .\scripts\dev.ps1                # fast: sync runtime/, rebuild api + web, restart them, open the window
-  .\scripts\dev.ps1 -Full          # also run the whole install.sh (CLI, agents, skills, systemd units);
+  .\scripts\dev                    # fast: sync runtime/, rebuild api + web, restart them, open the window
+  .\scripts\dev -Full              # also run the whole install.sh (CLI, agents, skills, systemd units);
                                    # creates the VM first if there is none
-  .\scripts\dev.ps1 -Only web      # rebuild one image (api|web)
-  .\scripts\dev.ps1 -NoWindow      # update the VM only
-  .\scripts\dev.ps1 -Release       # put the latest released runtime back
+  .\scripts\dev -Only web          # rebuild one image (api|web)
+  .\scripts\dev -NoWindow          # update the VM only
+  .\scripts\dev -Release           # put the latest released runtime back
 
 .NOTES
   The VM records the runtime as `local`. The host only installs when that
@@ -29,12 +31,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $py = Join-Path $root '.venv\Scripts\python.exe'
-$eggie = Join-Path $root '.venv\Scripts\eggie.exe'
+# The host CLI as a module, not .venv\Scripts\eggie.exe: that shim exists only
+# if the venv was installed after the entry point got its current name.
+function Eggie { & $py -m host.cli @args }
 $tag = 'local'
 $stage = '/opt/eggie/dev'    # mirror of the checkout parts build.sh needs
 
 function Say($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
-function Fail($msg) { Write-Host "dev.ps1: $msg" -ForegroundColor Red; exit 1 }
+function Fail($msg) { Write-Host "dev: $msg" -ForegroundColor Red; exit 1 }
 
 if (-not (Test-Path $py)) { Fail "no .venv here; run .\setup.ps1 -NoCreate first" }
 
@@ -94,18 +98,18 @@ try {
     # --- the VM --------------------------------------------------------------
     $known = (& $py -c 'from host.providers import get_provider; print(get_provider().exists())') -eq 'True'
     if (-not $known) {
-        if (-not $Full) { Fail "no VM '$vm' yet; run: .\scripts\dev.ps1 -Full" }
+        if (-not $Full) { Fail "no VM '$vm' yet; run: .\scripts\dev -Full" }
         Say "No VM yet: creating it with the released runtime first (several minutes)"
-        & $eggie setup --headless
+        Eggie setup --headless
         if ($LASTEXITCODE -ne 0) { Fail "setup failed" }
     }
     # Always, not only when stopped: a distro that nothing holds open ends seconds
     # after the last wsl.exe exits, and the commands below would boot it unheld.
-    & $eggie vm start
+    Eggie vm start
     if ($LASTEXITCODE -ne 0) { Fail "the VM did not start" }
 
     if ((Invoke-Vm @('test', '-x', '/usr/bin/docker')) -ne 0) {
-        Fail "the VM has no Docker yet; run: $eggie setup --headless, then this again"
+        Fail "the VM has no Docker yet; run: .venv\Scripts\python.exe -m host.cli setup --headless, then this again"
     }
 
     # --- sync the checkout into the VM ---------------------------------------

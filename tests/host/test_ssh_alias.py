@@ -313,9 +313,13 @@ def test_connecting_an_agent_lima_does_not_offer_is_refused(tmp_path):
     assert not (tmp_path / ".claude").exists()
 
 
-def test_wsl_offers_no_agent_to_connect():
+def test_wsl_offers_only_codex_to_connect():
+    # Claude Code on Windows reaches the distro through WSL; nothing to write.
     import pytest
-    assert Wsl2Provider.agent_connections == ()
+    calls = []
+    provider = Wsl2Provider(runner=calls.append)
+    assert provider.agent_connections == ("codex",)
     with pytest.raises(ValueError):
-        Wsl2Provider.connect_agent(object(), "claude-code")
-    assert Wsl2Provider.agent_connected(object(), "claude-code") is False
+        provider.connect_agent("claude-code")
+    assert provider.agent_connected("claude-code") is False
+    assert calls == []

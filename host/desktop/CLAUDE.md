@@ -47,7 +47,8 @@ reopens the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/
 clicks once, in the guide. `agent-connect:failed` (Try again / Back to the guide) shows only on an
 error. Both values come from a VM-served page and are checked in `view.py`. There is no local
 confirmation, so a page could send the window there unasked: that is accepted only because the
-write is fixed (the agent's entry for this VM, allowlisted agents only). A connect step that could
+write is fixed (the agent's entry for this VM, or for Codex on WSL making this VM the default distro;
+allowlisted agents only). A connect step that could
 write anything a page chose would need a local confirmation again. A new connectable agent needs a
 `data-when="<id>"` section in the `agent-connect` template.
 

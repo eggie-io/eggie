@@ -70,7 +70,7 @@ def screen_for(route: str, state: str, *, first_run: bool, resumed: bool,
 
 # The agents ui/index.html has an agent-connect section for, by their
 # runtime/agents/ id. A provider may offer only these.
-CONNECTABLE_AGENTS = frozenset({"claude-code"})
+CONNECTABLE_AGENTS = frozenset({"claude-code", "codex"})
 # The guide pages the console may ask to come back to.
 _GUIDE_PATH = re.compile(r"/(agents|welcome)/[a-z0-9][a-z0-9-]*")
 

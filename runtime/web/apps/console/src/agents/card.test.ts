@@ -13,9 +13,10 @@ const fourFields: Guide = {
   warning: null,
   steps: [],
   auto: null,
+  autoCard: null,
 };
-const userAtHost: Guide = { card: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [], auto: null };
-const wsl: Guide = { card: null, tagline: "", warning: null, steps: [], auto: null };
+const userAtHost: Guide = { card: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
+const wsl: Guide = { card: null, tagline: "", warning: null, steps: [], auto: null, autoCard: null };
 const lima = { vm: "lima" as const, ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/k" } };
 
 describe("cardRows", () => {
@@ -57,7 +58,7 @@ describe("cardRows", () => {
   });
 
   it("offers no copy for a row of plain guidance, and keeps its hint", () => {
-    const guide: Guide = { card: [{ label: "SSH key", value: "The key you downloaded", hint: "Saved earlier." }], tagline: "", warning: null, steps: [], auto: null };
+    const guide: Guide = { card: [{ label: "SSH key", value: "The key you downloaded", hint: "Saved earlier." }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
     const site = { vm: "site" as const, ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } };
     expect(cardRows(guide, site)).toEqual([{ label: "SSH key", value: "The key you downloaded", copy: false, hint: "Saved earlier." }]);
   });

@@ -5,15 +5,24 @@ const PLATFORMS: Platform[] = ["windows", "mac", "cloud"];
 
 export interface Media { kind: "image" | "video"; src: string }
 // `media` is empty for a step that shows a placeholder; more than one makes a slider.
-// `action: "connect"` puts the desktop window's "Add Eggie to …" button in the step.
-export interface Step { title: string; body: Rich[]; media: Media[]; alt: string; action: "connect" | null }
+// `action: "connect"` puts the desktop window's button in the step. `button`
+// and `done` (its label, and the heading once it has run) are set only there,
+// and null when the manifest leaves the card's "Add Eggie to …" wording.
+export interface Step {
+  title: string; body: Rich[]; media: Media[]; alt: string; action: "connect" | null;
+  button: string | null; done: string | null;
+}
 // One line of the card: a label and a template over the API's SSH facts, with
 // an optional explanation shown on demand.
 export interface CardField { label: string; value: string; hint?: string }
 // `card` is null for a guide with nothing to copy. `auto` is the shorter list
 // shown when the desktop window can add the connection itself, null when the
-// manifest has none; `steps` stays the way to do it by hand.
-export interface Guide { card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[]; auto: Step[] | null }
+// manifest has none; `steps` stays the way to do it by hand. `autoCard` is the
+// card that list shows: its own, null when it needs nothing copied.
+export interface Guide {
+  card: CardField[] | null; tagline: string; warning: Rich[] | null; steps: Step[];
+  auto: Step[] | null; autoCard: CardField[] | null;
+}
 // `note` says where the agent lives, shown beside its name in lists; null when the manifest has none.
 export interface Agent { id: string; name: string; note: string | null; icon: string; platforms: Partial<Record<Platform, Guide>>; hasSetup: boolean }
 export interface Connect {
@@ -55,12 +64,20 @@ function parseMedia(value: unknown, folder: string): Media | null {
 function parseStep(value: unknown, folder: string, actions = false): Step | null {
   if (!isObject(value) || !text(value.title) || !text(value.body) || !text(value.alt)) return null;
   if (value.action !== undefined && !(actions && value.action === "connect")) return null;
+  const connect = value.action === "connect";
+  for (const field of [value.button, value.done]) {
+    if (field !== undefined && !(connect && text(field))) return null;
+  }
   const body = parseRich(value.body);
   const files = value.media ?? [];
   if (body === null || !Array.isArray(files)) return null;
   const media = files.map((file) => parseMedia(file, folder));
   if (media.some((item) => item === null)) return null;
-  return { title: value.title, body, alt: value.alt, media: media as Media[], action: value.action === "connect" ? "connect" : null };
+  return {
+    title: value.title, body, alt: value.alt, media: media as Media[], action: connect ? "connect" : null,
+    button: connect && text(value.button) ? value.button : null,
+    done: connect && text(value.done) ? value.done : null,
+  };
 }
 
 function parseCardField(value: unknown): CardField | null {
@@ -71,15 +88,19 @@ function parseCardField(value: unknown): CardField | null {
   return { label: value.label, value: value.value, ...(value.hint !== undefined && { hint: value.hint }) };
 }
 
+// Null when absent, undefined when present but wrong.
+function parseCard(value: unknown): CardField[] | null | undefined {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return undefined;
+  const fields = value.map(parseCardField);
+  if (fields.length === 0 || fields.some((field) => field === null)) return undefined;
+  return fields as CardField[];
+}
+
 function parseGuide(value: unknown, folder: string): Guide | null {
   if (!isObject(value) || !text(value.tagline)) return null;
-  let card: CardField[] | null = null;
-  if (value.card !== undefined) {
-    if (!Array.isArray(value.card)) return null;
-    const fields = value.card.map(parseCardField);
-    if (fields.length === 0 || fields.some((field) => field === null)) return null;
-    card = fields as CardField[];
-  }
+  const card = parseCard(value.card);
+  if (card === undefined) return null;
   let warning: Rich[] | null = null;
   if (value.warning !== undefined) {
     warning = text(value.warning) ? parseRich(value.warning) : null;
@@ -88,12 +109,17 @@ function parseGuide(value: unknown, folder: string): Guide | null {
   const steps = parseSteps(value.steps, folder, false);
   if (steps === null) return null;
   let auto: Step[] | null = null;
+  let autoCard: CardField[] | null = null;
   if (value.auto !== undefined) {
-    auto = isObject(value.auto) ? parseSteps(value.auto.steps, folder, true) : null;
+    if (!isObject(value.auto)) return null;
+    auto = parseSteps(value.auto.steps, folder, true);
     // Without exactly one button the list could not be followed.
     if (auto === null || auto.filter((step) => step.action === "connect").length !== 1) return null;
+    const own = parseCard(value.auto.card);
+    if (own === undefined) return null;
+    autoCard = own;
   }
-  return { card, tagline: value.tagline, warning, steps, auto };
+  return { card, tagline: value.tagline, warning, steps, auto, autoCard };
 }
 
 function parseSteps(value: unknown, folder: string, actions: boolean): Step[] | null {

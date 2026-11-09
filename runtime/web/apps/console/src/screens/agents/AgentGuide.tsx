@@ -94,15 +94,15 @@ function ConnectCard({ agent, step, offer }: { agent: Agent; step: Step; offer: 
       </div>
       {offer.added ? (
         <>
-          <h2 className={s.connectTitle}><Icon name="check-circle" />Eggie is in {agent.name}'s connections</h2>
-          <p className={s.connectText}>Go on to the next step to choose it in {agent.name}.</p>
-          <Button variant="ghost" size="sm" onClick={go}>Add it again</Button>
+          <h2 className={s.connectTitle}><Icon name="check-circle" />{step.done ?? `Eggie is in ${agent.name}'s connections`}</h2>
+          <p className={s.connectText}>{step.done ? "Go on to the next step." : `Go on to the next step to choose it in ${agent.name}.`}</p>
+          <Button variant="ghost" size="sm" onClick={go}>{step.button ? "Do it again" : "Add it again"}</Button>
         </>
       ) : (
         <>
           <h2 className={s.connectTitle}>{step.title}</h2>
           <div className={cx(s.connectText, s.rich)}><RichText nodes={step.body} /></div>
-          <Button variant="primary" icon="check-circle" onClick={go}>Add Eggie to {agent.name}</Button>
+          <Button variant="primary" icon="check-circle" onClick={go}>{step.button ?? `Add Eggie to ${agent.name}`}</Button>
         </>
       )}
     </div>
@@ -126,8 +126,8 @@ function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
 }) {
   const offer = useConnectOffer(agent);
   const { steps, auto } = guideSteps(shown, offer !== undefined, byHand);
-  // The automatic list needs nothing copied, so it drops the card.
-  const guide = { ...shown, steps, card: auto ? null : shown.card };
+  // The automatic list shows only the card it names, if any.
+  const guide = { ...shown, steps, card: auto ? shown.autoCard : shown.card };
   const [active, setActiveStep] = useState(() => (auto ? firstStep(steps, offer!.added) : 0));
   const [check, setCheck] = useState<Check>("idle");
   const navigate = useNavigate();

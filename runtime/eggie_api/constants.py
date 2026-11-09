@@ -18,6 +18,8 @@ GUEST_TOKEN = f"{GUEST_ROOT}/api.token"
 
 GITHUB_DIR = f"{GUEST_ROOT}/github"
 AGENT_STATUS_DIR = f"{GUEST_ROOT}/agent-status"
+UPDATE_DIR = f"{GUEST_ROOT}/update"
+RUNTIME_VERSION_FILE = f"{GUEST_ROOT}/runtime.version"
 AGENTS_DIR = f"{GUEST_ROOT}/runtime/agents"
 # Eggie's OAuth App. Public by design: the Device Flow needs no secret.
 GITHUB_CLIENT_ID = "Ov23lie5k9VqSCKI52Ci"

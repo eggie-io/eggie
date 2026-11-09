@@ -55,6 +55,8 @@ class ApiConfig:
     github_dir: Path = Path(constants.GITHUB_DIR)
     agent_status_dir: Path = Path(constants.AGENT_STATUS_DIR)
     agents_dir: Path = Path(constants.AGENTS_DIR)
+    update_dir: Path = Path(constants.UPDATE_DIR)
+    runtime_marker: Path = Path(constants.RUNTIME_VERSION_FILE)
     # A server with its own hostnames ("site mode"): the console's host.
     # Projects live under `domain`, which the installer sets alongside it.
     site_host: str | None = None
@@ -108,6 +110,8 @@ class ApiConfig:
             github_dir=Path(env.get("EGGIE_GITHUB_DIR", constants.GITHUB_DIR)),
             agent_status_dir=Path(env.get("EGGIE_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
             agents_dir=Path(env.get("EGGIE_AGENTS_DIR", constants.AGENTS_DIR)),
+            update_dir=Path(env.get("EGGIE_UPDATE_DIR", constants.UPDATE_DIR)),
+            runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
             web_url=env.get("EGGIE_WEB_URL", "https://app.eggie.io"),
             tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),

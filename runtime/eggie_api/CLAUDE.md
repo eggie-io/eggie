@@ -144,6 +144,11 @@ and a host release. Prefer additive changes.
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
+- **Runtime update** (`services/runtime_update.py`) — `GET|POST /api/runtime/update` (console only). Holds
+  no state: `available.json` (written by `install/lib/update-check.sh`) and `status.json` (by
+  `update-now.sh`) are read on every call, since the update recreates this container. POST bumps
+  `update/request`; a bump nobody picked up in 2 minutes, or a `running` status older than 30, reads
+  as `failed`. `available` is shown only when it is a newer `runtime-vX.Y.Z` than `runtime.version`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)

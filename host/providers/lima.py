@@ -21,7 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import lima_install, ssh_alias
+from . import claude_ssh, lima_install, ssh_alias
 from ..core.provider import Access, AccessField, Completed, Diagnosis, CheckResult, Runtime
 
 LOOPBACK = "127.0.0.1"
@@ -181,7 +181,8 @@ class LimaProvider:
     def __init__(self, name="eggie-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
-                 mac_ver=None, machine=None, ssh_dir: Path | None = None):
+                 mac_ver=None, machine=None, ssh_dir: Path | None = None,
+                 claude_dir: Path | None = None):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
@@ -191,6 +192,11 @@ class LimaProvider:
         # The user's own ~/.ssh, where setup adds the `eggie` host. Injectable
         # so no test can edit the real one.
         self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
+        # Claude Code's ~/.claude, where setup adds the "Eggie" SSH connection.
+        # Next to the injected ~/.ssh by default, so a test that moves one
+        # moves both.
+        self.claude_dir = (Path(claude_dir) if claude_dir
+                           else self.ssh_dir.parent / ".claude")
         # Injectable for the same reason Wsl2Provider's `facts` is: platform.mac_ver()
         # returns ('', ..., ...) on the Windows host this suite mostly runs on, so a
         # test exercising preflight()/is_supported() needs a real version to check
@@ -332,6 +338,10 @@ class LimaProvider:
                 ssh_alias.forget(self.ssh_dir / "known_hosts", address, self._spawn)
         except (OSError, ValueError):
             pass    # a stale `eggie` host is harmless; the VM is what mattered
+        try:
+            claude_ssh.remove(self.claude_dir)
+        except (OSError, ValueError):
+            pass
 
     def recover(self, *, everything: bool = False) -> None:
         # Nothing outside this instance to restart, so `everything` is the same
@@ -379,8 +389,10 @@ class LimaProvider:
 
     def ssh_shortcut(self):
         """The setup step that adds `Host eggie` to ~/.ssh/config and the
-        VM's host keys to known_hosts -- see ssh_alias.py. Rewritten on every
-        run: the values come from the ssh.config Lima writes on each start."""
+        VM's host keys to known_hosts -- see ssh_alias.py -- and the "Eggie"
+        connection that names it to Claude Code (claude_ssh.py). Rewritten on
+        every run: the values come from the ssh.config Lima writes on each
+        start."""
         def write() -> str:
             user_config = self.ssh_dir / "config"
             try:
@@ -390,7 +402,13 @@ class LimaProvider:
                 # Never fails setup: the VM works without it, and the status
                 # screen still shows the full `ssh -F` command.
                 return f"Could not add the '{ssh_alias.ALIAS}' host to {user_config}: {e}"
-            return f"Connect with: ssh {ssh_alias.ALIAS}"
+            message = f"Connect with: ssh {ssh_alias.ALIAS}"
+            try:
+                if claude_ssh.install(self.claude_dir):
+                    message += "; Claude Code lists it as 'Eggie'"
+            except (OSError, ValueError) as e:
+                message += f". Could not add 'Eggie' to Claude Code: {e}"
+            return message
 
         return write
 

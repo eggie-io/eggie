@@ -5,6 +5,8 @@ declares on every start; a reinstall is a new VM either way. A known_hosts
 entry for the old keys then blocks every client -- including Cursor's, which
 ignores StrictHostKeyChecking -- so the entries are replaced, not bypassed.
 """
+import json
+
 from host.core.install import default_steps
 from host.providers import ssh_alias
 from host.providers.lima import LimaProvider
@@ -263,10 +265,14 @@ def test_destroy_takes_the_host_and_its_keys_away(tmp_path):
     config = tmp_path / ".ssh" / "config"
     config.parent.mkdir()
     config.write_text(USER_CONFIG)
+    (tmp_path / ".claude").mkdir()
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"model": "opus"}')
     provider = _provider(tmp_path, runner=Lima())
     provider.ssh_shortcut()()
     provider.destroy()
     assert config.read_text() == USER_CONFIG
+    assert json.loads(settings.read_text()) == {"model": "opus"}
     assert "39022" not in (tmp_path / ".ssh" / "known_hosts").read_text()
 
 
@@ -275,3 +281,28 @@ def test_the_step_follows_create_vm_on_lima_and_is_absent_on_wsl(tmp_path):
     lima = [s.name for s in default_steps(_provider(tmp_path), **kwargs)]
     assert lima[lima.index("create_vm") + 1] == "ssh_alias"
     assert Wsl2Provider().ssh_shortcut() is None
+
+
+# --- Claude Code's "Eggie" connection, written by the same step ---
+
+def test_setup_also_names_the_host_to_claude_code(tmp_path):
+    from host.providers import claude_ssh
+    (tmp_path / ".claude").mkdir()
+    message = _provider(tmp_path).ssh_shortcut()()
+    assert claude_ssh.installed(tmp_path / ".claude")
+    assert "Claude Code" in message
+
+
+def test_setup_without_claude_code_writes_only_the_ssh_host(tmp_path):
+    message = _provider(tmp_path).ssh_shortcut()()
+    assert message == "Connect with: ssh eggie"
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_an_unreadable_claude_settings_file_does_not_fail_setup(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text("{oops")
+    message = _provider(tmp_path).ssh_shortcut()()
+    assert message.startswith("Connect with: ssh eggie")
+    assert "Could not add 'Eggie' to Claude Code" in message
+    assert ssh_alias.installed(tmp_path / ".ssh" / "config")

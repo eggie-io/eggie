@@ -3,15 +3,16 @@
   Dev loop on Windows: run this checkout's runtime in the Eggie VM and this
   checkout's host window against it. The Windows twin of scripts/dev.sh.
   Nothing is pushed; the images are built inside the VM from your working
-  tree. Re-run it after every change. Run it from PowerShell, not from WSL.
+  tree. Re-run it after every change. Run it from PowerShell, not from WSL,
+  through scripts\dev.cmd (the execution policy blocks a bare .ps1).
 
 .EXAMPLE
-  .\scripts\dev.ps1                # fast: sync runtime/, rebuild api + web, restart them, open the window
-  .\scripts\dev.ps1 -Full          # also run the whole install.sh (CLI, agents, skills, systemd units);
+  .\scripts\dev                    # fast: sync runtime/, rebuild api + web, restart them, open the window
+  .\scripts\dev -Full              # also run the whole install.sh (CLI, agents, skills, systemd units);
                                    # creates the VM first if there is none
-  .\scripts\dev.ps1 -Only web      # rebuild one image (api|web)
-  .\scripts\dev.ps1 -NoWindow      # update the VM only
-  .\scripts\dev.ps1 -Release       # put the latest released runtime back
+  .\scripts\dev -Only web          # rebuild one image (api|web)
+  .\scripts\dev -NoWindow          # update the VM only
+  .\scripts\dev -Release           # put the latest released runtime back
 
 .NOTES
   The VM records the runtime as `local`. The host only installs when that
@@ -94,7 +95,7 @@ try {
     # --- the VM --------------------------------------------------------------
     $known = (& $py -c 'from host.providers import get_provider; print(get_provider().exists())') -eq 'True'
     if (-not $known) {
-        if (-not $Full) { Fail "no VM '$vm' yet; run: .\scripts\dev.ps1 -Full" }
+        if (-not $Full) { Fail "no VM '$vm' yet; run: .\scripts\dev -Full" }
         Say "No VM yet: creating it with the released runtime first (several minutes)"
         & $eggie setup --headless
         if ($LASTEXITCODE -ne 0) { Fail "setup failed" }

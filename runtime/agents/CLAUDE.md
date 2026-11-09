@@ -30,8 +30,9 @@ key the user downloaded from the web app.
   slider; none gives a placeholder showing `alt`, which is also each image's alt text.
 - `auto` (optional): `{"steps": [...]}`, a shorter list shown instead of `steps` when the desktop
   window can add the connection itself (`connect=` in its link; Claude Code on Mac). Exactly one
-  of its steps has `"action": "connect"`, which shows the "Add Eggie to <agent>" button; no other
-  step may have an `action`. `steps` stays complete: a plain browser, the cloud and "Set it up by
+  of its steps has `"action": "connect"`: the picture frame then shows a card with that step's
+  title and body and the "Add Eggie to <agent>" button, so the step needs no `media` (any it has
+  is not shown). No other step may have an `action`. `steps` stays complete: a plain browser, the cloud and "Set it up by
   hand instead" all use it.
 - `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1
   (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.

@@ -64,7 +64,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser", and
     `connect=` (agent ids the window can connect by itself) and `added=` (those already connected):
     those agents' guides then show the manifest's `auto` steps, whose `"action": "connect"` step
-    has "Add Eggie to <agent>" sending the window to its `#connect=` screen (`desktopConnectUrl`),
+    fills the picture frame with a card (`ConnectCard`) whose "Add Eggie to <agent>" sends the window to its `#connect=` screen (`desktopConnectUrl`),
     with "Set it up by hand instead" switching to the ordinary `steps`. With `added=` the list opens
     past the button. All three are empty in a plain browser, which gets only `steps`.
   - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the

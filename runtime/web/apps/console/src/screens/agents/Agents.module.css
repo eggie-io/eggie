@@ -96,8 +96,6 @@
 .stepTitle { padding-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink-2); }
 .stepActive .stepTitle { color: var(--ink); }
 /* 50px lines the body up under the title: 14px padding, 24px dot, 12px gap. */
-.connectForMe { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 14px 12px 50px; }
-.connectDone { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink); }
 .otherWay {
   align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: 13px; line-height: 18px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px;
@@ -169,6 +167,9 @@
 @media (max-width: 860px) {
   .main { min-height: 0; }
   .frame { flex: none; aspect-ratio: 16 / 10; }
+  /* The card is text and a button, not a picture: let it set the height. */
+  .frame:has(> .connectCard) { aspect-ratio: auto; }
+  .frame > .connectCard { position: static; margin: var(--space-4); }
 }
 .slider, .placeholder { position: absolute; inset: var(--space-5); }
 .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
@@ -191,6 +192,17 @@
   background: var(--line-strong); transition: background-color 120ms ease, width 120ms ease;
 }
 .slideDotOn { width: 20px; background: var(--ink-2); }
+.connectCard {
+  position: absolute; inset: var(--space-5); overflow: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: var(--space-3);
+  padding: var(--space-5); text-align: center; border-radius: 8px; background: var(--raised);
+}
+.connectMarks { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); color: var(--ink-3); }
+.connectTitle {
+  margin: 0; display: inline-flex; align-items: center; gap: var(--space-2);
+  font-size: 18px; line-height: 24px; font-weight: 650; color: var(--ink); text-wrap: balance;
+}
+.connectText { max-width: 40ch; margin: 0 0 var(--space-2); font-size: 14px; line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 .placeholder {
   display: flex; align-items: center; justify-content: center; padding: var(--space-6); text-align: center;
   border: 1.5px dashed var(--line-strong); border-radius: 8px; font-size: 14px; line-height: 20px; color: var(--ink-3);

@@ -1,13 +1,14 @@
 import { useId, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
-import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
-import { firstStep, guideSteps, type Agent, type Connect, type Guide } from "../../agents/catalog";
+import { BrandMark, Button, Card, Icon, Notice, cx } from "@eggie/ui";
+import { firstStep, guideSteps, type Agent, type Connect, type Guide, type Step } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
 import { desktopConnectUrl } from "../../desktop/desktop";
 import { useDesktopAdded, useDesktopConnect, useDesktopHome } from "../../desktop/DesktopContext";
 import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
+import { AgentMark } from "./AgentMark";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
@@ -79,20 +80,31 @@ function useConnectOffer(agent: Agent): { url: string; added: boolean } | undefi
   return { url: desktopConnectUrl(home, agent.id, pathname), added: added.includes(agent.id) };
 }
 
-// The automatic list's button. It opens the desktop window's own screen,
-// which asks before it changes anything and then brings the user back here.
-function ConnectForMe({ agent, offer }: { agent: Agent; offer: { url: string; added: boolean } }) {
+// The automatic list's connect step, drawn in the picture frame: the button
+// is the step. It opens the desktop window's own screen, which asks before it
+// changes anything and then brings the user back here.
+function ConnectCard({ agent, step, offer }: { agent: Agent; step: Step; offer: { url: string; added: boolean } }) {
   const go = () => window.location.assign(offer.url);
-  if (offer.added)
-    return (
-      <div className={s.connectForMe}>
-        <p className={s.connectDone}><Icon name="check-circle" />Eggie is in {agent.name}'s connections.</p>
-        <Button variant="ghost" size="sm" onClick={go}>Add it again</Button>
-      </div>
-    );
   return (
-    <div className={s.connectForMe}>
-      <Button variant="primary" size="sm" icon="check-circle" onClick={go}>Add Eggie to {agent.name}</Button>
+    <div className={s.connectCard}>
+      <div className={s.connectMarks} aria-hidden="true">
+        <span className={s.mark}><BrandMark size={22} /></span>
+        <Icon name="chevron-right" />
+        <AgentMark agent={agent} />
+      </div>
+      {offer.added ? (
+        <>
+          <h2 className={s.connectTitle}><Icon name="check-circle" />Eggie is in {agent.name}'s connections</h2>
+          <p className={s.connectText}>Go on to the next step to choose it in {agent.name}.</p>
+          <Button variant="ghost" size="sm" onClick={go}>Add it again</Button>
+        </>
+      ) : (
+        <>
+          <h2 className={s.connectTitle}>{step.title}</h2>
+          <div className={cx(s.connectText, s.rich)}><RichText nodes={step.body} /></div>
+          <Button variant="primary" icon="check-circle" onClick={go}>Add Eggie to {agent.name}</Button>
+        </>
+      )}
     </div>
   );
 }
@@ -177,7 +189,6 @@ function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
               </button>
               {/* Outside the button: a list is not allowed inside one. */}
               {index === active && <div className={cx(s.stepBody, s.rich)}><RichText nodes={item.body} /></div>}
-              {index === active && item.action === "connect" && offer && <ConnectForMe agent={agent} offer={offer} />}
             </li>
           ))}
         </ol>
@@ -208,7 +219,9 @@ function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
       </div>
       <div className={s.main}>
         <Card className={s.frame}>
-          <MediaSlider key={active} media={step.media} alt={step.alt} />
+          {step.action === "connect" && offer
+            ? <ConnectCard agent={agent} step={step} offer={offer} />
+            : <MediaSlider key={active} media={step.media} alt={step.alt} />}
         </Card>
         <div className={s.nav}>
           {/* Mounted before it has text, so screen readers announce the message. */}

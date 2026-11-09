@@ -27,8 +27,8 @@
         "steps": [
           {"title": "Add Eggie to Claude Code", "action": "connect", "body": "Eggie adds the connection for you. It asks first, then brings you back here.", "alt": "Eggie adds the connection to Claude Code"},
           {"title": "Open Claude Code", "body": "<p>Open the Claude desktop app and click <b>&lt;/&gt;</b> at the top to switch to Claude Code.</p><p>If it was already open, quit and open it again so it sees the new connection.</p>", "alt": "Screenshot · Claude Code switch at the top of the sidebar", "media": ["media/mac-claude-code-0.png"]},
-          {"title": "Choose Eggie", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Select <b>Eggie</b>.</li></ol>", "alt": "Screenshot · environment menu under the prompt box", "media": ["media/mac-claude-code-1.png"]},
-          {"title": "Start prompting", "body": "<p>The first time, Claude Code takes a minute to install what it needs on your kitchen.</p><p>Then tell it what to build.</p>", "alt": "Claude Code prompt, connected to the kitchen"}
+          {"title": "Choose Eggie", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Under <b>SSH</b>, select <b>Eggie</b>.</li></ol>", "alt": "Screenshot · environment menu with Eggie under SSH", "media": ["media/mac-claude-code-auto-2.png"]},
+          {"title": "Start prompting", "body": "<p>Claude Code opens in your kitchen's <b>projects</b> folder. The first time, it may take a minute to install what it needs there.</p><p>Then tell it what to build.</p>", "alt": "Screenshot · Claude Code prompt on Eggie, in the projects folder", "media": ["media/mac-claude-code-auto-3.png"]}
         ]
       }
     },

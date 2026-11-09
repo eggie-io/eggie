@@ -58,6 +58,8 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | M13 | Update from the previous host release via the **Update** button | The window closes on its own after the download; Installer.app opens and asks for the admin password (as on a first install); reopening Eggie afterwards shows the new version in the footer | |
 | M14 | Boot a VM with a newer compatible runtime tag published | `runtime.version` moves; projects still run | |
 | M15 | Boot with the network off | The VM starts on its old runtime; `journalctl -u eggie-update` explains why | |
+| M16 | In the window: Agents → Claude Code. Click **Add Eggie to Claude Code**, confirm, then **Back to the guide**. Follow steps 2–4 | The guide shows 4 steps (not 8); after confirming, `~/.claude/settings.json` has an `sshConfigs` entry with id `eggie` and the rest of the file is unchanged; the guide reopens at step 2 with step 1 marked added; Claude Code lists **Eggie** under **SSH** and opens in `projects`. **Set it up by hand instead** shows the 8 manual steps | |
+| M17 | **Destructive.** After M16, `eggie uninstall --purge` (M11's script runs it) | The `eggie` entry is gone from `~/.claude/settings.json`; the rest of the file remains | |
 
 ## Tray and open at login
 

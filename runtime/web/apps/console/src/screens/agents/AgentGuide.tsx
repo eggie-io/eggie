@@ -1,10 +1,12 @@
 import { useId, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
 import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
+import { desktopConnectUrl } from "../../desktop/desktop";
+import { useDesktopConnect, useDesktopHome } from "../../desktop/DesktopContext";
 import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
@@ -54,6 +56,23 @@ function Hint({ label, text }: { label: string; text: string }) {
       </button>
       <span id={id} role="tooltip" className={s.hintText}>{text}</span>
     </span>
+  );
+}
+
+// Inside the desktop window, for an agent it can connect by itself: one click
+// there instead of the manual steps. The window asks before it changes anything.
+function ConnectForMe({ agent }: { agent: Agent }) {
+  const home = useDesktopHome();
+  const connect = useDesktopConnect();
+  const { pathname } = useLocation();
+  if (!home || !connect.includes(agent.id)) return null;
+  return (
+    <div className={s.connectForMe}>
+      <p className={s.muted}>Eggie can add the connection to {agent.name} for you.</p>
+      <Button variant="primary" size="sm" icon="check-circle" onClick={() => window.location.assign(desktopConnectUrl(home, agent.id, pathname))}>
+        Add Eggie to {agent.name}
+      </Button>
+    </div>
   );
 }
 
@@ -126,6 +145,7 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
               </button>
               {/* Outside the button: a list is not allowed inside one. */}
               {index === active && <div className={cx(s.stepBody, s.rich)}><RichText nodes={item.body} /></div>}
+              {index === 0 && active === 0 && <ConnectForMe agent={agent} />}
             </li>
           ))}
         </ol>

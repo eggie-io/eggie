@@ -39,6 +39,45 @@ export function takeDesktopHome(location: Pick<Location, "hash">, store: Store |
   return home;
 }
 
+const CONNECT_KEY = "eggie.desktopConnect";
+const AGENT_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+function agentIds(value: string | null): string[] | null {
+  if (value === null) return null;
+  const ids = value.split(",").filter((id) => id !== "");
+  return ids.every((id) => AGENT_ID.test(id)) ? ids : null;
+}
+
+// The agents the desktop window can connect by itself (`connect=` in the
+// handoff link), remembered like Home. Empty in a plain browser.
+// Read before takeHandoff() clears the fragment.
+export function takeDesktopConnect(location: Pick<Location, "hash">, store: Store | null): string[] {
+  const given = agentIds(new URLSearchParams(location.hash.replace(/^#/, "")).get("connect"));
+  if (given !== null) {
+    try {
+      store?.setItem(CONNECT_KEY, given.join(","));
+    } catch {
+      // As for Home: a reload inside the window loses the button, nothing else.
+    }
+    return given;
+  }
+  let stored: string | null = null;
+  try {
+    stored = store?.getItem(CONNECT_KEY) ?? null;
+  } catch {
+    // Blocked storage: nothing remembered.
+  }
+  return agentIds(stored) ?? [];
+}
+
+// The desktop screen that connects `agent`, then reopens `back` here. The
+// window checks both again and asks the user before it changes anything.
+export function desktopConnectUrl(home: string, agent: string, back: string): string {
+  const url = new URL(home);
+  url.hash = new URLSearchParams({ connect: agent, back }).toString();
+  return url.toString();
+}
+
 export async function browserLink(api: Pick<Api, "post">, origin: string): Promise<string> {
   try {
     const { code } = await api.post<{ code: string }>("/api/sessions/handoff");

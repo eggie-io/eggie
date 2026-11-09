@@ -270,6 +270,7 @@ def test_destroy_takes_the_host_and_its_keys_away(tmp_path):
     settings.write_text('{"model": "opus"}')
     provider = _provider(tmp_path, runner=Lima())
     provider.ssh_shortcut()()
+    provider.connect_agent("claude-code")
     provider.destroy()
     assert config.read_text() == USER_CONFIG
     assert json.loads(settings.read_text()) == {"model": "opus"}
@@ -283,26 +284,33 @@ def test_the_step_follows_create_vm_on_lima_and_is_absent_on_wsl(tmp_path):
     assert Wsl2Provider().ssh_shortcut() is None
 
 
-# --- Claude Code's "Eggie" connection, written by the same step ---
 
-def test_setup_also_names_the_host_to_claude_code(tmp_path):
-    from host.providers import claude_ssh
+# --- Claude Code's "Eggie" connection, added from the agent guide ---
+
+def test_setup_leaves_claude_code_alone(tmp_path):
+    # Claude Code may be installed after Eggie; the guide's button adds it.
     (tmp_path / ".claude").mkdir()
-    message = _provider(tmp_path).ssh_shortcut()()
-    assert claude_ssh.installed(tmp_path / ".claude")
+    assert _provider(tmp_path).ssh_shortcut()() == "Connect with: ssh eggie"
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+
+
+def test_connecting_claude_code_writes_the_host_and_the_entry(tmp_path):
+    from host.providers import claude_ssh
+    message = _provider(tmp_path).connect_agent("claude-code")
     assert "Claude Code" in message
+    assert ssh_alias.installed(tmp_path / ".ssh" / "config")
+    assert claude_ssh.installed(tmp_path / ".claude")
 
 
-def test_setup_without_claude_code_writes_only_the_ssh_host(tmp_path):
-    message = _provider(tmp_path).ssh_shortcut()()
-    assert message == "Connect with: ssh eggie"
+def test_connecting_an_agent_lima_does_not_offer_is_refused(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        _provider(tmp_path).connect_agent("codex")
     assert not (tmp_path / ".claude").exists()
 
 
-def test_an_unreadable_claude_settings_file_does_not_fail_setup(tmp_path):
-    (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "settings.json").write_text("{oops")
-    message = _provider(tmp_path).ssh_shortcut()()
-    assert message.startswith("Connect with: ssh eggie")
-    assert "Could not add 'Eggie' to Claude Code" in message
-    assert ssh_alias.installed(tmp_path / ".ssh" / "config")
+def test_wsl_offers_no_agent_to_connect():
+    import pytest
+    assert Wsl2Provider.agent_connections == ()
+    with pytest.raises(ValueError):
+        Wsl2Provider.connect_agent(object(), "claude-code")

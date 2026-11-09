@@ -93,6 +93,9 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   itself. The runtime keeps the keys (`ssh_deletekeys: false`, Lima only). Setup's `ssh_alias` step
   and every `start()` replace the known_hosts entries with the guest's real keys
   (`providers/ssh_alias.py`). `Host eggie` is written into `~/.ssh/config` itself, because
-  Cursor's host list ignores `Include`. The same step adds an `"Eggie"` entry (id `eggie`,
-  `sshHost: eggie`) to `sshConfigs` in `~/.claude/settings.json` (`providers/claude_ssh.py`), only
-  when `~/.claude` exists, and never rewrites a file it cannot parse. `destroy()` removes both.
+  Cursor's host list ignores `Include`.
+- Setup never touches a coding agent's own settings: the agent may be installed later. The
+  provider's `agent_connections` / `connect_agent(id)` do it when the user asks from the console's
+  guide (see `desktop/CLAUDE.md`). On Lima, `claude-code` refreshes `Host eggie` and adds an
+  `"Eggie"` entry (id `eggie`) to `sshConfigs` in `~/.claude/settings.json`
+  (`providers/claude_ssh.py`); a file it cannot parse is never rewritten. `destroy()` removes it.

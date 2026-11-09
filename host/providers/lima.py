@@ -192,7 +192,8 @@ class LimaProvider:
         # The user's own ~/.ssh, where setup adds the `eggie` host. Injectable
         # so no test can edit the real one.
         self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
-        # Claude Code's ~/.claude, where setup adds the "Eggie" SSH connection.
+        # Claude Code's ~/.claude, where the agent-connect screen adds the
+        # "Eggie" SSH connection.
         # Next to the injected ~/.ssh by default, so a test that moves one
         # moves both.
         self.claude_dir = (Path(claude_dir) if claude_dir
@@ -389,10 +390,8 @@ class LimaProvider:
 
     def ssh_shortcut(self):
         """The setup step that adds `Host eggie` to ~/.ssh/config and the
-        VM's host keys to known_hosts -- see ssh_alias.py -- and the "Eggie"
-        connection that names it to Claude Code (claude_ssh.py). Rewritten on
-        every run: the values come from the ssh.config Lima writes on each
-        start."""
+        VM's host keys to known_hosts -- see ssh_alias.py. Rewritten on every
+        run: the values come from the ssh.config Lima writes on each start."""
         def write() -> str:
             user_config = self.ssh_dir / "config"
             try:
@@ -402,15 +401,24 @@ class LimaProvider:
                 # Never fails setup: the VM works without it, and the status
                 # screen still shows the full `ssh -F` command.
                 return f"Could not add the '{ssh_alias.ALIAS}' host to {user_config}: {e}"
-            message = f"Connect with: ssh {ssh_alias.ALIAS}"
-            try:
-                if claude_ssh.install(self.claude_dir):
-                    message += "; Claude Code lists it as 'Eggie'"
-            except (OSError, ValueError) as e:
-                message += f". Could not add 'Eggie' to Claude Code: {e}"
-            return message
+            return f"Connect with: ssh {ssh_alias.ALIAS}"
 
         return write
+
+    # The agents the desktop app can connect to this VM by itself, by their
+    # runtime/agents/ id. The console shows the guide's button only for these.
+    agent_connections = ("claude-code",)
+
+    def connect_agent(self, agent_id: str) -> str:
+        """Point the agent at the VM. For Claude Code: an "Eggie" entry in its
+        SSH connections naming the `eggie` alias, which is refreshed first
+        so the entry never names a host that is missing or stale."""
+        if agent_id not in self.agent_connections:
+            raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
+        ssh_alias.install(self.ssh_dir / "config", self._lima_ssh())
+        self._trust_host_keys()
+        claude_ssh.install(self.claude_dir)
+        return "Claude Code now lists Eggie as an SSH connection."
 
     def _control(self, verb: str, guest_port: int, host_port: int) -> Completed:
         return self._spawn(["ssh", "-F", str(self._ssh_config()),

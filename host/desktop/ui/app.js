@@ -359,6 +359,32 @@ const ROUTES = {
   'quit': () => fromTray(() => startQuit(false)),
 };
 
+// The console's agent guide sends the window here as
+// #connect=<agent>&back=<guide path>. Nothing is written until the user
+// confirms; the bridge checks both values again.
+let connectRequest = null;
+
+async function openConnect(agent, back) {
+  const offer = await api().agent_connection(agent);
+  if (!offer.ok) {
+    showNotice(offer.message);
+    return refresh();
+  }
+  connectRequest = { agent, back };
+  show('agent-connect', offer);
+}
+
+ACTIONS['connect-agent'] = async () => {
+  const result = await api().connect_agent(connectRequest.agent);
+  if (!result.ok) return showNotice(result.message);
+  show('agent-connect:done', result);
+};
+ACTIONS['connect-back'] = async () => {
+  const result = await api().enter_console(connectRequest ? connectRequest.back : '');
+  if (result.ok) window.location.assign(result.url);
+  else showNotice(result.message);
+};
+
 window.eggie.route = (name) => {
   const go = ROUTES[name];
   if (go) go();
@@ -488,6 +514,11 @@ function start() {
   if (route && ROUTES[route]) {
     history.replaceState(null, '', window.location.pathname);
     return ROUTES[route]();
+  }
+  const params = new URLSearchParams(route);
+  if (params.has('connect')) {
+    history.replaceState(null, '', window.location.pathname);
+    return openConnect(params.get('connect'), params.get('back') || '');
   }
   return refresh();
 }

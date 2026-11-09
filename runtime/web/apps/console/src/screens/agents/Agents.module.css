@@ -96,6 +96,7 @@
 .stepTitle { padding-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink-2); }
 .stepActive .stepTitle { color: var(--ink); }
 /* 50px lines the body up under the title: 14px padding, 24px dot, 12px gap. */
+.connectForMe { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 14px 12px 50px; }
 .stepBody { margin-top: -10px; padding: 0 14px 12px 50px; font-size: 13px; line-height: 18px; color: var(--ink-2); text-wrap: pretty; }
 
 .rich p, .rich ul, .rich ol { margin: 0; }

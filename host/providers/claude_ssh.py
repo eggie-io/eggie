@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 # The "Eggie" SSH connection in Claude Code's ~/.claude/settings.json, so the
-# Claude desktop app lists the VM without the user adding it by hand.
+# Claude desktop app lists the VM without the user adding it by hand. Written
+# when the user asks for it from Claude Code's guide in the console (the
+# desktop app's agent-connect screen), never at setup: Claude Code may be
+# installed long after Eggie.
 #
 # Claude Code keeps its SSH connections in the `sshConfigs` list of that file.
 # Ours points at the `eggie` alias ssh_alias.py writes into ~/.ssh/config, so
@@ -64,11 +67,10 @@ def installed(claude_dir: Path) -> bool:
         return False
 
 
-def install(claude_dir: Path) -> bool:
-    """Add or refresh the Eggie entry. False, and nothing written, when Claude
-    Code is not installed: no ~/.claude for a tool the user does not have."""
-    if not claude_dir.is_dir():
-        return False
+def install(claude_dir: Path) -> None:
+    """Add or refresh the Eggie entry. A missing ~/.claude is created: the
+    user asked for the entry, and Claude Code reads it once it starts."""
+    claude_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     # Resolved so a dotfiles symlink is written through, not replaced.
     path = settings_path(claude_dir).resolve()
     data = _load(path)
@@ -79,10 +81,9 @@ def install(claude_dir: Path) -> bool:
     else:
         configs[at] = dict(ENTRY)
     if configs == data.get("sshConfigs"):
-        return True
+        return
     data["sshConfigs"] = configs
     _save(path, data)
-    return True
 
 
 def remove(claude_dir: Path) -> None:

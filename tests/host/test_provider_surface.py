@@ -40,6 +40,25 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 
+# What the desktop app asks to connect a coding agent from the console's
+# guide (`DesktopApi.connect_agent`). Apart from the install list: it runs
+# whenever the user asks, long after setup.
+AGENT_SURFACE = {"agent_connections", "connect_agent"}
+
+
+def test_every_provider_says_which_agents_it_can_connect():
+    from host.desktop.view import CONNECTABLE_AGENTS
+    from host.providers.lima import LimaProvider
+    from host.providers.wsl2 import Wsl2Provider
+
+    for cls in (LimaProvider, Wsl2Provider):
+        missing = [name for name in AGENT_SURFACE if not hasattr(cls, name)]
+        assert not missing, f"{cls.__name__} does not provide {missing}"
+        # The local screens have words only for these.
+        assert set(cls.agent_connections) <= CONNECTABLE_AGENTS, cls.__name__
+    assert not (AGENT_SURFACE & (LIFECYCLE_SURFACE | INSTALL_SURFACE))
+
+
 def _protocol_methods(name: str = "VmProvider") -> set[str]:
     source = (HOST / "core" / "provider.py").read_text()
     for node in ast.parse(source).body:

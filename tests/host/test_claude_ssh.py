@@ -31,7 +31,7 @@ def _read(claude):
 
 def test_the_entry_points_at_the_eggie_ssh_alias(tmp_path):
     claude = _claude(tmp_path)
-    assert claude_ssh.install(claude)
+    claude_ssh.install(claude)
     assert _read(claude) == {"sshConfigs": [{
         "id": "eggie", "name": "Eggie", "sshHost": "eggie",
         "startDirectory": "/opt/eggie/projects"}]}
@@ -56,9 +56,11 @@ def test_installing_again_replaces_the_entry_in_place(tmp_path):
     assert configs == [claude_ssh.ENTRY, later]
 
 
-def test_nothing_is_written_without_claude_code(tmp_path):
-    assert not claude_ssh.install(tmp_path / ".claude")
-    assert not (tmp_path / ".claude").exists()
+def test_a_missing_claude_dir_is_created_private(tmp_path):
+    # The user asked for the entry; Claude Code reads it once it starts.
+    claude_ssh.install(tmp_path / ".claude")
+    assert claude_ssh.installed(tmp_path / ".claude")
+    assert (tmp_path / ".claude").stat().st_mode & 0o777 == 0o700
 
 
 @pytest.mark.parametrize("text", ["{not json", "[]", '{"sshConfigs": {}}'])

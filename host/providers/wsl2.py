@@ -461,6 +461,12 @@ class Wsl2Provider:
         """None: the distro runs no sshd, so there is no host to name."""
         return None
 
+    # None yet: the agents reach the distro through WSL itself.
+    agent_connections: tuple[str, ...] = ()
+
+    def connect_agent(self, agent_id: str) -> str:
+        raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
+
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs
         turned on is `remediable` above, not a download."""

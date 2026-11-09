@@ -38,6 +38,14 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
+Connecting a coding agent is a round trip through that link. `enter_console` adds
+`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for);
+the console's guide then sends the window to `<local>#connect=<id>&back=<guide path>`. The local
+`agent-connect` screen asks first, `connect_agent` does the work, and `enter_console(back)` reopens
+the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/<id>`). Both values come
+from a VM-served page: checked in `view.py`, never acted on without the user's click. A new
+connectable agent needs a `data-when="<id>"` section in the `agent-connect` template.
+
 ## Things that will bite you
 
 - **The title bar is recoloured by `DesktopPlatform.style_title_bar` on `events.before_show`.** DWM

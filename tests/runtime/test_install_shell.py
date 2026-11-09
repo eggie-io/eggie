@@ -16,6 +16,7 @@ INSTALL = ROOT / "runtime" / "install" / "install.sh"
 # constant that no longer exists.
 STACK = f"{constants.GUEST_ROOT}/stack.yml"
 STACK_YML = ROOT / "runtime" / "stack.yml"
+TRANSFERS = f"{constants.GUEST_ROOT}/transfers"
 
 
 def test_install_is_valid_bash():
@@ -113,6 +114,15 @@ def test_install_always_pulls_before_bringing_the_stack_up():
     assert _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull") < _index_of(" up -d")
 
 
+def test_only_an_explicit_switch_skips_the_pull():
+    # scripts/dev.sh builds the images in the VM under a tag ghcr lacks, so its
+    # install must not pull; every other install still must.
+    commands = _commands()
+    switch = _index_of('if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then')
+    assert "else" in commands[switch + 2]
+    assert switch < _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull")
+
+
 def test_the_stack_comes_up_without_the_tunnel_profile():
     # The API starts the tunnel client only while a public URL is on.
     ups = [l for l in _commands() if f"compose -f {STACK}" in l and " up -d" in l]
@@ -133,6 +143,8 @@ def test_install_makes_opt_eggie_writable_before_the_api_starts():
     assert _index_of("g+s") < up, \
         "setgid, or project directories the API creates lose the group"
     assert _index_of("mkdir -p " + constants.GUEST_PROJECTS) < _index_of("chgrp")
+    assert TRANSFERS in _commands()[_index_of("mkdir -p " + constants.GUEST_PROJECTS)], \
+        "transfers/ needs the group and setgid before the API makes in/ under it"
 
 
 def test_install_guards_acl_on_the_package_before_using_setfacl():
@@ -146,6 +158,8 @@ def test_projects_get_a_default_group_acl_after_the_sweep_and_before_the_api():
     # umask for new entries, every folder it creates comes out 2755.
     default = _index_of("setfacl -d -m g::rwx")
     assert "-type d" in _commands()[default], "only directories take a default ACL"
+    # An import builds the tree in transfers/ and renames it into projects/.
+    assert {constants.GUEST_PROJECTS, TRANSFERS} <= set(_commands()[default].split())
     assert _index_of("g+rwX") < default < _index_of(" up -d")
 
 
@@ -160,6 +174,7 @@ def test_each_login_account_gets_access_by_uid_not_only_by_group():
     assert all(loop < i < _index_of("done < <(accounts)")
                for i in (recursive, default, token))
     assert "-type d" in commands[default]
+    assert {constants.GUEST_PROJECTS, TRANSFERS} <= set(commands[default].split())
     # After the last chmod of the token: chmod rewrites the ACL mask.
     assert _index_of(f"chmod 640 {constants.GUEST_TOKEN}") < token
 
@@ -527,6 +542,15 @@ def test_only_a_site_install_enables_the_metadata_guard():
     assert "systemctl enable --now eggie-metadata-guard.service" in block
     assert block.index("if (( SITE ))") < block.index("eggie-metadata-guard")
     assert text.count("eggie-metadata-guard") == block.count("eggie-metadata-guard")
+
+
+def test_every_install_enables_the_reaper_and_keeps_its_settings():
+    # Local VMs pile up Desktop sessions too, so it is not a site-only step; a
+    # rewritten env file would undo IDLE_MIN/DRY set by hand on a machine.
+    text = INSTALL.read_text()
+    (block,) = re.findall(r"# 11d\..*?enable --now eggie-claude-reaper\.timer\n", text, re.S)
+    assert "SITE" not in block
+    assert "if [[ ! -f /opt/eggie/claude-reaper.env ]]" in block
 
 
 def test_the_wsl_account_exists_before_accounts_are_provisioned():

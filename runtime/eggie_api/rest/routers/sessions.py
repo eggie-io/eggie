@@ -29,13 +29,14 @@ def build(s: Services) -> APIRouter:
 
     @router.post("/api/session")
     def start_session(body: Handoff, response: Response) -> dict:
-        session_id = s.site.redeem(body.code)
-        if session_id is None:
+        signed_in = s.site.redeem(body.code)
+        if signed_in is None:
             raise Unauthorized("handoff_invalid", "that sign-in link has already "
                             "been used or has run out; open Eggie again from "
                             "where you started")
+        session_id, return_path = signed_in
         response.set_cookie(COOKIE, session_id, **cookie_options(s.config))
-        return {"signed_in": True}
+        return {"signed_in": True, "return_path": return_path}
 
     @router.get("/api/session")
     def read_session() -> dict:

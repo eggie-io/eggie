@@ -3,7 +3,7 @@ from tests.runtime.api.conftest import COMPOSE_MALFORMED, _create, _write_compos
 
 
 def _up_dirs(env):
-    return [a[3] for a in env.runner.calls if a[-2:] == ["up", "-d"]]
+    return [a[3] for a in env.runner.calls if a[-3:] == ["up", "-d", "--force-recreate"]]
 
 
 def _resume_and_wait(env):

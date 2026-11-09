@@ -160,10 +160,36 @@ the boot sequence already fetches. Until it answers, a page on `localhost` assum
 and any other address assumes nothing. On a site: a signed-out console goes
 straight to the web app page above, with no screen to click through. After a code the server
 refused it does not redirect again (that would loop) and shows a **Sign in** button instead,
-with Try again beside it. The public URL control is absent; the agents card shows the
-server's SSH host and port 22 with no key file; the account menu has no sign-out; and a server
+with Try again beside it. The public URL control is absent; the agents screen shows the
+cloud guide: the login and host come from the service's `GET /v1/instances` (falling back to what
+install recorded), port 22, and the key as "the one you downloaded" since only the user has it; the account menu has no sign-out; and a server
 whose account the service revoked gets a terminal "set it up again from the web app" screen,
 with a link to the web app's kitchens list, instead of a sign-in button that cannot work.
+
+## Pushing a project here
+
+The local console's Push uploads a project to a kitchen; the kitchen side is `/api/transfers`,
+mounted on a site only.
+
+- `POST /api/transfers` (headers `Eggie-Transfer-Ticket`, `-Size`, `-Replace: none|all`) redeems
+  the ticket, resolves the project from the grant, refuses `none` for a project it already has,
+  checks disk, and answers 201 `{push_id, token}`. An import replaces all the project's files and
+  every volume in the bundle. An opened push with no upload
+  in 10 minutes is dropped; a new open replaces it.
+- `PUT /api/transfers/{push_id}/bundle` and `GET /api/transfers/{push_id}` take `Eggie-Transfer-Token`.
+- Errors: `transfer_ticket_invalid`, `instance_busy` (429 past 10 opens a minute from one address
+  or 60 in all; 409 while the project is busy), `already_on_instance`, `instance_disk_full` (507),
+  `bad_bundle`, `not_ready`, `cloud_unavailable`.
+- `GET /api/ready` (open) answers 200 `{"ready": true}` when signed in and Docker answers, else 503
+  `not_ready`. The service probes it before marking a kitchen running, so a release with it also
+  serves `/api/transfers`.
+- The redeem answer may carry `return_path`; `POST /api/session` returns it (validated) and the
+  console lands on that page after sign-in.
+- Pushed projects (`pushed_projects`) are skipped by the kitchen's registry sync: never registered
+  or deleted there. On the sending side a locally deleted pushed project is forgotten, not deleted
+  on the service.
+- The service calls it uses: `POST /v1/transfers/tickets/redeem` and `.../complete` on the kitchen;
+  `GET /v1/transfers/targets` and `POST /v1/transfers/tickets` on the sender.
 
 ## Security
 
@@ -278,6 +304,21 @@ request: {"code": "k3x9m2p7qa…"}
 single-use, short-lived (a minute is plenty), bound to one server, and consumed on redemption
 even if the server then fails to set a cookie. Codes the service mints never start with `lh_`.
 
+### `PUT /v1/instances/me/projects`
+
+```json
+request: {"projects": [{"ref": "shop", "name": "shop", "public_url": "https://shop.foo.eggie.space"},
+                       {"ref": "blog", "name": "blog", "public_url": null}]}
+204
+```
+
+The kitchen's full project list, so the web app can show it (contract:
+`eggie-web/docs/superpowers/specs/2026-11-04-instance-projects-contract.md`). `ref` and `name` are
+the project id; `public_url` is the primary web address while the project runs, `null` otherwise.
+Sent from the sync loop when the list changes (a start or stop wakes it) and every 10 minutes;
+5xx, 429, a 401 that survives a refresh or no answer back off (up to 5 min); any other 4xx is not
+resent until the list changes.
+
 ### Lifecycle
 
 - Renew the certificate at least 30 days before `not_after`.
@@ -297,5 +338,5 @@ even if the server then fails to set a cookie. Codes the service mints never sta
 - Until the refresh grace window exists on the service, a stranded server is re-provisioned.
 - User-attached custom domains, Cloudflare proxying and forward-auth in front of projects are out
   of scope for this version.
-- The live gates for a site are `release-testing.md` S1–S12; the branch that built site mode had
+- The live gates for a site are `release-testing.md` S1–S12 and S13–S18 (push); the branch that built site mode had
   not run on a real droplet when this was written.

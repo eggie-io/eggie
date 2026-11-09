@@ -286,7 +286,7 @@ def _bootstrap_and_restarts(monkeypatch, provider, tmp_path):
 
 def test_a_vm_created_by_this_run_restarts_once_after_its_first_bootstrap(
         tmp_path, monkeypatch):
-    # The runtime's boot settings (on WSL: no Windows drive, no interop)
+    # The runtime's boot settings (on WSL: no Windows drive, no Windows PATH)
     # would otherwise wait for a reboot the user may not do for weeks.
     calls = _bootstrap_and_restarts(monkeypatch, FakeProvider(exists=False), tmp_path)
     assert calls == ["bootstrap", "restart"]
@@ -332,7 +332,7 @@ def test_the_restart_waits_for_the_api_past_a_cold_boot():
 
 def test_a_restart_a_failed_setup_still_owed_happens_on_the_re_run(tmp_path, monkeypatch):
     # The re-run finds the VM existing, but its boot settings never applied:
-    # without the restart, /mnt/c and interop stay on with nothing saying so.
+    # without the restart, /mnt/c stays mounted with nothing saying so.
     import host.core.install as install
     calls = []
     monkeypatch.setattr(install, "_bootstrap", lambda p, **kw: calls.append("bootstrap"))

@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { COPY_REFUSED, useCopy } from "../useCopy";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { Icon } from "./Icon";
 import s from "./PromptCard.module.css";
-
-const COPIED_MS = 2600;
 
 export function PromptCard({
   prompt,
@@ -17,33 +16,7 @@ export function PromptCard({
   hint?: ReactNode;
   aside?: ReactNode;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [refused, setRefused] = useState(false);
-  const body = useRef<HTMLPreElement>(null);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), COPIED_MS);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setCopied(true);
-      setRefused(false);
-    } catch {
-      // Clipboard access can be refused; leave the prompt selected for Ctrl+C.
-      setRefused(true);
-      const node = body.current;
-      const selection = window.getSelection();
-      if (!node || !selection) return;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }
+  const { copied, refused, copy, target } = useCopy<HTMLPreElement>(prompt);
 
   return (
     <Card as="section" className={s.card}>
@@ -52,7 +25,7 @@ export function PromptCard({
         {aside && <span className={s.aside}>{aside}</span>}
       </header>
       <div className={s.body}>
-        <pre ref={body} className={s.prompt}>{prompt}</pre>
+        <pre ref={target} className={s.prompt}>{prompt}</pre>
         <div className={s.row}>
           {copied ? (
             <span className={s.copied} role="status"><Icon name="check-circle" />Copied. It's yours.</span>
@@ -60,7 +33,7 @@ export function PromptCard({
             <Button variant="primary" icon="copy" onClick={copy}>Copy the prompt</Button>
           )}
           <span className={s.hint} role={refused ? "alert" : undefined}>
-            {refused ? "Couldn't copy — the text is selected, press Ctrl+C (⌘C on a Mac)." : hint}
+            {refused ? COPY_REFUSED : hint}
           </span>
         </div>
       </div>

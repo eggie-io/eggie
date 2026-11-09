@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card, Icon, Notice } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
 import { subtitle } from "../../projects/format";
 import { ONE, useProjects } from "../../projects/queries";
 import type { DeleteResult } from "../../projects/types";
@@ -34,6 +35,7 @@ export function ProjectList() {
   const [folder, setFolder] = useState(false);
   const deleted = (useLocation().state as { deleted?: DeleteResult } | null)?.deleted;
   const { connectedAgent } = useOnboarding();
+  const agent = useCurrentAgent({ poll: false });
   const modal = <NewProjectModal open={creating} onClose={() => setCreating(false)} />;
 
   // The single-project cache for a deleted project is dropped only once the
@@ -62,6 +64,7 @@ export function ProjectList() {
       );
     } else {
       const cooking = projects.filter((project) => projectView(project).kind === "running").length;
+      const waiting = projects.filter((project) => ["waiting", "setup"].includes(projectView(project).kind)).length;
       body = (
         <>
           {deleted && <DeletedNotice result={deleted} />}
@@ -69,7 +72,7 @@ export function ProjectList() {
           <header className={s.head}>
             <div className={s.heading}>
               <h1 className={s.title}>Your projects</h1>
-              <p className={s.sub}>{subtitle(projects.length, cooking)}</p>
+              <p className={s.sub}>{subtitle(projects.length, cooking, waiting, agent.name)}</p>
             </div>
             <div className={s.headActions}>
               <Button icon="folder" onClick={() => setFolder(true)}>From a folder</Button>

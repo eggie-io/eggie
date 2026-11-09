@@ -2,16 +2,18 @@ import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "rea
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Choice, Icon, Modal, Notice, ProgressBar, cx } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
 import { api } from "../../api/client";
 import { createImportApi } from "../../imports/importApi";
 import { fromDrop, fromFileList } from "../../imports/pick";
-import { planImport, type ImportPlan, type Picked } from "../../imports/plan";
+import { hasCompose, planImport, type ImportPlan, type Picked } from "../../imports/plan";
 import { runImport, type Mode, type Progress } from "../../imports/send";
 import { tarBlob } from "../../imports/tar";
 import { size } from "../../projects/format";
 import { fits } from "../../uploads/queue";
 import type { Disk } from "../../uploads/uploadApi";
 import s from "./ProjectList.module.css";
+import { WhatNext } from "./WhatNext";
 
 type Step =
   | { kind: "pick"; problem: string | null }
@@ -32,6 +34,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
   const picker = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const client = useQueryClient();
+  const agent = useCurrentAgent({ poll: false });
 
   // Bumped whenever a pick is abandoned, so a folder the browser or the
   // planner finishes with afterwards doesn't reappear in a fresh dialog.
@@ -114,6 +117,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
 
   async function bringIn(plan: ImportPlan, mode: Mode) {
     setStep({ kind: "working", plan, progress: { sent: 0, total: 0 } });
+    let created = false;
     try {
       const disk = await api.get<Disk>("/api/disk");
       // The API keeps the uploaded archive on disk until it has unpacked it.
@@ -127,7 +131,7 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
         });
         return;
       }
-      await runImport(importApi, {
+      created = await runImport(importApi, {
         id: plan.id,
         mode,
         archive: tarBlob(plan.entries),
@@ -136,6 +140,14 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
     } catch (error) {
       setStep({ kind: "failed", plan, mode, message: error instanceof Error ? error.message : "Something went wrong." });
       return;
+    }
+    if (created && hasCompose(plan)) {
+      // Merging into an existing project does not start it. Whatever fails here (a start already under way included) shows on the project page.
+      try {
+        await importApi.up(plan.id);
+      } catch {
+        // navigate anyway
+      }
     }
     await client.invalidateQueries({ queryKey: ["projects"] });
     setStep(PICK);
@@ -168,6 +180,11 @@ export function ImportFolderModal({ open, onClose, existing }: { open: boolean; 
             </Button>
           </div>
           <p>The original stays exactly where it is. Repositories, dependency trees and caches are left out — your coding agent puts them back.</p>
+          <WhatNext
+            agent={agent.name}
+            first="Copies the folder into Eggie"
+            middle="Sets it up to run in Eggie. Most projects need this once, so it's not a sign anything's broken."
+          />
           {step.problem && <Notice tone="warning">{step.problem}</Notice>}
         </>
       );

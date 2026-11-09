@@ -22,6 +22,10 @@ def build(s: Services) -> APIRouter:
     def project_restart(project_id: str) -> dict:
         return {"job_id": s.lifecycle.start(project_id, stop_first=True)}
 
+    @router.post("/projects/{project_id}/start-when-ready", status_code=202)
+    def project_start_when_ready(project_id: str) -> dict:
+        return s.lifecycle.start_when_ready(project_id)
+
     @router.post("/projects/{project_id}/down", status_code=202)
     def project_down(project_id: str) -> dict:
         return {"job_id": s.lifecycle.stop(project_id)}

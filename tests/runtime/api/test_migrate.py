@@ -145,3 +145,17 @@ def test_v6_adds_the_secrets_table_and_change_stamp(tmp_path):
     migrate.migrate(conn)
     assert {"secrets", "secret_requests"} <= tables(conn)
     assert "secrets_changed_at" in columns(conn, "projects")
+
+
+def test_a_v7_database_migrates_to_v8_with_start_when_ready_off(tmp_path):
+    conn = connect(tmp_path)
+    conn.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+    for step in migrate.MIGRATIONS[:7]:
+        step(conn)
+    conn.execute("INSERT INTO schema_version(version) VALUES (7)")
+    conn.execute("INSERT INTO projects(id, guest_path, domain) VALUES ('p','/g','d')")
+    conn.commit()
+    assert migrate.migrate(conn) == 8
+    assert {"instance_pushes", "pushed_projects"} <= tables(conn)
+    assert "unused_at" in columns(conn, "secrets")
+    assert conn.execute("SELECT start_when_ready FROM projects").fetchone()[0] == 0

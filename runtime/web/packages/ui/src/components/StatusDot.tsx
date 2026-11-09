@@ -2,13 +2,15 @@ import type { ReactNode } from "react";
 import { cx } from "../cx";
 import s from "./StatusDot.module.css";
 
-export type DotStatus = "running" | "starting" | "stopped" | "failed";
+export type DotStatus = "running" | "starting" | "stopped" | "failed" | "waiting" | "degraded";
 
 const WORD: Record<DotStatus, string> = {
   running: "Running",
   starting: "Starting",
   stopped: "Stopped",
   failed: "Failed",
+  waiting: "Waiting",
+  degraded: "Needs attention",
 };
 
 export function StatusDot({ status, label }: { status: DotStatus; label?: ReactNode }) {

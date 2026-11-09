@@ -1,11 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, Modal, Notice } from "@eggie/ui";
 import { openExternal } from "../../desktop/desktop";
 import { DEVICE_URL, useConnectGitHub, useGitHub, useReapplyGitHub } from "../../github/github";
 import { githubView } from "../../github/view";
 import { useJob } from "../../projects/queries";
 import { useNow } from "../../projects/useNow";
-import { Cloning, RepoPicker, type Started } from "./RepoPicker";
+import { Cloning, RepoPicker, useRepoPick, type Started } from "./RepoPicker";
 import s from "./GitHubModal.module.css";
 
 export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -15,6 +15,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
   // Held here rather than in RepoPicker so a failed clone's "Pick another" can sit in the footer.
   const [started, setStarted] = useState<Started | null>(null);
   const job = useJob(started?.job_id ?? null).data;
+  const pick = useRepoPick(setStarted);
 
   // Opened inside the click so no popup blocker trips; the URL never varies.
   const start = () => {
@@ -25,6 +26,11 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
   const view = status.data ? githubView(status.data) : null;
   // A clone is forgotten with the dialog or the connection it ran under.
   if (started && (!open || view?.kind !== "ready")) setStarted(null);
+  const picking = open && view?.kind === "ready";
+  useEffect(() => {
+    if (!picking) pick.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picking]);
 
   let body: ReactNode;
   let footer: ReactNode;
@@ -59,7 +65,15 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
           body = <Cloning key={started.job_id} id={started.id} job={job} onDone={onClose} />;
           if (job?.state === "failed") footer = <Button onClick={() => setStarted(null)}>Pick another</Button>;
         } else {
-          body = <RepoPicker login={view.login} onDone={onClose} onStarted={setStarted} />;
+          body = <RepoPicker login={view.login} pick={pick} onDone={onClose} />;
+          footer = (
+            <>
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" icon="download" disabled={!pick.selected || pick.clone.isPending} {...pick.bringIn}>
+                Bring it in
+              </Button>
+            </>
+          );
         }
         break;
       case "setupFailed":
@@ -79,7 +93,7 @@ export function GitHubModal({ open, onClose }: { open: boolean; onClose: () => v
   // the account menu), an always-rendered RepoPicker would poll GitHub and
   // keep its clone state alive even with the dialog closed.
   return (
-    <Modal open={open} onClose={onClose} title="GitHub" footer={open ? footer : undefined}>
+    <Modal open={open} onClose={onClose} title="Bring in from GitHub" footer={open ? footer : undefined}>
       <div className={s.body}>{open && body}</div>
     </Modal>
   );

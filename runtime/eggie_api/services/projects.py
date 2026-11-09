@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
@@ -10,12 +11,14 @@ import yaml
 
 from .. import constants
 from ..config import ApiConfig
-from ..domain.project import _slug
+from ..domain.project import FAILED_TO_START, _slug
 from ..errors import Conflict, EggieError, Invalid, NotFound
 from ..infra import docker, files
+from ..infra.github import origin_repo
 from ..infra.health import answers
 from ..infra.reconcile import discover, examine
 from ..infra.repos.projects import ProjectRepo
+from ..infra.repos.pushed_projects import PushedProjectRepo
 from .jobs import JobRegistry
 from .loader import ProjectLoader
 from .locks import ProjectLocks
@@ -30,7 +33,8 @@ class ProjectService:
     def __init__(self, config: ApiConfig, runner, loader: ProjectLoader,
                  projects: ProjectRepo, secrets: SecretService, jobs: JobRegistry,
                  locks: ProjectLocks, uploads: UploadService, public: Public,
-                 http_probe, wake: Callable[[], None]):
+                 http_probe, wake: Callable[[], None],
+                 push_summary: Callable[[str], dict], pushed_projects: PushedProjectRepo):
         self._config = config
         self._runner = runner
         self._loader = loader
@@ -42,6 +46,8 @@ class ProjectService:
         self._public = public
         self._probe = http_probe
         self._wake = wake
+        self._push_summary = push_summary
+        self._pushed_projects = pushed_projects
 
     def payload(self, row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -69,12 +75,18 @@ class ProjectService:
                        "message": row["problem_message"]}
             # One request with a short timeout, never the readiness window:
             # this runs inside a read the CLI is waiting on.
-            if recheck and project is not None and answers(
-                    project, row["domain"], edge_port=self._config.edge_port,
-                    traefik_host=self._config.traefik_host, http_probe=self._probe):
+            # A refused start can leave old containers answering; only a good
+            # start may clear Docker's message.
+            if (recheck and project is not None
+                    and row["problem_code"] != FAILED_TO_START
+                    and answers(project, row["domain"], edge_port=self._config.edge_port,
+                                traefik_host=self._config.traefik_host, http_probe=self._probe)):
                 # An entrypoint slower than the readiness window stores a
                 # diagnosis that is true for a minute and false forever after.
                 self._projects.set_problem(row["id"])
+                now = time.time()
+                self._projects.mark_ran_ok(row["id"], now)
+                row = {**row, "ran_ok_at": row["ran_ok_at"] or now}
                 problem = None
         active = self._jobs.active_for(row["id"])
         try:
@@ -89,14 +101,20 @@ class ProjectService:
                 "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
                 "web": web,
                 "public": public_status,
+                "push": self._push_summary(row["id"]),
+                "origin": row["origin"],
+                "ran_ok": row["ran_ok_at"] is not None,
+                "repo": origin_repo(folder) if row["origin"] == "github" else None,
                 "first_run": row.get("last_started_at") is None,
                 "restart_needed": self._secrets.restart_needed(row),
                 "secrets_requested": self._secrets.requested_count(row["id"]),
+                "start_when_ready": bool(row["start_when_ready"]),
                 "job": None if active is None else {
                     "id": active.id, "kind": active.kind,
                     "phase": active.phase, "started_at": active.started_at}}
 
-    def create(self, id: str, web: list[dict] | None, domain: str | None) -> dict:
+    def create(self, id: str, web: list[dict] | None, domain: str | None,
+               origin: str = "new") -> dict:
         # Same slug rule load_project applies to a directory name, so an id
         # survives the round trip host -> API -> compose project name.
         project_id = _slug(id)
@@ -113,7 +131,8 @@ class ProjectService:
             (d / ".eggie").mkdir(exist_ok=True)
             (d / ".eggie" / "project.yml").write_text(yaml.safe_dump(
                 {"id": project_id, "web": web}, sort_keys=False))
-        self._projects.add(project_id, str(d), domain or self._config.domain)
+        self._projects.add(project_id, str(d), domain or self._config.domain,
+                           origin=origin)
         self._wake()
         return self.payload(self._projects.get(project_id))
 
@@ -129,7 +148,8 @@ class ProjectService:
         if not found.adoptable:
             raise Conflict("not_adoptable",
                            f"'{project_id}' cannot be adopted: {found.reason}")
-        self._projects.add(project_id, str(folder), self._config.domain)
+        self._projects.add(project_id, str(folder), self._config.domain,
+                           origin="folder")
         self._wake()
         return self.payload(self._projects.get(project_id))
 
@@ -178,6 +198,7 @@ class ProjectService:
                     if not removed.ok and result.ok:
                         result = removed
             self._projects.remove(project_id)
+            self._pushed_projects.remove(project_id)
             self._wake()
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}

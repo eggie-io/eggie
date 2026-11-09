@@ -8,7 +8,7 @@ export type SignedOutReason = "not_signed_in" | "session_expired" | "handoff_spe
 // the usual VM. Results that never reached the health answer leave it unset.
 // webApp is the Eggie web app address from the same answer, same rules.
 export type BootResult = { site?: string | null; webApp?: string | null } & (
-  | { kind: "signedIn" }
+  | { kind: "signedIn"; landing: string | null }
   | { kind: "needsAccount" }
   | { kind: "signedOut"; reason: SignedOutReason }
   | { kind: "needsUpdate"; apiVersion: number | null }
@@ -24,10 +24,16 @@ function isWrongHost(error: unknown): boolean {
   );
 }
 
-async function checkAccount(api: Api): Promise<BootResult> {
+// Only a same-origin path may become the address bar: not "//host", not "/\\host".
+export function landingPath(value: unknown): string | null {
+  if (typeof value !== "string" || !value.startsWith("/")) return null;
+  return value[1] === "/" || value[1] === "\\" ? null : value;
+}
+
+async function checkAccount(api: Api, landing: string | null): Promise<BootResult> {
   try {
     const account = await api.get<Account>("/api/account");
-    return account?.state === "signed_in" ? { kind: "signedIn" } : { kind: "needsAccount" };
+    return account?.state === "signed_in" ? { kind: "signedIn", landing } : { kind: "needsAccount" };
   } catch (error) {
     if (isSessionLost(error)) return { kind: "signedOut", reason: error.code };
     return isWrongHost(error) ? { kind: "wrongHost" } : { kind: "notAnswering" };
@@ -77,8 +83,8 @@ async function signIn(api: Api, healthApi: unknown, handoff: string | null): Pro
   let spent = false;
   if (handoff !== null) {
     try {
-      await api.post("/api/session", { code: handoff });
-      return checkAccount(api);
+      const started = await api.post<{ return_path?: unknown }>("/api/session", { code: handoff });
+      return checkAccount(api, landingPath(started?.return_path));
     } catch (error) {
       if (isWrongHost(error)) return { kind: "wrongHost" };
       if (!(error instanceof ApiError && error.code === "handoff_invalid")) {
@@ -91,7 +97,7 @@ async function signIn(api: Api, healthApi: unknown, handoff: string | null): Pro
 
   try {
     await api.get("/api/session");
-    return checkAccount(api);
+    return checkAccount(api, null);
   } catch (error) {
     if (isSessionLost(error)) {
       return { kind: "signedOut", reason: spent ? "handoff_spent" : error.code };

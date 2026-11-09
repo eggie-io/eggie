@@ -47,7 +47,8 @@ def print_project(env: Env, project: dict) -> None:
     for url in urls[1:]:
         print(f"    {url}", file=env.out)
     if project.get("problem"):
-        print(f"    problem: {project['problem']['message']}", file=env.out)
+        message = project["problem"]["message"].replace("\n", "\n    ")
+        print(f"    problem: {message}", file=env.out)
 
 
 def cmd_up(env: Env, directory: str | None) -> None:

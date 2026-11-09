@@ -17,6 +17,35 @@ export function phaseCaption(phase: string, firstRun: boolean): string {
   }
 }
 
+// Local phases, then the instance's own (mirrored while waiting); both sides have a "stopping".
+export function pushPhaseCaption(phase: string): string {
+  switch (phase) {
+    case "preparing":
+      return "Getting ready";
+    case "stopping":
+      return "Stopping the project";
+    case "packing":
+      return "Packing it up";
+    case "starting":
+      return "Starting it again on this computer";
+    case "sending":
+    case "receiving":
+      return "Sending it to the kitchen";
+    case "waiting":
+      return "Waiting for the kitchen";
+    case "unpacking":
+      return "Unpacking on the kitchen";
+    case "replacing":
+      return "Swapping in the new copy";
+    case "restoring data":
+      return "Restoring the data";
+    case "completing":
+      return "Finishing up";
+    default:
+      return "Working on it";
+  }
+}
+
 export const CAUSE_COPY: Record<Cause, { heading: (id: string) => string; short: string; body: string }> = {
   bound_to_loopback: {
     heading: (id) => `${id} started, but it isn't answering`,

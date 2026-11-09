@@ -1,9 +1,11 @@
 import { useId, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { Button, Modal, TextField } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
 import { ApiError } from "../../api/client";
 import { useCreateProject } from "../../projects/queries";
 import { slugify } from "../../projects/slugify";
+import { WhatNext } from "./WhatNext";
 
 export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
@@ -11,6 +13,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
   const navigate = useNavigate();
   const slug = slugify(name);
   const formId = useId();
+  const agent = useCurrentAgent({ poll: false });
 
   const close = () => {
     setName("");
@@ -39,11 +42,13 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     <Modal
       open={open}
       onClose={close}
-      title="Name your project"
+      title="New project"
       footer={
         <>
-          <Button variant="ghost" onClick={close}>Keep it for later</Button>
-          <Button type="submit" form={formId} variant="primary" disabled={!slug || create.isPending}>Make it</Button>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button type="submit" form={formId} variant="primary" iconRight="chevron-right" disabled={!slug || create.isPending}>
+            Make the folder
+          </Button>
         </>
       }
     >
@@ -56,10 +61,15 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
             setName(value);
             if (create.isError) create.reset();
           }}
-          hint={slug ? <>It'll be called <strong>{slug}</strong></> : undefined}
+          hint={slug ? <>Folder: <strong>~/projects/{slug}</strong></> : undefined}
           error={error}
         />
       </form>
+      <WhatNext
+        agent={agent.name}
+        first="Makes an empty folder for it"
+        middle="Builds it. You start it with one prompt we write for you."
+      />
     </Modal>
   );
 }

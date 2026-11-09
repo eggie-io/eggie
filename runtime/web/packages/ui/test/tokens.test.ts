@@ -37,4 +37,19 @@ describe("design tokens", () => {
     }
     expect([...new Set(offences)]).toEqual([]);
   });
+
+  // The kit gallery's forced-dark wrapper must show what the OS dark setting shows.
+  it("the OS dark block and the .om-theme-dark wrapper declare the same values", () => {
+    const css = readFileSync(TOKENS, "utf8");
+    const values = (marker: string) => {
+      const start = css.indexOf(marker);
+      expect(start).toBeGreaterThan(-1);
+      const body = css.slice(start, css.indexOf("}", start));
+      return Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+    };
+    const os = values("@media (prefers-color-scheme: dark)");
+    const forced = values(".om-theme-dark {");
+    expect(os["--page"]).toBe("#15142a");
+    expect(forced).toEqual(os);
+  });
 });

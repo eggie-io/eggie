@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { loadCatalog, platformFor, type Connect } from "./catalog";
+import { currentAgent } from "./current";
 import type { AgentStatuses } from "./status";
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -23,14 +24,22 @@ export const POLL_MS = 3000;
 
 // Polls while the screen is mounted; with `watch` it stops once that agent is
 // connected. Errors don't stop it, so a briefly unreachable API recovers.
-export function useAgentStatus(watch?: string) {
+export function useAgentStatus(watch?: string, poll = true) {
   return useQuery({
     queryKey: ["agent-status"],
     queryFn: () => api.get<AgentStatuses>("/api/agents/status"),
     retry: 1,
     refetchInterval: (query) =>
-      watch && query.state.data?.agents[watch]?.connected ? false : POLL_MS,
+      !poll || (watch && query.state.data?.agents[watch]?.connected) ? false : POLL_MS,
   });
+}
+
+// `poll: false` reads the shared status without keeping it refreshing, for
+// screens that only label things with the agent's name.
+export function useCurrentAgent({ poll = true }: { poll?: boolean } = {}) {
+  const { agents } = useAgents();
+  const status = useAgentStatus(undefined, poll);
+  return currentAgent(agents, status.data);
 }
 
 export function useEnsureSetup() {

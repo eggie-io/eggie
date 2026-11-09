@@ -90,6 +90,8 @@ class MacTray:
             self._item.button().setTitle_("Eggie")
             return
         image.setSize_((18, 18))
+        # A template image is tinted by macOS to match the menu bar.
+        image.setTemplate_(True)
         self._item.button().setImage_(image)
 
     def _retarget_cmd_q(self) -> None:

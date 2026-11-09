@@ -245,8 +245,8 @@ def test_the_tray_menu_carries_open_settings_and_quit(tmp_path):
     desktop = FakeDesktop()
     _, _, window = _run(tmp_path, FakeProvider(), desktop)
     kwargs, _tray = desktop.tray_made
-    assert set(kwargs) == {"icon", "on_open", "on_settings", "on_quit"}
-    assert kwargs["icon"].is_file()
+    assert set(kwargs) == {"icons", "on_open", "on_settings", "on_quit"}
+    assert kwargs["icons"].on_light.is_file() and kwargs["icons"].on_dark.is_file()
     kwargs["on_settings"]()
     assert window.evaluated[-1] == 'window.eggie.route("settings")'
     kwargs["on_quit"]()

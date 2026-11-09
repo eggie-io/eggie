@@ -5,6 +5,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Callable
 
 # A proxy's own error page, not the service: the service always answers with
 # its JSON error body.
@@ -12,8 +13,10 @@ _GATEWAY = {502, 503, 504}
 
 
 class CloudError(Exception):
-    def __init__(self, code: str, message: str, status: int):
+    def __init__(self, code: str, message: str, status: int,
+                 retry_after: int | None = None):
         super().__init__(f"{code}: {message}")
+        self.retry_after = retry_after
         self.code = code
         self.message = message
         self.status = status
@@ -23,10 +26,20 @@ class CloudUnavailable(Exception):
     pass
 
 
-def _error_from(status: int, raw: bytes) -> Exception:
+def _retry_after(headers) -> int | None:
+    value = headers.get("Retry-After") if headers else None
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        # The HTTP-date form is not used by the service.
+        return None
+
+
+def _error_from(status: int, raw: bytes, headers=None) -> Exception:
     try:
         error = json.loads(raw)["error"]
-        return CloudError(str(error["code"]), str(error["message"]), status)
+        return CloudError(str(error["code"]), str(error["message"]), status,
+                          _retry_after(headers))
     except (ValueError, KeyError, TypeError):
         if status in _GATEWAY:
             return CloudUnavailable(f"the Eggie service answered {status}")
@@ -35,15 +48,18 @@ def _error_from(status: int, raw: bytes) -> Exception:
 
 
 class Cloud:
-    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0):
+    def __init__(self, base_url: str, *, opener=None, timeout: float = 10.0,
+                 user_agent: Callable[[], str] = lambda: "Eggie"):
         self._base = base_url.rstrip("/")
+        self._user_agent = user_agent
         self._open = opener or urllib.request.urlopen
         self._timeout = timeout
 
     def call(self, method: str, path: str, *, body: dict | None = None,
              token: str | None = None):
         data = None if body is None else json.dumps(body).encode()
-        headers = {"Accept": "application/json"}
+        # urllib's default names Python, which the service shows on device sign-in.
+        headers = {"Accept": "application/json", "User-Agent": self._user_agent()}
         if data is not None:
             headers["Content-Type"] = "application/json"
         if token:
@@ -55,7 +71,7 @@ class Cloud:
                 status = response.status
                 raw = response.read()
         except urllib.error.HTTPError as e:
-            raise _error_from(e.code, e.read()) from None
+            raise _error_from(e.code, e.read(), e.headers) from None
         except (OSError, http.client.HTTPException) as e:
             # A truncated body (e.g. IncompleteRead) is not an OSError, but
             # it means the same thing here: the service did not answer.
@@ -112,8 +128,13 @@ class Cloud:
         return self.call("DELETE", self._public_url_path(cloud_id), token=token)
 
     def list_instances(self, token: str):
-        """Every kitchen on the account, whichever device made it."""
+        """Every instance on the account, whichever device made it."""
         return self.call("GET", "/v1/instances", token=token)
+
+    def report_instance_projects(self, token: str, projects: list[dict]) -> None:
+        """Replaces the kitchen's whole project list on the service."""
+        self.call("PUT", "/v1/instances/me/projects", token=token,
+                  body={"projects": projects})
 
     def instance_certificate(self, token: str):
         """The site's certificate, issued and renewed by the service."""
@@ -124,3 +145,19 @@ class Cloud:
         instance's owner; the service consumes it either way."""
         return self.call("POST", "/v1/instances/handoff/redeem", token=token,
                          body={"code": code})
+
+    def transfer_targets(self, token: str):
+        return self.call("GET", "/v1/transfers/targets", token=token)
+
+    def mint_transfer_ticket(self, token: str, instance_id: str, project_id: str):
+        return self.call("POST", "/v1/transfers/tickets", token=token,
+                         body={"instance_id": instance_id, "project_id": project_id})
+
+    def redeem_transfer_ticket(self, token: str, ticket: str):
+        return self.call("POST", "/v1/transfers/tickets/redeem", token=token,
+                         body={"ticket": ticket})
+
+    def complete_transfer(self, token: str, ticket_id: str) -> None:
+        self.call("POST",
+                  f"/v1/transfers/{urllib.parse.quote(ticket_id, safe='')}/complete",
+                  token=token)

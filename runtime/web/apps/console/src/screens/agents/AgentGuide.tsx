@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
 import type { Agent, Connect, Guide } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
-import { useOnboarding } from "../onboarding/Onboarding";
+import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
@@ -17,7 +17,13 @@ export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
 
-  if (error) return <div className={s.page}><p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p></div>;
+  if (error)
+    return (
+      <div className={s.page}>
+        <p className={s.error}>Couldn't load the agent guides. Reload the page to try again.</p>
+        {base === "/welcome" && <div><SkipButton /></div>}
+      </div>
+    );
   if (agents === undefined) return <div className={s.page}><p className={s.muted}>Getting the guide…</p></div>;
   const agent = agents.find((candidate) => candidate.id === id);
   if (!agent) return <Navigate to={base} replace />;
@@ -35,6 +41,19 @@ export function AgentGuide({ base }: { base: AgentBase }) {
       {/* Keyed so switching agent starts again at step 1. */}
       <Steps key={agent.id} agent={agent} guide={agent.platforms[platform]!} connect={connect} welcome={base === "/welcome"} />
     </div>
+  );
+}
+
+// Shown on hover and on focus, so a keyboard or a tap reaches it too.
+function Hint({ label, text }: { label: string; text: string }) {
+  const id = useId();
+  return (
+    <span className={s.hint}>
+      <button type="button" className={s.hintButton} aria-label={`About ${label}`} aria-describedby={id}>
+        <Icon name="info" />
+      </button>
+      <span id={id} role="tooltip" className={s.hintText}>{text}</span>
+    </span>
   );
 }
 
@@ -117,7 +136,10 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
             {rows.map((row) => (
               <div key={row.label} className={s.keyRow}>
                 <span className={s.keyText}>
-                  <span className={s.keyName}>{row.label}</span>
+                  <span className={s.keyName}>
+                    {row.label}
+                    {row.hint && <Hint label={row.label} text={row.hint} />}
+                  </span>
                   <span className={cx(s.keyValue, !row.copy && s.keyUnknown)} title={row.value}>{row.value}</span>
                 </span>
                 {row.copy && <CopyButton className={s.copy} text={row.value} />}
@@ -135,8 +157,14 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
           {/* Mounted before it has text, so screen readers announce the message. */}
           <span className={s.checkProblem} role="status">{problem}</span>
           {!problem && <span className={s.count}>Step {active + 1} of {guide.steps.length}</span>}
-          <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
-          {primary}
+          {/* Back and the primary wrap as one pair, so neither is left alone on a line. */}
+          <div className={s.navActions}>
+            {welcome && <SkipButton />}
+            <div className={s.navPair}>
+              <Button variant="secondary" disabled={active === 0} onClick={() => setActive(active - 1)}>Back</Button>
+              {primary}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -52,3 +52,13 @@ export function repoRow(repo: Repo): RepoRow {
   if (repo.name_taken && repo.suggested_id) return { kind: "nameTaken", suggestion: repo.suggested_id };
   return { kind: "free" };
 }
+
+export function filterRepos(repos: Repo[], query: string): Repo[] {
+  const needle = query.trim().toLowerCase();
+  return needle ? repos.filter((repo) => repo.full_name.toLowerCase().includes(needle)) : repos;
+}
+
+// `/user/repos` has no name filter, so a search pulls in every page and filters here.
+export function shouldLoadMore(query: string, hasNextPage: boolean, isFetching: boolean): boolean {
+  return query.trim() !== "" && hasNextPage && !isFetching;
+}

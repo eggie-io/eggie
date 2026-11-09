@@ -43,7 +43,7 @@ def install(app: FastAPI, *, token: str, sessions: Sessions,
     # handoff code for a cookie. GET/DELETE /api/session must still go
     # through the session check below -- only the exchange itself is open.
     open_browser_routes = {("GET", "/api/health"), ("HEAD", "/api/health"),
-                           ("POST", "/api/session")}
+                           ("POST", "/api/session"), ("GET", "/api/ready")}
 
     def _bearer_ok(request: Request) -> bool:
         scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
@@ -70,6 +70,14 @@ def install(app: FastAPI, *, token: str, sessions: Sessions,
     @app.middleware("http")
     async def _authenticate(request: Request, call_next):
         path = request.url.path
+        if config.site_host and (path == "/api/transfers"
+                                 or path.startswith("/api/transfers/")):
+            # Called by another machine, not a page: no cookie, Origin or bearer
+            # token counts here; the router checks the ticket or push token.
+            if request.headers.get("host", "") != config.site_host:
+                return error_body("forbidden_host",
+                                  "pushes go to this kitchen's own address", 403)
+            return await call_next(request)
         if path == "/api" or path.startswith("/api/"):
             refusal = _browser_refusal(request)
             if refusal is not None:

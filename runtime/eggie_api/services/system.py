@@ -9,9 +9,10 @@ from ..infra.docker import DOCKER
 
 
 class SystemService:
-    def __init__(self, config: ApiConfig, runner):
+    def __init__(self, config: ApiConfig, runner, site_login=None):
         self._config = config
         self._runner = runner
+        self._site_login = site_login
 
     def health(self) -> dict:
         probe = self._runner.exec([DOCKER, "version", "--format", "{{.Server.Version}}"])
@@ -35,5 +36,8 @@ class SystemService:
         return disk.usage(Path(self._config.projects_root))
 
     def connect(self) -> dict:
+        site_user = None
+        if self._config.site_host and self._site_login:
+            site_user = self._site_login()
         return connect.facts(Path(self._config.connect_path),
-                             site_host=self._config.site_host)
+                             site_host=self._config.site_host, site_user=site_user)

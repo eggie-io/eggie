@@ -48,3 +48,16 @@ def test_a_site_tells_agents_its_host_on_the_standard_ssh_port_with_no_key_file(
 
 def test_a_site_record_without_a_site_host_has_no_ssh_facts(tmp_path):
     assert connect.facts(_write(tmp_path, {"vm": "site", "user": "ada"})) == {"vm": "site", "ssh": None}
+
+
+def test_a_site_prefers_the_login_the_service_reports_over_the_recorded_one(tmp_path):
+    facts = connect.facts(_write(tmp_path, {"vm": "site", "user": "root"}),
+                          site_host="foo.eggie.io", site_user="ada")
+    assert facts["ssh"]["user"] == "ada"
+
+
+def test_the_host_os_follows_the_vm_kind(tmp_path):
+    assert connect.host_os(_write(tmp_path, {"vm": "wsl"})) == "Windows"
+    assert connect.host_os(_write(tmp_path, {"vm": "lima"})) == "macOS"
+    assert connect.host_os(_write(tmp_path, {"vm": "site"})) == "Linux"
+

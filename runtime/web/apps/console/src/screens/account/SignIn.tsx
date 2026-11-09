@@ -4,7 +4,7 @@ import { type Account, type StartOutcome, signInError, signInLink, startError } 
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
 import { useNow } from "../../projects/useNow";
-import { webAppKitchens } from "../../site/signIn";
+import { webAppInstances } from "../../site/signIn";
 import { useSite, useWebApp } from "../../site/SiteContext";
 import { SleepyEgg } from "../SleepyEgg";
 import { StatusScreen } from "../StatusScreen";
@@ -61,7 +61,7 @@ export function SignIn({
     }
   };
 
-  const kitchens = webAppKitchens(webApp);
+  const instancesUrl = webAppInstances(webApp);
 
   // A site refuses sign-in from the console, so the button would only dead-end.
   if (typeof site === "string") {
@@ -70,8 +70,8 @@ export function SignIn({
         art={<SleepyEgg />}
         title="This server lost its Eggie sign-in"
         actions={
-          kitchens !== null && (
-            <a className={own.link} href={kitchens}>Open the Eggie web app</a>
+          instancesUrl !== null && (
+            <a className={own.link} href={instancesUrl}>Open the Eggie web app</a>
           )
         }
       >

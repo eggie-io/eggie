@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=22.22" },
+  "engines": { "node": ">=24" },
   "scripts": {
     "dev": "npm run dev -w @eggie/console",
     "build": "npm run build -w @eggie/console",
@@ -12,7 +12,7 @@
     "check-offline": "node scripts/check-offline.mjs apps/console/dist"
   },
   "devDependencies": {
-    "@types/node": "26.6.2",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",

@@ -9,15 +9,13 @@ log = logging.getLogger(__name__)
 # Held equal to the --raised, --ink-2 and --line tokens in desktop/ui/app.css.
 COLORS = {
     "light": {"caption": "#fefbf7", "text": "#6a5848", "border": "#efe6d9"},
-    "dark": {"caption": "#211a14", "text": "#cdb9a4", "border": "#3a2f25"},
+    "dark": {"caption": "#1c1a33", "text": "#bdb8d8", "border": "#332f52"},
 }
 
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20
 DWMWA_BORDER_COLOR = 34
 DWMWA_CAPTION_COLOR = 35
 DWMWA_TEXT_COLOR = 36
-
-_PERSONALIZE_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
 
 
 def colorref(hex_colour: str) -> int:
@@ -52,12 +50,3 @@ def dwm_set_attribute(hwnd: int, attr: int, value: int) -> None:
     if hresult != 0:
         raise OSError(f"DwmSetWindowAttribute({attr}) failed: HRESULT {hresult & 0xFFFFFFFF:#x}")
 
-
-def os_uses_dark() -> bool:
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _PERSONALIZE_KEY) as handle:
-            value, _kind = winreg.QueryValueEx(handle, "AppsUseLightTheme")
-        return value == 0
-    except Exception:
-        return False

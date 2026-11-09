@@ -11,6 +11,7 @@ import { SecretsPage } from "./screens/secrets/SecretsPage";
 import { NeedsUpdate } from "./screens/NeedsUpdate";
 import { NotAnswering } from "./screens/NotAnswering";
 import { ProjectList } from "./screens/list/ProjectList";
+import { AnalyzePage } from "./screens/project/AnalyzePage";
 import { ProjectLayout } from "./screens/project/ProjectLayout";
 import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
@@ -20,7 +21,7 @@ import { DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
-import { OnboardingProvider, Progress, SkipLink, useOnboarding } from "./screens/onboarding/Onboarding";
+import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboarding/Onboarding";
 import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
@@ -52,6 +53,10 @@ function Screens({ handoff }: { handoff: string | null }) {
     pendingHandoff.current = null;
     try {
       const next = await boot({ fetch: (input, init) => fetch(input, init), handoff: code });
+      // Once, before BrowserRouter mounts: a render-time replace would undo later navigation.
+      if (next.kind === "signedIn" && next.landing !== null) {
+        window.history.replaceState(null, "", next.landing);
+      }
       setSite((prev) => nextSite(prev, next));
       setWebApp((prev) => nextWebApp(prev, next));
       setResult(next);
@@ -118,7 +123,6 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
       nav={welcome ? <Progress /> : <Tabs />}
       trailing={
         <>
-          {welcome && <SkipLink />}
           <AccountMenu onSignedOut={onSignedOut} />
         </>
       }
@@ -134,6 +138,7 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
           <Route path="/" element={<ProjectList />} />
           <Route path="/p/:id" element={<ProjectLayout />}>
             <Route index element={<ProjectPage />} />
+            <Route path="analyze" element={<AnalyzePage />} />
             <Route path="files/*" element={<FilesPage />} />
             <Route path="secrets" element={<SecretsPage />} />
           </Route>

@@ -18,9 +18,10 @@ export function elapsed(startedAtSec: number, nowMs: number): string {
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 }
 
-export function subtitle(total: number, cooking: number): string {
+export function subtitle(total: number, cooking: number, waiting = 0, agent = "your coding agent"): string {
   if (total === 0) return "Nothing on the go yet";
   const head = `${counted(total)} on the go`;
+  if (waiting > 0) return `${head} · ${counted(waiting).toLowerCase()} waiting on ${agent}`;
   return cooking === 0 ? head : `${head} · ${counted(cooking).toLowerCase()} of them cooking`;
 }
 

@@ -54,4 +54,14 @@ describe("cardRows", () => {
     ]);
     expect(cardRows(userAtHost, site)?.[0]).toEqual({ label: "SSH Host", value: "ada@foo.eggie.io", copy: true });
   });
+
+  it("offers no copy for a row of plain guidance, and keeps its hint", () => {
+    const guide: Guide = { card: [{ label: "SSH key", value: "The key you downloaded", hint: "Saved earlier." }], tagline: "", warning: null, steps: [] };
+    const site = { vm: "site" as const, ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } };
+    expect(cardRows(guide, site)).toEqual([{ label: "SSH key", value: "The key you downloaded", copy: false, hint: "Saved earlier." }]);
+  });
+
+  it("shows no card on a server that could not say its SSH facts, rather than the local VM's", () => {
+    expect(cardRows(userAtHost, { vm: "site", ssh: null })).toBeNull();
+  });
 });

@@ -51,11 +51,26 @@ class FakeCloud:
     def list_instances(self, token):
         return self._next("list_instances", token)
 
+    def report_instance_projects(self, token, projects):
+        return self._next("report_instance_projects", token, projects)
+
     def instance_certificate(self, token):
         return self._next("instance_certificate", token)
 
     def redeem_instance_handoff(self, token, code):
         return self._next("redeem_instance_handoff", token, code)
+
+    def transfer_targets(self, token):
+        return self._next("transfer_targets", token)
+
+    def mint_transfer_ticket(self, token, instance_id, project_id):
+        return self._next("mint_transfer_ticket", token, instance_id, project_id)
+
+    def redeem_transfer_ticket(self, token, ticket):
+        return self._next("redeem_transfer_ticket", token, ticket)
+
+    def complete_transfer(self, token, ticket_id):
+        return self._next("complete_transfer", token, ticket_id)
 
 
 CODE = {"device_code": "dc-1", "user_code": "ABCD-EFGH",

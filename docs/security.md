@@ -16,6 +16,7 @@ user's machine can reach in, so read this before adding any way in.
 | Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
 | Site, port `80` | A redirect to 443 | The internet (site mode only) |
 | Site, port `22` | The login account | Whoever holds the SSH key the service installed (site mode only) |
+| Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use ticket the service minted for this kitchen's owner (site mode only) |
 
 The host-side forwards are loopback-only: WSL2's `localhostForwarding` puts guest ports onto the
 Windows host's `127.0.0.1`, and Lima's `portForwards` (`host/providers/eggie.yaml`) default to
@@ -43,11 +44,12 @@ Each of these is root-equivalent in the VM:
 
 ## The user's own computer
 
-Nothing in the VM can reach the user's files or run programs on their computer:
+These settings keep agents from damaging the user's files by accident. They are not a security
+boundary.
 
 - **Lima:** `host/providers/eggie.yaml` has `mounts: []`, so no macOS folder is shared.
-- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and lets Linux run Windows `.exe`
-  files by default. `install.sh` turns both off on every install, update and repair
+- **WSL2:** WSL mounts every Windows drive at `/mnt/<drive>` and puts Windows folders on `PATH`
+  by default. `install.sh` turns both off on every install, update and repair
   (`lib/wsl-conf.py`). The settings go in `/etc/wsl.conf`:
 
   ```ini
@@ -55,21 +57,22 @@ Nothing in the VM can reach the user's files or run programs on their computer:
   enabled=false
 
   [interop]
-  enabled=false
   appendWindowsPath=false
   ```
 
-  So there is no `C:` drive at `/mnt/c`, `cmd.exe` and `powershell.exe` cannot be started from the
-  VM, and `PATH` has no Windows folders. WSL reads the file only when the distro starts. Setup
-  restarts a VM it has just created right after the first install, before anyone uses it. A VM
+  Interop (running Windows `.exe` files) stays on: it is one kernel registration every WSL distro
+  shares, so turning it off in `eggie-vm` breaks it in the user's other distros.
+
+  WSL reads the file only when the distro starts. Setup restarts a VM it has just created right after the first install, before anyone uses it. A VM
   that was already running when it got the setting keeps the old behaviour until its next start,
   for example a Windows restart or `wsl --shutdown`. Projects come in by HTTP upload (Import), not
   through a shared folder.
 
-This protects against accidents, such as an agent deleting the wrong folder or a script started
-in the VM running on Windows. It is not a hard boundary:
+What this does not stop:
 
-- `eggie` is in the `docker` group, which is root in the VM, and root can mount things again.
+- Any process in the VM can run a Windows `.exe` it has there; it runs on Windows as the user.
+- Root in the VM (`eggie` has passwordless `sudo` and the `docker` group) can mount a drive by
+  hand or edit `wsl.conf`.
 - Every WSL2 distro on the computer runs in one shared utility VM with one kernel. A kernel
   escape from any distro reaches all of them.
 - Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and
@@ -112,6 +115,12 @@ Two things hold that up, and neither is enforced inside the VM:
 
 A project shared by public URL is exposed to the internet with whatever auth it has itself.
 
+The idle-session reaper (`vm.md`) runs as root and can stop any user's process, so it stops only
+a Claude Code Desktop process it can tie to a session transcript: no `ccd-cli` binary, no session
+id or no transcript, and the process is left alone and logged. Ending sessions with logind's
+`KillUserProcesses=yes` or `StopIdleSessionSec` is ruled out: both end Desktop's SSH session when
+the user disconnects, which kills the task they meant to leave running.
+
 ## Site mode (a server the service provisions)
 
 On a site the boundary is the server's firewall, which the service manages: 22, 80 and 443
@@ -140,6 +149,29 @@ root-equivalent — plus:
   data that seeded the account token, and a project's code would otherwise read it. A droplet-only
   `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts. It covers bridged
   containers only; a project with `network_mode: host` sits on the host's network and is outside it, as it is outside every container boundary already.
+
+### Pushing to a kitchen
+
+- `/api/transfers` has its own auth branch in `rest/auth.py`: `Host` must be the site host, and the
+  API token and sessions are refused. The router redeems the ticket with the service before it reads
+  a byte, and limits attempts to 10 a minute per sender address (the first `X-Forwarded-For`
+  entry, which Traefik sets, at most 1024 addresses tracked) and 60 a minute in all.
+- The ticket (`Eggie-Transfer-Ticket`) and the per-push token (`Eggie-Transfer-Token`) travel in
+  headers only, never in a URL or log line. The token is compared in constant time; an unknown id
+  and a wrong token both answer 404.
+- The kitchen takes the project's identity from the ticket's grant, never from the bundle; an `id`
+  in the pushed `.eggie/project.yml` is rewritten to the kitchen's project id.
+- Unpacking runs in a root helper container (`python -m eggie_api.infra.bundle unpack`): it refuses
+  absolute names, devices, FIFOs and hard links that escape the tree. Project files get the staging
+  folder's group (the VM's `docker`, inherited through `/opt/eggie`'s setgid bit) and setgid
+  directories; volumes keep the sender's owners. A volume whose explicit `name:` is outside
+  `<compose_name>_` is refused (`bad_bundle`), as is a compose `name:` that is another kitchen
+  project's.
+- What leaves the user's machine: the project files (including `.env` and any folder a service
+  mounts), every named volume that exists locally, and secret names with their hints. Never
+  secret values.
+- TLS to the kitchen is always verified; `EGGIE_INSTANCE_CA_FILE` adds trust for dev (staging)
+  certificates.
 
 ## Before adding a way in
 

@@ -1,21 +1,36 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Button, Icon, IconButton, Notice, StateBadge } from "@eggie/ui";
+import { Badge, Button, Icon, Notice, StateBadge } from "@eggie/ui";
+import { useCurrentAgent } from "../../agents/queries";
+import { NO_AGENT, atSentenceStart } from "../../agents/current";
 import { Elapsed } from "../../components/Elapsed";
 import { projectColor } from "../../projects/color";
 import { CAUSE_COPY, actionError, primaryUrl } from "../../projects/copy";
 import { hostOf } from "../../projects/format";
 import { publicView } from "../../projects/public";
-import { useLifecycle } from "../../projects/queries";
+import { useLifecycle, useStartWhenReady } from "../../projects/queries";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
 import { projectView } from "../../projects/view";
 import s from "./ProjectList.module.css";
 import { openExternal } from "../../desktop/desktop";
 
+const SETUP_NOTE = { github: "From GitHub · ", folder: "From a folder · ", new: "" } as const;
+
+function AgentNote({ agent, children }: { agent: string; children: ReactNode }) {
+  return (
+    <span className={s.note}>
+      {agent !== NO_AGENT && <span className={s.agentMark} aria-hidden="true">{agent.charAt(0)}</span>}
+      <span>{children}</span>
+    </span>
+  );
+}
+
 export function ProjectRow({ project }: { project: Project }) {
   const view = projectView(project);
+  const agent = useCurrentAgent({ poll: false });
   const lifecycle = useLifecycle(project.id);
+  const startWhenReady = useStartWhenReady(project.id);
   const navigate = useNavigate();
   const now = useNow(30_000);
   const pub = publicView(project.public, now);
@@ -48,6 +63,7 @@ export function ProjectRow({ project }: { project: Project }) {
             variant="ghost"
             size="sm"
             icon="stop"
+            className={s.ghost}
             disabled={lifecycle.isPending}
             onClick={() => lifecycle.mutate("down")}
           >
@@ -63,8 +79,12 @@ export function ProjectRow({ project }: { project: Project }) {
           aria-label={`Start ${project.id}`}
           size="sm"
           icon="play"
-          disabled={lifecycle.isPending}
-          onClick={() => lifecycle.mutate("up")}
+          disabled={lifecycle.isPending || startWhenReady.isPending}
+          onClick={() =>
+            project.secrets_requested > 0
+              ? startWhenReady.mutate(undefined, { onSuccess: () => navigate(`${page}/secrets`) })
+              : lifecycle.mutate("up")
+          }
         >
           Start
         </Button>
@@ -94,18 +114,28 @@ export function ProjectRow({ project }: { project: Project }) {
       );
       break;
     case "waiting":
-      line = <span className={s.quiet}>Waiting for your coding agent</span>;
+      line = <AgentNote agent={agent.name}>Empty folder · {agent.name} builds it from one prompt</AgentNote>;
       actions = (
-        <Button aria-label={`Open page for ${project.id}`} size="sm" iconRight="chevron-right" onClick={look}>
-          Open page
+        <Button aria-label={`Next step for ${project.id}`} variant="primary" size="sm" iconRight="chevron-right" onClick={look}>
+          Next step
+        </Button>
+      );
+      break;
+    case "setup":
+      line = <AgentNote agent={agent.name}>{SETUP_NOTE[project.origin] || atSentenceStart(agent.name)}{SETUP_NOTE[project.origin] && agent.name} makes it run here</AgentNote>;
+      actions = (
+        <Button aria-label={`Set up ${project.id}`} variant="secondary" size="sm" iconRight="chevron-right" onClick={look}>
+          Set it up
         </Button>
       );
       break;
   }
 
-  // wrong/gone/waiting already lead to the page through their only action.
-  const settings = view.kind !== "wrong" && view.kind !== "gone" && view.kind !== "waiting" && (
-    <IconButton icon="settings" label={`Settings for ${project.id}`} size="sm" onClick={look} />
+  // wrong/setup/gone/waiting already lead to the page through their only action.
+  const settings = view.kind !== "wrong" && view.kind !== "setup" && view.kind !== "gone" && view.kind !== "waiting" && (
+    <Button aria-label={`Settings for ${project.id}`} variant="ghost" size="sm" icon="settings" className={s.ghost} onClick={look}>
+      Settings
+    </Button>
   );
 
   return (
@@ -116,6 +146,11 @@ export function ProjectRow({ project }: { project: Project }) {
       <div className={s.who}>
         <Link className={s.name} to={page}>{project.id}</Link>
         {line}
+        {project.secrets_requested > 0 && (
+          <Badge tone="warning" icon="key">
+            Needs {project.secrets_requested} {project.secrets_requested === 1 ? "secret" : "secrets"}
+          </Badge>
+        )}
         {pub.kind === "on" && (
           <span className={s.public}>
             <Icon name="globe" />
@@ -123,9 +158,10 @@ export function ProjectRow({ project }: { project: Project }) {
           </span>
         )}
       </div>
-      <div className={s.state}><StateBadge state={view.badge} /></div>
-      <div className={s.actions}>{actions}{settings}</div>
-      {lifecycle.error && <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error)}</Notice>}
+      <div className={s.actions}><StateBadge state={view.badge} />{actions}{settings}</div>
+      {(lifecycle.error ?? startWhenReady.error) && (
+        <Notice tone="danger" className={s.rowError}>{actionError(lifecycle.error ?? startWhenReady.error)}</Notice>
+      )}
     </li>
   );
 }

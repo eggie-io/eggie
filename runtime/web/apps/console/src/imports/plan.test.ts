@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planImport, type Picked } from "./plan";
+import { hasCompose, planImport, type Picked } from "./plan";
 
 const pick = (path: string, size = 1): Picked => ({ path, file: new File([new Uint8Array(size)], path.split("/").pop()!) });
 
@@ -54,5 +54,13 @@ describe("planImport", () => {
   it("an empty folder is a plan with nothing in it, not a crash", async () => {
     const plan = await planImport([]);
     expect(plan).toEqual({ name: "", id: "", entries: [], bytes: 0, skipped: [] });
+  });
+});
+
+describe("hasCompose", () => {
+  it("is true only for docker-compose.yml at the top of the folder", async () => {
+    expect(hasCompose(await planImport([pick("app/docker-compose.yml"), pick("app/a.py")]))).toBe(true);
+    expect(hasCompose(await planImport([pick("app/sub/docker-compose.yml")]))).toBe(false);
+    expect(hasCompose(await planImport([pick("app/compose.yaml")]))).toBe(false);
   });
 });

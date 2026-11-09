@@ -2,8 +2,8 @@ import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button, Card, Notice, TextField, cx } from "@eggie/ui";
 import { actionError } from "../../projects/copy";
-import { useDeleteSecret, useLifecycle, useSecrets, useSetSecret } from "../../projects/queries";
-import { nameProblem } from "../../projects/secrets";
+import { useDeleteSecret, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
+import { nameProblem, splitSecrets } from "../../projects/secrets";
 import { TitleRow } from "../project/TitleRow";
 import s from "./SecretsPage.module.css";
 
@@ -77,6 +77,7 @@ export function SecretsPage() {
   const query = useSecrets(id);
   const add = useSetSecret(id);
   const lifecycle = useLifecycle(id);
+  const waiting = useProject(id).data?.start_when_ready === true;
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
@@ -100,6 +101,7 @@ export function SecretsPage() {
   }
   const data = query.data;
   const taken = data.secrets.map((x) => x.name);
+  const { used, unused } = splitSecrets(data);
   const problem = nameProblem(name, taken);
 
   return (
@@ -115,6 +117,16 @@ export function SecretsPage() {
           </div>
         </Notice>
       )}
+      {waiting && (
+        <Notice tone="info">
+          Starts once these are set. {id} is waiting for {data.requested.length === 1 ? "the secret" : "the secrets"} below.
+          <div className={s.noticeActions}>
+            <Button size="sm" disabled={lifecycle.isPending} onClick={() => lifecycle.mutate("up", { onSuccess: () => navigate(projectUrl) })}>
+              Start without them
+            </Button>
+          </div>
+        </Notice>
+      )}
       {lifecycle.error && <Notice tone="danger">{actionError(lifecycle.error)}</Notice>}
       {data.requested.length > 0 && (
         <Section title="Requested">
@@ -123,10 +135,17 @@ export function SecretsPage() {
           </ul>
         </Section>
       )}
-      {data.secrets.length > 0 && (
+      {used.length > 0 && (
         <Section title="Your secrets">
           <ul className={s.rows}>
-            {data.secrets.map((x) => <StoredRow key={x.name} id={id} name={x.name} />)}
+            {used.map((x) => <StoredRow key={x.name} id={id} name={x.name} />)}
+          </ul>
+        </Section>
+      )}
+      {unused.length > 0 && (
+        <Section title="Not used by the latest push">
+          <ul className={s.rows}>
+            {unused.map((x) => <StoredRow key={x.name} id={id} name={x.name} />)}
           </ul>
         </Section>
       )}

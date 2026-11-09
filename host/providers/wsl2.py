@@ -237,7 +237,7 @@ class Wsl2Provider:
         # bootstrap dying minutes later at `systemctl enable --now docker`.
         # Replacing the whole file is safe only because the import above just
         # succeeded: it refuses an existing distro, so nothing the runtime
-        # wrote (default user, no drives, no interop) can be here yet.
+        # wrote (default user, no drives) can be here yet.
         self._require(
             self.exec(["bash", "-lc",
                        "printf '[boot]\\nsystemd=true\\n' > /etc/wsl.conf"],

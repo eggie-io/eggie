@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boot, takeHandoff } from "./boot";
+import { boot, landingPath, takeHandoff } from "./boot";
 
 type Reply = { status: number; body?: unknown; raw?: string } | "refused";
 
@@ -89,8 +89,17 @@ describe("boot", () => {
       "POST /api/session": OK,
       "GET /api/account": ACCOUNT("signed_in"),
     });
-    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "signedIn", site: null, webApp: null });
+    expect(await boot({ fetch, handoff: "code" })).toEqual({ kind: "signedIn", landing: null, site: null, webApp: null });
     expect(calls).toEqual(["GET /api/health", "POST /api/session", "GET /api/account"]);
+  });
+
+  it("carries the page the sign-in was opened for", async () => {
+    const { fetch } = api({
+      "GET /api/health": HEALTHY,
+      "POST /api/session": { status: 200, body: { signed_in: true, return_path: "/p/shop/secrets" } },
+      "GET /api/account": ACCOUNT("signed_in"),
+    });
+    expect(await boot({ fetch, handoff: "code" })).toMatchObject({ kind: "signedIn", landing: "/p/shop/secrets" });
   });
 
   it("is still signed in when the handoff was spent but the cookie is good", async () => {
@@ -100,7 +109,7 @@ describe("boot", () => {
       "GET /api/session": OK,
       "GET /api/account": ACCOUNT("signed_in"),
     });
-    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedIn", site: null, webApp: null });
+    expect(await boot({ fetch, handoff: "old" })).toEqual({ kind: "signedIn", landing: null, site: null, webApp: null });
   });
 
   it("says the link was spent when the handoff fails and there is no session", async () => {
@@ -160,6 +169,13 @@ describe("boot", () => {
       "GET /api/account": refusal(500, "internal_error"),
     });
     expect(await boot({ fetch, handoff: null })).toEqual({ kind: "notAnswering", site: null, webApp: null });
+  });
+});
+
+describe("landingPath", () => {
+  it("keeps a same-origin path and drops anything that could leave the origin", () => {
+    expect(landingPath("/p/a/secrets")).toBe("/p/a/secrets");
+    for (const bad of ["//x", "/\\x", "https://x", 42, null]) expect(landingPath(bad)).toBeNull();
   });
 });
 

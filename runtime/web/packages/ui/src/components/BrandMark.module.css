@@ -1,9 +1,9 @@
 .mark {
   display: inline-block;
   flex: none;
-  width: 1em;
-  height: 1em;
-  border-radius: 50% 50% 46% 46% / 58% 58% 42% 42%;
-  background: var(--gold);
-  box-shadow: inset -.125em -.125em 0 var(--orange);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

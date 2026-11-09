@@ -111,7 +111,7 @@ services:
   # The token's directory is mounted, not the file: docker would create a
   # missing file mount source as a root-owned directory.
   tunnel:
-    image: cloudflare/cloudflared:2026.9.3
+    image: cloudflare/cloudflared:2026.10.3
     profiles: [tunnel]
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token-file /run/eggie/token

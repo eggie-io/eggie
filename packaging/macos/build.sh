@@ -17,6 +17,11 @@ version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/pyproject.toml" | head -1)
 [ -n "$version" ] || { echo "no version in pyproject.toml" >&2; exit 1; }
 pkg="$repo/dist/EggieSetup-$version-$(uname -m).pkg"
 
+if [ -n "${EGGIE_NOTARY_PROFILE:-}" ]; then
+    [ -n "${EGGIE_CODESIGN_ID:-}" ] && [ -n "${EGGIE_INSTALLER_ID:-}" ] || {
+        echo "Notarizing needs EGGIE_CODESIGN_ID and EGGIE_INSTALLER_ID." >&2; exit 1; }
+fi
+
 [ -x "$venv_python" ] || {
     echo "No virtualenv at $venv_python. Run: python3.12 -m venv .venv" >&2; exit 1; }
 "$venv_python" -c "import PyInstaller" 2>/dev/null || {
@@ -80,9 +85,17 @@ if /usr/libexec/PlistBuddy -c "Print :LSBackgroundOnly" \
     exit 1
 fi
 
-# Signing is optional and off by default: a Developer ID costs money and a PoC
-# build is installed by the person who made it. Unsigned, Gatekeeper requires a
-# right-click > Open on the .pkg — see docs/release-testing.md.
+# Signing is opt-in per build. EGGIE_CODESIGN_ID and EGGIE_INSTALLER_ID name the
+# Developer ID identities in the keychain (`security find-identity -v`);
+# EGGIE_NOTARY_PROFILE names a `notarytool store-credentials` profile and turns
+# on notarization and stapling of the .pkg. Release builds set all three. A
+# local dev build can leave them unset and install with right-click > Open
+# (docs/release-testing.md).
+#
+# Notarization requires the hardened runtime. Under it, libffi closures (pyobjc,
+# under pywebview's Cocoa backend) need allow-unsigned-executable-memory, which
+# is why entitlements.plist exists and why the signed bundle is selfchecked
+# again: a build that passed unsigned can still fail once signed.
 #
 # --deep re-signs every Mach-O in the bundle, which is right while everything in
 # it comes from PyInstaller. It stops being right the moment a third-party
@@ -94,8 +107,12 @@ fi
 if [ -n "${EGGIE_CODESIGN_ID:-}" ]; then
     echo "==> Signing the app as $EGGIE_CODESIGN_ID"
     codesign --force --deep --options runtime --timestamp \
+        --entitlements "$here/entitlements.plist" \
         --sign "$EGGIE_CODESIGN_ID" "$app"
     codesign --verify --strict --verbose=2 "$app"
+    # Hardened runtime can break what passed unsigned: prove the signed bundle.
+    "$cli" selfcheck
+    "$gui" selfcheck
 fi
 
 rm -rf "$staging"
@@ -140,6 +157,14 @@ if [ -n "${EGGIE_INSTALLER_ID:-}" ]; then
     productbuild_args+=(--sign "$EGGIE_INSTALLER_ID" --timestamp)
 fi
 productbuild "${productbuild_args[@]}" "$pkg"
+
+if [ -n "${EGGIE_NOTARY_PROFILE:-}" ]; then
+    echo "==> Notarizing (usually a few minutes)"
+    xcrun notarytool submit "$pkg" --keychain-profile "$EGGIE_NOTARY_PROFILE" --wait
+    xcrun stapler staple "$pkg"
+    xcrun stapler validate "$pkg"
+    spctl --assess --type install --verbose=4 "$pkg"
+fi
 
 echo "==> dist/$(basename "$pkg")"
 if [ -z "${EGGIE_INSTALLER_ID:-}" ]; then

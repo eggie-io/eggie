@@ -10,7 +10,7 @@ import { filesRoute } from "../../uploads/paths";
 import { menuNotes } from "./menu";
 import s from "./ProjectLayout.module.css";
 
-export type ProjectDialog = "analyze" | "public" | "delete";
+export type ProjectDialog = "public" | "push" | "delete";
 
 function Label({ icon, children, note, noteClass }: { icon: IconName; children: ReactNode; note?: string | null; noteClass?: string }) {
   return (
@@ -25,7 +25,14 @@ function Label({ icon, children, note, noteClass }: { icon: IconName; children: 
 }
 
 // `project` is undefined while it loads or once it's gone: only the way back and the name stay.
-export function ProjectMenu({ id, project, onOpen }: { id: string; project?: Project; onOpen: (dialog: ProjectDialog) => void }) {
+export type PushItem = { note: string | null; disabled: boolean } | null;
+
+export function ProjectMenu({ id, project, push, onOpen }: {
+  id: string;
+  project?: Project;
+  push: PushItem;
+  onOpen: (dialog: ProjectDialog) => void;
+}) {
   const site = useSite();
   const now = useNow();
   const tile = projectColor(id);
@@ -68,9 +75,9 @@ export function ProjectMenu({ id, project, onOpen }: { id: string; project?: Pro
             <NavLink to={page} end className={s.item}>
               <Label icon="layers">Overview</Label>
             </NavLink>
-            <button type="button" className={s.item} onClick={() => onOpen("analyze")}>
+            <NavLink to={`${page}/analyze`} className={s.item}>
               <Label icon="search">Analyze</Label>
-            </button>
+            </NavLink>
             <NavLink to={filesRoute(id, "")} className={s.item}>
               <Label icon="folder">Files</Label>
             </NavLink>
@@ -86,6 +93,17 @@ export function ProjectMenu({ id, project, onOpen }: { id: string; project?: Pro
                 onClick={() => onOpen("public")}
               >
                 <Label icon="globe" note={notes.public.note}>Public address</Label>
+              </button>
+            )}
+            {site === null && push && (
+              <button
+                type="button"
+                className={s.item}
+                disabled={push.disabled}
+                title={push.disabled ? (push.note ?? undefined) : undefined}
+                onClick={() => onOpen("push")}
+              >
+                <Label icon="upload" note={push.note}>Push to Kitchen</Label>
               </button>
             )}
           </nav>

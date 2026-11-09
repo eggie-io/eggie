@@ -9,6 +9,7 @@ export interface Progress {
 
 export interface ImportApi {
   create(id: string): Promise<unknown>;
+  up(id: string): Promise<unknown>;
   remove(id: string): Promise<unknown>;
   send(id: string, archive: Blob, onProgress: (sent: number, total: number) => void): Promise<unknown>;
 }
@@ -27,7 +28,8 @@ export const BUSY_DEADLINE_MS = 60_000;
 
 const isCode = (error: unknown, code: string) => error instanceof ApiError && error.code === code;
 
-export async function runImport(api: ImportApi, run: ImportRun): Promise<void> {
+// Resolves to whether this import created the project (false: it merged into one).
+export async function runImport(api: ImportApi, run: ImportRun): Promise<boolean> {
   const sleep = run.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const now = run.now ?? (() => Date.now());
 
@@ -53,12 +55,15 @@ export async function runImport(api: ImportApi, run: ImportRun): Promise<void> {
       if (!isCode(error, "project_not_found")) throw error;
     }
   }
+  let created = true;
   try {
     await api.create(run.id);
   } catch (error) {
     if (!(run.mode === "merge" && isCode(error, "project_exists"))) throw error;
+    created = false;
   }
 
   run.onProgress({ sent: 0, total: run.archive.size });
   await whileBusy(() => api.send(run.id, run.archive, (sent, total) => run.onProgress({ sent, total })));
+  return created;
 }

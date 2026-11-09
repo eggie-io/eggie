@@ -42,10 +42,9 @@ system browser — there is no native menu.
 
 - **The title bar is recoloured by `DesktopPlatform.style_title_bar` on `events.before_show`.** DWM
   caption/text/border colours need Windows 11; Windows 10 keeps its default bar (the dark-mode
-  buttons flag still applies). Colours are read once per launch, and `title_bar_win.COLORS` is held
-  equal to `app.css` by a test: change both together. pywebview itself flips the dark-mode
-  flag when the OS theme changes, but our colours are not re-applied, so after an OS theme switch
-  the bar is mixed until relaunch.
+  buttons flag still applies). `title_bar_win.COLORS` is held equal to `app.css` by a test: change
+  both together. The app often starts hidden at login, so the colours are re-applied whenever the
+  Windows theme changes (`theme_win.ThemeWatch`, which also swaps the tray icon).
 - **`min_size` and the window size are outer sizes** on Windows (title bar and borders included),
   so at the 800×560 minimum the page is about 784×521. Nothing in `app.css` may demand more;
   `#screen` scrolls instead. Check layouts at the page size, not the window size.

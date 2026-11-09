@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -13,6 +15,7 @@ class CreateProject(BaseModel):
     id: str
     web: list[WebOverride] | None = None
     domain: str | None = None
+    origin: Literal["new", "folder"] = "new"
 
 
 class StartUpload(BaseModel):
@@ -37,3 +40,8 @@ class SecretHint(BaseModel):
 class CloneRepo(BaseModel):
     repo: str
     id: str | None = None
+
+
+class PushRequest(BaseModel):
+    instance_id: str = Field(min_length=1, max_length=256)
+    replace: bool = False

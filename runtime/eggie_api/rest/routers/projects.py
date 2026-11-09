@@ -17,7 +17,7 @@ def build(s: Services) -> APIRouter:
     def create_project(body: CreateProject) -> dict:
         return s.projects.create(
             body.id, [w.model_dump() for w in body.web] if body.web else None,
-            body.domain)
+            body.domain, body.origin)
 
     @router.post("/projects/{project_id}/adopt", status_code=201)
     def adopt_project(project_id: str) -> dict:

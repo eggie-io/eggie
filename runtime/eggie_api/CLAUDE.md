@@ -85,7 +85,10 @@ and a host release. Prefer additive changes.
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;
   `connect.facts` knows `"site"`; `Public` reports `not_available`. Browser allowlist and `Secure`
-  cookie: `rest/auth.py::cookie_options`.
+  cookie: `rest/auth.py::cookie_options`. `InstanceProjects.report`
+  (`services/instance_projects.py`) is a site-only sync pass: it `PUT`s the full project list to
+  `/v1/instances/me/projects` on change and every 10 minutes; `public_url` only while
+  `started_ok`. Lifecycle status writes wake the loop (`on_status`).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service
@@ -112,7 +115,8 @@ and a host release. Prefer additive changes.
   `{vm, ssh}`; the SSH port is `host/providers/eggie.yaml`'s `ssh.localPort`, held equal by
   `tests/test_constants_agree.py`.
 - **Account / cloud sync** (`infra/cloud.py`, `services/account.py`, `services/sync.py`) — the Eggie service
-  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Device-code sign-in, tokens in
+  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Every call sends
+  `User-Agent: Eggie/<version> (<host OS from connect.json>)`. Device-code sign-in, tokens in
   `state.db`; `sync.py` gives each local project a service record
   (`client_ref = <device_id>/<local_id>`) on a thread. Only the console is locked until sign-in —
   the CLI and agents never wait on it. Service gaps are **not** worked around here; see
@@ -140,6 +144,22 @@ and a host release. Prefer additive changes.
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
+- **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
+  `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
+  (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)
+  in a root helper container, then sends it with `infra/instance.py` (`InstanceClient`, TLS always
+  verified, `EGGIE_INSTANCE_CA_FILE` adds trust for staging certs). Kitchen side: `services/transfers.py`
+  and `rest/routers/transfers.py` (`POST /api/transfers`, `PUT .../bundle`, `GET .../{push_id}`,
+  `GET /api/ready`), site only, with their own auth branch in `rest/auth.py` (ticket and push token in
+  `Eggie-Transfer-*` headers, never URL or log). The kitchen unpacks with
+  `python -m eggie_api.infra.bundle unpack` (root container, `filter="tar"`; refuses absolute names,
+  devices, FIFOs, escaping hard links). Only `volumes/` keeps the sender's numeric owners and modes;
+  every project file gets the staging folder's group (the VM's `docker`, via `/opt/eggie`'s setgid)
+  and `g+rwX`, directories setgid. A repeat push sends `Eggie-Transfer-Replace: all` only after the
+  console's confirmation and replaces files and volumes alike. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
+  in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten) and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
+  sync; `instance_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
+  the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
 ## Testing
 
@@ -157,9 +177,19 @@ and a host release. Prefer additive changes.
 - A project's `status` in `state.db` is the last start/stop outcome, not a live reading. Projects
   get no restart policy, so after a VM reboot only `LifecycleService.resume_all()` (run from `__main__`)
   brings the `started_ok` ones back; without it Traefik answers 404 under a "running" badge.
+- `ran_ok` on the project payload is "ever answered", set once by a start that passes the readiness
+  check or by a `recheck` that clears a stale problem; it never goes back to false. A refused start
+  stores Docker's last lines as `failed_to_start`; only a good start clears it, `recheck` skips it.
+  `origin` is `new`/`github`/`folder`; `POST /projects` accepts only `new` and `folder`, clone sets `github`.
 - Anything the API creates inside a project must be group-writable: login users are never the
   API's uid. `install.sh`'s default ACL on `/opt/eggie/projects` handles that under the API's
   umask 022; `clone_argv`'s `umask 002` predates it and is harmless.
+- A database whose data sits in a project folder (`./pgdata:/var/lib/postgresql/data`) travels as
+  project files: a push replaces the kitchen's copy and gives it the project files' group and modes,
+  which Postgres refuses (it wants its own user and 0700). Data belongs in a named volume, as the
+  `eggie-setup` skill says.
+- An API restart during a kitchen import's replace step loses `transfers/in/<push>/old` (the sweep
+  deletes it); a put-back that fails moves it to `transfers/kept/<project>-<push>` instead; a failed volume restore leaves that volume empty (it is removed before copying).
 - A top-level directory or module in `eggie_api/` must not share a name with a stdlib module (`http`,
   `json`, …): the image's working directory is first on `sys.path`, so it would shadow the stdlib.
   `test_layering.py` pins it.

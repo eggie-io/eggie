@@ -65,6 +65,13 @@ describe("parseAgent", () => {
     expect(parseAgent("codex", { name: "Codex", icon: "i.svg", platforms: { mac: guide({ card: [] }) } }, "/a")).toBeNull();
   });
 
+  it("reads the note, and drops an agent whose note is not text", () => {
+    const agent = (note: unknown) => parseAgent("codex", { name: "Codex", note, icon: "i.svg", platforms: { mac: guide() } }, "/a");
+    expect(agent("(in ChatGPT)")?.note).toBe("(in ChatGPT)");
+    expect(agent(undefined)?.note).toBeNull();
+    for (const bad of ["", " ", 42]) expect(agent(bad)).toBeNull();
+  });
+
   it("drops an agent that is not an object, such as the SPA's index.html", () => {
     expect(parseAgent("codex", "<!doctype html>", "/agents")).toBeNull();
   });
@@ -104,6 +111,9 @@ describe("platformFor", () => {
   it("trusts the VM over the browser", () => {
     expect(platformFor({ vm: "wsl", ssh: null }, "Macintosh")).toBe("windows");
     expect(platformFor({ vm: "lima", ssh: null }, "Windows NT")).toBe("mac");
+  });
+  it("gives a cloud server the cloud guide whatever the browser is", () => {
+    expect(platformFor({ vm: "site", ssh: null }, "Macintosh")).toBe("cloud");
   });
   it("falls back to the browser when the VM is unknown", () => {
     expect(platformFor({ vm: "other", ssh: null }, "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5)")).toBe("mac");

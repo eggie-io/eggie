@@ -100,7 +100,8 @@ class CloneService:
                     raise JobFailed(f"a project called '{project_id}' appeared "
                                     "while downloading; nothing was changed")
                 os.rename(staging, directory)
-                self._projects.add(project_id, str(directory), self._config.domain)
+                self._projects.add(project_id, str(directory), self._config.domain,
+                                    origin="github")
                 self._wake()
                 if not (directory / constants.COMPOSE_FILE).exists():
                     write(f"no {constants.COMPOSE_FILE} yet; left stopped\n")

@@ -26,8 +26,9 @@ SKILLS_CLI=skills@1.5.26
 # Unpinned on purpose: pinning a tag here is a value change, not a code change.
 # Until it is pinned, a box's skills are not identifiable from runtime.version.
 SKILLS_SOURCE="${EGGIE_SKILLS_SOURCE:-eggie-io/eggie-skills}"
-# skills@1.5.26 declares node >=22.20.0; Ubuntu 24.04's own nodejs is 18.
-NODE_MIN=22.20.0
+# Ubuntu 24.04's own nodejs is 18 and `npx skills` needs a newer one, so install from NodeSource.
+# The NodeSource repo below follows this major.
+NODE_MIN=24.0.0
 TOKEN_CREATED=0
 
 # A failed reinstall must not look installed; get.sh already resolved the ref.
@@ -91,14 +92,15 @@ systemctl enable --now docker
 # equivalent here, so this grants no access it did not have. setgid makes the
 # project directories the API creates later inherit the group; without it the
 # API cannot even open /opt/eggie/state.db and restart:always loops it.
-mkdir -p /opt/eggie/projects
+mkdir -p /opt/eggie/projects /opt/eggie/transfers
 chgrp -R docker /opt/eggie
 chmod -R g+rwX /opt/eggie
 find /opt/eggie -type d -exec chmod g+s {} +
 # The API runs under umask 022, so what it creates in a project would come out
 # 2755 and shut the login accounts out. A default ACL replaces the umask for
 # new entries, whoever makes them: the API, a container, a coding agent.
-find /opt/eggie/projects -type d -exec setfacl -d -m g::rwx {} +
+# transfers/ too: a pushed project is unpacked there, then renamed into projects/.
+find /opt/eggie/projects /opt/eggie/transfers -type d -exec setfacl -d -m g::rwx {} +
 
 # The GitHub token is the API's alone: the sweep above just widened it, so
 # its modes are put back every run.
@@ -188,20 +190,26 @@ fi
 # answered perfectly sends them to inspect the one part that is working; on
 # Apple Silicon, where an amd64-only image is the common case, that is the first
 # thing they hit.
-PULL_LOG="$(mktemp)"
-if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
-  if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
-    echo "could not pull the Eggie images: one of them is not published for" >&2
-    echo "this machine's architecture ($(uname -m)). The registry answered" >&2
-    echo "fine -- that image needs a build for this architecture." >&2
-  else
-    echo "could not pull the Eggie images: the registry was unreachable." >&2
-    echo "Check the network connection or proxy and run setup again." >&2
+# EGGIE_SKIP_PULL=1 is scripts/dev.sh's: it built the images in this VM, under
+# a tag ghcr does not have. `up -d` below still fetches any image that is missing.
+if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then
+  echo "EGGIE_SKIP_PULL=1: using the Eggie images already in this VM"
+else
+  PULL_LOG="$(mktemp)"
+  if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
+    if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
+      echo "could not pull the Eggie images: one of them is not published for" >&2
+      echo "this machine's architecture ($(uname -m)). The registry answered" >&2
+      echo "fine -- that image needs a build for this architecture." >&2
+    else
+      echo "could not pull the Eggie images: the registry was unreachable." >&2
+      echo "Check the network connection or proxy and run setup again." >&2
+    fi
+    rm -f "$PULL_LOG"
+    exit 1
   fi
   rm -f "$PULL_LOG"
-  exit 1
 fi
-rm -f "$PULL_LOG"
 # The API reads its token once, at startup, and `up -d` leaves an unchanged
 # container running, so a new token or a repair recreates it. That must be
 # its only start: on a site it rotates its account seed at once, and a restart
@@ -270,13 +278,13 @@ if ! node_ok; then
   install -m 0755 -d /etc/apt/keyrings
   if ! curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
       | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg; then
-    echo "could not reach NodeSource to install Node.js 22" >&2
+    echo "could not reach NodeSource to install Node.js ${NODE_MIN%%.*}" >&2
     exit 1
   fi
-  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MIN%%.*}.x nodistro main" \
     > /etc/apt/sources.list.d/nodesource.list
   if ! { apt-get update && apt-get install -y nodejs; }; then
-    echo "could not reach NodeSource to install Node.js 22" >&2
+    echo "could not reach NodeSource to install Node.js ${NODE_MIN%%.*}" >&2
     exit 1
   fi
   node_ok || { echo "Node.js $NODE_MIN or newer did not install" >&2; exit 1; }
@@ -306,7 +314,7 @@ if [[ -d /mnt/lima-cidata && -d /etc/cloud/cloud.cfg.d ]]; then
 fi
 
 # 9b. WSL comes with root only: add the login account step 10 provisions,
-# and keep the VM off the user's Windows files and programs.
+# and keep the VM off the user's Windows files.
 # A site is a cloud server whatever kernel it runs; the service made its account.
 if (( SITE )); then vm=site
 elif grep -qi microsoft /proc/sys/kernel/osrelease; then vm=wsl
@@ -315,12 +323,11 @@ else vm=other
 fi
 if [[ "$vm" == wsl ]]; then
   bash "$INSTALL_DIR/lib/wsl-user.sh" /etc/wsl.conf /etc/sudoers.d
-  # No C: drive at /mnt/c, no running Windows .exe files, no Windows folders
-  # on PATH. Enforced every run, so an older VM or a hand edit gets it back.
-  # WSL reads it at boot only. It can't be switched off live: interop is one
-  # kernel registration that every WSL distro shares.
+  # No C: drive at /mnt/c, no Windows folders on PATH; WSL reads it at boot.
+  # Interop stays on: it is one kernel registration every WSL distro shares,
+  # so turning it off here breaks the user's other distros.
   python3 "$INSTALL_DIR/lib/wsl-conf.py" /etc/wsl.conf \
-    automount.enabled=false interop.enabled=false interop.appendWindowsPath=false
+    automount.enabled=false interop.appendWindowsPath=false
 fi
 
 # 10. per account: docker group, agent instructions, ~/projects, skills.
@@ -340,7 +347,7 @@ while IFS=: read -r name uid gid home; do
     # on Lima that is every session, multiplexed over the ssh control master
     # opened at boot. -P: a project's symlinks are not followed out of it.
     setfacl -R -P -m "u:$name:rwX" /opt/eggie/projects
-    find /opt/eggie/projects -type d -exec setfacl -d -m "u:$name:rwx" {} +
+    find /opt/eggie/projects /opt/eggie/transfers -type d -exec setfacl -d -m "u:$name:rwx" {} +
     setfacl -m "u:$name:r" /opt/eggie/api.token
   fi
   bash "$INSTALL_DIR/lib/install-agents.sh" "$RUNTIME_DIR" "$home" "$uid:$gid"
@@ -374,6 +381,21 @@ systemctl daemon-reload
 systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
 systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
+
+# 11d. stop Claude Code Desktop sessions idle for hours: Desktop keeps one
+# process per session alive for 30 days. Settings live in an env file a run
+# never overwrites; commented out so a new release's defaults still apply.
+if [[ ! -f /opt/eggie/claude-reaper.env ]]; then
+  cat > /opt/eggie/claude-reaper.env <<'EOF'
+# Read by eggie-claude-reaper.service on each run; no restart needed.
+# EGGIE_REAPER_IDLE_MIN=120
+# EGGIE_REAPER_DRY=1
+EOF
+fi
+install -m 644 "$INSTALL_DIR/systemd/eggie-claude-reaper.service" \
+  "$INSTALL_DIR/systemd/eggie-claude-reaper.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now eggie-claude-reaper.timer
 
 # 12. what the console's "Connect an agent" guide needs to know.
 # sed, not head: head exiting early would SIGPIPE the pipeline under pipefail.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { polling, type GitHubStatus, type Repo, type SetupState } from "./github";
-import { githubView, repoRow } from "./view";
+import { filterRepos, githubView, repoRow, shouldLoadMore } from "./view";
 
 const connected = (setup: SetupState, setup_error: string | null = null): GitHubStatus =>
   ({ state: "connected", login: "octo", name: "Octo", email: "e", setup, setup_error }) as const;
@@ -83,5 +83,47 @@ describe("repoRow", () => {
   it("clones directly when the name is free or has no usable suggestion", () => {
     expect(repoRow(repo({}))).toEqual({ kind: "free" });
     expect(repoRow(repo({ name_taken: true, suggested_id: null }))).toEqual({ kind: "free" });
+  });
+});
+
+describe("filterRepos", () => {
+  const named = (full_name: string): Repo => ({
+    full_name, private: false, description: null, updated_at: null,
+    project: null, name_taken: false, suggested_id: null,
+  });
+  const repos = ["ada/Recipe-Box", "ada/garden-log", "kitchen-co/tiny-crm"].map(named);
+  const names = (query: string) => filterRepos(repos, query).map((repo) => repo.full_name);
+
+  it("matches any part of the owner/name, ignoring case", () => {
+    expect(names("RECIPE")).toEqual(["ada/Recipe-Box"]);
+    expect(names("ada/")).toEqual(["ada/Recipe-Box", "ada/garden-log"]);
+  });
+
+  it("ignores surrounding spaces", () => {
+    expect(names("  tiny ")).toEqual(["kitchen-co/tiny-crm"]);
+  });
+
+  it("keeps every repo for an empty or blank query", () => {
+    expect(names("")).toHaveLength(3);
+    expect(names("   ")).toHaveLength(3);
+  });
+});
+
+describe("shouldLoadMore", () => {
+  it("keeps fetching pages while a query is set and more remain", () => {
+    expect(shouldLoadMore("crm", true, false)).toBe(true);
+  });
+
+  it("leaves paging to Load more without a query", () => {
+    expect(shouldLoadMore("", true, false)).toBe(false);
+    expect(shouldLoadMore("  ", true, false)).toBe(false);
+  });
+
+  it("waits for the page in flight", () => {
+    expect(shouldLoadMore("crm", true, true)).toBe(false);
+  });
+
+  it("stops once every page is loaded", () => {
+    expect(shouldLoadMore("crm", false, false)).toBe(false);
   });
 });

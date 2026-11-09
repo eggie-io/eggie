@@ -6,9 +6,11 @@ from pathlib import Path
 from .. import constants
 
 _KINDS = {"wsl", "lima", "site"}
+_HOST_OS = {"wsl": "Windows", "lima": "macOS"}
 
 
-def facts(path: Path, site_host: str | None = None) -> dict:
+def facts(path: Path, site_host: str | None = None,
+          site_user: str | None = None) -> dict:
     """How a coding agent reaches the VM, from what
     install.sh recorded. Anything unreadable reads as an unknown VM: the
     console then chooses a guide from the browser instead."""
@@ -24,7 +26,12 @@ def facts(path: Path, site_host: str | None = None) -> dict:
     if vm == "lima" and user:
         ssh = {"host": "127.0.0.1", "port": constants.LIMA_SSH_PORT,
                "user": user, "key_file": constants.LIMA_KEY_FILE}
-    elif vm == "site" and user and site_host:
+    elif vm == "site" and (site_user or user) and site_host:
         # The service installed the user's own key; there is no file to name.
-        ssh = {"host": site_host, "port": 22, "user": user, "key_file": None}
+        ssh = {"host": site_host, "port": 22, "user": site_user or user, "key_file": None}
     return {"vm": vm, "ssh": ssh}
+
+
+def host_os(path: Path) -> str:
+    """The OS of the computer the VM runs on; a site is its own host."""
+    return _HOST_OS.get(facts(path)["vm"], "Linux")

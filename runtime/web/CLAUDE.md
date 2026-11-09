@@ -5,7 +5,7 @@ React + Vite + TypeScript npm workspace, shipped as the `eggie-web` nginx image.
 it in the Python package. Not to be confused with `host/desktop/ui/` (the native window's local
 screens); don't share code or assets with it.
 
-## Commands (Node ≥ 22.22)
+## Commands (Node ≥ 24)
 
 ```bash
 npm install
@@ -37,18 +37,20 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 - `apps/console` — the app. `/kit` is the component gallery in both themes.
   - `/p/:id/*` pages render inside `screens/project/ProjectLayout.tsx`: it owns the project menu
     (`ProjectMenu.tsx`; its Secrets and Public address notes come from `menu.ts`'s `menuNotes`) and
-    the Analyze, Public address and Delete dialogs. Overview, Files and Secrets render content
-    only, starting with `TitleRow.tsx`. An unknown or deleted id still gets the layout, with a
+    the Public address and Delete dialogs (Analyze is its own page, `AnalyzePage.tsx`,
+    `/p/:id/analyze`). Overview, Files and Secrets render content only, starting with `TitleRow.tsx`. An unknown or deleted id still gets the layout, with a
     bare menu. `projects/color.ts`'s `projectColor` gives a project its tile colour, stable per id.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
-    name rule. Sections: Requested (name with its hint, value), Your secrets (write-only, typed values visible), Add. Mock: `?scenario=secrets`.
-  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM, never clickable), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openKitchenUrl`, through `openExternal` in the desktop window). Mock: `?scenario=kitchens`, `no-kitchens`, `kitchens-down`.
+    name rule. Sections: Requested (name with its hint, value), Your secrets (write-only, typed values visible), Not used by the latest push, Add. While `start_when_ready` is set a notice offers "Start without them" (the ordinary `up`). Start on a project with `secrets_requested > 0` calls `start-when-ready` and lands here. Mock: `?scenario=secrets`, `instance-waiting-secrets`.
+  - `push/push.ts` decides the Push dialog (kitchen rows, the repeat-push confirmation, floating-tag warnings, menu state, secrets link) with no React; `screens/project/PushModal.tsx` renders it and shows the API's messages as they come (the server renders the error copy). Mock: `?scenario=push-no-account`, `push-offline`, `push-no-instances`, `push-instances`, `push-running`, `push-done-secrets`, `push-rate-limited`, `instance-waiting-secrets`.
+  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM, never clickable), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openInstanceUrl`, through `openExternal` in the desktop window; "New cloud kitchen" at the bottom opens `<web_app>/kitchens/new`). On a site the shell's back arrow links `<web_app>/kitchens/<id>` (the `current` row of the same query; `/kitchens` until it loads). The account menu's "Account settings" opens `<web_app>/account`. Mock: `?scenario=instances`, `no-instances`, `instances-down`.
   - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`, and `webApp` likewise into `WebAppContext`/`useWebApp()`; the initial state comes from the page address via `isLocalHost`, so `undefined` occurs only on a non-local address before the first boot answer); on a site the signed-out screen redirects (`window.location.replace`) to `<web_app>/kitchens/open?host=…` via `site/signIn.ts`, or shows a Sign in button after a refused code (`handoff_spent`, so a failing redeem cannot loop), the sign-in screen says the server lost its sign-in (no button), the project menu's Public address item and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`, `?scenario=site-signed-out`.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.
   - `projects/view.ts` maps the API's `status`/`problem`/`job`/`empty` to one screen state for both
-    the list and the project page. `projects/slugify.ts` mirrors the API's `_slug`; both read
+    the list and the project page (`waiting`/`setup` drive `HandoffCard.tsx`; mock `?scenario=handoff-new`,
+    `-github`, `-folder`). `projects/slugify.ts` mirrors the API's `_slug`; both read
     `tests/fixtures/slugify-cases.json`.
   - `uploads/queue.ts` owns the chunked-upload protocol (resume at the API's offset, busy retry on
     the last chunk, hold on `disk_full`) with no React in it. One instance lives above the router in
@@ -65,7 +67,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.
   - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab). All content is in
     `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
-    `<id>/agent.json` with `windows` and `mac` blocks, an optional `card` of fields to copy, steps with an HTML
+    `<id>/agent.json` with `windows`, `mac` and `cloud` blocks, an optional `card` of fields to copy, steps with an HTML
     `body` and a `media` list (screenshots and videos; more than one makes a slider).
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
     names a missing media file. `screens/agents/AgentMark.tsx` shows an agent's icon, or its

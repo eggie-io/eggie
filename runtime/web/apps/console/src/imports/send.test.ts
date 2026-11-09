@@ -16,6 +16,9 @@ function setup(failures: Partial<Record<keyof ImportApi, Error[]>> = {}) {
       calls.push(`create ${id}`);
       fail("create");
     },
+    async up(id) {
+      calls.push(`up ${id}`);
+    },
     async remove(id) {
       calls.push(`remove ${id}`);
       fail("remove");
@@ -56,8 +59,13 @@ describe("runImport", () => {
 
   it("merge tolerates a project that already exists", async () => {
     const { calls, run } = setup({ create: [new ApiError("project_exists", "exists", 409)] });
-    await run("merge");
+    expect(await run("merge")).toBe(false);
     expect(calls).toEqual(["create shop", "send shop 6"]);
+  });
+
+  it("reports a project it created as created, in merge and replace alike", async () => {
+    expect(await setup().run("merge")).toBe(true);
+    expect(await setup().run("replace")).toBe(true);
   });
 
   it("replace deletes before it creates", async () => {

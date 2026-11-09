@@ -92,6 +92,8 @@ quarantine flag, so Gatekeeper never checks it. The Lima-specific unknowns are l
 | B6 | Clone a repo with no docker-compose.yml, then a folder whose compose fails | Both show Needs set-up with a prompt (the second with Docker's message); after the agent runs `eggie up` successfully, a later failure shows Something's wrong | |
 | B7 | On WSL, Lima and a site, with Claude Code Desktop connected over SSH: `systemctl list-timers eggie-claude-reaper.timer`, then (after a run) `journalctl -t eggie-reaper` | The timer is listed with a next run; every `~/.claude/remote/ccd-cli/` process (`ps -eo pid,args \| grep ccd-cli`) has a line with its `idle_min`, none says `skip` | |
 | B8 | On WSL, Lima and a site: put `EGGIE_REAPER_IDLE_MIN=2` in `/opt/eggie/claude-reaper.env`, open a Desktop session, wait 3 minutes, `systemctl start eggie-claude-reaper.service`; then send a message in that session | The journal shows `reap pid=<pid>` and the process is gone; the message gets an answer from a new process with the same `--session-id`. Remove the line afterwards | |
+| B9 | On a running VM, a day after a new `runtime-v*` release (or run `systemctl start eggie-update-check.service`), open the console and click **Update available** → **Update now** | The pill appears; the "Updating Eggie…" overlay shows, projects keep running, the console reloads by itself and `/opt/eggie/runtime.version` is the new release | |
+| B10 | Start an update from the pill, then cut the network mid-pull | The overlay ends, the pill panel shows the reason and the button reads **Try again**; the old version keeps serving and `runtime.version` is unchanged | |
 
 ## Site mode (a droplet from the snapshot; see `site-mode.md`)
 

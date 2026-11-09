@@ -19,6 +19,7 @@ import { SignedOut } from "./screens/SignedOut";
 import { WrongHost } from "./screens/WrongHost";
 import { DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
+import { UpdateButton } from "./shell/UpdateButton";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboarding/Onboarding";
@@ -123,6 +124,7 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
       nav={welcome ? <Progress /> : <Tabs />}
       trailing={
         <>
+          <UpdateButton />
           <AccountMenu onSignedOut={onSignedOut} />
         </>
       }

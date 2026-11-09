@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a newer Eggie runtime release every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

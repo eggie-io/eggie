@@ -92,6 +92,15 @@ above the one it last handled, into `status.json`. systemd drops triggers that a
 so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
 meanwhile.
 
+`lib/update-check.sh` + `lib/update-now.sh` (step 11b-2) work in `/opt/eggie/update/` (`2770 root:docker`).
+`eggie-update-check.timer` (10 min after boot, then every 6 h) runs the check: `resolve_ref` from
+`get.sh` with the host's accepted API, written to `available.json` only when the result sorts strictly
+above the installed tag. A branch pin writes `null` without calling git; any failure exits non-zero
+and keeps the last answer. `eggie-update-now.path` fires when the API bumps `request`;
+`update-now.sh` runs `boot-update.sh` if `request` is above `status.json`'s, records
+`running`/`done`/`failed` (with the last stderr line), then re-runs the check. Never `start`
+`eggie-update-now.service` from `install.sh`. `snapshot-prep.sh` strips the directory.
+
 ## Site mode
 
 `get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
@@ -106,7 +115,8 @@ imaged (`tests/runtime/test_snapshot_prep.py`).
 
 `bash -n` plus text assertions over `install.sh`; `resolve_ref` sourced from `get.sh` with a fake
 `git` on `PATH`; `install-agents.sh`/`login-users.sh` run against temporary homes;
-`install-skills.sh` against a fake `runuser` on `PATH`. Nothing touches
+`install-skills.sh` against a fake `runuser` on `PATH`; `update-check.sh` with fake `git`/`curl` and
+`update-now.sh` with fake sibling scripts in a temp `lib/` (`tests/runtime/test_update_*.py`). Nothing touches
 the network — apt, NodeSource, npm and ghcr are covered only by the live-VM acceptance run.
 
 ## Things that will bite you

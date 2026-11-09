@@ -31,6 +31,7 @@ from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
 from .services.projects import ProjectService
 from .services.public import Public
+from .services.runtime_update import RuntimeUpdate
 from .services.push import PushService
 from .services.secrets import SecretService
 from .services.sessions import Sessions
@@ -75,6 +76,7 @@ class Services:
     site: SiteSignIn
     instances: Instances
     agents: AgentStatus
+    runtime_update: RuntimeUpdate
     certificate: Certificate | None
     sync: SyncLoop
     system: SystemService
@@ -166,4 +168,5 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         sessions=sessions, site=site,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
+        runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
         certificate=certificate, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

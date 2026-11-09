@@ -92,4 +92,5 @@ Start with [docs/README.md](docs/README.md) and [docs/architecture.md](docs/arch
 
 ## License
 
-See [LICENSE](LICENSE).
+Source-available under the [Functional Source License 1.1 (FSL-1.1-ALv2)](LICENSE.md).
+Each version becomes Apache 2.0 two years after its release.

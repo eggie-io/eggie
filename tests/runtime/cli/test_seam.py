@@ -18,7 +18,7 @@ def _project(guest, name="blog", compose=COMPOSE_ONE_WEB):
 
 
 def _compose_ups(runner):
-    return [argv for argv in runner.calls if argv[-2:] == ["up", "-d"]]
+    return [argv for argv in runner.calls if argv[-3:] == ["up", "-d", "--force-recreate"]]
 
 
 def _wait_for(condition, timeout=5.0):

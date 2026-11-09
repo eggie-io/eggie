@@ -1,4 +1,6 @@
 [project]
+license = "FSL-1.1-ALv2"
+license-files = ["LICENSE.md"]
 name = "eggie"
 version = "0.2.10"
 requires-python = ">=3.12"

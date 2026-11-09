@@ -114,6 +114,15 @@ def test_install_always_pulls_before_bringing_the_stack_up():
     assert _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull") < _index_of(" up -d")
 
 
+def test_only_an_explicit_switch_skips_the_pull():
+    # scripts/dev.sh builds the images in the VM under a tag ghcr lacks, so its
+    # install must not pull; every other install still must.
+    commands = _commands()
+    switch = _index_of('if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then')
+    assert "else" in commands[switch + 2]
+    assert switch < _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull")
+
+
 def test_the_stack_comes_up_without_the_tunnel_profile():
     # The API starts the tunnel client only while a public URL is on.
     ups = [l for l in _commands() if f"compose -f {STACK}" in l and " up -d" in l]

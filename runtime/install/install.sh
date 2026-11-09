@@ -190,20 +190,26 @@ fi
 # answered perfectly sends them to inspect the one part that is working; on
 # Apple Silicon, where an amd64-only image is the common case, that is the first
 # thing they hit.
-PULL_LOG="$(mktemp)"
-if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
-  if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
-    echo "could not pull the Eggie images: one of them is not published for" >&2
-    echo "this machine's architecture ($(uname -m)). The registry answered" >&2
-    echo "fine -- that image needs a build for this architecture." >&2
-  else
-    echo "could not pull the Eggie images: the registry was unreachable." >&2
-    echo "Check the network connection or proxy and run setup again." >&2
+# EGGIE_SKIP_PULL=1 is scripts/dev.sh's: it built the images in this VM, under
+# a tag ghcr does not have. `up -d` below still fetches any image that is missing.
+if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then
+  echo "EGGIE_SKIP_PULL=1: using the Eggie images already in this VM"
+else
+  PULL_LOG="$(mktemp)"
+  if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
+    if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
+      echo "could not pull the Eggie images: one of them is not published for" >&2
+      echo "this machine's architecture ($(uname -m)). The registry answered" >&2
+      echo "fine -- that image needs a build for this architecture." >&2
+    else
+      echo "could not pull the Eggie images: the registry was unreachable." >&2
+      echo "Check the network connection or proxy and run setup again." >&2
+    fi
+    rm -f "$PULL_LOG"
+    exit 1
   fi
   rm -f "$PULL_LOG"
-  exit 1
 fi
-rm -f "$PULL_LOG"
 # The API reads its token once, at startup, and `up -d` leaves an unchanged
 # container running, so a new token or a repair recreates it. That must be
 # its only start: on a site it rotates its account seed at once, and a restart

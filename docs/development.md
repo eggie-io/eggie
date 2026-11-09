@@ -74,12 +74,14 @@ scripts/dev.sh --no-window    # update the VM only
 scripts/dev.sh --release      # back to the latest released runtime
 ```
 
-On Windows, run it from PowerShell (not WSL) after `.\setup.ps1 -NoCreate` has built `.venv`. The
-flags are `-Full`, `-Only web`, `-NoWindow` and `-Release`. The checkout can live on a Windows
-drive or inside a WSL distro (`\\wsl.localhost\...`).
+On Windows, run it from PowerShell (not WSL) after `.\setup.ps1 -NoCreate` has built `.venv`.
+`scripts\dev.cmd` starts `dev.ps1` past the execution policy, which blocks `.ps1` files by
+default. The flags are `-Full`, `-Only web`, `-NoWindow` and `-Release`. The checkout can live on a
+Windows drive or inside a WSL distro (`\\wsl.localhost\...`).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+.\scripts\dev                # fast loop
+.\scripts\dev -Only web      # rebuild one image
 ```
 
 The VM then reports runtime `local`. Neither the host's bootstrap nor the boot updater replaces a

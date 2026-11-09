@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { updateView, type RuntimeUpdate } from "./update";
+import { latchStart, updateView, type RuntimeUpdate } from "./update";
 
 const status = (over: Partial<RuntimeUpdate> = {}): RuntimeUpdate => ({
   installed: "0.2.0", available: "0.3.0", state: "idle", error: null, ...over,
@@ -43,5 +43,22 @@ describe("updateView", () => {
     expect(updateView(status({ state: "failed", error: "boom" }), "0.2.0")).toMatchObject({
       kind: "offer", problem: "boom",
     });
+  });
+});
+
+describe("latchStart", () => {
+  it("a tab that only saw the update running still reloads once the release moved", () => {
+    const running = status({ state: "running" });
+    const from = latchStart(updateView(running, null), null, running.installed);
+    expect(from).toBe("0.2.0");
+    expect(updateView(status({ installed: "0.3.0", available: null }), from)).toEqual({ kind: "done" });
+  });
+
+  it("keeps the release it first latched", () => {
+    expect(latchStart({ kind: "updating" }, "0.2.0", "0.3.0")).toBe("0.2.0");
+  });
+
+  it("does not latch outside an update", () => {
+    expect(latchStart({ kind: "hidden" }, null, "0.2.0")).toBeNull();
   });
 });

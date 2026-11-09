@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 
 const KEY = ["runtime-update"] as const;
 const UPDATING_POLL_MS = 3_000;
@@ -31,6 +31,17 @@ export function updateView(status: RuntimeUpdate | undefined, startedFrom: strin
     installed: status.installed,
     problem: status.state === "failed" ? (status.error ?? "no reason given") : null,
   };
+}
+
+// A tab that only watched someone else's update still needs to know where
+// it started, so it reloads once the release moves.
+export function latchStart(view: UpdateView, startedFrom: string | null, installed: string | null): string | null {
+  return view.kind === "updating" && startedFrom === null ? installed : startedFrom;
+}
+
+// The request failed for good, as opposed to an answer lost while the API restarts.
+export function refusedStart(error: unknown): boolean {
+  return error instanceof ApiError && (error.code === "update_not_available" || error.code === "update_unavailable");
 }
 
 // The API and web containers are recreated mid-update, so fetches fail for a

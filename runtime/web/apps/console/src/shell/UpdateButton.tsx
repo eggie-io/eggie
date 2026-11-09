@@ -1,7 +1,8 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, Icon } from "@eggie/ui";
 import { UpdatingOverlay } from "../screens/UpdatingOverlay";
-import { updateView, useRuntimeUpdate, useStartUpdate } from "../update/update";
+import { latchStart, refusedStart, updateView, useRuntimeUpdate, useStartUpdate } from "../update/update";
 import s from "./Shell.module.css";
 
 export function UpdateButton() {
@@ -12,6 +13,11 @@ export function UpdateButton() {
   const start = useStartUpdate();
   const { data } = useRuntimeUpdate(startedFrom, start.isPending);
   const view = updateView(data, startedFrom);
+  const client = useQueryClient();
+
+  useEffect(() => {
+    setStartedFrom((was) => latchStart(view, was, data?.installed ?? null));
+  }, [view, data?.installed]);
 
   useEffect(() => {
     if (view.kind === "done") window.location.reload();
@@ -38,7 +44,12 @@ export function UpdateButton() {
 
   const begin = () => {
     setStartedFrom(view.installed);
-    start.mutate(undefined, { onError: () => setStartedFrom(null) });
+    start.mutate(undefined, {
+      onError: (error) => {
+        if (refusedStart(error)) setStartedFrom(null);
+        void client.invalidateQueries({ queryKey: ["runtime-update"] });
+      },
+    });
   };
 
   return (

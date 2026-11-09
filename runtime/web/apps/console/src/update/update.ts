@@ -35,8 +35,14 @@ export function updateView(status: RuntimeUpdate | undefined, baseline: string |
   };
 }
 
-export function nextBaseline(baseline: string | null, installed: string | null): string | null {
-  return baseline ?? installed;
+// Latched by a tab that first loads mid-update, when installed is unknown:
+// whatever release appears afterwards differs from it, so the tab reloads.
+export const UNKNOWN_BASELINE = "unknown";
+
+export function nextBaseline(baseline: string | null, status: RuntimeUpdate | undefined): string | null {
+  if (baseline !== null || !status) return baseline;
+  if (status.installed !== null) return status.installed;
+  return status.state === "running" ? UNKNOWN_BASELINE : null;
 }
 
 // The API and web containers are recreated mid-update, so fetches fail for a

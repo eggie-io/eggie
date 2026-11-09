@@ -80,10 +80,17 @@ class RuntimeUpdate:
         status = self._json(self._dir / "status.json")
         handled = status.get("request")
         handled = handled if isinstance(handled, int) and not isinstance(handled, bool) else 0
+        # install.sh writes the marker last, on every install, so a marker newer
+        # than an outcome means a later install overtook it. No marker: mid-install.
+        installed_at = self._mtime(self._marker)
         if counter > handled:
+            if installed_at > self._mtime(self._dir / "request"):
+                return "idle", None
             if now - self._mtime(self._dir / "request") > _PICKUP_SECONDS:
                 return "failed", "The updater inside Eggie did not start."
             return "running", None
+        if status.get("state") in ("running", "failed") and installed_at > self._mtime(self._dir / "status.json"):
+            return "idle", None
         if status.get("state") == "running":
             if now - self._mtime(self._dir / "status.json") > _RUN_SECONDS:
                 return "failed", "The update did not finish."

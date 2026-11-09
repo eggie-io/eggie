@@ -17,7 +17,11 @@ class Dirs:
         self.marker = tmp_path / "runtime.version"
         if installed is not None:
             self.marker.write_text(installed)
+            self.stamp_marker(age=10_000)
         self.service = RuntimeUpdate(self.dir, self.marker, clock=lambda: NOW)
+
+    def stamp_marker(self, age):
+        os.utime(self.marker, (NOW - age, NOW - age))
 
     def write(self, name, content, age=0):
         path = self.dir / name
@@ -99,6 +103,48 @@ def test_a_failed_update_carries_its_error(d):
     d.run_status("failed", error="docker pull failed")
 
     assert (d.service.status()["state"], d.service.status()["error"]) == ("failed", "docker pull failed")
+
+
+def test_a_failure_an_install_has_since_overtaken_is_not_shown(d):
+    d.write("request", "1")
+    d.run_status("failed", error="docker pull failed", age=500)
+    d.stamp_marker(age=100)
+
+    status = d.service.status()
+    assert (status["state"], status["error"]) == ("idle", None)
+
+
+def test_an_update_interrupted_by_a_restart_is_not_still_running_once_an_install_finished(d):
+    d.write("request", "1", age=600)
+    d.run_status("running", age=500)
+    d.stamp_marker(age=100)
+
+    assert d.service.status()["state"] == "idle"
+
+
+def test_an_unstarted_request_is_overtaken_by_a_later_install(d):
+    d.run_status("done", request=4, age=900)
+    d.write("request", "5", age=500)
+    d.stamp_marker(age=100)
+
+    assert d.service.status()["state"] == "idle"
+
+
+def test_a_running_update_with_no_marker_stays_running(d):
+    d.write("request", "1")
+    d.run_status("running", age=100)
+    d.marker.unlink()
+
+    assert d.service.status()["state"] == "running"
+
+
+def test_a_failure_after_a_rollback_install_is_still_shown(d):
+    d.write("request", "1")
+    d.stamp_marker(age=500)
+    d.run_status("failed", error="update failed, rolled back", age=100)
+
+    status = d.service.status()
+    assert (status["state"], status["error"]) == ("failed", "update failed, rolled back")
 
 
 def test_requesting_bumps_the_counter_once_and_reports_running(d):

@@ -16,8 +16,8 @@ export function UpdateButton() {
   const client = useQueryClient();
 
   useEffect(() => {
-    setBaseline((was) => nextBaseline(was, data?.installed ?? null));
-  }, [data?.installed]);
+    setBaseline((was) => nextBaseline(was, data));
+  }, [data?.installed, data?.state]);
 
   useEffect(() => {
     if (view.kind === "done") window.location.reload();

@@ -57,7 +57,7 @@ describe("baseline across an update", () => {
   const watch = (answers: RuntimeUpdate[]) => {
     let baseline: string | null = null;
     return answers.map((answer) => {
-      baseline = nextBaseline(baseline, answer.installed);
+      baseline = nextBaseline(baseline, answer);
       return updateView(answer, baseline).kind;
     });
   };
@@ -70,11 +70,17 @@ describe("baseline across an update", () => {
     ])).toEqual(["offer", "updating", "done"]);
   });
 
-  it("a tab opened mid-update reloads after it", () => {
-    // The first release it sees is already the new one; the page is current, so no reload.
+  it("a tab opened mid-update with installed unknown reloads once the release appears", () => {
     expect(watch([
       status({ installed: null, state: "running" }),
       status({ installed: "0.2.0", available: null }),
-    ])).toEqual(["updating", "hidden"]);
+    ])).toEqual(["updating", "done"]);
+  });
+
+  it("a tab on a fresh VM with no release recorded neither latches a baseline nor reloads", () => {
+    expect(watch([
+      status({ installed: null, available: null }),
+      status({ installed: "0.2.0", available: null }),
+    ])).toEqual(["hidden", "hidden"]);
   });
 });

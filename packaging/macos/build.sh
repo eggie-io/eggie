@@ -89,8 +89,7 @@ fi
 # Developer ID identities in the keychain (`security find-identity -v`);
 # EGGIE_NOTARY_PROFILE names a `notarytool store-credentials` profile and turns
 # on notarization and stapling of the .pkg. Release builds set all three. A
-# local dev build can leave them unset and install with right-click > Open
-# (docs/release-testing.md).
+# local dev build can leave them unset and install with right-click > Open.
 #
 # Notarization requires the hardened runtime. Under it, libffi closures (pyobjc,
 # under pywebview's Cocoa backend) need allow-unsigned-executable-memory, which

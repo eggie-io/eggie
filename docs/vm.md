@@ -136,13 +136,12 @@ console, e.g. `foo.eggie.io`) and `EGGIE_SITE_DOMAIN` (projects, e.g. `foo.eggie
 | Public URLs | optional | not available (everything already is) |
 
 Build a snapshot: install with no site variables, run `bash /opt/eggie/runtime/install/snapshot-prep.sh`
-(it also drops root's key and shell history and resets the machine id), image. First boot of a droplet from it: cloud-init writes `account.json`, creates the login user,
-and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names (spec §3.2).
+(it also drops root's key and shell history and resets the machine id), image. First boot of a server from it: cloud-init writes `account.json`, creates the login user,
+and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names.
 
-On a droplet the memory limits for login accounts, the swap size and swappiness, the disabled
-dynamic motd and the sshd hardening come from the service's droplet snapshot, not from the
-runtime; leave them as they are. The service also picks the droplet size: 2 GB was not enough
-for an agent plus a project with headless Chrome, which runs fine on 4 GB.
+On a site server the memory limits for login accounts, the swap size and swappiness, the disabled
+dynamic motd and the sshd hardening come from the service's snapshot, not from the
+runtime; leave them as they are.
 
 ## Troubleshooting
 

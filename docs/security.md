@@ -15,8 +15,8 @@ user's machine can reach in, so read this before adding any way in.
 | Public URL (optional) | One project, through the Eggie service's Cloudflare tunnel | Outbound from the `tunnel` container |
 | Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
 | Site, port `80` | A redirect to 443 | The internet (site mode only) |
-| Site, port `22` | The login account | Whoever holds the SSH key the service installed (site mode only) |
-| Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use ticket the service minted for this kitchen's owner (site mode only) |
+| Site, port `22` | The login account | Whoever holds the login account's SSH key (site mode only) |
+| Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use push ticket (site mode only) |
 
 The host-side forwards are loopback-only: WSL2's `localhostForwarding` puts guest ports onto the
 Windows host's `127.0.0.1`, and Lima's `portForwards` (`host/providers/eggie.yaml`) default to
@@ -121,57 +121,12 @@ id or no transcript, and the process is left alone and logged. Ending sessions w
 `KillUserProcesses=yes` or `StopIdleSessionSec` is ruled out: both end Desktop's SSH session when
 the user disconnects, which kills the task they meant to leave running.
 
-## Site mode (a server the service provisions)
+## Site mode
 
-On a site the boundary is the server's firewall, which the service manages: 22, 80 and 443
-only. Inside it, everything above still holds — every login account, project and container is
-root-equivalent — plus:
-
-- The console and `/api` are on the internet. A session comes only from a handoff code the
-  service minted for this instance's owner and the instance redeemed with the service
-  (`services/site.py`); the cookie is `Secure`. The console and the projects sit on different
-  registered domains (`eggie.io` / `eggie.space`), so a project cannot set a cookie the console's
-  origin would read. The instance redeems at most ten codes a minute with the service; the
-  service owns single use and expiry.
-- Projects are public with whatever auth they have themselves, like public URLs locally.
-- The bearer API binds to loopback (`EGGIE_API_BIND`). Project `ports:` are still published on
-  all interfaces; only the firewall blocks them.
-- The certificate key is `0600`, owned by the API's user, written by the API, mounted read-only into Traefik; it covers
-  this instance's three names only. The seeded token file is deleted on import.
-- The seeded token pair is rotated at first boot, and sign-out is refused on a site.
-- The edge port (39080) is the plain-HTTP probe entrypoint and serves every project host; on a site
-  it is published on loopback only (`EGGIE_EDGE_BIND`).
-- The desktop window never shows the Eggie web app or a kitchen console: the switcher opens kitchens
-  in the system browser. Minting a kitchen code still needs a person's web app session; the device
-  token only lists kitchens (`GET /v1/instances`).
-- A snapshot made with `snapshot-prep.sh` holds no token, database or key.
-- Containers cannot reach the cloud metadata service (`169.254.169.254`): it serves the user
-  data that seeded the account token, and a project's code would otherwise read it. A droplet-only
-  `DROP` rule in `DOCKER-USER`, installed by `eggie-metadata-guard.service` before Docker starts. It covers bridged
-  containers only; a project with `network_mode: host` sits on the host's network and is outside it, as it is outside every container boundary already.
-
-### Pushing to a kitchen
-
-- `/api/transfers` has its own auth branch in `rest/auth.py`: `Host` must be the site host, and the
-  API token and sessions are refused. The router redeems the ticket with the service before it reads
-  a byte, and limits attempts to 10 a minute per sender address (the first `X-Forwarded-For`
-  entry, which Traefik sets, at most 1024 addresses tracked) and 60 a minute in all.
-- The ticket (`Eggie-Transfer-Ticket`) and the per-push token (`Eggie-Transfer-Token`) travel in
-  headers only, never in a URL or log line. The token is compared in constant time; an unknown id
-  and a wrong token both answer 404.
-- The kitchen takes the project's identity from the ticket's grant, never from the bundle; an `id`
-  in the pushed `.eggie/project.yml` is rewritten to the kitchen's project id.
-- Unpacking runs in a root helper container (`python -m eggie_api.infra.bundle unpack`): it refuses
-  absolute names, devices, FIFOs and hard links that escape the tree. Project files get the staging
-  folder's group (the VM's `docker`, inherited through `/opt/eggie`'s setgid bit) and setgid
-  directories; volumes keep the sender's owners. A volume whose explicit `name:` is outside
-  `<compose_name>_` is refused (`bad_bundle`), as is a compose `name:` that is another kitchen
-  project's.
-- What leaves the user's machine: the project files (including `.env` and any folder a service
-  mounts), every named volume that exists locally, and secret names with their hints. Never
-  secret values.
-- TLS to the kitchen is always verified; `EGGIE_INSTANCE_CA_FILE` adds trust for dev (staging)
-  certificates.
+On a server the Eggie service provisions, the runtime exposes 443, 80 and 22 behind a firewall
+the service manages; everything above about the inside of the boundary still holds. The console
+and `/api` need a session the service issues, and projects are public with whatever auth they
+have themselves.
 
 ## Before adding a way in
 

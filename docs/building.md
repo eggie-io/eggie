@@ -3,8 +3,8 @@
 Both installers use PyInstaller to freeze the host in one-dir mode. Before packaging, the build
 runs the frozen binary (`eggie version`, then `eggie selfcheck`), so a missing bundled asset
 fails the build instead of turning up during a user's setup. The version comes from
-`pyproject.toml`. Before a build ships, run the manual checks in
-[release-testing.md](release-testing.md).
+`pyproject.toml`. Before a build ships, test it by hand
+on real machines.
 
 ## Windows installer
 

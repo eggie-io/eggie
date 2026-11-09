@@ -7,6 +7,9 @@ The desktop app (`host/`) and the runtime (everything inside the VM) release sep
 - **Runtime:** every VM checks at boot (`eggie-update.service`) and moves to the newest
   `runtime-vX.Y.Z` whose `runtime/release.json` `api` the host accepts (`/opt/eggie/host.json`).
   A host that finds an older API updates the runtime at once. A failed update keeps the old one.
+  A running VM also checks about 10 minutes after boot and every 6 h (`eggie-update-check.timer`);
+  when it sees a newer accepted release the console header shows **Update available**, and
+  **Update now** runs the same update without a reboot. Projects keep running; branch-pinned installs are never offered.
 - **Desktop app:** the app checks `app-vX.Y.Z` releases on launch and shows **Update**.
 
 `runtime/install/get.sh` on `main` is what every host and every VM runs. Keep its env vars

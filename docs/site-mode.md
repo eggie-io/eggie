@@ -13,7 +13,7 @@ Nothing in the host or the desktop app changes for site mode. Everything lives i
 Run as root on a fresh Ubuntu 24.04 droplet, from `/`, with no site variables. The prep script
 strips what is this machine's; power off and take the image.
 
-Production — the newest `runtime-v*` tag; the boot update keeps every droplet made from it current:
+Production — the newest `runtime-v*` tag; the boot update keeps every droplet made from it current (a running one also shows **Update available** in its console):
 
 ```bash
 cd / && curl -fsSL https://raw.githubusercontent.com/eggie-io/eggie/main/runtime/install/get.sh | bash \
@@ -68,7 +68,7 @@ hyphen, for project ids and for service subdomains alike), so the two sides cann
    the `tls/`, `tunnel/`, `uploads/`, `github/`, `projects/` and `agent-status/` trees, root's SSH
    key and shell history, and cloud-init's instance state and machine id. The runtime tree, the
    images, `.env` and `runtime.env` stay. The snapshot does not need rebuilding on every release:
-   the boot update moves each server to the newest release on its first boot.
+   the boot update moves each server to the newest release on its first boot, and the console offers later ones.
 2. **The service provisions** a droplet from it (see the contract below): firewall, DNS rows,
    certificate, a device token pair for the owner's account, the login user's SSH key, and
    cloud-init user data that writes `/opt/eggie/account.json` and runs `get.sh` in repair mode with

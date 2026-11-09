@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dev loop on macOS (Windows: scripts/dev.ps1): run this checkout's runtime in
+# Dev loop on macOS (Windows: scripts/dev.cmd): run this checkout's runtime in
 # the Eggie VM and this checkout's host window against it. Nothing is pushed;
 # images are built in the VM from your working tree. Re-run after every change.
 #

@@ -4,7 +4,8 @@
   checkout's host window against it. The Windows twin of scripts/dev.sh.
   Nothing is pushed; the images are built inside the VM from your working
   tree. Re-run it after every change. Run it from PowerShell, not from WSL,
-  through scripts\dev.cmd (the execution policy blocks a bare .ps1).
+  through scripts\dev.cmd: the execution policy blocks a bare .ps1, and
+  PowerShell would pick a dev.ps1 over dev.cmd for `.\scripts\dev`.
 
 .EXAMPLE
   .\scripts\dev                    # fast: sync runtime/, rebuild api + web, restart them, open the window
@@ -35,7 +36,7 @@ $tag = 'local'
 $stage = '/opt/eggie/dev'    # mirror of the checkout parts build.sh needs
 
 function Say($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
-function Fail($msg) { Write-Host "dev.ps1: $msg" -ForegroundColor Red; exit 1 }
+function Fail($msg) { Write-Host "dev: $msg" -ForegroundColor Red; exit 1 }
 
 if (-not (Test-Path $py)) { Fail "no .venv here; run .\setup.ps1 -NoCreate first" }
 

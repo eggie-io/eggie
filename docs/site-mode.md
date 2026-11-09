@@ -133,8 +133,8 @@ with a link to the web app's kitchens list, instead of a sign-in button that can
 The local console's Push uploads a project to a kitchen; the kitchen side is `/api/transfers`,
 mounted on a site only.
 
-- A push can name a page to return to; `POST /api/session` returns it (validated) and the
-  console lands on that page after sign-in.
+- A sign-in code can carry a page to land on (a push's "add secrets" link uses it);
+  `POST /api/session` returns it (validated) and the console lands on that page after sign-in.
 - Pushed projects (`pushed_projects`) are skipped by the kitchen's registry sync: never registered
   or deleted there. On the sending side a locally deleted pushed project is forgotten, not deleted
   on the service.

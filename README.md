@@ -8,7 +8,7 @@ everything a project needs to run. You (or your coding agent) put a project ther
 a link to open it in your browser.
 
 > **Status:** early preview. Windows is the main platform. macOS works on Apple Silicon but has had
-> little testing ([status](docs/macos-status.md)).
+> little testing.
 
 ## What you get
 

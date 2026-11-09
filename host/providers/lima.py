@@ -5,8 +5,8 @@ from __future__ import annotations
 # provider's `create()` against the pre-33571da revision of eggie.yaml
 # booted under `vz`, ran the full engine bootstrap, and answered both
 # declared portForwards (39080, 39099) -- confirmed after the fact, not by a
-# controlled session anyone recorded as it happened. See
-# docs/macos-status.md (it points at the full command trail in git history).
+# controlled session anyone recorded as it happened. The full command trail
+# is in git history.
 # Still unrun anywhere: the `--cpus`/`--memory` flags `create()` passes,
 # `forward()`/`forwards()` and the ssh control master
 # they assume, `stop()`/`destroy()`, the uninstall path, whether
@@ -29,8 +29,8 @@ LOOPBACK = "127.0.0.1"
 # The value eggie.yaml's `ssh.localPort` requests -- not confirmed as what
 # Lima actually binds. Not shown to the user for that reason (see
 # _PORT_UNCONFIRMED below): the one VM this project has inspected predates
-# the field, so whether Lima honours it is still an open question in
-# docs/macos-status.md. Kept here only as the value asked for.
+# the field, so whether Lima honours it is still an open question. Kept here
+# only as the value asked for.
 DECLARED_SSH_PORT = "39022"
 
 # What the screen shows for Port before Lima has written its own ssh.config
@@ -81,7 +81,7 @@ def parse_ssh_config(text: str) -> dict[str, str]:
 # check. Port is different: Eggie requests it via eggie.yaml's
 # `ssh.localPort`, but no run of this project has ever confirmed Lima honours
 # that field rather than picking its own free port -- the one VM inspected so
-# far predates the field entirely (see docs/macos-status.md).
+# far predates the field entirely.
 # User and Identity file are never configured anywhere: they are guesses at
 # Lima's usual behaviour for a fresh guest account (`getpass.getuser()`,
 # `_config/user`), and a host username Lima sanitizes when provisioning the

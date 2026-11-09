@@ -60,7 +60,7 @@ Every feature router (`FEATURES` in `rest/app.py`) is mounted **twice**:
 
 The desktop gets the browser a session via `POST /sessions/handoff`; a signed-in page gets the
 system browser one via `POST /api/sessions/handoff`
-(`docs/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`).
+(`../eggie-resources/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`).
 Every non-2xx body is `{"error": {"code": ..., "message": ...}}`, produced by one exception
 handler — the host's `ApiClient` and the console both depend on that shape.
 
@@ -120,7 +120,7 @@ and a host release. Prefer additive changes.
   `state.db`; `sync.py` gives each local project a service record
   (`client_ref = <device_id>/<local_id>`) on a thread. Only the console is locked until sign-in —
   the CLI and agents never wait on it. Service gaps are **not** worked around here; see
-  `docs/superpowers/specs/2026-09-23-account-sign-in-sync-design.md` §7.
+  `../eggie-resources/superpowers/specs/2026-09-23-account-sign-in-sync-design.md` §7.
 - **GitHub** (`infra/github.py`, `services/github_link.py`) — Device Flow (`EGGIE_GITHUB_CLIENT_ID`, no
   secret); token in `/opt/eggie/github/token` (0600). The API never touches a user home: it writes
   a token-free `desired.json` with a rising `generation`; a systemd path unit runs
@@ -138,7 +138,7 @@ and a host release. Prefer additive changes.
   and re-reads the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The `tunnel`
   network reaches the VM through its gateway, so every port published on 0.0.0.0 (the api's, a
   project's `ports:`) is reachable from the tunnel client. Design:
-  `docs/superpowers/specs/2026-09-24-public-url-design.md`.
+  `../eggie-resources/superpowers/specs/2026-09-24-public-url-design.md`.
 - **Agents** (`services/agents.py`) — `GET /agents/status` and `POST /agents/{id}/setup`. The API never
   reads a home: it bumps counters in `/opt/eggie/agent-status/` (`check`, `setup/<id>`) and returns
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
@@ -164,7 +164,7 @@ and a host release. Prefer additive changes.
   console's confirmation and replaces files and volumes alike. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
   in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten) and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
   sync; `instance_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
-  the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
+  the console shows the API's messages. Design: `../eggie-resources/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
 ## Testing
 

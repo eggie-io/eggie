@@ -10,7 +10,7 @@ A PoC (`eggie`) that creates a managed Linux VM (Ubuntu 24.04), installs Docker 
 any `docker-compose` project in the guest, and hands back a working URL on the host. Windows/WSL2
 is the primary platform. macOS/Lima is **confirmed once, still mostly unverified** (a VM booted and
 finished the runtime install on Apple Silicon; nobody has recorded a full `create_vm` → `verify`
-run) — see `docs/macos-status.md`.
+run) — see `../eggie-resources/ops/macos-status.md`.
 
 Each layer has its own CLAUDE.md with the detail; read the one for the tree you are touching:
 `host/`, `host/desktop/`, `runtime/`, `runtime/install/`, `runtime/eggie_api/`, `runtime/web/`.
@@ -89,7 +89,7 @@ In the WSL sandbox `/tmp/pytest-of-$USER` is root-owned, which breaks `tmp_path`
 
 - Python 3.12+, `from __future__ import annotations`, frozen dataclasses for value types.
 - Packaging lives in `packaging/<platform>/` (Inno Setup on Windows, `pkgbuild`/`productbuild` on
-  macOS); images in `packaging/images/build.sh`. Manual release gates: `docs/release-testing.md`.
+  macOS); images in `packaging/images/build.sh`. Manual release gates: `../eggie-resources/ops/release-testing.md`.
 - Gotchas go in the CLAUDE.md of the layer they belong to, under "Things that will bite you". Add
   one when you hit it.
 
@@ -112,10 +112,20 @@ one that breaks it. Commits inside a branch never reach the notes and can stay f
 ## Docs
 
 - `docs/README.md` indexes the human how-tos: `development.md`, `building.md`, `releasing.md`,
-  `vm.md`, `site-mode.md`, `security.md`, `release-testing.md`, `macos-status.md`. Keep them in step when a command or path they
-  name changes.
-- `docs/superpowers/` — the original blueprint plus every design spec and plan (dated filenames).
-  `.superpowers/sdd/` (gitignored) is the per-task execution ledger.
+  `vm.md`, `site-mode.md`, `security.md`. Keep them in step when a command or path they name
+  changes.
+- Internal docs live in the private sibling repo `../eggie-resources/`, never here:
+  `../eggie-resources/ops/release-testing.md`, `../eggie-resources/ops/macos-status.md`,
+  `../eggie-resources/ops/releasing-internal.md` (first-release checklist),
+  `../eggie-resources/service/` (site-mode service contract, full site security notes) and
+  `../eggie-resources/design/` (the old web UI board).
+- Superpowers specs and plans do NOT live in this repo (it is public). Always write them to
+  the sibling repo `../eggie-resources/superpowers/`:
+  - specs: `../eggie-resources/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+  - plans: `../eggie-resources/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+  Commit them in `eggie-resources`, never in this repo. Never create `docs/superpowers/` here.
+  Older specs and plans are there too; read them there.
+- `.superpowers/sdd/` (gitignored) stays here as the per-task execution ledger.
 - `docs/architecture.md` is the high-level map for humans; keep it in step when the seam, the
   stack or the update flow changes. `docs/roadmap.md` **does not exist** — check `ls docs/` before
   trusting a pointer to it. Phase 1 (MVP) fixes what exists (repo split, no host CLI, SSH-only access,

@@ -7,8 +7,8 @@ You install one app. It creates a private Linux machine on your computer and set
 everything a project needs to run. You (or your coding agent) put a project there, and Eggie gives you
 a link to open it in your browser.
 
-> **Status:** early preview. Windows is the main platform. macOS works on Apple Silicon but has had
-> little testing.
+> **Status:** early preview. Tested on Windows and on Macs with Apple Silicon. Intel Macs have not
+> been tested.
 
 ## What you get
 

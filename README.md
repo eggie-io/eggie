@@ -1,5 +1,7 @@
 # Eggie
 
+> **Eggie is in open beta.** Describe an app to Claude Code, Codex or Cursor; Eggie runs it in a local VM with a real database and gives you a URL. [Download](https://eggie.io/) · [Report a bug](https://github.com/eggie-io/eggie/issues/new)
+> 
 <p align="center">
   <img src="https://github.com/eggie-io/.github/blob/main/profile/eggie-logo-lockup.png" width="196" alt="Eggie" />
 </p>

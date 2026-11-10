@@ -1,5 +1,11 @@
 # Eggie
 
+<p align="center">
+  <img src="https://github.com/eggie-io/.github/blob/main/profile/eggie-logo-lockup.png" width="196" alt="Eggie" />
+</p>
+
+[![Eggie Demo Video](https://img.youtube.com/vi/Y0OksMC7h2g/maxresdefault.jpg)](https://www.youtube.com/watch?v=Y0OksMC7h2g)
+
 Eggie gives you a ready-to-use place on your own computer to build and run web apps with a coding
 agent such as Claude Code, Codex or Cursor, without setting up a developer machine.
 

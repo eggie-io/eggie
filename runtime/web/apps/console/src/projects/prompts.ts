@@ -37,21 +37,25 @@ export const said = (source: Source, detail: string) => `${source === "docker" ?
 export type Focus = "full" | "start" | "share";
 
 export const ANALYZE_GETS: Record<Focus, string[]> = {
-  full: ["What it does", "How it runs", "What's broken", "Keys it needs", "Top 3 fixes"],
+  full: ["Verdict", "What matters most", "What's in good shape", "What wasn't checked", "Keys it needs"],
   start: ["The cause, in plain words", "The fix it suggests", "It waits for your OK"],
-  share: ["Leaked keys or data", "What breaks for others", "What to fix first"],
+  share: ["What strangers could reach", "Leaked keys", "What to change before sharing"],
 };
+
+// Without this an agent that lacks the skill answers free-form, and it reads like an audit.
+const NO_SKILL = "If you don't have that skill, say so instead of guessing.";
 
 export function analyzePrompt(focus: Focus, id: string, detail: string | null): string {
   const p = folder(id);
   switch (focus) {
     case "full":
-      return `Look through ${p} and give me a short, plain-language report. Don't change any files. Tell me: 1) what it does, in two sentences; 2) how it runs — what starts and what it needs; 3) what's broken or half-finished; 4) which keys or passwords it expects; 5) the three things you'd fix first, and why.`;
+      return `Use the eggie-audit skill to take a quick look at ${p} and tell me what shape it's in. Also tell me which keys or passwords it expects. Don't fix anything. ${NO_SKILL}`;
     case "start": {
-      const ask = `${p} won't start in Eggie. Find out why: check docker-compose.yml, the Dockerfile${detail ? " and the error below" : ""}. Don't change any files yet. Explain the cause in plain words, tell me exactly what you'd change to fix it, then wait for my go-ahead.`;
+      const files = detail ? "docker-compose.yml, the Dockerfile and the error below" : "docker-compose.yml and the Dockerfile";
+      const ask = `${p} won't start in Eggie. Find out why: read \`eggie logs\` first, then ${files}. Don't change any files yet. Explain the cause in plain words, tell me exactly what you'd change to fix it, then wait for my go-ahead.`;
       return detail ? `${ask}\n\n${detail}` : ask;
     }
     case "share":
-      return `I'm about to put ${p} on a public address. Check it first, without changing any files: are there keys, passwords or personal data in the code or in anything it serves? What breaks for someone who isn't me? Give me a short list: what's fine, and what to fix before sharing.`;
+      return `I'm about to put ${p} on a public address, so other people will be able to open it. Use the eggie-audit skill to check security and readiness to go live first. Don't fix anything until I say so. ${NO_SKILL}`;
   }
 }

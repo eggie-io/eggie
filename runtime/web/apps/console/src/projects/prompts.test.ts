@@ -26,13 +26,13 @@ describe("setupPrompt", () => {
 describe("analyzePrompt", () => {
   it("points the start question at the error and carries it", () => {
     const prompt = analyzePrompt("start", "a", "exit code 1");
-    expect(prompt).toContain("the Dockerfile and the error below.");
+    expect(prompt).toContain("docker-compose.yml, the Dockerfile and the error below.");
     expect(prompt).toMatch(/go-ahead\.\n\nexit code 1$/);
   });
 
   it("drops the error from the start question when there is none", () => {
     const prompt = analyzePrompt("start", "a", null);
-    expect(prompt).toContain("the Dockerfile. Don't change");
+    expect(prompt).toContain("docker-compose.yml and the Dockerfile. Don't change");
     expect(prompt).not.toContain("error below");
     expect(prompt).toMatch(/go-ahead\.$/);
   });

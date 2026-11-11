@@ -59,12 +59,13 @@ export function AnalyzePage() {
   const focus = picked.focus;
   const detail = focus === "start" ? startDetail(project, view) : null;
   const name = atSentenceStart(agent.name);
+  const audit = focus !== "start";
 
   return (
     <section className={s.page}>
       <TitleRow
         title="Analyze"
-        sub={<span className={s.lead}>Get a plain-language read on this project. Eggie doesn't look at your code. {name} reads it and answers there. Nothing gets changed.</span>}
+        sub={<span className={s.lead}>Get a plain-language read on this project. Eggie doesn't look at your code. {name} reads it and answers there. Nothing in your app gets changed.</span>}
       />
       <div className={s.ask}>
         <span className={s.askLabel}>What do you want to know?</span>
@@ -76,8 +77,12 @@ export function AnalyzePage() {
         steps={{
           prompt: analyzePrompt(focus, project.id, detail),
           extra: detail ?? undefined,
-          copyHint: `It tells ${agent.name} not to change any files.`,
-          pasteHint: `Takes a minute or two. Read the report in ${agent.name}, not here.`,
+          copyHint: audit
+            ? `It tells ${agent.name} not to fix anything. A report is saved in the project.`
+            : `It tells ${agent.name} not to change any files.`,
+          pasteHint: audit
+            ? `Takes about ten minutes. ${name} asks you a question or two along the way.`
+            : `Takes a minute or two. Read the report in ${agent.name}, not here.`,
           last: (
             <>
               <span className={s.stepTitle}>What you'll get back</span>

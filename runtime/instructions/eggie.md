@@ -61,6 +61,9 @@ At every level the rules below hold, and always give them the project's URL.
   skill (no skills? run `eggie --help`).
 - A recipe ("download the Eggie recipe …", or a line copied from the Eggie website): the
   `eggie-recipe` skill (no skills? `eggie recipe get <slug>` prints what to do).
+- Something the user will need again outside this chat (a QR code for their phone, store or
+  deploy steps, where to sign in): write it as a page in the project's `.eggie/docs/`, which
+  Eggie shows under **Docs**. The `eggie-pages` skill says how.
 - Files on the user's own computer are out of reach from here. For a folder they have, ask them
   to use **Import** in Eggie. You cannot open their browser: give them links to click.
 - GitHub — repositories, pull requests, issues: use `gh` and plain `git` over https.

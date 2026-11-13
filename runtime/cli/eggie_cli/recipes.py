@@ -32,7 +32,10 @@ def cmd_recipe_add(env: Env, slug: str, project: str | None = None) -> None:
             raise EggieError("Run this inside a project folder in "
                              f"~/projects ({env.root}), or pass --project.")
         folder, project_id = found
+    client = env.client()
     if folder.is_dir():
         prepare_overlay_dir(folder, env.gid(), "project.yml")
-    env.client().add_recipe(project_id, slug)
+        # A copied-in folder has no project row until something registers it.
+        client.ensure_project(project_id)
+    client.add_recipe(project_id, slug)
     print(f"{slug} added to {project_id}.", file=env.out)

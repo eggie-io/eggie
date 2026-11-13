@@ -46,3 +46,13 @@ def test_recipe_add_makes_the_eggie_folder_writable_for_the_api_first(recipe_gue
     recipe_guest.cloud.replies["recipe"] = [{"slug": "mobile-app"}]
     assert recipe_guest.run("recipe", "add", "mobile-app", cwd=folder)[0] == 0
     assert (folder / ".eggie").stat().st_mode & 0o2070 == 0o2070
+
+
+def test_recipe_add_works_on_a_copied_folder_eggie_has_not_seen_yet(recipe_guest):
+    folder = recipe_guest.root / "app"
+    folder.mkdir()
+    (folder / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
+    recipe_guest.cloud.replies["recipe"] = [{"slug": "mobile-app"}]
+    code, out, err = recipe_guest.run("recipe", "add", "mobile-app", cwd=folder)
+    assert (code, out, err) == (0, "mobile-app added to app.\n", "")
+    assert "mobile-app" in (folder / ".eggie/project.yml").read_text()

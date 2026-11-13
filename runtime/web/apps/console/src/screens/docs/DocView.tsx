@@ -1,11 +1,13 @@
-import { createElement, type ReactNode } from "react";
+import { createElement, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import type { Action } from "../../actions/types";
 import { Qr } from "../../components/Qr";
 import { qrModules } from "../../components/qr";
 import { openExternal } from "../../desktop/desktop";
 import type { Block, Inline } from "../../docs/markdown";
 import { docsRoute } from "../../docs/pages";
 import { fileUrl } from "../../uploads/paths";
+import { ActionCard } from "./ActionCard";
 import s from "./DocsPage.module.css";
 
 // Renders parseDoc's tree as elements; nothing from the page reaches raw HTML.
@@ -42,7 +44,7 @@ function Inlines({ id, nodes }: { id: string; nodes: Inline[] }): ReactNode {
   });
 }
 
-function Blocks({ id, blocks }: { id: string; blocks: Block[] }): ReactNode {
+function Blocks({ id, blocks, onOpenTerminal }: { id: string; blocks: Block[]; onOpenTerminal: (action: Action) => void }): ReactNode {
   return blocks.map((block, i) => {
     switch (block.kind) {
       case "heading":
@@ -55,8 +57,10 @@ function Blocks({ id, blocks }: { id: string; blocks: Block[] }): ReactNode {
         return qrModules(block.value)
           ? <figure key={i} className={s.qr}><Qr value={block.value} label="QR code" /></figure>
           : <pre key={i} className={s.pre}><code>{block.value}</code></pre>;
+      case "action":
+        return <ActionCard key={i} projectId={id} id={block.id} onOpenTerminal={onOpenTerminal} />;
       case "list": {
-        const items = block.items.map((item, j) => <li key={j}><Blocks id={id} blocks={item} /></li>);
+        const items = block.items.map((item, j) => <li key={j}><Blocks id={id} blocks={item} onOpenTerminal={onOpenTerminal} /></li>);
         return block.ordered ? <ol key={i} start={block.start}>{items}</ol> : <ul key={i}>{items}</ul>;
       }
       case "table":
@@ -75,7 +79,7 @@ function Blocks({ id, blocks }: { id: string; blocks: Block[] }): ReactNode {
           </div>
         );
       case "quote":
-        return <blockquote key={i}><Blocks id={id} blocks={block.children} /></blockquote>;
+        return <blockquote key={i}><Blocks id={id} blocks={block.children} onOpenTerminal={onOpenTerminal} /></blockquote>;
       case "hr":
         return <hr key={i} />;
     }
@@ -83,5 +87,6 @@ function Blocks({ id, blocks }: { id: string; blocks: Block[] }): ReactNode {
 }
 
 export function DocView({ id, blocks }: { id: string; blocks: Block[] }) {
-  return <article className={s.doc}><Blocks id={id} blocks={blocks} /></article>;
+  const [, setTerminalFor] = useState<Action | null>(null);
+  return <article className={s.doc}><Blocks id={id} blocks={blocks} onOpenTerminal={setTerminalFor} /></article>;
 }

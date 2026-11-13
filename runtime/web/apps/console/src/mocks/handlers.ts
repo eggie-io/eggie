@@ -60,6 +60,7 @@ export const SCENARIOS = [
   "update-failed",
   "updating",
   "docs",
+  "actions",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -372,6 +373,27 @@ export function handlersFor(scenario: Scenario) {
       '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" rx="12" fill="#f3e9d2"/><text x="120" y="66" font-size="16" text-anchor="middle" font-family="sans-serif">Recipe Box</text></svg>',
       "image/svg+xml");
   }
+  if (scenario === "actions" && projects.has("recipe-box")) {
+    seedText("recipe-box", ".eggie/docs/index.md", [
+      "# Build and share",
+      "",
+      "Make an iPhone build of the app:",
+      "",
+      "```action",
+      "ios-build",
+      "```",
+      "",
+      "Share the app on your phone while you work:",
+      "",
+      "```action",
+      "expo-tunnel",
+      "```",
+      "",
+      "```action",
+      "nope",
+      "```",
+    ].join("\n"));
+  }
   for (const p of projects.values()) {
     if (p.id === "recipe-box" || p.empty) continue;
     seedFile(p.id, "docker-compose.yml", 1024, hoursAgo(30));
@@ -554,7 +576,48 @@ export function handlersFor(scenario: Scenario) {
     error: scenario === "update-failed" ? "could not pull the new images" : (null as string | null),
   };
 
+  type MockRun = { state: "running" | "exited"; exit_code: number | null; started_at: number };
+  const mockActions = [
+    { id: "ios-build", recipe: "expo", name: "Build for iPhone", description: "Makes a build you can install through TestFlight.", command: "eas build --platform ios", type: "one-off" },
+    { id: "expo-tunnel", recipe: "expo", name: "Share on your phone", description: null, command: "npx expo start --tunnel", type: "long-running" },
+  ] as const;
+  const mockRuns = new Map<string, MockRun>();
+  if (scenario === "actions") mockRuns.set("expo-tunnel", { state: "running", exit_code: null, started_at: nowSec() - 90 });
+
+  const actionHandlers = [
+    http.get("/api/projects/:id/actions", () => {
+      const denied = guard();
+      if (denied) return denied;
+      return HttpResponse.json({
+        actions: mockActions.map((a) => ({ ...a, run: mockRuns.get(a.id) ?? null })),
+        problems: [],
+      });
+    }),
+    http.post("/api/projects/:id/actions/:action/start", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const id = String(params.action);
+      if (!mockActions.some((a) => a.id === id)) return refuse("action_not_found", `no action called ${id}`, 404);
+      if (mockRuns.get(id)?.state === "running") return refuse("action_running", "That action is already running", 409);
+      const run: MockRun = { state: "running", exit_code: null, started_at: nowSec() };
+      mockRuns.set(id, run);
+      if (mockActions.find((a) => a.id === id)?.type === "one-off") {
+        window.setTimeout(() => mockRuns.set(id, { ...run, state: "exited", exit_code: 0 }), 4000);
+      }
+      return HttpResponse.json({ run });
+    }),
+    http.post("/api/projects/:id/actions/:action/stop", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      mockRuns.delete(String(params.action));
+      return HttpResponse.json({ run: null });
+    }),
+    http.get("/api/projects/:id/actions/:action/log", () =>
+      new HttpResponse("Starting Metro Bundler\nTunnel ready.\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } })),
+  ];
+
   return [
+    ...actionHandlers,
     http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
     http.post("/api/runtime/update", () => {
       if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);

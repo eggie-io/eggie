@@ -19,6 +19,7 @@ export type Block =
   | { kind: "paragraph"; children: Inline[] }
   | { kind: "code"; lang: string; text: string }
   | { kind: "qr"; value: string }
+  | { kind: "action"; id: string }
   | { kind: "list"; ordered: boolean; start: number; items: Block[][] }
   | { kind: "table"; align: Align[]; header: Inline[][]; rows: Inline[][][] }
   | { kind: "quote"; children: Block[] }
@@ -90,6 +91,7 @@ function blocks(tokens: Token[] | undefined): Block[] {
       case "text":
         return [{ kind: "paragraph", children: t.tokens ? inlines(t.tokens) : [decode(t.text)] }];
       case "code":
+        if (t.lang === "action") return [{ kind: "action", id: t.text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "" }];
         return t.lang === "qr" ? [{ kind: "qr", value: t.text.trim() }] : [{ kind: "code", lang: t.lang ?? "", text: t.text }];
       case "list":
         return [{ kind: "list", ordered: t.ordered, start: t.start === "" ? 1 : t.start, items: t.items.map((i) => item(i.tokens)) }];

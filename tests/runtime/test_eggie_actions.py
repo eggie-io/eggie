@@ -164,6 +164,14 @@ def test_a_one_off_runs_in_the_project_folder_and_reports_its_exit_code(helper):
     assert (helper.projects / "app" / "out").read_text().strip() == str(helper.projects / "app")
 
 
+@pytest.mark.parametrize("command", [r"find . -maxdepth 0 -exec pwd > out \;", "pwd > out;"])
+def test_a_command_ending_in_a_semicolon_reaches_bash_intact(helper, command):
+    # tmux reads an argument ending in `;` as a command separator.
+    helper.start_action("build", command)
+    assert helper.wait_exited("build")["exit_code"] == 0
+    assert (helper.projects / "app" / "out").read_text().strip() == str(helper.projects / "app")
+
+
 def test_start_while_running_is_action_running(helper):
     helper.start_action("serve", "sleep 600")
     reply = helper.ask(op="start", project="app", action="serve", command="sleep 600", log=False)
@@ -318,6 +326,21 @@ def test_ids_that_are_not_slugs_are_refused(helper):
             assert reply["ok"] is False and reply["code"] == "invalid", (request, project, action, reply)
 
 
-def test_only_start_needs_the_project_folder(helper):
+def test_start_refuses_a_project_with_no_folder(helper):
     reply = helper.ask(op="start", project="missing", action="a", command="true", log=False)
     assert reply["ok"] is False and reply["code"] == "invalid"
+
+
+def test_a_log_folder_planted_as_a_link_is_not_followed(helper, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (helper.logs / "app").symlink_to(elsewhere)
+    reply = helper.ask(op="start", project="app", action="serve", command="sleep 600", log=True)
+    assert reply["ok"] is False
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_an_unexpected_error_still_gets_a_reply(helper):
+    # A lone surrogate cannot be encoded into tmux's argv.
+    reply = helper.ask(op="start", project="app", action="odd", command="echo \ud800", log=False)
+    assert reply["ok"] is False and reply["code"] == "failed"

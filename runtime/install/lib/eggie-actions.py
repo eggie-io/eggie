@@ -23,6 +23,7 @@ import subprocess
 import termios
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -133,8 +134,9 @@ class Actions:
             # The command waits for `go` so pipe-pane is in place before its first byte.
             # Its exit code is recorded in @exit, not left to pane_dead_status: tmux
             # sometimes never reaps a pane's process, and then has no status at all.
+            # The newline: tmux reads an argument ending in `;` as a command separator.
             self.tmux("new-session", "-d", "-s", name, "-c", str(self.projects / project),
-                      "-x", "120", "-y", "32", "-e", f"EGGIE_ACTION_COMMAND={command}",
+                      "-x", "120", "-y", "32", "-e", f"EGGIE_ACTION_COMMAND={command}\n",
                       f'tmux -L {SERVER} wait-for go-{name}; bash -lc "$EGGIE_ACTION_COMMAND"; '
                       f'tmux -L {SERVER} set-option -p -t "$TMUX_PANE" @exit $?')
             try:
@@ -155,16 +157,20 @@ class Actions:
     def fresh_log(self, project: str, action: str) -> Path:
         folder = self.logs / project
         folder.mkdir(exist_ok=True)
-        path = folder / f"{action}.log"
         # The docker group can write logs/: never truncate or chown through a planted link.
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+        dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            fd = os.open(f"{action}.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+                         0o640, dir_fd=dir_fd)
+        finally:
+            os.close(dir_fd)
         try:
             # tmux's pipe runs as the account, so it must own the file it appends to.
             os.fchown(fd, self.account().uid, -1)
             os.fchmod(fd, 0o640)
         finally:
             os.close(fd)
-        return path
+        return folder / f"{action}.log"
 
     def stop(self, names: list[str], *, remove: bool = False) -> None:
         panes = self.panes()
@@ -184,6 +190,14 @@ class Actions:
                 signal_group(groups[name], signal.SIGKILL)
             if name in alive or (remove and name in panes):
                 self.tmux("kill-session", "-t", f"={name}", check=False)
+        # tmux marks a pane dead a moment after its last process goes.
+        ended = [n for n in groups if n not in alive and not remove]
+        deadline = time.monotonic() + 1
+        while ended and time.monotonic() < deadline:
+            panes = self.panes()
+            ended = [n for n in ended if n in panes and not panes[n].dead]
+            if ended:
+                time.sleep(0.05)
 
     def attach(self, handler: socketserver.StreamRequestHandler, name: str, cols: int, rows: int) -> None:
         if name not in self.panes():
@@ -296,7 +310,8 @@ class Handler(socketserver.StreamRequestHandler):
             answer = self.answer(request)
         except Refused as e:
             answer = {"ok": False, "code": e.code, "message": e.message}
-        except OSError as e:
+        except Exception as e:
+            traceback.print_exc()
             answer = {"ok": False, "code": "failed", "message": str(e)}
         if answer is not None:
             try:

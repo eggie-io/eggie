@@ -7,7 +7,7 @@ from typing import NoReturn
 from .commands import cmd_clone, cmd_down, cmd_logs, cmd_new, cmd_status, cmd_up
 from .env import Env
 from .errors import EggieError
-from .recipes import cmd_recipe_get, cmd_recipe_list
+from .recipes import cmd_recipe_add, cmd_recipe_get, cmd_recipe_list
 from .secrets import cmd_secret_list, cmd_secret_request, cmd_secret_rm, cmd_secret_set
 
 
@@ -65,6 +65,10 @@ def _parser() -> argparse.ArgumentParser:
     recipe_get = recipe_sub.add_parser(
         "get", help="download a recipe into ~/projects/.recipes and print its RECIPE.md")
     recipe_get.add_argument("slug")
+    recipe_add = recipe_sub.add_parser(
+        "add", help="record that this project uses a recipe")
+    recipe_add.add_argument("slug")
+    recipe_add.add_argument("--project", help="project id (default: the project you are in)")
     return parser
 
 
@@ -92,6 +96,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "recipe": lambda: {
             "list": lambda: cmd_recipe_list(env),
             "get": lambda: cmd_recipe_get(env, args.slug),
+            "add": lambda: cmd_recipe_add(env, args.slug, args.project),
         }[args.recipe_command](),
     }
     try:

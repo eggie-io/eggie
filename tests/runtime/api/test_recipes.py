@@ -1,9 +1,11 @@
 import hashlib
 
 import pytest
+import yaml
 
+from eggie_api.errors import NotFound
 from eggie_api.infra.cloud import CloudError
-from tests.runtime.api.conftest import _make_env
+from tests.runtime.api.conftest import _create, _make_env, _write_compose
 from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.api.recipe_zips import RECIPE_MD, recipe_zip, zip_bytes
 
@@ -150,3 +152,75 @@ def test_a_signed_in_vm_sends_its_token_for_the_recipe_and_its_bundle(make):
     assert env.client.post("/recipes/blog/get").status_code == 200
     assert env.cloud.calls[0] == ("recipe", "at-1", "blog")
     assert env.cloud.calls[1][:2] == ("recipe_bundle", "at-1")
+
+
+def _project(env, yml=None):
+    _write_compose(env, "app")
+    assert _create(env, "app", origin="folder").status_code == 201
+    if yml is not None:
+        folder = env.config.projects_root / "app" / ".eggie"
+        folder.mkdir(exist_ok=True)
+        (folder / "project.yml").write_text(yaml.safe_dump(yml))
+
+
+def _recipes_in(env):
+    return yaml.safe_load((env.config.projects_root / "app/.eggie/project.yml").read_text())
+
+
+def test_add_records_the_slug_and_keeps_the_files_other_keys(make):
+    env = make(recipe=[{"slug": "mobile-app"}])
+    _project(env, {"id": "app", "web": [{"service": "web", "port": 80}]})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "mobile-app"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"id": "app", "recipes": ["mobile-app"]}
+    assert _recipes_in(env) == {"id": "app", "web": [{"service": "web", "port": 80}],
+                                "recipes": ["mobile-app"]}
+    path = env.config.projects_root / "app/.eggie/project.yml"
+    assert path.stat().st_mode & 0o777 == 0o664
+    assert [p.name for p in path.parent.iterdir()] == ["project.yml"]
+
+
+def test_add_creates_the_file_when_the_project_has_none(make):
+    env = make(recipe=[{"slug": "mobile-app"}])
+    _project(env)
+    (env.config.projects_root / "app/.eggie/project.yml").unlink(missing_ok=True)
+    assert env.client.post("/projects/app/recipes", json={"slug": "mobile-app"}).status_code == 200
+    assert _recipes_in(env)["recipes"] == ["mobile-app"]
+
+
+def test_adding_a_slug_twice_keeps_one(make):
+    env = make(recipe=[{"slug": "a"}, {"slug": "b"}, {"slug": "a"}])
+    _project(env, {"recipes": ["a"]})
+    env.client.post("/projects/app/recipes", json={"slug": "b"})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "a"})
+    assert resp.json()["recipes"] == ["a", "b"]
+    assert _recipes_in(env)["recipes"] == ["a", "b"]
+
+
+def test_adding_an_unpublished_recipe_is_recipe_not_found_and_writes_nothing(make):
+    env = make(recipe=[CloudError("recipe_not_found", "m", 404)])
+    _project(env, {"id": "app"})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "nope"})
+    assert _code(resp) == (404, "recipe_not_found")
+    assert _recipes_in(env) == {"id": "app"}
+
+
+def test_adding_a_bad_slug_is_invalid_recipe(make):
+    env = make()
+    _project(env, {"id": "app"})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "Not A Slug"})
+    assert _code(resp)[1] == "invalid_recipe"
+    assert env.cloud.calls == []
+
+
+def test_adding_to_an_unknown_project_is_project_not_found(make):
+    env = make()
+    resp = env.client.post("/projects/ghost/recipes", json={"slug": "a"})
+    assert _code(resp) == (404, "project_not_found")
+
+
+def test_actions_of_an_unpublished_recipe_is_recipe_not_found(make):
+    env = make(recipe_actions=[CloudError("recipe_not_found", "m", 404)])
+    with pytest.raises(NotFound) as e:
+        env.app.state.services.recipes.actions("nope")
+    assert e.value.code == "recipe_not_found"

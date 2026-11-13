@@ -7,7 +7,10 @@ import shutil
 import uuid
 from pathlib import Path
 
+import yaml
+
 from ..config import ApiConfig
+from ..domain.actions import is_slug
 from ..errors import Conflict, Invalid, NotFound, Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.recipe_zip import RECIPE_MD, BadBundle, unpack
@@ -16,7 +19,6 @@ from .account import NotSignedIn
 MAX_BUNDLE_BYTES = 100 * 1024 ** 2
 MAX_FILES = 10_000
 MAX_UNPACKED_BYTES = 500 * 1024 ** 2
-_SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -28,10 +30,11 @@ class RecipeService:
     """Recipes from the Eggie service, unpacked under `<projects_root>/.recipes`
     (dot-prefixed, so project discovery never adopts it) for the agent to follow."""
 
-    def __init__(self, config: ApiConfig, account, cloud):
+    def __init__(self, config: ApiConfig, account, cloud, loader):
         self._root = Path(config.projects_root) / ".recipes"
         self._account = account
         self._cloud = cloud
+        self._loader = loader
 
     def _ask(self, fn):
         # Recipes are public; a signed-in VM still sends its token so the
@@ -59,13 +62,45 @@ class RecipeService:
             if isinstance(r, dict) and isinstance(r.get("slug"), str)
             and isinstance(r.get("summary"), str) and r["summary"].strip()]}
 
-    def get(self, slug: str) -> dict:
-        if len(slug) > 63 or not _SLUG.match(slug):
+    def _published(self, slug: str) -> dict:
+        if not is_slug(slug):
             raise Invalid("invalid_recipe", f"'{slug}' is not a recipe name")
         try:
-            meta = self._ask(lambda token: self._cloud.recipe(token, slug))
+            return self._ask(lambda token: self._cloud.recipe(token, slug))
         except CloudError:
             raise NotFound("recipe_not_found", f"There is no published recipe '{slug}'.")
+
+    def actions(self, slug: str) -> dict:
+        try:
+            return self._ask(lambda token: self._cloud.recipe_actions(token, slug))
+        except CloudError:
+            raise NotFound("recipe_not_found", f"There is no published recipe '{slug}'.")
+
+    def add(self, project_id: str, slug: str) -> dict:
+        self._loader.require(project_id)
+        self._published(slug)
+        data = self._loader.project_yml(project_id)
+        current = self._loader.recipes(project_id)
+        recipes = [*current, slug] if slug not in current else list(current)
+        self._write_project_yml(project_id, {**data, "recipes": recipes})
+        return {"id": project_id, "recipes": recipes}
+
+    def _write_project_yml(self, project_id: str, data: dict) -> None:
+        folder = self._loader.dir(project_id) / ".eggie"
+        if not folder.exists():
+            folder.mkdir(parents=True)
+            folder.chmod(0o2775)
+        tmp = folder / f".project.yml.{uuid.uuid4().hex[:8]}"
+        try:
+            tmp.write_text(yaml.safe_dump(data, sort_keys=False))
+            # Login users share the docker group, not the API's umask.
+            tmp.chmod(0o664)
+            os.replace(tmp, folder / "project.yml")
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def get(self, slug: str) -> dict:
+        meta = self._published(slug)
         bundle = meta.get("bundle") if isinstance(meta, dict) else None
         if bundle is None:
             raise Conflict("recipe_has_no_bundle", "This recipe has nothing to download.")

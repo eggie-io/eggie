@@ -1,6 +1,7 @@
 import hashlib
 
 from eggie_api.infra.cloud import CloudError
+from tests.runtime.api.conftest import AUTH, COMPOSE_ONE_WEB
 from tests.runtime.api.recipe_zips import RECIPE_MD, recipe_zip
 
 
@@ -21,3 +22,15 @@ def test_recipe_get_of_an_unknown_recipe_says_so(recipe_guest):
     code, _out, err = recipe_guest.run("recipe", "get", "nope", cwd=recipe_guest.root)
     assert code == 1
     assert "There is no published recipe 'nope'." in err
+
+
+def test_recipe_add_records_the_recipe_on_the_project_you_are_in(recipe_guest):
+    folder = recipe_guest.root / "app"
+    folder.mkdir()
+    (folder / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
+    recipe_guest._client.post("/projects", json={"id": "app", "origin": "folder"},
+                              headers=AUTH)
+    recipe_guest.cloud.replies["recipe"] = [{"slug": "mobile-app"}]
+    code, out, err = recipe_guest.run("recipe", "add", "mobile-app", cwd=folder)
+    assert (code, out, err) == (0, "mobile-app added to app.\n", "")
+    assert "mobile-app" in (folder / ".eggie/project.yml").read_text()

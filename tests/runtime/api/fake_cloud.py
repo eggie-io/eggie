@@ -81,6 +81,9 @@ class FakeCloud:
     def recipe(self, token, slug):
         return self._next("recipe", token, slug)
 
+    def recipe_actions(self, token, slug):
+        return self._next("recipe_actions", token, slug)
+
     def recipe_bundle(self, token, slug, version, dest, *, max_bytes):
         body = self._next("recipe_bundle", token, slug, version)
         if len(body) > max_bytes:

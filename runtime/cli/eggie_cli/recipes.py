@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .env import Env
+from .env import Env, require_project
 
 
 def cmd_recipe_list(env: Env) -> None:
@@ -19,3 +19,9 @@ def cmd_recipe_get(env: Env, slug: str) -> None:
           file=env.out)
     print("Its RECIPE.md follows. Files it mentions are in that folder.\n", file=env.out)
     print(recipe["instructions"], end="", file=env.out)
+
+
+def cmd_recipe_add(env: Env, slug: str, project: str | None = None) -> None:
+    project_id = project or require_project(env)
+    env.client().add_recipe(project_id, slug)
+    print(f"{slug} added to {project_id}.", file=env.out)

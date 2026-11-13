@@ -6,6 +6,7 @@ import yaml
 
 from .. import constants
 from ..config import ApiConfig
+from ..domain.actions import recipes_of
 from ..domain.detect import AmbiguousError
 from ..domain.overlay import host_for
 from ..domain.project import Project, load_project
@@ -49,6 +50,17 @@ class ProjectLoader:
             raise BadRequest("compose_missing",
                              f"project '{project_id}' has no {constants.COMPOSE_FILE}")
         return self.parse_yaml(path)
+
+    def project_yml(self, project_id: str) -> dict:
+        path = self.dir(project_id) / ".eggie" / "project.yml"
+        return self.parse_yaml(path) if path.exists() else {}
+
+    def recipes(self, project_id: str) -> tuple[str, ...]:
+        self.require(project_id)
+        try:
+            return recipes_of(self.project_yml(project_id))
+        except Invalid:
+            return ()
 
     def load(self, project_id: str) -> Project:
         compose = self.compose(project_id)

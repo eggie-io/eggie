@@ -27,5 +27,5 @@ export const useStartAction = (projectId: string) => useRunMutation(projectId, "
 export const useStopAction = (projectId: string) => useRunMutation(projectId, "stop");
 
 export function actionLog(projectId: string, actionId: string): Promise<string> {
-  return api.text(`${base(projectId)}/${encodeURIComponent(actionId)}/log?tail=200`);
+  return api.text(`${base(projectId)}/${encodeURIComponent(actionId)}/log`);
 }

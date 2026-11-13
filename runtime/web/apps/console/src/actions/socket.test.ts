@@ -24,7 +24,15 @@ describe("closeReason", () => {
     expect(closeReason(1006, false)).toBe("refused");
   });
 
+  it("reconnects when the helper restarts under an open terminal", () => {
+    expect(closeReason(1012, true)).toBe("dropped");
+  });
+
+  it("stops retrying when the helper fails to attach", () => {
+    expect(closeReason(4502, true)).toBe("failed");
+  });
+
   it("reconnects after any other loss", () => {
-    for (const code of [1006, 1011, 4502, 1001]) expect(closeReason(code, true)).toBe("dropped");
+    for (const code of [1006, 1011, 1001]) expect(closeReason(code, true)).toBe("dropped");
   });
 });

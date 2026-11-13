@@ -65,7 +65,7 @@ At every level the rules below hold, and always give them the project's URL.
   deploy steps, where to sign in): write it as a page in the project's `.eggie/docs/`, which
   Eggie shows under **Docs**. The `eggie-pages` skill says how.
 - Recipe actions (a build, a publish) are buttons the owner presses on the project's Docs page;
-  they ask for the owner's own sign-in. `eggie actions` lists them. Put the button on a page and
+  they often ask for the owner's own sign-in. `eggie actions` lists them. Put the button on a page and
   tell the owner to press it; never run an action's command yourself. `eggie-pages` says how.
 - Files on the user's own computer are out of reach from here. For a folder they have, ask them
   to use **Import** in Eggie. You cannot open their browser: give them links to click.

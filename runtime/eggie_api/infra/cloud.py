@@ -5,11 +5,14 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Callable
 
 # A proxy's own error page, not the service: the service always answers with
 # its JSON error body.
 _GATEWAY = {502, 503, 504}
+CHUNK = 1024 * 1024
+BUNDLE_TIMEOUT = 120.0
 
 
 class CloudError(Exception):
@@ -55,17 +58,22 @@ class Cloud:
         self._open = opener or urllib.request.urlopen
         self._timeout = timeout
 
-    def call(self, method: str, path: str, *, body: dict | None = None,
-             token: str | None = None):
-        data = None if body is None else json.dumps(body).encode()
+    def _request(self, method: str, path: str, *, data: bytes | None,
+                 token: str | None, accept: str) -> urllib.request.Request:
         # urllib's default names Python, which the service shows on device sign-in.
-        headers = {"Accept": "application/json", "User-Agent": self._user_agent()}
+        headers = {"Accept": accept, "User-Agent": self._user_agent()}
         if data is not None:
             headers["Content-Type"] = "application/json"
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        request = urllib.request.Request(self._base + path, data=data,
-                                         headers=headers, method=method)
+        return urllib.request.Request(self._base + path, data=data,
+                                      headers=headers, method=method)
+
+    def call(self, method: str, path: str, *, body: dict | None = None,
+             token: str | None = None):
+        data = None if body is None else json.dumps(body).encode()
+        request = self._request(method, path, data=data, token=token,
+                                accept="application/json")
         try:
             with self._open(request, timeout=self._timeout) as response:
                 status = response.status
@@ -161,3 +169,36 @@ class Cloud:
         self.call("POST",
                   f"/v1/transfers/{urllib.parse.quote(ticket_id, safe='')}/complete",
                   token=token)
+
+    def recipes(self, token: str | None):
+        return self.call("GET", "/v1/recipes", token=token)
+
+    def recipe(self, token: str | None, slug: str):
+        return self.call("GET", f"/v1/recipes/{urllib.parse.quote(slug, safe='')}",
+                         token=token)
+
+    def recipe_bundle(self, token: str | None, slug: str, version: int, dest: Path,
+                      *, max_bytes: int) -> None:
+        """Streams the zip to `dest`; on any failure `dest` is gone."""
+        path = f"/v1/recipes/{urllib.parse.quote(slug, safe='')}/bundle/{int(version)}"
+        request = self._request("GET", path, data=None, token=token,
+                                accept="application/zip")
+        try:
+            with self._open(request, timeout=BUNDLE_TIMEOUT) as response, \
+                    open(dest, "wb") as out:
+                written = 0
+                while chunk := response.read(CHUNK):
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise CloudError("bundle_too_large",
+                                         f"the recipe is larger than {max_bytes} bytes", 0)
+                    out.write(chunk)
+        except urllib.error.HTTPError as e:
+            dest.unlink(missing_ok=True)
+            raise _error_from(e.code, e.read(), e.headers) from None
+        except (OSError, http.client.HTTPException) as e:
+            dest.unlink(missing_ok=True)
+            raise CloudUnavailable(str(e)) from None
+        except BaseException:
+            dest.unlink(missing_ok=True)
+            raise

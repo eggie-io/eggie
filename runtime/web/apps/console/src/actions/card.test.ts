@@ -39,6 +39,14 @@ describe("cardFor", () => {
     expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "Eggie's service had a problem" });
   });
 
+  it("an unreadable project.yml shows its problem, not a missing action", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [{ recipe: null, code: "invalid_project_yml", message: "project.yml is not valid YAML" }],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "project.yml is not valid YAML" });
+  });
+
   it("a matching action is shown even when another recipe has a problem", () => {
     const answer: ActionsAnswer = {
       actions: [build],

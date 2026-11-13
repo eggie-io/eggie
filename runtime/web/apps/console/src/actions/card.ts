@@ -7,6 +7,8 @@ export type Card =
   | { kind: "unknown"; id: string }
   | { kind: "action"; action: Action };
 
+const BLOCKING = ["cloud_unavailable", "cloud_error", "invalid_project_yml"];
+
 export function cardFor(answer: ActionsAnswer | undefined, error: unknown, id: string): Card {
   if (!answer) {
     if (error === undefined || error === null) return { kind: "loading" };
@@ -14,9 +16,9 @@ export function cardFor(answer: ActionsAnswer | undefined, error: unknown, id: s
   }
   const action = answer.actions.find((a) => a.id === id);
   if (action) return { kind: "action", action };
-  // The recipe that would define it could not be fetched, so "no such action" would be a guess.
-  const cloud = answer.problems.find((p) => p.code === "cloud_unavailable" || p.code === "cloud_error");
-  if (cloud) return { kind: "unavailable", message: cloud.message };
+  // The recipes that would define it could not be read or fetched, so "no such action" would be a guess.
+  const blocked = answer.problems.find((p) => BLOCKING.includes(p.code));
+  if (blocked) return { kind: "unavailable", message: blocked.message };
   return { kind: "unknown", id };
 }
 

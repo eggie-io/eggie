@@ -1,4 +1,4 @@
-import { delay, http, HttpResponse } from "msw";
+import { delay, http, HttpResponse, ws } from "msw";
 import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
@@ -616,8 +616,22 @@ export function handlersFor(scenario: Scenario) {
       new HttpResponse("Starting Metro Bundler\nTunnel ready.\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } })),
   ];
 
+  const terminal = ws.link("*/api/projects/:id/actions/:action/terminal");
+  const terminalHandler = terminal.addEventListener("connection", ({ client }) => {
+    // MSW hands a typed array to the page as-is; a real socket delivers an ArrayBuffer.
+    const text = { encode: (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer };
+    client.send(text.encode("Mock terminal. Type something.\r\n$ "));
+    client.addEventListener("message", ({ data }) => {
+      if (typeof data === "string") return;
+      const bytes = new Uint8Array(data as ArrayBuffer);
+      // Enter comes as \r; echo it as a new prompt line.
+      client.send(text.encode(new TextDecoder().decode(bytes).replace(/\r/g, "\r\n$ ")));
+    });
+  });
+
   return [
     ...actionHandlers,
+    terminalHandler,
     http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
     http.post("/api/runtime/update", () => {
       if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);

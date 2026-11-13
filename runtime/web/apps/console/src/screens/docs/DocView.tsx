@@ -8,6 +8,7 @@ import type { Block, Inline } from "../../docs/markdown";
 import { docsRoute } from "../../docs/pages";
 import { fileUrl } from "../../uploads/paths";
 import { ActionCard } from "./ActionCard";
+import { TerminalPanel } from "./TerminalPanel";
 import s from "./DocsPage.module.css";
 
 // Renders parseDoc's tree as elements; nothing from the page reaches raw HTML.
@@ -87,6 +88,11 @@ function Blocks({ id, blocks, onOpenTerminal }: { id: string; blocks: Block[]; o
 }
 
 export function DocView({ id, blocks }: { id: string; blocks: Block[] }) {
-  const [, setTerminalFor] = useState<Action | null>(null);
-  return <article className={s.doc}><Blocks id={id} blocks={blocks} onOpenTerminal={setTerminalFor} /></article>;
+  const [terminalFor, setTerminalFor] = useState<Action | null>(null);
+  return (
+    <article className={s.doc}>
+      <Blocks id={id} blocks={blocks} onOpenTerminal={setTerminalFor} />
+      {terminalFor && <TerminalPanel projectId={id} action={terminalFor} onClose={() => setTerminalFor(null)} />}
+    </article>
+  );
 }

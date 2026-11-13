@@ -11,6 +11,8 @@
   "dependencies": {
     "@eggie/ui": "*",
     "@tanstack/react-query": "5.103.2",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
     "marked": "18.1.2",
     "qrcode-generator": "2.0.4",
     "react": "19.3.0",

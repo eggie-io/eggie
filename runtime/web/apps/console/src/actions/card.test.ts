@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
-import { cardFor } from "./card";
+import { cardFor, runStatus } from "./card";
 import type { Action, ActionsAnswer } from "./types";
 
 const build: Action = {
@@ -31,11 +31,29 @@ describe("cardFor", () => {
     expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "Can't reach Eggie's service" });
   });
 
+  it("a service error with no such action is unavailable, not a missing action", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [{ recipe: "expo", code: "cloud_error", message: "Eggie's service had a problem" }],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "Eggie's service had a problem" });
+  });
+
   it("a matching action is shown even when another recipe has a problem", () => {
     const answer: ActionsAnswer = {
       actions: [build],
       problems: [{ recipe: "stripe", code: "recipe_not_found", message: "No recipe stripe" }],
     };
     expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "action", action: build });
+  });
+});
+
+describe("runStatus", () => {
+  it("a run that exited with no code was stopped, not failed", () => {
+    expect(runStatus({ state: "exited", exit_code: null, started_at: 1 })).toEqual({ tone: "neutral", text: "Stopped" });
+  });
+
+  it("a non-zero exit is a failure with its code", () => {
+    expect(runStatus({ state: "exited", exit_code: 2, started_at: 1 })).toEqual({ tone: "danger", text: "Exited 2" });
   });
 });

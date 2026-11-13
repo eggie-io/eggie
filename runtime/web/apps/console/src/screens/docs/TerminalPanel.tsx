@@ -110,7 +110,7 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
       <div className={s.body}>
         <div className={s.term} ref={host} />
         {finished && (
-          <p className={s.status}>Finished — exit code {run.exit_code ?? "unknown"}</p>
+          <p className={s.status}>{run.exit_code === null ? "Stopped" : `Finished — exit code ${run.exit_code}`}</p>
         )}
         {reconnecting && <p className={s.status}>Reconnecting…</p>}
         {ended && NOTES[ended] && <Notice tone="danger">{NOTES[ended]}</Notice>}

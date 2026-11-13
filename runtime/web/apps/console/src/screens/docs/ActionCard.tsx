@@ -2,17 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge, Button, Modal, Notice } from "@eggie/ui";
 import { actionLog, useProjectActions, useStartAction, useStopAction } from "../../actions/queries";
-import { cardFor } from "../../actions/card";
-import type { Action, Run } from "../../actions/types";
+import { stripAnsi } from "../../actions/ansi";
+import { cardFor, runStatus } from "../../actions/card";
+import type { Action } from "../../actions/types";
 import { ApiError } from "../../api/client";
 import { actionError } from "../../projects/copy";
 import s from "./ActionCard.module.css";
-
-function runStatus(run: Run | null): { tone: "success" | "neutral" | "danger"; text: string } {
-  if (run?.state === "running") return { tone: "success", text: "Running" };
-  if (run?.state === "exited") return { tone: run.exit_code === 0 ? "neutral" : "danger", text: `Exited ${run.exit_code ?? ""}`.trim() };
-  return { tone: "neutral", text: "Stopped" };
-}
 
 function LogModal({ projectId, action, onClose }: { projectId: string; action: Action; onClose: () => void }) {
   const log = useQuery({ queryKey: ["action-log", projectId, action.id], queryFn: () => actionLog(projectId, action.id), gcTime: 0 });
@@ -23,7 +18,7 @@ function LogModal({ projectId, action, onClose }: { projectId: string; action: A
       ) : log.data === undefined ? (
         <p className={s.muted}>Loading…</p>
       ) : (
-        <pre className={s.log}>{log.data === "" ? "Nothing printed yet." : log.data}</pre>
+        <pre className={s.log}>{stripAnsi(log.data) || "Nothing printed yet."}</pre>
       )}
     </Modal>
   );

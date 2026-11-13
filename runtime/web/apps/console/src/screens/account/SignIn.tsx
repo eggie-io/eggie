@@ -118,7 +118,7 @@ function Pending({ account }: { account: Extract<Account, { state: "pending" }> 
       tone="yolk"
       art={
         <div className={own.qr}>
-          <Qr value={link} />
+          <Qr value={link} label="QR code for the sign-in page" />
         </div>
       }
       title="Approve this computer"

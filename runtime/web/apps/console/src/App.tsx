@@ -6,6 +6,7 @@ import { boot, type BootResult } from "./boot/boot";
 import { AgentGuide } from "./screens/agents/AgentGuide";
 import { AgentPicker } from "./screens/agents/AgentPicker";
 import { Kit } from "./screens/Kit";
+import { DocsPage } from "./screens/docs/DocsPage";
 import { FilesPage } from "./screens/files/FilesPage";
 import { SecretsPage } from "./screens/secrets/SecretsPage";
 import { NeedsUpdate } from "./screens/NeedsUpdate";
@@ -157,6 +158,8 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
             <Route path="analyze" element={<AnalyzePage />} />
             <Route path="files/*" element={<FilesPage />} />
             <Route path="secrets" element={<SecretsPage />} />
+            <Route path="docs" element={<DocsPage />} />
+            <Route path="docs/:page" element={<DocsPage />} />
           </Route>
           <Route path="/agents" element={<AgentPicker base="/agents" />} />
           <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />

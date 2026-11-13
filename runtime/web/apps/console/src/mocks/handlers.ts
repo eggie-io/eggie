@@ -59,6 +59,7 @@ export const SCENARIOS = [
   "update-available",
   "update-failed",
   "updating",
+  "docs",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -327,6 +328,46 @@ export function handlersFor(scenario: Scenario) {
     for (const name of ["orders.csv", "users.csv", "notes.txt"]) seedFile("recipe-box", `data/${name}`, 40 * 1024, hoursAgo(26));
     for (let i = 1; i <= 48; i += 1) seedFile("recipe-box", `public/img-${i}.png`, 90 * 1024, hoursAgo(2));
     for (let i = 1; i <= 112; i += 1) seedFile("recipe-box", `src/module-${i}.ts`, 3 * 1024, nowSec() - 11 * 60);
+  }
+  const contents = new Map<string, { body: string; type: string }>();
+  const seedText = (id: string, path: string, body: string, type = "text/markdown") => {
+    seedFile(id, path, body.length, nowSec() - 5 * 60);
+    contents.set(`${id}/${path}`, { body, type });
+  };
+  if (scenario === "docs" && projects.has("recipe-box")) {
+    seedText("recipe-box", ".eggie/docs/index.md", [
+      "# Try it on your phone",
+      "",
+      "Open **Expo Go** and scan this code. Your phone must be on the same Wi-Fi.",
+      "",
+      "```qr",
+      "exp://192.168.1.5:8081",
+      "```",
+      "",
+      "![The app's home screen](home.svg)",
+      "",
+      "When you're happy with it, follow [Publish to the stores](stores.md).",
+      "",
+      "<script>alert('this shows as text')</script>",
+      "",
+      "| Account | Login |",
+      "|:--|:--|",
+      "| Admin | `admin@example.com` |",
+    ].join("\n"));
+    seedText("recipe-box", ".eggie/docs/stores.md", [
+      "# Publish to the stores",
+      "",
+      "1. Create an [Apple developer account](https://developer.apple.com/programs/).",
+      "2. Ask me to run the store build — it takes about 20 minutes.",
+      "",
+      "- [x] App icon",
+      "- [ ] Screenshots",
+      "",
+      "> Google Play asks for a privacy policy link.",
+    ].join("\n"));
+    seedText("recipe-box", ".eggie/docs/home.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" rx="12" fill="#f3e9d2"/><text x="120" y="66" font-size="16" text-anchor="middle" font-family="sans-serif">Recipe Box</text></svg>',
+      "image/svg+xml");
   }
   for (const p of projects.values()) {
     if (p.id === "recipe-box" || p.empty) continue;
@@ -903,6 +944,8 @@ export function handlersFor(scenario: Scenario) {
       if (!find(id)) return notFound(id);
       const path = decodeURIComponent(new URL(request.url).pathname.split("/files/")[1] ?? "");
       if (tree(id).get(path)?.kind !== "file") return refuse("file_not_found", `no file '${path}' in project '${id}'`, 404);
+      const seeded = contents.get(`${id}/${path}`);
+      if (seeded) return new HttpResponse(seeded.body, { headers: { "Content-Type": seeded.type } });
       return new HttpResponse(`mock contents of ${path}\n`, {
         headers: { "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="${baseName(path)}"` },
       });

@@ -11,6 +11,8 @@
   border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper);
   font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink-2); text-decoration: none;
 }
+/* The scrolling row clips anything drawn outside it, so the focus ring sits inside the link. */
+.tab:focus-visible { outline-offset: -2px; }
 .tab:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
 .tabCurrent, .tabCurrent:hover { background: var(--selected); border-color: var(--line-strong); color: var(--ink); }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router";
 import { Notice, cx } from "@eggie/ui";
 import { ApiError } from "../../api/client";
@@ -24,7 +24,7 @@ export function DocsPage() {
 
   const labels = names.map((name, i) => pageTitle(name, titles[i]?.data));
   const row = useRef<HTMLElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Bring the current page's link into the row when it sits past either edge; titles arriving
     // later widen the links, so this runs again then.
     const box = row.current;

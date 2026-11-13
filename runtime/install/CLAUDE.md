@@ -70,7 +70,7 @@ user (root when it is empty). `KillMode=process` and `Restart=always` keep runni
 a helper restart or a runtime update. Long-running actions log to `actions/logs/<project>/<action>.log`
 (10 MiB cap, truncated at start); one-off actions keep none. `snapshot-prep.sh` strips the logs.
 `eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
-picks up a changed conf only after all its actions have ended.
+picks up a changed conf only once it has no action sessions left (finished runs keep theirs) or reboots.
 
 ## `install.sh` — numbered steps, order matters
 

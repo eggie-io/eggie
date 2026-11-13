@@ -133,9 +133,10 @@ console ──/api/projects/{id}/actions──→ api ──unix socket──→
         ──/api/.../terminal (WebSocket)─→ api ──────────────────────────────────────→ (attach)
 ```
 
-`eggie-actions` runs each action in a tmux session as the login account and streams its terminal;
-the console shows it in a panel, so a code can be typed in. A long-running action keeps a log
-(10 MiB cap) and keeps running when the panel closes or the runtime updates. Stopping or deleting
+`eggie-actions` runs each action in a tmux session as the login account (root on a site, which has
+none) and streams its terminal; the console shows it in a panel, so a code can be typed in. Every run
+keeps going when the panel closes or the runtime updates; only a long-running action keeps a log
+(10 MiB cap). Stopping or deleting
 a project, or a kitchen import replacing it, stops its actions.
 
 ### Site mode
@@ -213,8 +214,8 @@ login account, every agent) is root-equivalent. All host forwards are loopback-o
 is the one way in from outside the machine. The API token tells the host apart from a stray
 container; it is not authentication. Secrets live in `state.db`, readable by anything root-equivalent in the VM,
 coding agents included: they protect against leaks into files, git and chat, not against the
-agent. Action commands come only from the Eggie service and run as the login account; the agent's
-account can see an action's terminal. Details: [security.md](security.md).
+agent. Action commands come only from the Eggie service and run as the login account, or root on a
+machine without one (a site); the agent's account can see an action's terminal. Details: [security.md](security.md).
 
 ## Where things live
 

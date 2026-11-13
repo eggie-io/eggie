@@ -97,7 +97,8 @@ reach the API from outside the user's machine needs its own authentication.
 
 ## Recipe actions
 
-Commands come only from the Eggie service and run as the login account, never as root.
+Commands come only from the Eggie service and run as the login account, or as root on a machine
+without one (a site).
 
 - **The terminal WebSocket checks for itself.** The auth middleware never sees a WebSocket, so the
   route checks `Host`, a required `Origin` and the session cookie before accepting. It exists only
@@ -106,7 +107,7 @@ Commands come only from the Eggie service and run as the login account, never as
   to run or attach to an action; that is the same trust as the Docker socket. The agent's account is
   in `docker`, so it can see an action's terminal, including what the person types into it.
 - **A one-off action keeps no log**, so what it prints, a typed code included, stays out of files. Long-running
-  actions log their output to `/opt/eggie/actions/logs/`.
+  actions log their output to `/opt/eggie/actions/logs/`, and that log holds whatever the program prints.
 
 ## Public URLs
 

@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import yaml
 
@@ -217,6 +219,14 @@ def test_the_log_is_the_tail_of_the_actions_log_file(make):
     assert resp.status_code == 200
     assert resp.text == "last line\n"
     assert browser.get("/api/projects/app/actions/expo-login/log").text == ""
+
+
+def test_a_log_that_is_not_a_regular_file_reads_as_empty(make):
+    env = make()
+    folder = env.config.actions_logs / "app"
+    folder.mkdir(parents=True)
+    os.mkfifo(folder / "ios-build.log")
+    assert env.app.state.services.actions.log("app", "ios-build") == ""
 
 
 def test_the_log_route_is_console_only(make):

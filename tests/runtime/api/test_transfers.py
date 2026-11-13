@@ -16,6 +16,7 @@ from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import BROWSER, _make_env
 from tests.runtime.api.fake_cloud import FakeCloud
+from tests.runtime.api.fake_helper import FakeHelper
 from tests.runtime.api.route_sweep import every_route
 
 GIB = 1024 ** 3
@@ -109,10 +110,12 @@ class FakeTimers:
 @pytest.fixture
 def instance(tmp_path):
     cloud, sleeps, free, timers = FakeCloud(), [], {"bytes": 100 * GIB}, FakeTimers()
+    actions = FakeHelper()
     for ns in _make_env(tmp_path, cloud=cloud, sleep=sleeps.append,
-                        free_bytes=lambda: free["bytes"], timer=timers,
+                        free_bytes=lambda: free["bytes"], timer=timers, actions_helper=actions,
                         site_host="foo.eggie.io", domain="foo.eggie.space"):
         ns.cloud, ns.sleeps, ns.free, ns.timers = cloud, sleeps, free, timers
+        ns.actions = actions
         ns.repos.account.update(access_token="at", refresh_token="rt",
                                 access_expires_at=10**12, org_id="org-1")
         ns.helper = Helper(tmp_path)
@@ -343,6 +346,26 @@ def test_full_import_replaces_every_file_and_completes(instance):
     assert list((instance.config.transfers_root / "in").iterdir()) == []
     settle(instance, "my-shop")
     assert instance.runner.argv_containing("up")
+
+
+def test_a_replacing_import_stops_the_projects_actions_before_its_files_go(instance):
+    # Stopped stack, running actions: they live in the folder regardless.
+    folder = instance_project(instance, status="stopped")
+    local_project(instance)
+    old_file_at_stop = []
+    record = instance.actions.stop_project
+
+    def stop_project(project):
+        old_file_at_stop.append((folder / "src" / "old.py").exists())
+        record(project)
+
+    instance.actions.stop_project = stop_project
+
+    status = push(instance, make_bundle(instance), replace="all")
+
+    assert status["state"] == "done", status
+    assert ("stop_project", "my-shop") in instance.actions.calls
+    assert old_file_at_stop[0] is True
 
 
 def test_a_project_folder_the_api_cannot_move_goes_through_the_root_helper(instance):

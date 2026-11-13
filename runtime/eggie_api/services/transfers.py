@@ -157,6 +157,8 @@ class Transfers:
                               what="push attempts")
         self._pushes: dict[str, _Push] = {}
         self._lock = threading.Lock()
+        # Recipe actions run in the project folder whatever the stack's status.
+        self.before_replace: Callable[[str], None] | None = None
 
     @property
     def _inbox(self) -> Path:
@@ -442,6 +444,8 @@ class _ImportJob:
             except JobFailed as e:
                 raise _failed("stop_failed", f"{self.pid} could not be stopped: {e}") from None
         write.phase("replacing")
+        if self.s.before_replace is not None:
+            self.s.before_replace(self.pid)
         self._replace(self.s._loader.dir(self.pid))
         if manifest.volumes:
             write.phase("restoring data")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import stat
 import threading
 import time
 from pathlib import Path
@@ -126,13 +127,18 @@ class ActionService:
             # logs/ is group-writable: never follow a link planted there.
             dir_fd = os.open(self._logs / project_id, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             try:
-                fd = os.open(f"{action_id}.log", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+                # Non-blocking: a FIFO planted there would otherwise hang the open.
+                fd = os.open(f"{action_id}.log", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=dir_fd)
             finally:
                 os.close(dir_fd)
         except OSError:
             return ""
         with os.fdopen(fd, "rb") as f:
-            size = os.fstat(fd).st_size
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                return ""
+            size = info.st_size
             f.seek(max(0, size - tail))
             return f.read(tail).decode("utf-8", errors="replace")
 

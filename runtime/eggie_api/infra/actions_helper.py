@@ -12,6 +12,8 @@ FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
 MAX_FRAME = 1024 * 1024
 WRITE_CHUNK = 64 * 1024
 MAX_REPLY = 64 * 1024
+# The helper's stop waits out a 5 s grace before it kills, then asks tmux again.
+STOP_TIMEOUT = 20.0
 
 
 class HelperUnavailable(Exception):
@@ -78,9 +80,9 @@ class ActionsHelper:
         self._path = str(socket_path)
         self._timeout = timeout
 
-    def _open(self, request: dict):
+    def _open(self, request: dict, timeout: float | None = None):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(self._timeout)
+        sock.settimeout(timeout or self._timeout)
         reader = sock.makefile("rb")
         try:
             try:
@@ -106,8 +108,8 @@ class ActionsHelper:
             raise
         return sock, reader, reply
 
-    def _ask(self, request: dict) -> dict:
-        sock, reader, reply = self._open(request)
+    def _ask(self, request: dict, timeout: float | None = None) -> dict:
+        sock, reader, reply = self._open(request, timeout)
         reader.close()
         sock.close()
         return reply
@@ -117,14 +119,15 @@ class ActionsHelper:
                           "command": command, "log": log}).get("run")
 
     def stop(self, project: str, action: str) -> dict | None:
-        return self._ask({"op": "stop", "project": project, "action": action}).get("run")
+        return self._ask({"op": "stop", "project": project, "action": action},
+                         max(self._timeout, STOP_TIMEOUT)).get("run")
 
     def status(self, project: str) -> dict[str, dict]:
         runs = self._ask({"op": "status", "project": project}).get("runs")
         return runs if isinstance(runs, dict) else {}
 
     def stop_project(self, project: str) -> None:
-        self._ask({"op": "stop-project", "project": project})
+        self._ask({"op": "stop-project", "project": project}, max(self._timeout, STOP_TIMEOUT))
 
     def attach(self, project: str, action: str, cols: int, rows: int) -> Terminal:
         sock, reader, _reply = self._open({"op": "attach", "project": project,

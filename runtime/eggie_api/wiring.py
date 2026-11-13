@@ -163,6 +163,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     actions = ActionService(loader, recipes, actions_helper or ActionsHelper(config.actions_socket),
                             config.actions_logs, clock=clock or time.monotonic)
     lifecycle.on_stopped = actions.stop_project
+    transfers.before_replace = actions.stop_project
     projects = ProjectService(config, runner, loader, repos.projects, secrets, jobs, locks,
                               uploads, public, http_probe, sync.wake, push.summary,
                               repos.pushed_projects)

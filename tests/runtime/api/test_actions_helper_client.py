@@ -4,6 +4,7 @@ import socketserver
 import struct
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ class Helper(socketserver.ThreadingUnixStreamServer):
     def __init__(self, path):
         self.requests: list[dict] = []
         self.answers: dict[str, dict] = {}
+        self.delay = 0.0
         self.frames: list[tuple[int, bytes]] = []
         self.got_frames = threading.Event()
         super().__init__(path, Handler)
@@ -31,6 +33,7 @@ class Handler(socketserver.StreamRequestHandler):
     def handle(self):
         request = json.loads(self.rfile.readline())
         self.server.requests.append(request)
+        time.sleep(self.server.delay)
         answer = self.server.answers.get(request["op"], {"ok": True})
         self.wfile.write(json.dumps(answer).encode() + b"\n")
         if request["op"] != "attach" or not answer["ok"]:
@@ -86,6 +89,23 @@ def test_a_refusal_carries_the_helpers_code_and_message(helper):
 def test_no_helper_listening_is_unavailable(tmp_path):
     with pytest.raises(HelperUnavailable):
         ActionsHelper(tmp_path / "missing.sock", timeout=1).status("app")
+
+
+def test_a_stop_may_take_longer_than_other_requests(tmp_path):
+    folder = Path(tempfile.mkdtemp(prefix="ea"))
+    server = Helper(str(folder / "s"))
+    server.delay = 0.5
+    threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
+    try:
+        client = ActionsHelper(folder / "s", timeout=0.2)
+        assert client.stop("app", "ios-build") is None
+        client.stop_project("app")
+        with pytest.raises(HelperUnavailable):
+            client.status("app")
+    finally:
+        server.shutdown()
+        server.server_close()
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def test_attach_relays_terminal_bytes_and_resizes_both_ways(helper):

@@ -149,6 +149,13 @@ and a host release. Prefer additive changes.
   `update-now.sh`) are read on every call, since the update recreates this container. POST bumps
   `update/request`; a bump nobody picked up in 2 minutes, or a `running` status older than 30, reads
   as `failed`. `available` is shown only when it is a newer `runtime-vX.Y.Z` than `runtime.version`.
+- **Recipes** (`services/recipes.py`, `infra/recipe_zip.py`) — `GET /recipes` (published recipes
+  with a `summary`) and `POST /recipes/{slug}/get` for `eggie recipe list|get`. `get` downloads the
+  bundle from the Eggie service inside the request (no job), checks size and sha256, unpacks into
+  `<projects_root>/.recipes/<slug>/<version>/` and returns `RECIPE.md`'s text as `instructions`; a
+  version already there is not downloaded again. Caps: zip 100 MB, 10 000 entries, 500 MB unpacked;
+  no links, no paths leaving the folder, modes reset to 0644/0755. The API never runs anything from a
+  bundle. Design: `../eggie-resources/superpowers/specs/2026-11-13-recipe-bundles-design.md`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)

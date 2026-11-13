@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 
 from .. import constants
@@ -29,15 +29,29 @@ def cookie_options(config: ApiConfig) -> dict:
             "path": "/api", "secure": config.site_host is not None}
 
 
-def install(app: FastAPI, *, token: str, sessions: Sessions,
-            config: ApiConfig) -> None:
-    allowed_hosts = {f"localhost:{config.edge_port}",
-                     f"127.0.0.1:{config.edge_port}"}
-    allowed_origins = {f"http://{host}" for host in allowed_hosts}
+def _allowed(config: ApiConfig) -> tuple[set[str], set[str]]:
+    """The browser allowlist: (hosts, origins) Eggie's own page is served from."""
+    hosts = {f"localhost:{config.edge_port}", f"127.0.0.1:{config.edge_port}"}
+    origins = {f"http://{host}" for host in hosts}
     if config.site_host:
         # The site's edge is 443, so Host carries no port.
-        allowed_hosts.add(config.site_host)
-        allowed_origins.add(f"https://{config.site_host}")
+        hosts.add(config.site_host)
+        origins.add(f"https://{config.site_host}")
+    return hosts, origins
+
+
+def websocket_allowed(ws: WebSocket, *, sessions: Sessions, config: ApiConfig) -> bool:
+    """The HTTP middleware never sees a WebSocket. Origin is required although
+    the handshake is a GET: any page that opens the socket can type into it."""
+    hosts, origins = _allowed(config)
+    return (ws.headers.get("host", "") in hosts
+            and ws.headers.get("origin", "") in origins
+            and sessions.check(ws.cookies.get(COOKIE)) == "ok")
+
+
+def install(app: FastAPI, *, token: str, sessions: Sessions,
+            config: ApiConfig) -> None:
+    allowed_hosts, allowed_origins = _allowed(config)
     cookie = cookie_options(config)
     # Reachable before sign-in: checking the API version, and trading a
     # handoff code for a cookie. GET/DELETE /api/session must still go

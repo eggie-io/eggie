@@ -58,6 +58,10 @@ Every feature router (`FEATURES` in `rest/app.py`) is mounted **twice**:
 - at `/api` behind the `eggie_session` cookie plus a `Host`/`Origin` allowlist — the browser
   console, reached through Traefik on the edge port.
 
+The auth middleware is HTTP-only and never sees a WebSocket: a WebSocket route calls
+`auth.websocket_allowed` itself (Origin required) and lives only under `/api`; the sweep in
+`test_api_browser_auth.py` holds both. The one today is an action's terminal (`rest/terminal.py`).
+
 The desktop gets the browser a session via `POST /sessions/handoff`; a signed-in page gets the
 system browser one via `POST /api/sessions/handoff`
 (`../eggie-resources/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`).

@@ -1,22 +1,34 @@
+import queue
+
 from eggie_api.infra.actions_helper import HelperError
 
 
 class FakeTerminal:
+    """Echoes what is written. `read` blocks like the real one until there is
+    output, `hang_up()` or `close()`."""
+
     def __init__(self):
         self.written = []
+        self.resizes = []
         self.closed = False
+        self._out: queue.Queue[bytes] = queue.Queue()
 
     def read(self):
-        return b""
+        return self._out.get()
 
     def write(self, data):
         self.written.append(data)
+        self._out.put(data)
 
     def resize(self, cols, rows):
-        pass
+        self.resizes.append((cols, rows))
+
+    def hang_up(self):
+        self._out.put(b"")
 
     def close(self):
         self.closed = True
+        self._out.put(b"")
 
 
 class FakeHelper:
@@ -27,6 +39,7 @@ class FakeHelper:
         self.calls = []
         self.runs: dict[tuple[str, str], dict] = {}
         self.fail = None
+        self.terminals: list[FakeTerminal] = []
 
     def _record(self, *call):
         self.calls.append(call)
@@ -62,7 +75,8 @@ class FakeHelper:
         self._record("attach", project, action, cols, rows)
         if (project, action) not in self.runs:
             raise HelperError("not_running", "this action has no run to attach to")
-        return FakeTerminal()
+        self.terminals.append(FakeTerminal())
+        return self.terminals[-1]
 
     def names(self):
         return [c[0] for c in self.calls]

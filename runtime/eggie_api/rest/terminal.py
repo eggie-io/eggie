@@ -26,6 +26,9 @@ log = logging.getLogger("eggie.api")
 DEFAULT_COLS, DEFAULT_ROWS = 120, 32
 MAX_DIMENSION = 500
 MAX_REASON = 123
+# The helper hung up: it restarts on every runtime install while its runs carry on,
+# so the console reconnects, and a run that has really gone answers that with 4409.
+HELPER_GONE = 1012
 
 
 def _clamp(n: int) -> int:
@@ -88,7 +91,7 @@ async def _inbound(ws: WebSocket, terminal: Terminal) -> int | None:
             elif message.get("text") is not None and (dims := _resize(message["text"])):
                 await run_in_threadpool(terminal.resize, *dims)
         except OSError:
-            return 1000
+            return HELPER_GONE
         except Exception as e:
             # The type only: the message could quote what was typed.
             log.error("the terminal refused a write: %s", type(e).__name__)
@@ -135,7 +138,7 @@ async def relay(ws: WebSocket, terminal: Terminal) -> None:
             for send in in_flight:
                 send.cancel()
         terminal.close()
-    code = inbound.result() if inbound in done else 1000
+    code = inbound.result() if inbound in done else HELPER_GONE
     if code is not None:
         # The browser may have left in the meantime.
         with contextlib.suppress(RuntimeError, OSError, WebSocketDisconnect):

@@ -121,12 +121,13 @@ def test_a_helper_that_is_down_closes_with_4503(running):
     assert (closed.value.code, closed.value.reason) == (4503, "actions_unavailable")
 
 
-def test_the_terminal_hanging_up_closes_the_socket_normally(running):
+def test_the_terminal_hanging_up_closes_with_1012_so_the_console_reconnects(running):
+    # The helper restarts on every runtime install while its runs carry on.
     with running.browser.websocket_connect(TERMINAL) as ws:
         running.helper.terminals[-1].hang_up()
         with pytest.raises(WebSocketDisconnect) as closed:
             ws.receive_bytes()
-    assert closed.value.code == 1000
+    assert closed.value.code == 1012
     assert running.helper.terminals[-1].closed
     assert _pumps_end()
 
@@ -161,3 +162,12 @@ def test_a_write_the_terminal_cannot_take_closes_with_1011(running):
             ws.receive_bytes()
     assert closed.value.code == 1011
     assert running.helper.terminals[-1].closed
+
+
+def test_a_write_to_a_helper_that_has_gone_closes_with_1012(running):
+    with running.browser.websocket_connect(TERMINAL) as ws:
+        running.helper.terminals[-1].write_error = BrokenPipeError()
+        ws.send_bytes(b"x")
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_bytes()
+    assert closed.value.code == 1012

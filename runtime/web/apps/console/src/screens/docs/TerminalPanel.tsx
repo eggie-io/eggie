@@ -42,17 +42,18 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
     let timer: number | undefined;
     let attempt = 0;
     let disposed = false;
+    // Only the very first handshake can be "refused"; later failures are a restart or outage.
+    let everOpened = false;
     const encoder = new TextEncoder();
 
     const connect = () => {
-      let opened = false;
       // The server redraws the screen on attach.
       term.reset();
       const ws = new WebSocket(terminalUrl(window.location, projectId, action.id, term.cols, term.rows));
       ws.binaryType = "arraybuffer";
       socket = ws;
       ws.onopen = () => {
-        opened = true;
+        everOpened = true;
         attempt = 0;
         setReconnecting(false);
       };
@@ -61,7 +62,7 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;
-        const reason = closeReason(event.code, opened);
+        const reason = closeReason(event.code, everOpened);
         if (reason === "dropped") {
           setReconnecting(true);
           timer = window.setTimeout(connect, reconnectDelay(attempt++));
@@ -110,7 +111,7 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
         {finished && (
           <p className={s.status}>Finished — exit code {run.exit_code ?? "unknown"}</p>
         )}
-        {reconnecting && <p className={s.status}>Connection lost. Reconnecting…</p>}
+        {reconnecting && <p className={s.status}>Reconnecting…</p>}
         {ended && NOTES[ended] && <Notice tone="danger">{NOTES[ended]}</Notice>}
       </div>
     </Modal>

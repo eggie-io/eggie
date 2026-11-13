@@ -53,7 +53,7 @@ def test_get_unpacks_the_bundle_and_returns_its_instructions(make):
     assert out["path"] == str(target)
     assert (out["slug"], out["version"]) == ("blog", 3)
     assert out["instructions"] == RECIPE_MD
-    assert (target / "scripts/run.sh").stat().st_mode & 0o777 == 0o755
+    assert (target / "scripts/run.sh").stat().st_mode & 0o777 == 0o775
 
 
 def test_a_version_already_unpacked_is_not_downloaded_again(make):
@@ -140,3 +140,13 @@ def test_list_shows_only_recipes_an_agent_can_get(make):
     assert resp.status_code == 200
     assert resp.json() == {"recipes": [
         {"slug": "blog", "title": "Blog", "summary": "Use when …"}]}
+
+
+def test_a_signed_in_vm_sends_its_token_for_the_recipe_and_its_bundle(make):
+    body = recipe_zip()
+    env = make(recipe=[_meta(body)], recipe_bundle=[body])
+    env.repos.account.update(access_token="at-1", refresh_token="rt",
+                             access_expires_at=10**12, org_id="org-1")
+    assert env.client.post("/recipes/blog/get").status_code == 200
+    assert env.cloud.calls[0] == ("recipe", "at-1", "blog")
+    assert env.cloud.calls[1][:2] == ("recipe_bundle", "at-1")

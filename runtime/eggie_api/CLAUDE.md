@@ -154,7 +154,7 @@ and a host release. Prefer additive changes.
   bundle from the Eggie service inside the request (no job), checks size and sha256, unpacks into
   `<projects_root>/.recipes/<slug>/<version>/` and returns `RECIPE.md`'s text as `instructions`; a
   version already there is not downloaded again. Caps: zip 100 MB, 10 000 entries, 500 MB unpacked;
-  no links, no paths leaving the folder, modes reset to 0644/0755. The API never runs anything from a
+  no links, no paths leaving the folder, modes reset to 0664/0775, folders 2775 (group-writable). The API never runs anything from a
   bundle. Design: `../eggie-resources/superpowers/specs/2026-11-13-recipe-bundles-design.md`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`

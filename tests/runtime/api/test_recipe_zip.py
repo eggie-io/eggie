@@ -25,19 +25,21 @@ def _recipe(*extra):
     return [("RECIPE.md", b"# r\n", 0o100644), *extra]
 
 
-def test_unpacks_files_and_keeps_only_the_executable_bit(tmp_path):
+def test_unpacks_group_writable_and_keeps_only_the_executable_bit(tmp_path):
+    # Login users are never the API's uid: they copy and edit these files.
     dest = _unpack(tmp_path, _recipe(("scripts/run.sh", b"#!/bin/sh\n", 0o100755),
                                      ("x.txt", b"x", 0o104777)))
-    assert (dest / "RECIPE.md").stat().st_mode & 0o7777 == 0o644
-    assert (dest / "scripts/run.sh").stat().st_mode & 0o7777 == 0o755
-    assert (dest / "x.txt").stat().st_mode & 0o7777 == 0o755
-    assert (dest / "scripts").stat().st_mode & 0o7777 == 0o755
+    assert (dest / "RECIPE.md").stat().st_mode & 0o7777 == 0o664
+    assert (dest / "scripts/run.sh").stat().st_mode & 0o7777 == 0o775
+    assert (dest / "x.txt").stat().st_mode & 0o7777 == 0o775
+    assert (dest / "scripts").stat().st_mode & 0o7777 == 0o2775
+    assert dest.stat().st_mode & 0o7777 == 0o2775
     assert (dest / "scripts/run.sh").read_bytes() == b"#!/bin/sh\n"
 
 
 def test_an_entry_without_unix_mode_is_a_plain_file(tmp_path):
     dest = _unpack(tmp_path, _recipe(("notes.txt", b"n", 0)))
-    assert (dest / "notes.txt").stat().st_mode & 0o7777 == 0o644
+    assert (dest / "notes.txt").stat().st_mode & 0o7777 == 0o664
 
 
 @pytest.mark.parametrize("name", ["../evil", "/etc/evil", "a/../../evil", "a\\evil"])

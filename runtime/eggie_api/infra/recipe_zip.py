@@ -9,6 +9,9 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 RECIPE_MD = "RECIPE.md"
+# Group-writable like pushed project files: login users are never the API's
+# uid, and an explicit chmod would narrow the projects folder's default ACL.
+FILE_MODE, EXEC_MODE, DIR_MODE = 0o664, 0o775, 0o2775
 
 
 class BadBundle(Exception):
@@ -53,9 +56,9 @@ def unpack(zip_path: Path, dest: Path, *, max_files: int, max_unpacked_bytes: in
                     target.parent.mkdir(parents=True, exist_ok=True)
                     with zf.open(info) as src, open(target, "wb") as out:
                         shutil.copyfileobj(src, out)
-                    os.chmod(target, 0o755 if executable else 0o644)
+                    os.chmod(target, EXEC_MODE if executable else FILE_MODE)
                 for folder in [dest, *(p for p in dest.rglob("*") if p.is_dir())]:
-                    os.chmod(folder, 0o755)
+                    os.chmod(folder, DIR_MODE)
             except BaseException:
                 shutil.rmtree(dest, ignore_errors=True)
                 raise

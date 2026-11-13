@@ -10,8 +10,8 @@ from pathlib import Path
 import yaml
 
 from ..config import ApiConfig
-from ..domain.actions import is_slug
-from ..errors import Conflict, Invalid, NotFound, Unavailable, Upstream
+from ..domain.actions import is_slug, recipes_of
+from ..errors import Conflict, EggieError, Invalid, NotFound, Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.recipe_zip import RECIPE_MD, BadBundle, unpack
 from .account import NotSignedIn
@@ -67,22 +67,33 @@ class RecipeService:
             raise Invalid("invalid_recipe", f"'{slug}' is not a recipe name")
         try:
             return self._ask(lambda token: self._cloud.recipe(token, slug))
-        except CloudError:
-            raise NotFound("recipe_not_found", f"There is no published recipe '{slug}'.")
+        except CloudError as e:
+            raise self._missing(e, slug)
+
+    @staticmethod
+    def _missing(e: CloudError, slug: str) -> EggieError:
+        if e.status == 404:
+            return NotFound("recipe_not_found", f"There is no published recipe '{slug}'.")
+        return Upstream("cloud_error", e.message)
 
     def actions(self, slug: str) -> dict:
         try:
             return self._ask(lambda token: self._cloud.recipe_actions(token, slug))
-        except CloudError:
-            raise NotFound("recipe_not_found", f"There is no published recipe '{slug}'.")
+        except CloudError as e:
+            raise self._missing(e, slug)
 
     def add(self, project_id: str, slug: str) -> dict:
         self._loader.require(project_id)
         self._published(slug)
         data = self._loader.project_yml(project_id)
-        current = self._loader.recipes(project_id)
+        current = recipes_of(data)
         recipes = [*current, slug] if slug not in current else list(current)
-        self._write_project_yml(project_id, {**data, "recipes": recipes})
+        try:
+            self._write_project_yml(project_id, {**data, "recipes": recipes})
+        except OSError as e:
+            raise Conflict("project_not_writable",
+                           f"Eggie could not save .eggie/project.yml in '{project_id}' "
+                           f"({e.strerror}). Run the command again from the project folder.")
         return {"id": project_id, "recipes": recipes}
 
     def _write_project_yml(self, project_id: str, data: dict) -> None:

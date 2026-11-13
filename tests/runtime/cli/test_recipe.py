@@ -34,3 +34,15 @@ def test_recipe_add_records_the_recipe_on_the_project_you_are_in(recipe_guest):
     code, out, err = recipe_guest.run("recipe", "add", "mobile-app", cwd=folder)
     assert (code, out, err) == (0, "mobile-app added to app.\n", "")
     assert "mobile-app" in (folder / ".eggie/project.yml").read_text()
+
+
+def test_recipe_add_makes_the_eggie_folder_writable_for_the_api_first(recipe_guest):
+    folder = recipe_guest.root / "app"
+    (folder / ".eggie").mkdir(parents=True)
+    (folder / ".eggie").chmod(0o755)
+    (folder / "docker-compose.yml").write_text(COMPOSE_ONE_WEB)
+    recipe_guest._client.post("/projects", json={"id": "app", "origin": "folder"},
+                              headers=AUTH)
+    recipe_guest.cloud.replies["recipe"] = [{"slug": "mobile-app"}]
+    assert recipe_guest.run("recipe", "add", "mobile-app", cwd=folder)[0] == 0
+    assert (folder / ".eggie").stat().st_mode & 0o2070 == 0o2070

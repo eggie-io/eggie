@@ -224,3 +224,37 @@ def test_actions_of_an_unpublished_recipe_is_recipe_not_found(make):
     with pytest.raises(NotFound) as e:
         env.app.state.services.recipes.actions("nope")
     assert e.value.code == "recipe_not_found"
+
+
+def test_a_folder_the_api_cannot_write_is_project_not_writable_and_changes_nothing(make):
+    import os
+    if os.geteuid() == 0:
+        pytest.skip("root ignores directory modes")
+    env = make(recipe=[{"slug": "a"}])
+    _project(env, {"id": "app"})
+    folder = env.config.projects_root / "app/.eggie"
+    folder.chmod(0o555)
+    try:
+        resp = env.client.post("/projects/app/recipes", json={"slug": "a"})
+    finally:
+        folder.chmod(0o755)
+    assert _code(resp) == (409, "project_not_writable")
+    assert _recipes_in(env) == {"id": "app"}
+
+
+def test_add_does_not_overwrite_a_project_yml_that_is_not_valid_yaml(make):
+    env = make(recipe=[{"slug": "a"}])
+    _project(env)
+    path = env.config.projects_root / "app/.eggie/project.yml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text("web: [unclosed\n")
+    resp = env.client.post("/projects/app/recipes", json={"slug": "a"})
+    assert resp.status_code == 422 or resp.status_code == 400, resp.text
+    assert path.read_text() == "web: [unclosed\n"
+
+
+def test_a_service_failure_other_than_404_is_not_recipe_not_found(make):
+    env = make(recipe=[CloudError("boom", "down", 500)])
+    _project(env, {"id": "app"})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "a"})
+    assert _code(resp)[1] == "cloud_error"

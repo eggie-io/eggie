@@ -12,9 +12,10 @@ PER_INSTANCE = ["api.token", "state.db", "state.db-wal", "state.db-shm", "connec
                 "account.json", "tls/1799661600/site.crt", "tls/1799661600/site.key", "tls/tls.yml",
                 "tunnel/token", "uploads/partial", "github/token", "github/desired.json",
                 "github/applied.json", "projects/blog/docker-compose.yml",
-                "agent-status/status.json", "update/status.json"]
+                "agent-status/status.json", "update/status.json",
+                "actions/logs/blog/dev.log"]
 KEPT = ["runtime/install/install.sh", ".env", "runtime.env", "runtime.version",
-        "stack.yml"]
+        "stack.yml", "actions/actions.sock"]
 BUILDER_ONLY = [".ssh/authorized_keys", ".bash_history"]
 
 

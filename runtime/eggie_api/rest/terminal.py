@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future
@@ -19,6 +20,8 @@ from .errors import status_of
 
 if TYPE_CHECKING:
     from ..infra.actions_helper import Terminal
+
+log = logging.getLogger("eggie.api")
 
 DEFAULT_COLS, DEFAULT_ROWS = 120, 32
 MAX_DIMENSION = 500
@@ -73,19 +76,23 @@ async def serve(ws: WebSocket, attach: Callable[[], Terminal]) -> None:
         terminal.close()
 
 
-async def _inbound(ws: WebSocket, terminal: Terminal) -> bool:
-    """True once the browser has gone, False once the terminal refuses a write."""
+async def _inbound(ws: WebSocket, terminal: Terminal) -> int | None:
+    """None once the browser has gone, else the code to close it with."""
     while True:
         message = await ws.receive()
         if message["type"] == "websocket.disconnect":
-            return True
+            return None
         try:
             if message.get("bytes"):
                 await run_in_threadpool(terminal.write, message["bytes"])
             elif message.get("text") is not None and (dims := _resize(message["text"])):
                 await run_in_threadpool(terminal.resize, *dims)
         except OSError:
-            return False
+            return 1000
+        except Exception as e:
+            # The type only: the message could quote what was typed.
+            log.error("the terminal refused a write: %s", type(e).__name__)
+            return 1011
 
 
 async def relay(ws: WebSocket, terminal: Terminal) -> None:
@@ -128,7 +135,8 @@ async def relay(ws: WebSocket, terminal: Terminal) -> None:
             for send in in_flight:
                 send.cancel()
         terminal.close()
-    if not (inbound in done and inbound.result()):
+    code = inbound.result() if inbound in done else 1000
+    if code is not None:
         # The browser may have left in the meantime.
         with contextlib.suppress(RuntimeError, OSError, WebSocketDisconnect):
-            await ws.close(1000)
+            await ws.close(code)

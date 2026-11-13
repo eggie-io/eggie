@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from tests.runtime.api.conftest import AUTH, BROWSER
+from eggie_api.infra.actions_helper import HelperUnavailable
+from tests.runtime.api.conftest import BROWSER
 from tests.runtime.api.test_actions import IOS, make  # noqa: F401
 from tests.runtime.api.test_api_public import console
 
@@ -96,7 +97,7 @@ def test_no_cookie_is_refused(running):
     assert "attach" not in running.helper.names()
 
 
-def test_an_unknown_action_closes_with_4404(running):
+def test_a_malformed_action_id_closes_with_4404(running):
     # A well-formed id with no run is the helper's 4409; this one can't be an action at all.
     with running.browser.websocket_connect("/api/projects/app/actions/Bad_Id/terminal") as ws:
         with pytest.raises(WebSocketDisconnect) as closed:
@@ -110,6 +111,14 @@ def test_an_action_that_is_not_running_closes_with_4409(make):
         with pytest.raises(WebSocketDisconnect) as closed:
             ws.receive_bytes()
     assert (closed.value.code, closed.value.reason) == (4409, "action_not_running")
+
+
+def test_a_helper_that_is_down_closes_with_4503(running):
+    running.helper.fail = HelperUnavailable("no socket")
+    with running.browser.websocket_connect(TERMINAL) as ws:
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_bytes()
+    assert (closed.value.code, closed.value.reason) == (4503, "actions_unavailable")
 
 
 def test_the_terminal_hanging_up_closes_the_socket_normally(running):
@@ -132,8 +141,23 @@ def test_the_browser_leaving_closes_the_terminal_and_its_pump(running):
 
 
 def test_there_is_no_terminal_on_the_bearer_side(running):
-    bearer = TestClient(running.app, headers=AUTH)
+    # Fully authorised as a browser, so only a missing route can refuse it.
+    # The jar's cookie is scoped to /api, hence the hand-set header.
+    session = running.browser.cookies.get("eggie_session")
+    assert session
     with pytest.raises(WebSocketDisconnect):
-        with bearer.websocket_connect("/projects/app/actions/ios-build/terminal"):
+        with running.browser.websocket_connect(
+                "/projects/app/actions/ios-build/terminal",
+                headers={"Cookie": f"eggie_session={session}"}):
             pass
     assert "attach" not in running.helper.names()
+
+
+def test_a_write_the_terminal_cannot_take_closes_with_1011(running):
+    with running.browser.websocket_connect(TERMINAL) as ws:
+        running.helper.terminals[-1].write_error = ValueError("boom")
+        ws.send_bytes(b"x")
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_bytes()
+    assert closed.value.code == 1011
+    assert running.helper.terminals[-1].closed

@@ -11,12 +11,15 @@ class FakeTerminal:
         self.written = []
         self.resizes = []
         self.closed = False
+        self.write_error = None
         self._out: queue.Queue[bytes] = queue.Queue()
 
     def read(self):
         return self._out.get()
 
     def write(self, data):
+        if self.write_error is not None:
+            raise self.write_error
         self.written.append(data)
         self._out.put(data)
 

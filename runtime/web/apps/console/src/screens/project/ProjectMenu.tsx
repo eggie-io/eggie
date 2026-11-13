@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { Icon, StateBadge, cx, type IconName } from "@eggie/ui";
+import { docsRoute } from "../../docs/pages";
+import { useDocPages } from "../../docs/queries";
 import { projectColor } from "../../projects/color";
 import type { Project } from "../../projects/types";
 import { useNow } from "../../projects/useNow";
@@ -38,6 +40,7 @@ export function ProjectMenu({ id, project, push, onOpen }: {
   const tile = projectColor(id);
   const page = `/p/${encodeURIComponent(id)}`;
   const notes = project ? menuNotes(project, site, now) : null;
+  const docs = useDocPages(id).data ?? [];
 
   const menu = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
@@ -84,6 +87,11 @@ export function ProjectMenu({ id, project, push, onOpen }: {
             <NavLink to={`${page}/secrets`} className={s.item}>
               <Label icon="key" note={notes.secrets} noteClass={s.noteWarning}>Secrets</Label>
             </NavLink>
+            {docs.length > 0 && (
+              <NavLink to={docsRoute(id)} className={s.item}>
+                <Label icon="book">Docs</Label>
+              </NavLink>
+            )}
             {notes.public && (
               <button
                 type="button"

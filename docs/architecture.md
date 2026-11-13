@@ -114,6 +114,30 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.
 
+### Recipes and Docs pages
+
+A recipe is a bundle the Eggie service publishes (instructions, a template, files). `eggie recipe
+list|get` unpacks one into `~/projects/.recipes/<slug>/<version>/`; the API never runs anything from
+it. `eggie recipe add <slug>` records it in the project's `.eggie/project.yml` (`recipes:`). A coding
+agent can write pages into `.eggie/docs/*.md`; the console shows them under the project's Docs menu,
+read over the files API.
+
+### Actions
+
+A recipe can offer actions (sign in to a service, run a build, start a dev server). The commands come
+only from the Eggie service (`GET /v1/recipes/{slug}/actions`, cached for 5 minutes), never from the
+bundle or the project. A Docs page puts an action in the console with an ```` ```action ```` block.
+
+```
+console ──/api/projects/{id}/actions──→ api ──unix socket──→ eggie-actions (root) ──→ tmux
+        ──/api/.../terminal (WebSocket)─→ api ──────────────────────────────────────→ (attach)
+```
+
+`eggie-actions` runs each action in a tmux session as the login account and streams its terminal;
+the console shows it in a panel, so a code can be typed in. A long-running action keeps a log
+(10 MiB cap) and keeps running when the panel closes or the runtime updates. Stopping or deleting
+a project, or a kitchen import replacing it, stops its actions.
+
 ### Site mode
 
 The runtime also runs on a server the Eggie service provisions. Nothing in the host changes: the
@@ -139,6 +163,10 @@ under `/opt/eggie/`, and a systemd path unit runs a root script:
 | `github/desired.json` | `eggie-github.path` | `install/lib/github-apply.sh`: configures git/gh for login accounts |
 | `agent-status/check`, `setup/<id>` | `eggie-agents.path` | `install/lib/agents-run.sh`: detects connected agents, runs agent setup |
 
+`eggie-actions.service` is the exception: a long-running socket service (`/opt/eggie/actions/actions.sock`,
+`root:docker 0660`), not a path unit. It runs actions in tmux (`install/lib/eggie-actions.py`) and
+keeps them alive when it restarts.
+
 ### Coding agents
 
 Agents run as a login account in the VM. On Windows they open the VM's WSL distro; on macOS
@@ -154,6 +182,7 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 | GitHub (`eggie-io/eggie`) | `get.sh` on `main`, `runtime-v*` tags, `app-v*` releases | VM, host |
 | ghcr.io | `eggie-api` and `eggie-web` images (amd64 + arm64) | VM |
 | Eggie service (`app.eggie.io`) | Sign-in, project sync, public-URL tunnels | API |
+| Eggie service, `/v1/recipes/*` | Recipe bundles and their actions | API |
 | GitHub OAuth (Device Flow) | Connecting the user's GitHub account | API |
 
 ## Updates
@@ -184,7 +213,8 @@ login account, every agent) is root-equivalent. All host forwards are loopback-o
 is the one way in from outside the machine. The API token tells the host apart from a stray
 container; it is not authentication. Secrets live in `state.db`, readable by anything root-equivalent in the VM,
 coding agents included: they protect against leaks into files, git and chat, not against the
-agent. Details: [security.md](security.md).
+agent. Action commands come only from the Eggie service and run as the login account; the agent's
+account can see an action's terminal. Details: [security.md](security.md).
 
 ## Where things live
 

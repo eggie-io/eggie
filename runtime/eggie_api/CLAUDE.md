@@ -160,6 +160,13 @@ and a host release. Prefer additive changes.
   version already there is not downloaded again. Caps: zip 100 MB, 10 000 entries, 500 MB unpacked;
   no links, no paths leaving the folder, modes reset to 0664/0775, folders 2775 (group-writable). The API never runs anything from a
   bundle. Design: `../eggie-resources/superpowers/specs/2026-11-13-recipe-bundles-design.md`.
+- **Actions** (`domain/actions.py`, `services/actions.py`, `infra/actions_helper.py`, `rest/routers/actions.py`,
+  `rest/terminal.py`) — a project's `recipes:` in `.eggie/project.yml` (written by `POST /projects/{id}/recipes`,
+  `eggie recipe add`) name the recipes whose actions it offers. Commands come only from the Eggie
+  service (`GET /v1/recipes/{slug}/actions`, cached 5 min in memory), never from a bundle or the
+  project. List/start/stop are on both mounts; the log and the terminal WebSocket only under `/api`.
+  Start/stop go to the root helper `eggie-actions` over `/opt/eggie/actions/actions.sock`; the API
+  holds no tmux state. Stopping or deleting a project, and a kitchen import replacing one, stop its actions.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)

@@ -95,6 +95,19 @@ never put a route behind it alone that would be unsafe if every process in the V
 A service-issued per-device token is meant to replace it in a later phase; until then, a new way to
 reach the API from outside the user's machine needs its own authentication.
 
+## Recipe actions
+
+Commands come only from the Eggie service and run as the login account, never as root.
+
+- **The terminal WebSocket checks for itself.** The auth middleware never sees a WebSocket, so the
+  route checks `Host`, a required `Origin` and the session cookie before accepting. It exists only
+  under `/api`; the bearer-token mount has no terminal.
+- **The helper socket is `root:docker 0660`.** Whoever can use the Docker socket can ask `eggie-actions`
+  to run or attach to an action; that is the same trust as the Docker socket. The agent's account is
+  in `docker`, so it can see an action's terminal, including what the person types into it.
+- **A one-off action keeps no log**, so what it prints, a typed code included, stays out of files. Long-running
+  actions log their output to `/opt/eggie/actions/logs/`.
+
 ## Public URLs
 
 A public URL is the one path in from outside the user's machine. The Eggie service runs the

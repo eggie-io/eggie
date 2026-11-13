@@ -7,6 +7,7 @@ from typing import NoReturn
 from .commands import cmd_clone, cmd_down, cmd_logs, cmd_new, cmd_status, cmd_up
 from .env import Env
 from .errors import EggieError
+from .recipes import cmd_recipe_get, cmd_recipe_list
 from .secrets import cmd_secret_list, cmd_secret_request, cmd_secret_rm, cmd_secret_set
 
 
@@ -57,6 +58,13 @@ def _parser() -> argparse.ArgumentParser:
     secret_rm = secret_sub.add_parser("rm", help="remove a secret or a request")
     secret_rm.error = _secret_usage_error
     secret_rm.add_argument("name")
+    recipe = sub.add_parser("recipe", help="download a recipe from Eggie for you to follow")
+    recipe_sub = recipe.add_subparsers(dest="recipe_command", required=True,
+                                       metavar="<action>")
+    recipe_sub.add_parser("list", help="show published recipes and when to use each")
+    recipe_get = recipe_sub.add_parser(
+        "get", help="download a recipe into ~/projects/.recipes and print its RECIPE.md")
+    recipe_get.add_argument("slug")
     return parser
 
 
@@ -81,6 +89,10 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
             "list": lambda: cmd_secret_list(env),
             "rm": lambda: cmd_secret_rm(env, args.name),
         }[args.secret_command](),
+        "recipe": lambda: {
+            "list": lambda: cmd_recipe_list(env),
+            "get": lambda: cmd_recipe_get(env, args.slug),
+        }[args.recipe_command](),
     }
     try:
         commands[args.command]()

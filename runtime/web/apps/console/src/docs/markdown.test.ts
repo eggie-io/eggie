@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDoc, type Block, type Inline } from "./markdown";
+import { pageTitle, parseDoc, type Block, type Inline } from "./markdown";
 
 function text(nodes: (Block | Inline)[]): string {
   return nodes
@@ -70,5 +70,22 @@ describe("parseDoc", () => {
     expect(table.align).toEqual(["left", "right"]);
     expect(table.header.map((c) => text(c))).toEqual(["a", "b"]);
     expect(table.rows.map((r) => r.map((c) => text(c)))).toEqual([["1", "2"]]);
+  });
+});
+
+describe("pageTitle", () => {
+  it("titles a page by its first level-one heading, else by its name", () => {
+    expect(pageTitle("deploy", "Intro\n# Ship it \n# Second")).toBe("Ship it");
+    expect(pageTitle("deploy", "## Sub only")).toBe("deploy");
+    expect(pageTitle("deploy", undefined)).toBe("deploy");
+  });
+
+  it("skips a # line inside a code block", () => {
+    expect(pageTitle("deploy", "```bash\n# not a title\n```\n# Real")).toBe("Real");
+  });
+
+  it("titles with the heading's text as shown, not its Markdown", () => {
+    expect(pageTitle("menu", "# Fish &amp; *chips*")).toBe("Fish & chips");
+    expect(pageTitle("menu", "Setext\n===")).toBe("Setext");
   });
 });

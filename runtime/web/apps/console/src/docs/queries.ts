@@ -15,9 +15,10 @@ const sourceQuery = (id: string, page: string | undefined) => ({
   refetchOnWindowFocus: true,
 });
 
-export function useDocPages(id: string) {
+export function useDocPages(id: string, enabled = true) {
   return useQuery({
     queryKey: ["docs", id],
+    enabled,
     queryFn: async () => {
       try {
         return pageNames((await api.get<Listing>(listingUrl(id, DOCS_DIR))).entries);

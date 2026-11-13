@@ -2,16 +2,11 @@ import type { DirEntry } from "../uploads/queries";
 
 export const DOCS_DIR = ".eggie/docs";
 
-const MD = /\.md$/i;
+const MD = /\.md$/;
 
 export function pageNames(entries: DirEntry[]): string[] {
   const names = entries.filter((e) => e.kind === "file" && MD.test(e.name)).map((e) => e.name.replace(MD, ""));
   return names.sort((a, b) => (a === "index" ? -1 : b === "index" ? 1 : a.localeCompare(b, undefined, { sensitivity: "base" })));
-}
-
-export function pageTitle(name: string, source: string | undefined): string {
-  const heading = source?.match(/^# +(.+)$/m)?.[1].trim();
-  return heading || name;
 }
 
 export type LinkTarget = { kind: "page"; page: string } | { kind: "external"; href: string } | { kind: "none" };

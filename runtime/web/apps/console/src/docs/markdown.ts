@@ -113,3 +113,14 @@ function blocks(tokens: Token[] | undefined): Block[] {
 export function parseDoc(source: string): Block[] {
   return blocks(lexer(source));
 }
+
+function plain(nodes: Inline[]): string {
+  return nodes
+    .map((n) => (typeof n === "string" ? n : "children" in n ? plain(n.children) : n.kind === "code" ? n.text : n.kind === "image" ? n.alt : ""))
+    .join("");
+}
+
+export function pageTitle(name: string, source: string | undefined): string {
+  const heading = source === undefined ? undefined : parseDoc(source).find((b) => b.kind === "heading" && b.level === 1);
+  return (heading?.kind === "heading" && plain(heading.children).trim()) || name;
+}

@@ -1,19 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DirEntry } from "../uploads/queries";
-import { docsRoute, pageNames, pageTitle, resolveImage, resolveLink } from "./pages";
+import { docsRoute, pageNames, resolveImage, resolveLink } from "./pages";
 
 const file = (name: string): DirEntry => ({ name, kind: "file", size: 1, items: null, modified: 0 });
 
 describe("docs pages", () => {
   it("lists Markdown files only, index first and the rest by name ignoring case", () => {
     const entries = [file("beta.md"), file("notes.txt"), file("Alpha.md"), file("index.md"), { ...file("x.md"), kind: "folder" as const }, file("README.MD")];
-    expect(pageNames(entries)).toEqual(["index", "Alpha", "beta", "README"]);
-  });
-
-  it("titles a page by its first level-one heading, else by its name", () => {
-    expect(pageTitle("deploy", "Intro\n# Ship it \n# Second")).toBe("Ship it");
-    expect(pageTitle("deploy", "## Sub only")).toBe("deploy");
-    expect(pageTitle("deploy", undefined)).toBe("deploy");
+    expect(pageNames(entries)).toEqual(["index", "Alpha", "beta"]);
   });
 
   it("opens web and mail links outside and sibling .md links as pages", () => {

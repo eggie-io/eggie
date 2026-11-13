@@ -6,7 +6,8 @@ const QUIET = 4;
 export function qrModules(value: string): { d: string; box: number } | null {
   const qr = qrcode(0, "M");
   try {
-    qr.addData(value);
+    // The library keeps only the low byte of each UTF-16 unit; hand it UTF-8 bytes instead.
+    qr.addData(String.fromCharCode(...new TextEncoder().encode(value)), "Byte");
     qr.make();
   } catch {
     return null;

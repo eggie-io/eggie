@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router";
 import { Notice, cx } from "@eggie/ui";
 import { ApiError } from "../../api/client";
-import { parseDoc } from "../../docs/markdown";
-import { docsRoute, pageTitle } from "../../docs/pages";
+import { pageTitle, parseDoc } from "../../docs/markdown";
+import { docsRoute } from "../../docs/pages";
 import { useDocPages, useDocSource, useDocSources } from "../../docs/queries";
 import { actionError } from "../../projects/copy";
 import { TitleRow } from "../project/TitleRow";
@@ -23,8 +23,10 @@ export function DocsPage() {
   const blocks = useMemo(() => (source.data === undefined ? null : parseDoc(source.data)), [source.data]);
 
   const body = () => {
-    if (pages.isError) return <Notice tone="danger">{actionError(pages.error)}</Notice>;
-    if (!pages.data) return <p className={s.muted}>Turning the pages…</p>;
+    if (!pages.data) {
+      if (pages.isError) return <Notice tone="danger">{actionError(pages.error)}</Notice>;
+      return <p className={s.muted}>Turning the pages…</p>;
+    }
     if (names.length === 0) return <p className={s.muted}>No pages yet.</p>;
     const gone = !listed || (source.error instanceof ApiError && source.error.code === "file_not_found");
     if (gone) {
@@ -34,8 +36,10 @@ export function DocsPage() {
         </p>
       );
     }
-    if (source.isError) return <Notice tone="danger">{actionError(source.error)}</Notice>;
-    if (!blocks) return <p className={s.muted}>Turning the pages…</p>;
+    // A failed background refresh keeps showing the page it already has.
+    if (!blocks) {
+      return source.isError ? <Notice tone="danger">{actionError(source.error)}</Notice> : <p className={s.muted}>Turning the pages…</p>;
+    }
     return <DocView id={id} blocks={blocks} />;
   };
 

@@ -40,7 +40,7 @@ export function ProjectMenu({ id, project, push, onOpen }: {
   const tile = projectColor(id);
   const page = `/p/${encodeURIComponent(id)}`;
   const notes = project ? menuNotes(project, site, now) : null;
-  const docs = useDocPages(id).data ?? [];
+  const docs = useDocPages(id, project !== undefined).data ?? [];
 
   const menu = useRef<HTMLElement>(null);
   const { pathname } = useLocation();

@@ -4,6 +4,7 @@ import argparse
 import sys
 from typing import NoReturn
 
+from .actions import cmd_actions
 from .commands import cmd_clone, cmd_down, cmd_logs, cmd_new, cmd_status, cmd_up
 from .env import Env
 from .errors import EggieError
@@ -69,6 +70,9 @@ def _parser() -> argparse.ArgumentParser:
         "add", help="record that this project uses a recipe")
     recipe_add.add_argument("slug")
     recipe_add.add_argument("--project", help="project id (default: the project you are in)")
+    actions = sub.add_parser(
+        "actions", help="show the actions this project's recipes give the owner's console")
+    actions.add_argument("--project", help="project id (default: the project you are in)")
     return parser
 
 
@@ -98,6 +102,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
             "get": lambda: cmd_recipe_get(env, args.slug),
             "add": lambda: cmd_recipe_add(env, args.slug, args.project),
         }[args.recipe_command](),
+        "actions": lambda: cmd_actions(env, args.project),
     }
     try:
         commands[args.command]()

@@ -37,6 +37,7 @@ class LifecycleService:
         self._locks = locks
         self._probe = http_probe
         self.on_status: Callable[[], None] = lambda: None
+        self.on_stopped: Callable[[str], None] | None = None
 
     def _set_status(self, project_id: str, status: str) -> None:
         self._projects.set_status(project_id, status)
@@ -170,6 +171,8 @@ class LifecycleService:
                     raise JobFailed((result.stderr or result.stdout).strip()
                                     or "compose down failed")
                 self._set_status(project_id, "stopped")
+                if self.on_stopped is not None:
+                    self.on_stopped(project_id)
                 return {"status": "stopped"}
             finally:
                 self._locks.release(project_id)

@@ -70,6 +70,9 @@ class ApiConfig:
     instance_ca_file: Path | None = None
     # Where bundles are staged before a push or after an incoming one.
     transfers_root: Path = Path(f"{constants.GUEST_ROOT}/transfers")
+    # The root eggie-actions helper's socket, and where it writes long-running logs.
+    actions_socket: Path = Path(f"{constants.GUEST_ROOT}/actions/actions.sock")
+    actions_logs: Path = Path(f"{constants.GUEST_ROOT}/actions/logs")
     version: str = __version__
 
     def public_url(self, host: str) -> str:
@@ -121,5 +124,9 @@ class ApiConfig:
                              if env.get("EGGIE_INSTANCE_CA_FILE") else None),
             transfers_root=Path(env.get("EGGIE_TRANSFERS_ROOT",
                                         f"{constants.GUEST_ROOT}/transfers")),
+            actions_socket=Path(env.get("EGGIE_ACTIONS_SOCKET",
+                                        f"{constants.GUEST_ROOT}/actions/actions.sock")),
+            actions_logs=Path(env.get("EGGIE_ACTIONS_LOGS",
+                                      f"{constants.GUEST_ROOT}/actions/logs")),
             version=env.get("EGGIE_SERVICE_VERSION", __version__),
         )

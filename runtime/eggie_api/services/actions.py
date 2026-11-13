@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from ..domain.actions import Action, is_slug, merge, parse_actions
-from ..errors import Conflict, EggieError, NotFound, Unavailable, Upstream
+from ..errors import Conflict, EggieError, Invalid, NotFound, Unavailable, Upstream
 from ..infra.actions_helper import HelperError, HelperUnavailable, Terminal
 from .loader import ProjectLoader
 from .recipes import RecipeService
@@ -52,7 +52,11 @@ class ActionService:
         per_recipe: dict[str, list[Action]] = {}
         problems: list[dict] = []
         failures: list[EggieError] = []
-        for slug in self._loader.recipes(project_id):
+        try:
+            slugs = self._loader.recipes(project_id)
+        except Invalid as e:
+            return {}, [{"recipe": None, "code": e.code, "message": e.message}], [e]
+        for slug in slugs:
             try:
                 actions, dropped = self._recipe(slug)
             except (NotFound, Upstream, Unavailable) as e:

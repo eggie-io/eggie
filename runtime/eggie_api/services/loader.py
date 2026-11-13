@@ -53,14 +53,19 @@ class ProjectLoader:
 
     def project_yml(self, project_id: str) -> dict:
         path = self.dir(project_id) / ".eggie" / "project.yml"
-        return self.parse_yaml(path) if path.exists() else {}
+        if not path.exists():
+            return {}
+        try:
+            return self.parse_yaml(path)
+        except Invalid as e:
+            raise Invalid("invalid_project_yml", e.message) from e
+        except OSError as e:
+            raise Invalid("invalid_project_yml",
+                          f"project.yml cannot be read ({e.strerror})") from e
 
     def recipes(self, project_id: str) -> tuple[str, ...]:
         self.require(project_id)
-        try:
-            return recipes_of(self.project_yml(project_id))
-        except Invalid:
-            return ()
+        return recipes_of(self.project_yml(project_id))
 
     def load(self, project_id: str) -> Project:
         compose = self.compose(project_id)

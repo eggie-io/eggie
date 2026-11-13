@@ -112,6 +112,17 @@ def test_start_while_the_service_is_unreachable_is_503_cloud_unavailable(make):
     assert _error(resp) == (503, "cloud_unavailable")
 
 
+def test_a_project_yml_that_cannot_be_read_is_a_problem_not_an_empty_list(make):
+    env = make(recipe_actions=[IOS])
+    (env.config.projects_root / "app/.eggie/project.yml").write_text("recipes: [unclosed\n")
+    out = env.client.get("/projects/app/actions").json()
+    assert out["actions"] == []
+    assert [(p["recipe"], p["code"]) for p in out["problems"]] == [(None, "invalid_project_yml")]
+    assert "project.yml" in out["problems"][0]["message"]
+    assert _error(env.client.post("/projects/app/actions/ios-build/start")) == (
+        422, "invalid_project_yml")
+
+
 def test_a_recipe_the_service_no_longer_has_is_a_problem(make):
     env = make(recipes=("mobile-app", "gone"),
                recipe_actions=[IOS, CloudError("recipe_not_found", "m", 404)])

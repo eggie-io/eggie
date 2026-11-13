@@ -253,6 +253,26 @@ def test_add_does_not_overwrite_a_project_yml_that_is_not_valid_yaml(make):
     assert path.read_text() == "web: [unclosed\n"
 
 
+def test_adding_a_recipe_already_listed_leaves_the_file_untouched(make):
+    env = make(recipe=[{"slug": "a"}])
+    _project(env)
+    path = env.config.projects_root / "app/.eggie/project.yml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text("# the owner's note\nrecipes: [a]\n")
+    resp = env.client.post("/projects/app/recipes", json={"slug": "a"})
+    assert resp.json() == {"id": "app", "recipes": ["a"]}
+    assert path.read_text() == "# the owner's note\nrecipes: [a]\n"
+
+
+@pytest.mark.parametrize("recipes", ["a", ["a", {"slug": "b"}], ["a", "Not A Slug"]])
+def test_add_refuses_a_recipes_entry_that_is_not_a_list_of_names(make, recipes):
+    env = make(recipe=[{"slug": "c"}])
+    _project(env, {"recipes": recipes})
+    resp = env.client.post("/projects/app/recipes", json={"slug": "c"})
+    assert _code(resp) == (422, "invalid_project_yml")
+    assert _recipes_in(env) == {"recipes": recipes}
+
+
 def test_a_service_failure_other_than_404_is_not_recipe_not_found(make):
     env = make(recipe=[CloudError("boom", "down", 500)])
     _project(env, {"id": "app"})

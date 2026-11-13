@@ -86,8 +86,16 @@ class RecipeService:
         self._loader.require(project_id)
         self._published(slug)
         data = self._loader.project_yml(project_id)
+        listed = data.get("recipes") or []
+        # Rewriting would silently drop whatever the owner put there.
+        if not (isinstance(listed, list) and all(is_slug(r) for r in listed)):
+            raise Invalid("invalid_project_yml",
+                          "recipes in .eggie/project.yml must be a list of recipe names. "
+                          "Fix it and run the command again.")
         current = recipes_of(data)
-        recipes = [*current, slug] if slug not in current else list(current)
+        if slug in current:
+            return {"id": project_id, "recipes": list(current)}
+        recipes = [*current, slug]
         try:
             self._write_project_yml(project_id, {**data, "recipes": recipes})
         except OSError as e:

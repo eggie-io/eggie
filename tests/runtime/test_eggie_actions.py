@@ -86,6 +86,26 @@ def test_attach_relays_input_and_output(helper):
     assert helper.wait_exited("say")["exit_code"] == 0
 
 
+def test_the_tmux_prefix_reaches_the_program_and_opens_no_shell(helper):
+    helper.start_action("say", "echo ready; cat -v")
+    terminal = helper.attach("say")
+    # Before the screen is up, the pty itself still echoes ^B.
+    terminal.read_until(b"ready")
+    terminal.send(b"\x02c\x02:\r")
+    terminal.read_until(b"^Bc^B:")
+    terminal.close()
+    panes = helper.tmux("list-panes", "-s", "-t", "=app--say", "-F", "#{pane_id}").stdout.split()
+    assert len(panes) == 1, panes
+
+
+def test_a_stray_pane_does_not_change_an_actions_status(helper):
+    helper.start_action("build", "exit 3")
+    assert helper.wait_exited("build")["exit_code"] == 3
+    assert helper.tmux("new-window", "-d", "-t", "=app--build:", "sleep 600").returncode == 0
+    run = helper.run("build")
+    assert run["state"] == "exited" and run["exit_code"] == 3
+
+
 def test_a_second_attach_sees_what_was_on_screen(helper):
     # The tab closed mid-prompt: the run goes on, and reopening shows the prompt.
     helper.start_action("login", "echo enter-the-code; read code; echo code:$code")

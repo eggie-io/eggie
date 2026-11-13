@@ -69,6 +69,8 @@ connection into terminal frames. Actions run in a tmux server (`-L eggie-actions
 user (root when it is empty). `KillMode=process` and `Restart=always` keep running actions alive across
 a helper restart or a runtime update. Long-running actions log to `actions/logs/<project>/<action>.log`
 (10 MiB cap, truncated at start); one-off actions keep none. `snapshot-prep.sh` strips the logs.
+`eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
+picks up a changed conf only after all its actions have ended.
 
 ## `install.sh` — numbered steps, order matters
 

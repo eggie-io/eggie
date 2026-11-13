@@ -113,6 +113,9 @@ class Actions:
             name, dead, recorded, status, created, pid = (line.split("\t") + [""] * 6)[:6]
             if not (created.isdigit() and pid.isdigit()):
                 continue
+            # Only the session's first pane is the action's; a stray one never overwrites it.
+            if name in panes:
+                continue
             code = recorded if recorded.isdigit() else status
             panes[name] = Pane(dead == "1", int(code) if dead == "1" and code.isdigit() else None,
                                int(created), int(pid))

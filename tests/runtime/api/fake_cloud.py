@@ -1,3 +1,6 @@
+from eggie_api.infra.cloud import CloudError
+
+
 class FakeCloud:
     """Replays scripted answers per method, in order; an exception is raised.
     Records every call as (method, *args)."""
@@ -71,6 +74,18 @@ class FakeCloud:
 
     def complete_transfer(self, token, ticket_id):
         return self._next("complete_transfer", token, ticket_id)
+
+    def recipes(self, token):
+        return self._next("recipes", token)
+
+    def recipe(self, token, slug):
+        return self._next("recipe", token, slug)
+
+    def recipe_bundle(self, token, slug, version, dest, *, max_bytes):
+        body = self._next("recipe_bundle", token, slug, version)
+        if len(body) > max_bytes:
+            raise CloudError("bundle_too_large", "too large", 0)
+        dest.write_bytes(body)
 
 
 CODE = {"device_code": "dc-1", "user_code": "ABCD-EFGH",

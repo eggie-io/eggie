@@ -6,10 +6,11 @@ from ..config import ApiConfig
 from ..wiring import Services, build
 from . import auth, errors
 from .routers import (account, files, github, instances, jobs, lifecycle, projects, public,
-                      push, runtime_update, secrets, sessions, system, transfers, uploads)
+                      push, recipes, runtime_update, secrets, sessions, system, transfers,
+                      uploads)
 
 FEATURES = (system, account, github, projects, lifecycle, files, uploads,
-            secrets, jobs, public)
+            secrets, jobs, public, recipes)
 
 
 def create_app(*, config: ApiConfig | None = None, services: Services | None = None,

@@ -31,6 +31,7 @@ from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
 from .services.projects import ProjectService
 from .services.public import Public
+from .services.recipes import RecipeService
 from .services.runtime_update import RuntimeUpdate
 from .services.push import PushService
 from .services.secrets import SecretService
@@ -70,6 +71,7 @@ class Services:
     account: Account
     public: Public
     push: PushService
+    recipes: RecipeService
     transfers: Transfers
     github_link: GitHubLink
     sessions: Sessions
@@ -164,6 +166,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, push=push, transfers=transfers,
+        recipes=RecipeService(config, account, cloud),
         github_link=github_link,
         sessions=sessions, site=site,
         instances=instances,

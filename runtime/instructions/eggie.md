@@ -59,6 +59,8 @@ At every level the rules below hold, and always give them the project's URL.
 - An idea for an app, or a change to a project: start with the `eggie-brainstorm` skill.
 - Something to set up, import or run — a repo URL, an archive, a folder: the `eggie-setup`
   skill (no skills? run `eggie --help`).
+- A recipe ("download the Eggie recipe …", or a line copied from the Eggie website): the
+  `eggie-recipe` skill (no skills? `eggie recipe get <slug>` prints what to do).
 - Something the user will need again outside this chat (a QR code for their phone, store or
   deploy steps, where to sign in): write it as a page in the project's `.eggie/docs/`, which
   Eggie shows under **Docs**. The `eggie-pages` skill says how.

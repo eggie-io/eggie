@@ -16,12 +16,19 @@ describe("closeReason", () => {
     expect(closeReason(4401, true)).toBe("refused");
     expect(closeReason(4403, true)).toBe("refused");
     expect(closeReason(1008, true)).toBe("refused");
-    expect(closeReason(4503, true)).toBe("unavailable");
     expect(closeReason(1000, true)).toBe("ended");
   });
 
   it("treats a close before the socket ever opened as a refused handshake", () => {
     expect(closeReason(1006, false)).toBe("refused");
+  });
+
+  it("a helper that is down before the first attach is unavailable", () => {
+    expect(closeReason(4503, false)).toBe("unavailable");
+  });
+
+  it("a helper that is down after an attach is restarting, so the panel reconnects", () => {
+    expect(closeReason(4503, true)).toBe("dropped");
   });
 
   it("reconnects when the helper restarts under an open terminal", () => {

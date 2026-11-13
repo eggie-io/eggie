@@ -43,7 +43,8 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
     let timer: number | undefined;
     let attempt = 0;
     let disposed = false;
-    // Only the very first handshake can be "refused"; later failures are a restart or outage.
+    // Set on the first screen bytes, not onopen: the API accepts before closing with a refusal.
+    // Until then a failure is "refused"/"unavailable"; after it, a restart or outage to wait out.
     let everOpened = false;
     const encoder = new TextEncoder();
 
@@ -53,13 +54,15 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
       const ws = new WebSocket(terminalUrl(window.location, projectId, action.id, term.cols, term.rows));
       ws.binaryType = "arraybuffer";
       socket = ws;
-      ws.onopen = () => {
-        everOpened = true;
-        attempt = 0;
-        setReconnecting(false);
-      };
+      let attached = false;
       ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) term.write(new Uint8Array(event.data));
+        if (!(event.data instanceof ArrayBuffer)) return;
+        if (!attached) {
+          attached = everOpened = true;
+          attempt = 0;
+          setReconnecting(false);
+        }
+        term.write(new Uint8Array(event.data));
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;

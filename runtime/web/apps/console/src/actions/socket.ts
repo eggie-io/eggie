@@ -12,16 +12,16 @@ export function terminalUrl(
   return `${scheme}//${location.host}${path}?cols=${cols}&rows=${rows}`;
 }
 
-// `opened` separates a handshake the server refused (auth, origin) from a live socket that died:
-// both close with 1006 and no reason.
-export function closeReason(code: number, opened: boolean): CloseReason {
+// `everOpened`: this panel has had a terminal attached. Before that, 1006 is a refused handshake
+// (auth, origin) and 4503 a helper that is down; after it, both are a restart to reconnect through.
+export function closeReason(code: number, everOpened: boolean): CloseReason {
   if (code === 4404 || code === 4409) return "gone";
   if (code === 4401 || code === 4403 || code === 1008) return "refused";
-  if (code === 4503) return "unavailable";
+  if (code === 4503) return everOpened ? "dropped" : "unavailable";
   // The helper answered but could not attach: retrying would fail the same way.
   if (code === 4502) return "failed";
   if (code === 1000) return "ended";
-  if (code === 1006 && !opened) return "refused";
+  if (code === 1006 && !everOpened) return "refused";
   return "dropped";
 }
 

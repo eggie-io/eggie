@@ -365,6 +365,9 @@ export function handlersFor(scenario: Scenario) {
       "",
       "> Google Play asks for a privacy policy link.",
     ].join("\n"));
+    for (const title of ["Get the LinkedIn video", "Login page egg", "Logo candidates", "Particle hero", "QR test", "Take a lab result live", "Weekly report"]) {
+      seedText("recipe-box", `.eggie/docs/${title.toLowerCase().replaceAll(" ", "-")}.md`, `# ${title}\n\nNotes for ${title.toLowerCase()}.`);
+    }
     seedText("recipe-box", ".eggie/docs/home.svg",
       '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" rx="12" fill="#f3e9d2"/><text x="120" y="66" font-size="16" text-anchor="middle" font-family="sans-serif">Recipe Box</text></svg>',
       "image/svg+xml");

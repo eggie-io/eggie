@@ -1,12 +1,18 @@
 .page { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .muted { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
 
-.tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* One line held to the card's width; more pages scroll sideways instead of wrapping. */
+.tabs {
+  position: relative; display: flex; gap: var(--space-2); max-width: 760px; min-width: 0;
+  overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--space-1);
+}
 .tab {
-  display: inline-flex; align-items: center; min-height: var(--control-sm); padding: 0 var(--space-3);
+  flex: none; white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--control-sm); padding: 0 var(--space-3);
   border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper);
   font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink-2); text-decoration: none;
 }
+/* The scrolling row clips anything drawn outside it, so the focus ring sits inside the link. */
+.tab:focus-visible { outline-offset: -2px; }
 .tab:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
 .tabCurrent, .tabCurrent:hover { background: var(--selected); border-color: var(--line-strong); color: var(--ink); }
 

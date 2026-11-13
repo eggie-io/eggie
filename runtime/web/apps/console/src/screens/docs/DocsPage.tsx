@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router";
 import { Notice, cx } from "@eggie/ui";
 import { ApiError } from "../../api/client";
@@ -21,6 +21,20 @@ export function DocsPage() {
   const source = useDocSource(id, listed ? current : undefined);
   const titles = useDocSources(id, names.length > 1 ? names : []);
   const blocks = useMemo(() => (source.data === undefined ? null : parseDoc(source.data)), [source.data]);
+
+  const labels = names.map((name, i) => pageTitle(name, titles[i]?.data));
+  const row = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    // Bring the current page's link into the row when it sits past either edge; titles arriving
+    // later widen the links, so this runs again then.
+    const box = row.current;
+    const link = box?.querySelector<HTMLElement>("[aria-current='page']");
+    if (!box || !link) return;
+    const start = link.offsetLeft;
+    const end = start + link.offsetWidth;
+    if (start < box.scrollLeft) box.scrollLeft = start - 16;
+    else if (end > box.scrollLeft + box.clientWidth) box.scrollLeft = end - box.clientWidth + 16;
+  }, [current, labels.join("\n")]);
 
   const body = () => {
     if (!pages.data) {
@@ -47,7 +61,7 @@ export function DocsPage() {
     <section className={s.page}>
       <TitleRow title="Docs" sub={SUB} />
       {names.length > 1 && (
-        <nav className={s.tabs} aria-label="Pages">
+        <nav ref={row} className={s.tabs} aria-label="Pages">
           {names.map((name, i) => (
             <Link
               key={name}
@@ -55,7 +69,7 @@ export function DocsPage() {
               className={cx(s.tab, name === current && s.tabCurrent)}
               aria-current={name === current ? "page" : undefined}
             >
-              {pageTitle(name, titles[i]?.data)}
+              {labels[i]}
             </Link>
           ))}
         </nav>

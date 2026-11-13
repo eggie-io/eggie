@@ -219,10 +219,17 @@ if (( TOKEN_CREATED || REPAIR )); then
 fi
 /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK up -d
 
-# 8. git for `eggie clone`, gh for GitHub work, Node for `npx skills`.
+# 8. git for `eggie clone`, gh for GitHub work, Node for `npx skills`, tmux
+#    for recipe actions (step 11e).
 if ! dpkg -s git >/dev/null 2>&1; then
   if ! { apt-get update && apt-get install -y git; }; then
     echo "could not install git: the Ubuntu package mirrors may be unreachable" >&2
+    exit 1
+  fi
+fi
+if ! dpkg -s tmux >/dev/null 2>&1; then
+  if ! { apt-get update && apt-get install -y tmux; }; then
+    echo "could not install tmux: the Ubuntu package mirrors may be unreachable" >&2
     exit 1
   fi
 fi
@@ -408,6 +415,16 @@ install -m 644 "$INSTALL_DIR/systemd/eggie-claude-reaper.service" \
   "$INSTALL_DIR/systemd/eggie-claude-reaper.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now eggie-claude-reaper.timer
+
+# 11e. recipe actions: the root-side helper the API asks to run, stop and
+# attach to them. Restarted every run so a new release's helper takes over;
+# KillMode=process keeps the actions already running alive across it.
+install -d -m 2770 -o root -g docker /opt/eggie/actions /opt/eggie/actions/logs
+chmod 2770 /opt/eggie/actions /opt/eggie/actions/logs
+install -m 644 "$INSTALL_DIR/systemd/eggie-actions.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable eggie-actions.service
+systemctl restart eggie-actions.service
 
 # 12. what the console's "Connect an agent" guide needs to know.
 # sed, not head: head exiting early would SIGPIPE the pipeline under pipefail.

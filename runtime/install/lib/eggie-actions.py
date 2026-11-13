@@ -33,9 +33,11 @@ MAX_ID = 63
 MAX_COMMAND = 4000
 MAX_LINE = 64 * 1024
 MAX_FRAME = 1024 * 1024
+LOG_CAP = 10 * 1024 * 1024
 STOP_GRACE = 5.0
 FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
-PANES = "#{session_name}\t#{pane_dead}\t#{pane_dead_status}\t#{session_created}\t#{pane_pid}"
+PANES = ("#{session_name}\t#{pane_dead}\t#{@exit}\t#{pane_dead_status}"
+         "\t#{session_created}\t#{pane_pid}")
 
 
 class Refused(Exception):
@@ -68,9 +70,10 @@ def session(project: str, action: str) -> str:
 
 
 class Actions:
-    def __init__(self, projects: Path, logs: Path, connect: Path, tmux_tmpdir: str | None):
+    def __init__(self, projects: Path, logs: Path, connect: Path, tmux_tmpdir: str | None,
+                 log_cap: int = LOG_CAP):
         self.projects, self.logs, self.connect = projects, logs, connect
-        self.tmux_tmpdir = tmux_tmpdir
+        self.tmux_tmpdir, self.log_cap = tmux_tmpdir, log_cap
         self.starting = threading.Lock()
 
     def account(self) -> Account:
@@ -106,12 +109,12 @@ class Actions:
         out = self.tmux("list-panes", "-a", "-F", PANES, check=False)
         panes = {}
         for line in out.splitlines():
-            name, dead, status, created, pid = (line.split("\t") + [""] * 5)[:5]
+            name, dead, recorded, status, created, pid = (line.split("\t") + [""] * 6)[:6]
             if not (created.isdigit() and pid.isdigit()):
                 continue
-            # Empty for a pane killed by a signal.
-            exit_code = int(status) if dead == "1" and status.isdigit() else None
-            panes[name] = Pane(dead == "1", exit_code, int(created), int(pid))
+            code = recorded if recorded.isdigit() else status
+            panes[name] = Pane(dead == "1", int(code) if dead == "1" and code.isdigit() else None,
+                               int(created), int(pid))
         return panes
 
     def project_runs(self, project: str) -> dict[str, Pane]:
@@ -128,13 +131,18 @@ class Actions:
             if pane:
                 self.tmux("kill-session", "-t", f"={name}")
             # The command waits for `go` so pipe-pane is in place before its first byte.
+            # Its exit code is recorded in @exit, not left to pane_dead_status: tmux
+            # sometimes never reaps a pane's process, and then has no status at all.
             self.tmux("new-session", "-d", "-s", name, "-c", str(self.projects / project),
                       "-x", "120", "-y", "32", "-e", f"EGGIE_ACTION_COMMAND={command}",
-                      f'tmux -L {SERVER} wait-for go-{name}; exec bash -lc "$EGGIE_ACTION_COMMAND"')
+                      f'tmux -L {SERVER} wait-for go-{name}; bash -lc "$EGGIE_ACTION_COMMAND"; '
+                      f'tmux -L {SERVER} set-option -p -t "$TMUX_PANE" @exit $?')
             try:
                 if log:
                     path = self.fresh_log(project, action)
-                    self.tmux("pipe-pane", "-o", "-t", f"={name}:", f"cat >> {shlex.quote(str(path))}")
+                    # Past the cap, output is dropped until the next start.
+                    self.tmux("pipe-pane", "-o", "-t", f"={name}:",
+                              f"stdbuf -o0 head -c {self.log_cap} >> {shlex.quote(str(path))}")
             except BaseException:
                 self.tmux("kill-session", "-t", f"={name}", check=False)
                 raise
@@ -160,19 +168,20 @@ class Actions:
 
     def stop(self, names: list[str], *, remove: bool = False) -> None:
         panes = self.panes()
-        for name in names:
-            if name in panes and not panes[name].dead:
-                signal_group(panes[name].pid, signal.SIGTERM)
+        groups = {n: panes[n].pid for n in names if n in panes and not panes[n].dead}
+        for pid in groups.values():
+            signal_group(pid, signal.SIGTERM)
+        # The group, not pane_dead: the pane's shell can die on SIGTERM while
+        # the command it started ignores it and keeps running.
         deadline = time.monotonic() + STOP_GRACE
         while True:
-            panes = self.panes()
-            alive = [n for n in names if n in panes and not panes[n].dead]
+            alive = [n for n, pid in groups.items() if signal_group(pid, 0)]
             if not alive or time.monotonic() >= deadline:
                 break
             time.sleep(0.1)
         for name in names:
             if name in alive:
-                signal_group(panes[name].pid, signal.SIGKILL)
+                signal_group(groups[name], signal.SIGKILL)
             if name in alive or (remove and name in panes):
                 self.tmux("kill-session", "-t", f"={name}", check=False)
 
@@ -197,11 +206,12 @@ class Actions:
             os.close(fd)
 
 
-def signal_group(pid: int, sig: int) -> None:
+def signal_group(pid: int, sig: int) -> bool:
     try:
         os.killpg(pid, sig)
+        return True
     except (ProcessLookupError, PermissionError):
-        pass
+        return False
 
 
 def set_size(fd: int, cols: int, rows: int) -> None:
@@ -298,15 +308,15 @@ class Handler(socketserver.StreamRequestHandler):
         actions = self.server.actions
         op = request.get("op") if isinstance(request, dict) else None
         if op == "status":
-            runs = actions.project_runs(self.project(request))
+            runs = actions.project_runs(self.slug(request, "project"))
             return {"ok": True, "runs": {a: pane.run() for a, pane in runs.items()}}
         if op == "stop-project":
-            project = self.project(request)
+            project = self.slug(request, "project")
             actions.stop([session(project, a) for a in actions.project_runs(project)], remove=True)
             return {"ok": True}
         if op not in ("start", "stop", "attach"):
             raise Refused("invalid", f"unknown op {op!r}")
-        project, action = self.project(request), self.slug(request, "action")
+        project, action = self.slug(request, "project"), self.slug(request, "action")
         name = session(project, action)
         if op == "stop":
             actions.stop([name])
@@ -317,6 +327,8 @@ class Handler(socketserver.StreamRequestHandler):
             if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND \
                     or "\0" in command or not isinstance(log, bool):
                 raise Refused("invalid", "start needs a command and a log flag")
+            if not (actions.projects / project).is_dir():
+                raise Refused("invalid", f"no project {project!r}")
             return {"ok": True, "run": actions.start(project, action, command, log)}
         cols, rows = request.get("cols"), request.get("rows")
         if not all(type(v) is int and 1 <= v <= 1000 for v in (cols, rows)):
@@ -329,12 +341,6 @@ class Handler(socketserver.StreamRequestHandler):
         if not isinstance(value, str) or len(value) > MAX_ID or not SLUG.match(value):
             raise Refused("invalid", f"{key} must be a slug")
         return value
-
-    def project(self, request: dict) -> str:
-        project = self.slug(request, "project")
-        if not (self.server.actions.projects / project).is_dir():
-            raise Refused("invalid", f"no project {project!r}")
-        return project
 
 
 class Server(socketserver.ThreadingUnixStreamServer):
@@ -349,6 +355,7 @@ def main() -> None:
     parser.add_argument("--logs", default="/opt/eggie/actions/logs")
     parser.add_argument("--connect", default="/opt/eggie/connect.json")
     parser.add_argument("--tmux-tmpdir")
+    parser.add_argument("--log-cap", type=int, default=LOG_CAP)
     args = parser.parse_args()
     sock = Path(args.socket)
     sock.unlink(missing_ok=True)
@@ -359,7 +366,7 @@ def main() -> None:
     finally:
         os.umask(previous)
     server.actions = Actions(Path(args.projects_root), Path(args.logs), Path(args.connect),
-                             args.tmux_tmpdir)
+                             args.tmux_tmpdir, args.log_cap)
     server.serve_forever()
 
 

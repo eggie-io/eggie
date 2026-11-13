@@ -87,12 +87,12 @@ class Helper:
     def set_user(self, user: str) -> None:
         self.connect.write_text(json.dumps({"vm": "wsl", "user": user}))
 
-    def start(self) -> None:
+    def start(self, *extra: str) -> None:
         with self.stderr.open("a") as err:
             self.proc = subprocess.Popen(
                 [sys.executable, str(HELPER), "--socket", str(self.socket),
                  "--projects-root", str(self.projects), "--logs", str(self.logs),
-                 "--connect", str(self.connect), "--tmux-tmpdir", str(self.tmux_tmpdir)],
+                 "--connect", str(self.connect), "--tmux-tmpdir", str(self.tmux_tmpdir), *extra],
                 env=self.env, stdout=subprocess.DEVNULL, stderr=err)
         assert eventually(self._answers, 5), self.stderr.read_text()
 
@@ -272,6 +272,28 @@ def test_a_long_running_log_holds_output_and_a_one_off_writes_none(helper):
     assert not (helper.logs / "app" / "login.log").exists()
 
 
+def test_a_log_stops_growing_at_its_cap(helper):
+    helper.kill()
+    helper.start("--log-cap", "1000")
+    helper.start_action("serve", "for i in $(seq 500); do echo line-$i; done; echo all-printed; sleep 600",
+                        log=True)
+    terminal = helper.attach("serve")
+    terminal.read_until(b"all-printed")
+    terminal.close()
+    log = helper.logs / "app" / "serve.log"
+    assert eventually(lambda: log.stat().st_size >= 1000)
+    time.sleep(0.3)
+    assert log.stat().st_size == 1000
+
+
+def test_a_project_removed_outside_the_api_can_still_have_its_actions_stopped(helper):
+    helper.start_action("serve", "sleep 600")
+    shutil.rmtree(helper.projects / "app")
+    assert helper.ask(op="stop", project="app", action="serve")["ok"]
+    assert helper.ask(op="stop-project", project="app") == {"ok": True}
+    assert helper.ask(op="status", project="app") == {"ok": True, "runs": {}}
+
+
 def test_runs_survive_a_helper_restart(helper):
     helper.start_action("serve", "sleep 600")
     helper.kill()
@@ -289,8 +311,13 @@ def test_actions_run_as_the_connect_user_and_as_root_when_it_is_empty(helper):
 
 def test_ids_that_are_not_slugs_are_refused(helper):
     for project, action in [("../x", "a"), ("a b", "a"), ("app", "../x"), ("app", "a b"),
-                            ("app", "a--b"), ("missing", "a")]:
-        reply = helper.ask(op="start", project=project, action=action, command="true", log=False)
-        assert reply["ok"] is False and reply["code"] == "invalid", (project, action, reply)
-        reply = helper.ask(op="attach", project=project, action=action, cols=80, rows=24)
-        assert reply["ok"] is False and reply["code"] == "invalid", (project, action, reply)
+                            ("app", "a--b")]:
+        for request in ({"op": "start", "command": "true", "log": False},
+                        {"op": "attach", "cols": 80, "rows": 24}, {"op": "stop"}):
+            reply = helper.ask(**request, project=project, action=action)
+            assert reply["ok"] is False and reply["code"] == "invalid", (request, project, action, reply)
+
+
+def test_only_start_needs_the_project_folder(helper):
+    reply = helper.ask(op="start", project="missing", action="a", command="true", log=False)
+    assert reply["ok"] is False and reply["code"] == "invalid"

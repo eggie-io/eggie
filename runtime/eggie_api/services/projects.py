@@ -48,6 +48,7 @@ class ProjectService:
         self._wake = wake
         self._push_summary = push_summary
         self._pushed_projects = pushed_projects
+        self.before_delete: Callable[[str], None] | None = None
 
     def payload(self, row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -185,6 +186,8 @@ class ProjectService:
         # replace-import all wait on this answer. Removal is by compose label,
         # not `compose down`, so a broken compose file can never block it.
         with self._locks.held(project_id):
+            if self.before_delete is not None:
+                self.before_delete(project_id)
             self._public.disable(project_id, force=True)
             result = docker.remove_by_label(
                 self._runner, self._compose_name(project_id, row), volumes=purge)

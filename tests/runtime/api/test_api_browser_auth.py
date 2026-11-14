@@ -1,6 +1,9 @@
 import re
 
+import pytest
+from fastapi.routing import APIWebSocketRoute
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from tests.runtime.api.conftest import BROWSER
 from tests.runtime.api.route_sweep import every_route
@@ -83,6 +86,19 @@ def test_every_api_route_requires_a_session_except_the_open_ones(env):
             assert resp.status_code == 401, (
                 f"{method} {concrete} answered {resp.status_code} without a session")
     assert checked >= 15, "the sweep found fewer routes than this app actually has"
+
+
+def test_every_websocket_route_is_on_the_api_mount_and_needs_a_session(env):
+    # The auth middleware never sees a WebSocket, so the sweep above skips
+    # them: each route checks for itself (test_actions_terminal.py).
+    client = _browser(env, **ORIGIN)
+    sockets = [r for r in every_route(env.app) if isinstance(r, APIWebSocketRoute)]
+    assert sockets, "the sweep found no WebSocket route"
+    for route in sockets:
+        assert route.path.startswith("/api/"), f"{route.path} is outside the /api mount"
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(re.sub(r"\{[^}]+\}", "x", route.path)):
+                pass
 
 
 from tests.runtime.api.conftest import SITE_BROWSER, SITE_ORIGIN

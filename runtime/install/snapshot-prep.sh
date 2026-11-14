@@ -2,7 +2,7 @@
 # Run as root before imaging a server. Strips what makes an installed runtime
 # this machine's: every droplet made from the image must start with its own
 # API token, database, certificate, GitHub token, projects and cloud-init run.
-# install.sh recreates github/, projects/ and agent-status/ and update/. The runtime tree,
+# install.sh recreates github/, projects/, agent-status/, update/ and actions/logs/. The runtime tree,
 # the images, .env and runtime.env stay; the next boot's get.sh (repair mode,
 # with the site names) finishes the job.
 set -euo pipefail
@@ -18,7 +18,8 @@ fi
 rm -f "$ROOT/api.token" "$ROOT/state.db" "$ROOT/state.db-wal" "$ROOT/state.db-shm" \
       "$ROOT/connect.json" "$ROOT/site.env" "$ROOT/account.json"
 rm -rf "$ROOT/tls" "$ROOT/tunnel" "$ROOT/uploads" \
-      "$ROOT/github" "$ROOT/projects" "$ROOT/agent-status" "$ROOT/update"
+      "$ROOT/github" "$ROOT/projects" "$ROOT/agent-status" "$ROOT/update" \
+      "$ROOT/actions/logs"
 # The image builder's key and history must not reach every customer's server;
 # the service installs the user's key on the new droplet.
 rm -f "$ROOT_HOME/.ssh/authorized_keys" "$ROOT_HOME/.bash_history"

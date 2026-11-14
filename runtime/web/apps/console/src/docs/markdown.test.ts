@@ -88,4 +88,13 @@ describe("pageTitle", () => {
     expect(pageTitle("menu", "# Fish &amp; *chips*")).toBe("Fish & chips");
     expect(pageTitle("menu", "Setext\n===")).toBe("Setext");
   });
+
+  it("maps an action block to its id", () => {
+    expect(parseDoc("```action\n ios-build \n```")).toEqual([{ kind: "action", id: "ios-build" }]);
+  });
+
+  it("takes the first non-empty line of an action block and maps an empty one to an empty id", () => {
+    expect(parseDoc("```action\n\n  tunnel\nignored\n```")).toEqual([{ kind: "action", id: "tunnel" }]);
+    expect(parseDoc("```action\n```")).toEqual([{ kind: "action", id: "" }]);
+  });
 });

@@ -176,6 +176,13 @@ class ApiClient:
     def recipes(self) -> list[dict]:
         return self._call("GET", "/recipes").get("recipes", [])
 
+    def add_recipe(self, project_id: str, slug: str) -> dict:
+        return self._call("POST", f"/projects/{urllib.parse.quote(project_id, safe='')}/recipes",
+                          {"slug": slug})
+
+    def actions(self, project_id: str) -> dict:
+        return self._call("GET", f"/projects/{urllib.parse.quote(project_id, safe='')}/actions")
+
     def get_recipe(self, slug: str) -> dict:
         body = self._open("POST", f"/recipes/{urllib.parse.quote(slug, safe='')}/get",
                           timeout=RECIPE_TIMEOUT)

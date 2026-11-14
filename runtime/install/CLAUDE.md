@@ -2,7 +2,8 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_swap.py`, `test_install_agents.py`, `test_install_skills.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`, `test_claude_reaper.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`, `test_claude_reaper.py`,
+`test_eggie_actions.py`, `test_actions_end_to_end.py` (fixture: `actions_helper_fixture.py`).
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -59,6 +60,17 @@ Every install, both modes (step 11d): every 30 minutes, `SIGTERM` to Claude Code
 binary path, cmdline and transcript layout, which any Desktop release may change: it then
 stops nothing (a new binary path even silently), and the fix ships as a runtime release. Never kill on anything but a
 matched transcript (`docs/security.md`).
+
+### `lib/eggie-actions.py` + `systemd/eggie-actions.service`
+
+Every install (step 11e): a root socket service the API asks to run recipe actions
+(`/opt/eggie/actions/actions.sock`, `root:docker 0660`). One JSON line in, one out; `attach` turns the
+connection into terminal frames. Actions run in a tmux server (`-L eggie-actions`) as `connect.json`'s
+user (root when it is empty). `KillMode=process` and `Restart=always` keep running actions alive across
+a helper restart or a runtime update. Long-running actions log to `actions/logs/<project>/<action>.log`
+(10 MiB cap, truncated at start); one-off actions keep none (`output` reads any run's tmux scrollback instead, newest 4 MiB). `snapshot-prep.sh` strips the logs.
+`eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
+picks up a changed conf only once it has no action sessions left (finished runs keep theirs) or reboots.
 
 ## `install.sh` — numbered steps, order matters
 
@@ -121,6 +133,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 
 ## Things that will bite you
 
+- tmux's argv parser treats a trailing `;` as a command separator, so the helper sends the command
+  with a trailing newline. Address sessions with an exact `=NAME` target; a bare name matches by prefix.
 - Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
   `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
   for the API token: it must be written after the sweep.

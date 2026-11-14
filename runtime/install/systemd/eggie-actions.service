@@ -1,0 +1,14 @@
+[Unit]
+Description=Run recipe actions for the console in tmux as the login account
+
+[Service]
+Type=simple
+# The tmux server holding the running actions lives in this unit's cgroup:
+# only the helper itself may go down on a restart.
+KillMode=process
+Restart=always
+RestartSec=2
+ExecStart=/usr/bin/python3 /opt/eggie/runtime/install/lib/eggie-actions.py
+
+[Install]
+WantedBy=multi-user.target

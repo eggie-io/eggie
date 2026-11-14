@@ -11,6 +11,10 @@ class WebOverride(BaseModel):
     subdomain: str | None = None
 
 
+class RecipeAdd(BaseModel):
+    slug: str
+
+
 class CreateProject(BaseModel):
     id: str
     web: list[WebOverride] | None = None

@@ -134,7 +134,7 @@ SITE_ORIGIN = {"Origin": "https://foo.eggie.io"}
 
 
 def _make_env(tmp_path, *, cloud=None, instance=None, sleep=None, clock=None,
-              free_bytes=None, timer=None, **overrides):
+              free_bytes=None, timer=None, actions_helper=None, **overrides):
     token_path = tmp_path / "api.token"
     token_path.write_text("test-token")
     config = ApiConfig(
@@ -157,13 +157,17 @@ def _make_env(tmp_path, *, cloud=None, instance=None, sleep=None, clock=None,
             "tls_dir": tmp_path / "tls",
             "account_seed": tmp_path / "account.json",
             "transfers_root": tmp_path / "transfers",
+            # Nothing listens here: a test that stops or deletes a project
+            # proves the hooks survive a helper that is down.
+            "actions_socket": tmp_path / "actions.sock",
+            "actions_logs": tmp_path / "actions-logs",
             **overrides,
         })
     runner = FakeRunner()
     probe = FakeProbe()
     app = create_app(config=config, runner=runner, http_probe=probe, cloud=cloud,
                      instance=instance, sleep=sleep, clock=clock, free_bytes=free_bytes,
-                     timer=timer)
+                     timer=timer, actions_helper=actions_helper)
     with TestClient(app, headers=AUTH) as client:
         # raw_client returns the 500 a real caller would see instead of
         # re-raising the exception inside the test.

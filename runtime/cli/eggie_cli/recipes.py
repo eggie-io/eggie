@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .env import Env
+from .env import Env, project_here
+from .errors import EggieError
+from .project import prepare_overlay_dir
 
 
 def cmd_recipe_list(env: Env) -> None:
@@ -19,3 +21,21 @@ def cmd_recipe_get(env: Env, slug: str) -> None:
           file=env.out)
     print("Its RECIPE.md follows. Files it mentions are in that folder.\n", file=env.out)
     print(recipe["instructions"], end="", file=env.out)
+
+
+def cmd_recipe_add(env: Env, slug: str, project: str | None = None) -> None:
+    if project:
+        folder, project_id = env.root / project, project
+    else:
+        found = project_here(env, None)
+        if found is None:
+            raise EggieError("Run this inside a project folder in "
+                             f"~/projects ({env.root}), or pass --project.")
+        folder, project_id = found
+    client = env.client()
+    if folder.is_dir():
+        prepare_overlay_dir(folder, env.gid(), "project.yml")
+        # A copied-in folder has no project row until something registers it.
+        client.ensure_project(project_id)
+    client.add_recipe(project_id, slug)
+    print(f"{slug} added to {project_id}.", file=env.out)

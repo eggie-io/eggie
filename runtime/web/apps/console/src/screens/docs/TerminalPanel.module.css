@@ -1,0 +1,7 @@
+.body { display: flex; flex-direction: column; gap: var(--space-3); }
+.term {
+  height: 55vh; min-height: 240px; padding: var(--space-2); border-radius: var(--radius-md);
+  background: var(--code-bg); overflow: hidden;
+}
+.term :global(.xterm-viewport) { background-color: transparent !important; }
+.status { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }

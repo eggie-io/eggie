@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import ApiConfig
 from .errors import EggieError
 from .infra import connect, disk
+from .infra.actions_helper import ActionsHelper
 from .infra.cloud import Cloud
 from .infra.db import Database
 from .infra.github import GitHub
@@ -18,6 +19,7 @@ from .infra.runner import LocalRunner
 from .infra.tunnel import TunnelClient
 from .infra.uploads import UploadStore
 from .services.account import Account
+from .services.actions import ActionService
 from .services.agents import AgentStatus
 from .services.certificate import Certificate
 from .services.clone import CloneService
@@ -72,6 +74,7 @@ class Services:
     public: Public
     push: PushService
     recipes: RecipeService
+    actions: ActionService
     transfers: Transfers
     github_link: GitHubLink
     sessions: Sessions
@@ -87,7 +90,8 @@ class Services:
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, instance=None,
-          sleep=None, clock=None, free_bytes=None, timer=None) -> Services:
+          sleep=None, clock=None, free_bytes=None, timer=None,
+          actions_helper=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -155,18 +159,25 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
             Path(config.transfers_root))["free_bytes"]),
         sleep=sleep or time.sleep, timer=timer)
     transfers.sweep()
+    recipes = RecipeService(config, account, cloud, loader)
+    actions = ActionService(loader, recipes, actions_helper or ActionsHelper(config.actions_socket),
+                            config.actions_logs, clock=clock or time.monotonic)
+    lifecycle.on_stopped = actions.stop_project
+    transfers.before_replace = actions.stop_project
+    projects = ProjectService(config, runner, loader, repos.projects, secrets, jobs, locks,
+                              uploads, public, http_probe, sync.wake, push.summary,
+                              repos.pushed_projects)
+    projects.before_delete = actions.stop_project
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,
-        projects=ProjectService(config, runner, loader, repos.projects, secrets,
-                                jobs, locks, uploads, public, http_probe,
-                                sync.wake, push.summary, repos.pushed_projects),
+        projects=projects,
         lifecycle=lifecycle,
         clone=CloneService(config, runner, loader, repos.projects, locks,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, push=push, transfers=transfers,
-        recipes=RecipeService(config, account, cloud),
+        recipes=recipes, actions=actions,
         github_link=github_link,
         sessions=sessions, site=site,
         instances=instances,

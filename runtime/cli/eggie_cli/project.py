@@ -52,8 +52,8 @@ def docker_gid() -> int:
             "Run `eggie setup` on your computer.") from None
 
 
-def prepare_overlay_dir(project: Path, gid: int) -> None:
-    """Let the API write .eggie/overlay.yml, the one file it writes here.
+def prepare_overlay_dir(project: Path, gid: int, name: str = "overlay.yml") -> None:
+    """Let the API write .eggie/<name> (overlay.yml, or project.yml for recipes).
 
     The API runs as a non-root member of the docker group (uid 1000), while
     a coding agent working as root leaves directories 755 and files 644.
@@ -62,7 +62,7 @@ def prepare_overlay_dir(project: Path, gid: int) -> None:
     already right, and a foreign overlay that is wrong is replaced instead.
     """
     eggie_dir = project / ".eggie"
-    overlay = eggie_dir / "overlay.yml"
+    overlay = eggie_dir / name
     for path in (eggie_dir, overlay):
         if path.is_symlink():
             raise EggieError(
@@ -98,7 +98,7 @@ def _make_group_writable(path: Path, gid: int, mode: int) -> None:
 def _replace_with_own_copy(overlay: Path, gid: int) -> None:
     # The folder is group-writable without the sticky bit, so a member of the
     # docker group may replace a file there that it is not allowed to chmod.
-    tmp = overlay.with_name(".overlay.yml.tmp")
+    tmp = overlay.with_name(f".{overlay.name}.tmp")
     try:
         tmp.write_bytes(overlay.read_bytes())
         os.chown(tmp, -1, gid)

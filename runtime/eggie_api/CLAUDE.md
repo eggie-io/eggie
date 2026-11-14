@@ -164,7 +164,8 @@ and a host release. Prefer additive changes.
   `rest/terminal.py`) — a project's `recipes:` in `.eggie/project.yml` (written by `POST /projects/{id}/recipes`,
   `eggie recipe add`) name the recipes whose actions it offers. Commands come only from the Eggie
   service (`GET /v1/recipes/{slug}/actions`, cached 5 min in memory), never from a bundle or the
-  project. List/start/stop are on both mounts; the log and the terminal WebSocket only under `/api`.
+  project. List/start/stop are on both mounts; the log, the output (a run's whole tmux scrollback via the
+  helper's `output` op, nothing on disk) and the terminal WebSocket only under `/api`.
   Start/stop go to the root helper `eggie-actions` over `/opt/eggie/actions/actions.sock`; the API
   holds no tmux state. Stopping or deleting a project, and a kitchen import replacing one, stop its actions.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes

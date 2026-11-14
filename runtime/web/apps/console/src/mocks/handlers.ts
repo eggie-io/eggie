@@ -614,6 +614,11 @@ export function handlersFor(scenario: Scenario) {
     }),
     http.get("/api/projects/:id/actions/:action/log", () =>
       new HttpResponse("Starting Metro Bundler\nTunnel ready.\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } })),
+    http.get("/api/projects/:id/actions/:action/output", () => {
+      const lines = Array.from({ length: 149 }, (_, i) => `[${String(i + 1).padStart(3, "0")}] Compiling module ${i + 1} of 149`);
+      lines.push("Error: Provisioning profile is missing for bundle id com.example.recipebox");
+      return new HttpResponse(lines.join("\n") + "\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }),
   ];
 
   const terminal = ws.link("*/api/projects/:id/actions/:action/terminal");

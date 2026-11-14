@@ -136,8 +136,8 @@ console ──/api/projects/{id}/actions──→ api ──unix socket──→
 `eggie-actions` runs each action in a tmux session as the login account (root on a site, which has
 none) and streams its terminal; the console shows it in a panel, so a code can be typed in. Every run
 keeps going when the panel closes or the runtime updates; only a long-running action keeps a log
-(10 MiB cap). Stopping or deleting
-a project, or a kitchen import replacing it, stops its actions.
+(10 MiB cap). A one-off's whole output is read from tmux's scrollback when the owner asks (Output),
+never written to disk. Stopping or deleting a project, or a kitchen import replacing it, stops its actions.
 
 ### Site mode
 

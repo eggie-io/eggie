@@ -29,3 +29,7 @@ export const useStopAction = (projectId: string) => useRunMutation(projectId, "s
 export function actionLog(projectId: string, actionId: string): Promise<string> {
   return api.text(`${base(projectId)}/${encodeURIComponent(actionId)}/log`);
 }
+
+export function actionOutput(projectId: string, actionId: string): Promise<string> {
+  return api.text(`${base(projectId)}/${encodeURIComponent(actionId)}/output`);
+}

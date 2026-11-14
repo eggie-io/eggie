@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Modal, Notice } from "@eggie/ui";
-import { actionLog, useProjectActions, useStartAction, useStopAction } from "../../actions/queries";
+import { actionLog, actionOutput, useProjectActions, useStartAction, useStopAction } from "../../actions/queries";
 import { stripAnsi } from "../../actions/ansi";
 import { cardFor, runStatus } from "../../actions/card";
 import type { Action } from "../../actions/types";
@@ -9,16 +9,30 @@ import { ApiError } from "../../api/client";
 import { actionError } from "../../projects/copy";
 import s from "./ActionCard.module.css";
 
-function LogModal({ projectId, action, onClose }: { projectId: string; action: Action; onClose: () => void }) {
-  const log = useQuery({ queryKey: ["action-log", projectId, action.id], queryFn: () => actionLog(projectId, action.id), gcTime: 0 });
+function TextModal({
+  title,
+  queryKey,
+  fetch,
+  onClose,
+}: {
+  title: string;
+  queryKey: readonly string[];
+  fetch: () => Promise<string>;
+  onClose: () => void;
+}) {
+  const text = useQuery({ queryKey, queryFn: fetch, gcTime: 0 });
+  const pre = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [text.data]);
   return (
-    <Modal open onClose={onClose} title={`${action.name} log`} wide>
-      {log.isError ? (
-        <Notice tone="danger">{actionError(log.error)}</Notice>
-      ) : log.data === undefined ? (
+    <Modal open onClose={onClose} title={title} wide>
+      {text.isError ? (
+        <Notice tone="danger">{actionError(text.error)}</Notice>
+      ) : text.data === undefined ? (
         <p className={s.muted}>Loading…</p>
       ) : (
-        <pre className={s.log}>{stripAnsi(log.data) || "Nothing printed yet."}</pre>
+        <pre ref={pre} className={s.log}>{stripAnsi(text.data) || "Nothing printed yet."}</pre>
       )}
     </Modal>
   );
@@ -36,7 +50,7 @@ export function ActionCard({
   const actions = useProjectActions(projectId);
   const start = useStartAction(projectId);
   const stop = useStopAction(projectId);
-  const [logFor, setLogFor] = useState<Action | null>(null);
+  const [view, setView] = useState<"log" | "output" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const card = cardFor(actions.data, actions.error, id);
 
@@ -82,18 +96,24 @@ export function ActionCard({
               <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>Start</Button>
             )}
             <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Open terminal</Button>
-            <Button variant="ghost" onClick={() => setLogFor(action)}>Logs</Button>
+            <Button variant="ghost" onClick={() => setView("log")}>Logs</Button>
           </>
-        ) : running ? (
-          <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Show output</Button>
         ) : (
           <>
-            <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>{action.run ? "Run again" : "Run"}</Button>
+            {!running && <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>{action.run ? "Run again" : "Run"}</Button>}
             {action.run && <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Show output</Button>}
+            {action.run && <Button variant="ghost" onClick={() => setView("output")}>Output</Button>}
           </>
         )}
       </div>
-      {logFor && <LogModal projectId={projectId} action={logFor} onClose={() => setLogFor(null)} />}
+      {view === "log" && (
+        <TextModal title={`${action.name} log`} queryKey={["action-log", projectId, action.id]}
+          fetch={() => actionLog(projectId, action.id)} onClose={() => setView(null)} />
+      )}
+      {view === "output" && (
+        <TextModal title={`${action.name} output`} queryKey={["action-output", projectId, action.id]}
+          fetch={() => actionOutput(projectId, action.id)} onClose={() => setView(null)} />
+      )}
     </div>
   );
 }

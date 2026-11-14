@@ -22,8 +22,12 @@ function TextModal({
 }) {
   const text = useQuery({ queryKey, queryFn: fetch, gcTime: 0 });
   const pre = useRef<HTMLPreElement>(null);
+  const scrolled = useRef(false);
+  // Only the first load: a refetch must not move the owner off what they are reading.
   useEffect(() => {
-    if (pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+    if (scrolled.current || !pre.current) return;
+    pre.current.scrollTop = pre.current.scrollHeight;
+    scrolled.current = true;
   }, [text.data]);
   return (
     <Modal open onClose={onClose} title={title} wide>

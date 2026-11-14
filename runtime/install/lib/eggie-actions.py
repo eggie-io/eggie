@@ -35,6 +35,8 @@ MAX_COMMAND = 4000
 MAX_LINE = 64 * 1024
 MAX_FRAME = 1024 * 1024
 LOG_CAP = 10 * 1024 * 1024
+# Measured JSON-escaped, so the reply always fits the API client's 16 MiB read.
+OUTPUT_CAP = 4 * 1024 * 1024
 STOP_GRACE = 5.0
 FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
 PANES = ("#{session_name}\t#{pane_dead}\t#{@exit}\t#{pane_dead_status}"
@@ -72,9 +74,9 @@ def session(project: str, action: str) -> str:
 
 class Actions:
     def __init__(self, projects: Path, logs: Path, connect: Path, tmux_tmpdir: str | None,
-                 log_cap: int = LOG_CAP):
+                 log_cap: int = LOG_CAP, output_cap: int = OUTPUT_CAP):
         self.projects, self.logs, self.connect = projects, logs, connect
-        self.tmux_tmpdir, self.log_cap = tmux_tmpdir, log_cap
+        self.tmux_tmpdir, self.log_cap, self.output_cap = tmux_tmpdir, log_cap, output_cap
         self.starting = threading.Lock()
 
     def account(self) -> Account:
@@ -209,8 +211,11 @@ class Actions:
         # -J joins wrapped lines but keeps their padding; the screen's empty rows below the
         # output go too.
         text = self.tmux("capture-pane", "-p", "-J", "-S", "-", "-E", "-", "-t", f"={name}:")
-        text = "\n".join(line.rstrip() for line in text.splitlines()).rstrip()
-        return text + "\n" if text else ""
+        # split, not splitlines: a form feed or U+2028 in the output is not a line break.
+        lines = [line.rstrip() for line in text.split("\n")]
+        while lines and not lines[-1]:
+            lines.pop()
+        return keep_tail(lines, self.output_cap) if lines else ""
 
     def attach(self, handler: socketserver.StreamRequestHandler, name: str, cols: int, rows: int) -> None:
         if name not in self.panes():
@@ -231,6 +236,22 @@ class Actions:
             # Only this attach client goes: the session and its run carry on.
             end_child(pid)
             os.close(fd)
+
+
+def keep_tail(lines: list[str], cap: int) -> str:
+    """The newest whole lines whose JSON-escaped size fits in `cap`."""
+    kept, size = [], 2
+    for line in reversed(lines):
+        # The line escaped, less its quotes, plus its escaped newline.
+        size += len(json.dumps(line))
+        if size > cap:
+            break
+        kept.append(line)
+    if not kept:
+        # One line alone is over the cap: its end, at worst 12 escaped bytes a character.
+        last = lines[-1]
+        return last[max(0, len(last) - cap // 12):] + "\n"
+    return "\n".join(reversed(kept)) + "\n"
 
 
 def signal_group(pid: int, sig: int) -> bool:
@@ -386,6 +407,7 @@ def main() -> None:
     parser.add_argument("--connect", default="/opt/eggie/connect.json")
     parser.add_argument("--tmux-tmpdir")
     parser.add_argument("--log-cap", type=int, default=LOG_CAP)
+    parser.add_argument("--output-cap", type=int, default=OUTPUT_CAP)
     args = parser.parse_args()
     sock = Path(args.socket)
     sock.unlink(missing_ok=True)
@@ -396,7 +418,7 @@ def main() -> None:
     finally:
         os.umask(previous)
     server.actions = Actions(Path(args.projects_root), Path(args.logs), Path(args.connect),
-                             args.tmux_tmpdir, args.log_cap)
+                             args.tmux_tmpdir, args.log_cap, args.output_cap)
     server.serve_forever()
 
 

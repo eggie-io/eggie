@@ -68,7 +68,7 @@ Every install (step 11e): a root socket service the API asks to run recipe actio
 connection into terminal frames. Actions run in a tmux server (`-L eggie-actions`) as `connect.json`'s
 user (root when it is empty). `KillMode=process` and `Restart=always` keep running actions alive across
 a helper restart or a runtime update. Long-running actions log to `actions/logs/<project>/<action>.log`
-(10 MiB cap, truncated at start); one-off actions keep none (`output` reads any run's tmux scrollback instead). `snapshot-prep.sh` strips the logs.
+(10 MiB cap, truncated at start); one-off actions keep none (`output` reads any run's tmux scrollback instead, newest 4 MiB). `snapshot-prep.sh` strips the logs.
 `eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
 picks up a changed conf only once it has no action sessions left (finished runs keep theirs) or reboots.
 

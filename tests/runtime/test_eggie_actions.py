@@ -235,3 +235,13 @@ def test_output_holds_a_one_offs_whole_output_past_the_screen(helper):
 def test_output_without_a_session_is_not_running(helper):
     reply = helper.ask(op="output", project="app", action="never")
     assert reply["ok"] is False and reply["code"] == "not_running"
+
+
+def test_output_past_its_cap_keeps_the_newest_whole_lines(helper):
+    helper.kill()
+    helper.start("--output-cap", "100")
+    helper.start_action("build", "for i in $(seq 200); do echo line-$i; done")
+    helper.wait_exited("build")
+    text = helper.ask(op="output", project="app", action="build")["text"]
+    assert len(text) <= 100
+    assert text.startswith("line-") and "line-200" in text.split("\n")

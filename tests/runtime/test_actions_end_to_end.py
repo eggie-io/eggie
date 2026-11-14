@@ -26,3 +26,4 @@ def test_the_api_client_drives_the_real_helper(helper):
 
     run = eventually(lambda: (r := client.status("app").get("say")) and r["state"] == "exited" and r)
     assert run and run["exit_code"] == 0
+    assert "got:hi" in client.output("app", "say")

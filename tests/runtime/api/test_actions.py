@@ -244,3 +244,29 @@ def test_the_log_route_is_console_only(make):
     env = make()
     resp = env.client.get("/projects/app/actions/ios-build/log")
     assert resp.status_code in (404, 405)
+
+
+def test_the_output_is_the_helpers_capture_of_the_run(make):
+    env = make()
+    env.helper.runs[("app", "expo-login")] = {"state": "exited", "exit_code": 1, "started_at": 1}
+    env.helper.outputs[("app", "expo-login")] = "line-1\nerror: no network\n"
+    browser = console(env.app, env.client)
+    resp = browser.get("/api/projects/app/actions/expo-login/output")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert resp.text == "line-1\nerror: no network\n"
+
+
+def test_the_output_of_an_action_with_no_run_is_409_action_not_running(make):
+    env = make()
+    browser = console(env.app, env.client)
+    assert _error(browser.get("/api/projects/app/actions/expo-login/output")) == (
+        409, "action_not_running")
+
+
+def test_the_output_route_is_console_only(make):
+    env = make()
+    env.helper.runs[("app", "expo-login")] = {"state": "exited", "exit_code": 0, "started_at": 1}
+    resp = env.client.get("/projects/app/actions/expo-login/output")
+    assert resp.status_code in (404, 405)
+    assert "output" not in env.helper.names()

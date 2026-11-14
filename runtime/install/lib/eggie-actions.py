@@ -100,7 +100,8 @@ class Actions:
                 "tmux", "-L", SERVER, "-f", str(CONF), *args]
 
     def tmux(self, *args: str, check: bool = True) -> str:
-        result = subprocess.run(self.tmux_argv(*args), capture_output=True, text=True)
+        result = subprocess.run(self.tmux_argv(*args), capture_output=True,
+                                encoding="utf-8", errors="replace")
         if check and result.returncode != 0:
             raise Refused("failed", result.stderr.strip() or f"tmux {args[0]} failed")
         return result.stdout
@@ -201,6 +202,15 @@ class Actions:
             ended = [n for n in ended if n in panes and not panes[n].dead]
             if ended:
                 time.sleep(0.05)
+
+    def output(self, name: str) -> str:
+        if name not in self.panes():
+            raise Refused("not_running", "this action has no run to show")
+        # -J joins wrapped lines but keeps their padding; the screen's empty rows below the
+        # output go too.
+        text = self.tmux("capture-pane", "-p", "-J", "-S", "-", "-E", "-", "-t", f"={name}:")
+        text = "\n".join(line.rstrip() for line in text.splitlines()).rstrip()
+        return text + "\n" if text else ""
 
     def attach(self, handler: socketserver.StreamRequestHandler, name: str, cols: int, rows: int) -> None:
         if name not in self.panes():
@@ -332,7 +342,7 @@ class Handler(socketserver.StreamRequestHandler):
             project = self.slug(request, "project")
             actions.stop([session(project, a) for a in actions.project_runs(project)], remove=True)
             return {"ok": True}
-        if op not in ("start", "stop", "attach"):
+        if op not in ("start", "stop", "attach", "output"):
             raise Refused("invalid", f"unknown op {op!r}")
         project, action = self.slug(request, "project"), self.slug(request, "action")
         name = session(project, action)
@@ -340,6 +350,8 @@ class Handler(socketserver.StreamRequestHandler):
             actions.stop([name])
             pane = actions.panes().get(name)
             return {"ok": True, "run": pane.run() if pane else None}
+        if op == "output":
+            return {"ok": True, "text": actions.output(name)}
         if op == "start":
             command, log = request.get("command"), request.get("log")
             if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND \

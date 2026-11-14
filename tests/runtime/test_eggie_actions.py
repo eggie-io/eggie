@@ -196,7 +196,8 @@ def test_ids_that_are_not_slugs_are_refused(helper):
     for project, action in [("../x", "a"), ("a b", "a"), ("app", "../x"), ("app", "a b"),
                             ("app", "a--b")]:
         for request in ({"op": "start", "command": "true", "log": False},
-                        {"op": "attach", "cols": 80, "rows": 24}, {"op": "stop"}):
+                        {"op": "attach", "cols": 80, "rows": 24}, {"op": "stop"},
+                        {"op": "output"}):
             reply = helper.ask(**request, project=project, action=action)
             assert reply["ok"] is False and reply["code"] == "invalid", (request, project, action, reply)
 
@@ -219,3 +220,18 @@ def test_an_unexpected_error_still_gets_a_reply(helper):
     # A lone surrogate cannot be encoded into tmux's argv.
     reply = helper.ask(op="start", project="app", action="odd", command="echo \ud800", log=False)
     assert reply["ok"] is False and reply["code"] == "failed"
+
+
+def test_output_holds_a_one_offs_whole_output_past_the_screen(helper):
+    helper.start_action("build", "for i in $(seq 200); do echo line-$i; done; exit 1")
+    assert helper.wait_exited("build")["exit_code"] == 1
+    reply = helper.ask(op="output", project="app", action="build")
+    assert reply["ok"], reply
+    lines = reply["text"].splitlines()
+    assert "line-1" in lines and "line-200" in lines
+    assert lines[-1].strip(), "trailing blank screen rows are dropped"
+
+
+def test_output_without_a_session_is_not_running(helper):
+    reply = helper.ask(op="output", project="app", action="never")
+    assert reply["ok"] is False and reply["code"] == "not_running"

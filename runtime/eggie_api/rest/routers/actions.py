@@ -39,6 +39,12 @@ def build_console(s: Services) -> APIRouter:
     def action_log(project_id: str, action_id: str, tail: int = DEFAULT_TAIL) -> str:
         return s.actions.log(project_id, action_id, tail)
 
+    # The whole tmux scrollback of a run, for a one-off that keeps no log.
+    @router.get("/projects/{project_id}/actions/{action_id}/output",
+                response_class=PlainTextResponse)
+    def action_output(project_id: str, action_id: str) -> str:
+        return s.actions.output(project_id, action_id)
+
     @router.websocket("/projects/{project_id}/actions/{action_id}/terminal")
     async def action_terminal(ws: WebSocket, project_id: str, action_id: str) -> None:
         if not auth.websocket_allowed(ws, sessions=s.sessions, config=s.config):

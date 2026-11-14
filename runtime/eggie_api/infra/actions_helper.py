@@ -12,6 +12,8 @@ FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
 MAX_FRAME = 1024 * 1024
 WRITE_CHUNK = 64 * 1024
 MAX_REPLY = 64 * 1024
+# A run's whole tmux scrollback (10 000 lines), JSON-escaped.
+MAX_OUTPUT_REPLY = 16 * 1024 * 1024
 # The helper's stop waits out a 5 s grace before it kills, then asks tmux again.
 STOP_TIMEOUT = 20.0
 
@@ -80,7 +82,7 @@ class ActionsHelper:
         self._path = str(socket_path)
         self._timeout = timeout
 
-    def _open(self, request: dict, timeout: float | None = None):
+    def _open(self, request: dict, timeout: float | None = None, max_reply: int = MAX_REPLY):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(timeout or self._timeout)
         reader = sock.makefile("rb")
@@ -88,7 +90,7 @@ class ActionsHelper:
             try:
                 sock.connect(self._path)
                 sock.sendall(json.dumps(request).encode() + b"\n")
-                line = reader.readline(MAX_REPLY)
+                line = reader.readline(max_reply)
             except OSError as e:
                 raise HelperUnavailable(f"eggie-actions did not answer: {e}") from e
             if not line:
@@ -108,8 +110,9 @@ class ActionsHelper:
             raise
         return sock, reader, reply
 
-    def _ask(self, request: dict, timeout: float | None = None) -> dict:
-        sock, reader, reply = self._open(request, timeout)
+    def _ask(self, request: dict, timeout: float | None = None,
+             max_reply: int = MAX_REPLY) -> dict:
+        sock, reader, reply = self._open(request, timeout, max_reply)
         reader.close()
         sock.close()
         return reply
@@ -128,6 +131,11 @@ class ActionsHelper:
 
     def stop_project(self, project: str) -> None:
         self._ask({"op": "stop-project", "project": project}, max(self._timeout, STOP_TIMEOUT))
+
+    def output(self, project: str, action: str) -> str:
+        text = self._ask({"op": "output", "project": project, "action": action},
+                         max_reply=MAX_OUTPUT_REPLY).get("text")
+        return text if isinstance(text, str) else ""
 
     def attach(self, project: str, action: str, cols: int, rows: int) -> Terminal:
         sock, reader, _reply = self._open({"op": "attach", "project": project,

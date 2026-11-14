@@ -124,6 +124,10 @@ class ActionService:
         self._action_id(project_id, action_id)
         return self._call(lambda: self._helper.attach(project_id, action_id, cols, rows))
 
+    def output(self, project_id: str, action_id: str) -> str:
+        self._action_id(project_id, action_id)
+        return self._call(lambda: self._helper.output(project_id, action_id))
+
     def log(self, project_id: str, action_id: str, tail: int = DEFAULT_TAIL) -> str:
         self._action_id(project_id, action_id)
         tail = max(0, min(tail, MAX_TAIL))

@@ -43,6 +43,7 @@ class FakeHelper:
         self.runs: dict[tuple[str, str], dict] = {}
         self.fail = None
         self.terminals: list[FakeTerminal] = []
+        self.outputs: dict[tuple[str, str], str] = {}
 
     def _record(self, *call):
         self.calls.append(call)
@@ -80,6 +81,12 @@ class FakeHelper:
             raise HelperError("not_running", "this action has no run to attach to")
         self.terminals.append(FakeTerminal())
         return self.terminals[-1]
+
+    def output(self, project, action):
+        self._record("output", project, action)
+        if (project, action) not in self.runs:
+            raise HelperError("not_running", "this action has no run to show")
+        return self.outputs.get((project, action), "")
 
     def names(self):
         return [c[0] for c in self.calls]

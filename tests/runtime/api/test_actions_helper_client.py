@@ -131,3 +131,11 @@ def test_attach_to_nothing_running_is_a_refusal(helper):
     with pytest.raises(HelperError) as caught:
         client.attach("app", "ios-build", 80, 24)
     assert caught.value.code == "not_running"
+
+
+def test_output_reads_a_whole_scrollback_longer_than_a_status_reply(helper):
+    server, client = helper
+    text = "".join(f"line-{i}\n" for i in range(20000))
+    server.answers = {"output": {"ok": True, "text": text}}
+    assert client.output("app", "ios-build") == text
+    assert server.requests == [{"op": "output", "project": "app", "action": "ios-build"}]

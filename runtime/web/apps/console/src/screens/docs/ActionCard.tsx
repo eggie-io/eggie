@@ -101,8 +101,8 @@ export function ActionCard({
         ) : (
           <>
             {!running && <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>{action.run ? "Run again" : "Run"}</Button>}
-            {action.run && <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Show output</Button>}
-            {action.run && <Button variant="ghost" onClick={() => setView("output")}>Output</Button>}
+            {action.run && <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Open terminal</Button>}
+            {action.run && <Button variant="ghost" onClick={() => setView("output")}>Full output</Button>}
           </>
         )}
       </div>
@@ -111,7 +111,7 @@ export function ActionCard({
           fetch={() => actionLog(projectId, action.id)} onClose={() => setView(null)} />
       )}
       {view === "output" && (
-        <TextModal title={`${action.name} output`} queryKey={["action-output", projectId, action.id]}
+        <TextModal title={`${action.name} — full output`} queryKey={["action-output", projectId, action.id]}
           fetch={() => actionOutput(projectId, action.id)} onClose={() => setView(null)} />
       )}
     </div>

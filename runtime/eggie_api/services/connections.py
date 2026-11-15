@@ -30,7 +30,7 @@ class ConnectionService:
         self._spawn = spawn or _daemon
         self.prompter = Prompter(helper)
         self._lock = threading.Lock()
-        self._catalog: tuple[float, dict[str, Connection], list[str]] | None = None
+        self._catalog: tuple[float, dict[str, Connection], set[str]] | None = None
         self._states: dict[str, tuple[float, str]] = {}
         self._checking: set[str] = set()
         # Bumped whenever the cached state is dropped, so a check already in flight can't refill it.
@@ -40,21 +40,19 @@ class ConnectionService:
         self._logged_in: set[str] = set()
 
     def catalog(self) -> dict[str, Connection]:
-        return self._fetch()[0]
+        return self.catalog_and_rejected()[0]
 
-    def catalog_problems(self) -> list[str]:
-        return list(self._fetch()[1])
-
-    def _fetch(self) -> tuple[dict[str, Connection], list[str]]:
+    def catalog_and_rejected(self) -> tuple[dict[str, Connection], set[str]]:
+        """The usable connections, and the ids of entries the service sent but Eggie refused."""
         now = self._clock()
         with self._lock:
             hit = self._catalog
         if hit is not None and now - hit[0] < CATALOG_SECONDS:
             return hit[1], hit[2]
-        found, problems = parse_connections(self._recipes.connections())
+        found, rejected = parse_connections(self._recipes.connections())
         with self._lock:
-            self._catalog = (now, found, problems)
-        return found, problems
+            self._catalog = (now, found, rejected)
+        return found, rejected
 
     def _connection(self, cid: str) -> Connection:
         found = self.catalog().get(cid) if is_slug(cid) else None
@@ -112,7 +110,8 @@ class ConnectionService:
         state = "unknown"
         try:
             code = self._helper.check(conn.check)
-            if code is not None:
+            # A negative code is a signal: the check was killed, it didn't say signed out.
+            if code is not None and code >= 0:
                 state = "connected" if code == 0 else "signed-out"
         except (HelperError, HelperUnavailable):
             pass

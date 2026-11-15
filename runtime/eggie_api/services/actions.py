@@ -77,9 +77,10 @@ class ActionService:
         merged, duplicates = merge(per_recipe)
         problems += duplicates
         catalog: dict[str, Connection] = {}
+        rejected: set[str] = set()
         if any(a.connections for a in merged.values()):
             try:
-                catalog = self._connections.catalog()
+                catalog, rejected = self._connections.catalog_and_rejected()
             except (Upstream, Unavailable) as e:
                 failures.append(e)
                 for recipe in dict.fromkeys(a.recipe for a in merged.values() if a.connections):
@@ -88,11 +89,19 @@ class ActionService:
                         problems, failures, catalog)
         runnable: dict[str, Action] = {}
         for aid, action in merged.items():
-            unknown = [c for c in action.connections if c not in catalog]
-            if unknown:
+            missing = [c for c in action.connections if c not in catalog]
+            invalid = [c for c in missing if c in rejected]
+            if invalid:
+                problems.append({"recipe": action.recipe, "code": "invalid_connection",
+                                 "action": aid,
+                                 "message": f"Action {aid} can't be run: the Eggie service sent "
+                                            f"a definition of {', '.join(invalid)} that Eggie "
+                                            f"can't use."})
+            elif missing:
                 problems.append({"recipe": action.recipe, "code": "unknown_connection",
+                                 "action": aid,
                                  "message": f"Action {aid} uses a connection Eggie doesn't know "
-                                            f"({', '.join(unknown)}), so it can't be run."})
+                                            f"({', '.join(missing)}), so it can't be run."})
             else:
                 runnable[aid] = action
         return runnable, problems, failures, catalog
@@ -110,8 +119,11 @@ class ActionService:
 
     @staticmethod
     def _sources(action: Action, catalog: dict[str, Connection]) -> list:
+        # A connection with a login is answered in its own session; outside it a generic
+        # question of its own ("Do you want to continue?") would answer the wrong prompt.
         return [("action", action.questions),
-                *((cid, catalog[cid].questions) for cid in action.connections)]
+                *((cid, catalog[cid].questions) for cid in action.connections
+                  if catalog[cid].login is None)]
 
     def _call(self, fn):
         try:

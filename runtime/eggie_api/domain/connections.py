@@ -150,20 +150,19 @@ def _connection(raw: object) -> Connection | str:
     return Connection(cid, name, description, login, check, questions)
 
 
-def parse_connections(payload: object) -> tuple[dict[str, Connection], list[str]]:
-    """Valid connections by id from the service's body, and one message per entry dropped."""
+def parse_connections(payload: object) -> tuple[dict[str, Connection], set[str]]:
+    """Valid connections by id from the service's body, and the ids of entries refused.
+    A repeated id keeps its first entry."""
     entries = payload.get("connections") if isinstance(payload, dict) else None
     if not isinstance(entries, list):
-        return {}, ["The service sent connections in a shape Eggie can't read."]
+        return {}, set()
     found: dict[str, Connection] = {}
-    problems: list[str] = []
-    for index, raw in enumerate(entries, start=1):
+    rejected: set[str] = set()
+    for raw in entries:
         result = _connection(raw)
-        label = raw["id"] if isinstance(raw, dict) and is_slug(raw.get("id")) else index
         if isinstance(result, str):
-            problems.append(f"Connection {label} {result} and was skipped.")
-        elif result.id in found:
-            problems.append(f"Connection {result.id} is listed twice; the first one is used.")
-        else:
+            if isinstance(raw, dict) and is_slug(raw.get("id")):
+                rejected.add(raw["id"])
+        elif result.id not in found:
             found[result.id] = result
-    return found, problems
+    return found, rejected

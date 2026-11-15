@@ -174,7 +174,8 @@ and a host release. Prefer additive changes.
   (cached 2 min, dropped when a login starts or ends); a login is a helper session named `+<id>` in
   the account's home with a 15-minute deadline. `prompting` reads the screen, answers `reply`
   questions itself and offers `label` ones to the card as `asking`; actions use the same code over their
-  own questions plus their connections'. Answer bodies are parsed by hand so FastAPI's 422 can't echo
+  own questions plus those of their login-less connections (a connection with a login is answered only
+  in its `+<id>` session, so its generic replies never fire inside a build). Answer bodies are parsed by hand so FastAPI's 422 can't echo
   them; an answer is one line, never logged. Connection routes: GET/login/cancel/answer on both
   mounts, the terminal only under `/api`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes

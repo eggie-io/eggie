@@ -30,8 +30,8 @@ def parse(*entries):
 
 
 def test_the_contracts_expo_and_apple_entries_parse():
-    found, problems = parse(EXPO, APPLE)
-    assert problems == [] and list(found) == ["expo", "apple"]
+    found, rejected = parse(EXPO, APPLE)
+    assert rejected == set() and list(found) == ["expo", "apple"]
     expo, apple = found["expo"], found["apple"]
     assert expo.login.link_after == "Open " and expo.login.code_after == "Code: "
     assert expo.check == "npx --yes eas-cli@latest whoami"
@@ -47,8 +47,8 @@ def test_the_contracts_expo_and_apple_entries_parse():
     {**ASK, "type": "text"},
 ])
 def test_a_question_without_exactly_one_of_reply_and_label_is_refused(question):
-    found, problems = parse({**APPLE, "id": "bad", "questions": [question]}, EXPO)
-    assert list(found) == ["expo"] and len(problems) == 1 and "bad" in problems[0]
+    found, rejected = parse({**APPLE, "id": "bad", "questions": [question]}, EXPO)
+    assert list(found) == ["expo"] and rejected == {"bad"}
 
 
 def test_an_empty_reply_is_a_reply():
@@ -62,33 +62,37 @@ def test_a_label_question_without_type_is_text():
 
 
 def test_a_connection_with_neither_login_nor_questions_is_dropped():
-    found, problems = parse({"id": "empty", "name": "Empty"}, EXPO)
-    assert list(found) == ["expo"] and len(problems) == 1 and "empty" in problems[0]
+    found, rejected = parse({"id": "empty", "name": "Empty"}, EXPO)
+    assert list(found) == ["expo"] and rejected == {"empty"}
 
 
 def test_duplicate_question_ids_in_one_connection_are_refused():
-    found, problems = parse({**APPLE, "questions": [ASK, ASK]})
-    assert found == {} and len(problems) == 1
+    found, rejected = parse({**APPLE, "questions": [ASK, ASK]})
+    assert found == {} and rejected == {"apple"}
 
 
 def test_a_repeated_connection_id_keeps_the_first():
-    found, problems = parse(EXPO, {**EXPO, "name": "Second"})
-    assert found["expo"].name == "Expo" and len(problems) == 1
+    found, rejected = parse(EXPO, {**EXPO, "name": "Second"})
+    assert found["expo"].name == "Expo" and rejected == set()
 
 
 @pytest.mark.parametrize("bad", [
-    {"id": "Bad_Id"}, {"name": "x" * 81}, {"questions": [{**ASK, "match": "a\nb"}]},
+    {"name": "x" * 81}, {"questions": [{**ASK, "match": "a\nb"}]},
     {"questions": [{**ASK, "match": "x" * 201}]},
     {"login": {"command": "c", "link_after": ""}}, {"login": {"command": "c", "link_after": "x" * 41}},
     {"login": {"command": "a\0b"}}, {"questions": [{**ASK, "id": f"q{i}"} for i in range(21)]},
     {"questions": [{"id": "q", "match": "Go?", "label": "L", "type": "password"}]},
 ])
 def test_a_bad_field_drops_the_connection(bad):
-    found, problems = parse({**EXPO, **bad}, {**APPLE})
-    assert list(found) == ["apple"] and len(problems) == 1
+    found, rejected = parse({**EXPO, **bad}, {**APPLE})
+    assert list(found) == ["apple"] and rejected == {"expo"}
+
+
+def test_an_entry_without_a_valid_id_is_dropped_but_names_nothing():
+    found, rejected = parse({**EXPO, "id": "Bad_Id"}, {**APPLE})
+    assert list(found) == ["apple"] and rejected == set()
 
 
 @pytest.mark.parametrize("payload", [None, [], {"connections": "x"}, {}])
 def test_a_malformed_body_yields_no_connections(payload):
-    found, problems = parse_connections(payload)
-    assert found == {} and len(problems) == 1
+    assert parse_connections(payload) == ({}, set())

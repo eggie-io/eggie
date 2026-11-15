@@ -90,7 +90,7 @@ def _checks(env):
 
 
 @pytest.mark.parametrize("exit_code, state", [(0, "connected"), (1, "signed-out"),
-                                              (None, "unknown")])
+                                              (None, "unknown"), (-9, "unknown")])
 def test_the_check_exit_code_sets_the_state(make, exit_code, state):
     env = make(EXPO)
     env.helper.checks[CHECK] = exit_code

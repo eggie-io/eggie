@@ -312,11 +312,23 @@ def test_an_action_using_an_unknown_connection_is_not_runnable(make):
     out = env.client.get("/projects/app/actions").json()
     assert out["actions"] == []
     assert out["problems"] == [{
-        "recipe": "mobile-app", "code": "unknown_connection",
+        "recipe": "mobile-app", "code": "unknown_connection", "action": "ios-build",
         "message": "Action ios-build uses a connection Eggie doesn't know (expo), "
                    "so it can't be run."}]
     assert _error(env.client.post("/projects/app/actions/ios-build/start")) == (
         404, "action_not_found")
+
+
+def test_an_action_whose_connection_the_service_sent_invalid_says_so(make):
+    broken = {**EXPO_CONNECTION, "login": {"command": ""}}
+    env = make(recipe_actions=[{"actions": [IOS_BUILD]}],
+               connections=[{"connections": [broken, APPLE_CONNECTION]}])
+    out = env.client.get("/projects/app/actions").json()
+    assert out["actions"] == []
+    assert out["problems"] == [{
+        "recipe": "mobile-app", "code": "invalid_connection", "action": "ios-build",
+        "message": "Action ios-build can't be run: the Eggie service sent a definition of "
+                   "expo that Eggie can't use."}]
 
 
 def test_a_service_without_connections_leaves_out_only_actions_that_use_them(make):
@@ -338,6 +350,27 @@ def test_list_describes_the_connections_actions_use(make):
          "check": True},
         {"id": "apple", "name": "Apple", "description": None, "login": False, "check": False}]
     assert {a["id"]: a["asks"] for a in out["actions"]} == {"shell": False, "ios-build": True}
+
+
+EXPO_ASKING = {**EXPO_CONNECTION, "questions": [
+    {"id": "continue", "match": "Do you want to continue?", "reply": ""},
+    {"id": "otp", "match": "One-time password:", "label": "Code from your app"}]}
+EXPO_BUILD = {**IOS_BUILD, "connections": ["expo"]}
+
+
+def test_an_action_does_not_answer_the_questions_of_a_connection_with_a_login(make):
+    env = make(recipe_actions=[{"actions": [EXPO_BUILD]}],
+               connections=[{"connections": [EXPO_ASKING]}])
+    env.client.post("/projects/app/actions/ios-build/start")
+    env.helper.screens[IOS_KEY] = _screen(["Do you want to continue? (Y/n)"], 0)
+    assert _asking(env) is None
+    assert env.helper.typed == []
+
+
+def test_a_connection_with_a_login_does_not_make_its_actions_ask(make):
+    env = make(recipe_actions=[{"actions": [EXPO_BUILD]}],
+               connections=[{"connections": [EXPO_ASKING]}])
+    assert [a["asks"] for a in env.client.get("/projects/app/actions").json()["actions"]] == [False]
 
 
 def test_an_apple_question_reaches_the_card_and_the_answer_is_typed(make):

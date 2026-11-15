@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { ActionRun, ActionsAnswer, AnswerBody, ConnectionAnswer, ConnectionRun, ConnectionState, Run } from "./types";
@@ -67,15 +68,25 @@ function useConnectionVerb(id: string, verb: "login" | "cancel") {
 export const useConnectionLogin = (id: string) => useConnectionVerb(id, "login");
 export const useConnectionCancel = (id: string) => useConnectionVerb(id, "cancel");
 
-// The value lives only in the mutation call; it is never a key, meta or cached data.
-export function useAnswerConnection(id: string) {
+// Not a useMutation: a mutation keeps its variables (the typed value) on its observer and in the
+// MutationCache. Here the value is held only by the request in flight.
+function useAnswer(path: string, settledKey: readonly unknown[]) {
   const client = useQueryClient();
-  return useMutation({
-    mutationKey: ["answer-connection", id],
-    mutationFn: (body: AnswerBody) => api.post<Record<string, never>>(`${connectionBase(id)}/answer`, body),
-    onSettled: () => client.invalidateQueries({ queryKey: connectionKey(id) }),
-  });
+  const [sending, setSending] = useState(false);
+  const send = (body: AnswerBody, onError: (error: unknown) => void) => {
+    setSending(true);
+    api
+      .post<Record<string, never>>(path, body)
+      .catch(onError)
+      .finally(() => {
+        setSending(false);
+        void client.invalidateQueries({ queryKey: settledKey });
+      });
+  };
+  return { send, sending };
 }
+
+export const useAnswerConnection = (id: string) => useAnswer(`${connectionBase(id)}/answer`, connectionKey(id));
 
 export function useActionRun(projectId: string, actionId: string, enabled: boolean) {
   return useQuery({
@@ -86,12 +97,5 @@ export function useActionRun(projectId: string, actionId: string, enabled: boole
   });
 }
 
-export function useAnswerAction(projectId: string, actionId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationKey: ["answer-action", projectId, actionId],
-    mutationFn: (body: AnswerBody) =>
-      api.post<Record<string, never>>(`${base(projectId)}/${encodeURIComponent(actionId)}/answer`, body),
-    onSettled: () => client.invalidateQueries({ queryKey: [...key(projectId), actionId, "run"] }),
-  });
-}
+export const useAnswerAction = (projectId: string, actionId: string) =>
+  useAnswer(`${base(projectId)}/${encodeURIComponent(actionId)}/answer`, [...key(projectId), actionId, "run"]);

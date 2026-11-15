@@ -14,7 +14,7 @@ export type Action = {
   asks: boolean;
 };
 
-export type ActionProblem = { recipe: string | null; code: string; message: string };
+export type ActionProblem = { recipe: string | null; code: string; message: string; action?: string };
 
 export type ConnectionInfo = { id: string; name: string; description: string | null; login: boolean; check: boolean };
 

@@ -53,9 +53,9 @@ function LoginRow({ connection, onOpenTerminal }: Props) {
   const send = (value: string) => {
     if (view.kind !== "asking") return;
     setReplyProblem(null);
-    reply.mutate(
+    reply.send(
       { source: view.asking.source, question: view.asking.id, value },
-      { onError: (error) => setReplyProblem(actionError(error)) },
+      (error) => setReplyProblem(actionError(error)),
     );
   };
 
@@ -122,7 +122,7 @@ function LoginRow({ connection, onOpenTerminal }: Props) {
             key={`${view.asking.source}:${view.asking.id}`}
             asking={view.asking}
             onSend={send}
-            sending={reply.isPending}
+            sending={reply.sending}
             error={replyProblem}
           />
           <div className={s.buttons}>{cancelButton}{showTerminal}</div>

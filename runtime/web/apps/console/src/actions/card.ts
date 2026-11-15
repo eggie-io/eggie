@@ -7,7 +7,7 @@ export type Card =
   | { kind: "unknown"; id: string }
   | { kind: "action"; action: Action };
 
-const BLOCKING = ["cloud_unavailable", "cloud_error", "invalid_project_yml"];
+const BLOCKING = ["cloud_unavailable", "cloud_error", "invalid_project_yml", "connections_unavailable"];
 
 export function cardFor(answer: ActionsAnswer | undefined, error: unknown, id: string): Card {
   if (!answer) {
@@ -16,6 +16,9 @@ export function cardFor(answer: ActionsAnswer | undefined, error: unknown, id: s
   }
   const action = answer.actions.find((a) => a.id === id);
   if (action) return { kind: "action", action };
+  // Dropped for one of its connections: the API names the action on that problem.
+  const own = answer.problems.find((p) => p.action === id);
+  if (own) return { kind: "unavailable", message: own.message };
   // The recipes that would define it could not be read or fetched, so "no such action" would be a guess.
   const blocked = answer.problems.find((p) => BLOCKING.includes(p.code));
   if (blocked) return { kind: "unavailable", message: blocked.message };

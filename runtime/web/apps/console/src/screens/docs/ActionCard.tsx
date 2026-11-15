@@ -109,9 +109,9 @@ export function ActionCard({
     if (!asking) return;
     const key = askingKey;
     setAnswerProblem(null);
-    answer.mutate(
+    answer.send(
       { source: asking.source, question: asking.id, value },
-      { onError: (error) => setAnswerProblem({ key, message: actionError(error) }) },
+      (error) => setAnswerProblem({ key, message: actionError(error) }),
     );
   };
   const end = () => {
@@ -171,7 +171,7 @@ export function ActionCard({
           key={askingKey}
           asking={asking}
           onSend={send}
-          sending={answer.isPending}
+          sending={answer.sending}
           error={answerProblem?.key === askingKey ? answerProblem.message : null}
         />
       )}

@@ -50,6 +50,45 @@ describe("cardFor", () => {
     expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "project.yml is not valid YAML" });
   });
 
+  it("an action left out because the service offers no connections is unavailable", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [{ recipe: "expo", code: "connections_unavailable", message: "No sign-in connections yet" }],
+      connections: [],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "No sign-in connections yet" });
+  });
+
+  it("an action dropped for an unknown connection shows that problem, not a missing action", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [
+        { recipe: "expo", code: "unknown_connection", action: "android-build", message: "Action android-build uses a connection Eggie doesn't know" },
+        { recipe: "expo", code: "unknown_connection", action: "ios-build", message: "Action ios-build uses a connection Eggie doesn't know" },
+      ],
+      connections: [],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "Action ios-build uses a connection Eggie doesn't know" });
+  });
+
+  it("an action dropped for a connection the service sent invalid shows that problem", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [{ recipe: "expo", code: "invalid_connection", action: "ios-build", message: "Action ios-build can't be run" }],
+      connections: [],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unavailable", message: "Action ios-build can't be run" });
+  });
+
+  it("another action's connection problem leaves an id the answer lacks unknown", () => {
+    const answer: ActionsAnswer = {
+      actions: [],
+      problems: [{ recipe: "expo", code: "unknown_connection", action: "android-build", message: "Action android-build can't be run" }],
+      connections: [],
+    };
+    expect(cardFor(answer, null, "ios-build")).toEqual({ kind: "unknown", id: "ios-build" });
+  });
+
   it("a matching action is shown even when another recipe has a problem", () => {
     const answer: ActionsAnswer = {
       actions: [build],

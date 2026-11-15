@@ -138,5 +138,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - Every console status poll starts `eggie-agents.service`, so journald shows a Started/Finished
   pair every 3 s while an agents screen is open; and `systemctl start eggie-agents.service` in
   `install.sh` step 11c blocks while a requested setup runs.
+- install.sh runs from `/root` (WSL execs pass `--cd ~` as root). `runuser` keeps that cwd, which
+  no account can enter: anything run as an account must `cd` to its home first, or npx fails
+  with `spawn sh EACCES`.
 - Use `/usr/bin/docker` by absolute path: Docker Desktop's WSL integration can put its own `docker`
   on `PATH`, which talks to Desktop's engine instead of this VM's.

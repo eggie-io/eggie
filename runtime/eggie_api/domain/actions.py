@@ -1,17 +1,15 @@
 """Recipe actions: what the service may publish as a button, and a project's recipes. No I/O."""
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+
+from .connections import (
+    MAX_COMMAND, MAX_DESCRIPTION, MAX_NAME, Question, is_slug, one_line as _one_line, parse_questions,
+)
 
 ACTION_TYPES = ("one-off", "long-running")
 MAX_ACTIONS = 20
-
-SLUG = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
-MAX_SLUG = 63
-MAX_NAME = 80
-MAX_DESCRIPTION = 300
-MAX_COMMAND = 4000
+MAX_CONNECTIONS = 5
 
 
 @dataclass(frozen=True)
@@ -22,17 +20,13 @@ class Action:
     description: str | None
     command: str
     type: str
+    connections: tuple[str, ...] = ()
+    questions: tuple[Question, ...] = ()
 
     def to_wire(self) -> dict:
-        return asdict(self)
-
-
-def is_slug(value: object) -> bool:
-    return type(value) is str and len(value) <= MAX_SLUG and SLUG.fullmatch(value) is not None
-
-
-def _one_line(value: str) -> bool:
-    return "\n" not in value and "\r" not in value
+        return {"id": self.id, "recipe": self.recipe, "name": self.name,
+                "description": self.description, "command": self.command, "type": self.type,
+                "connections": list(self.connections), "asks": bool(self.questions)}
 
 
 def _check(recipe: str, raw: object) -> Action | str:
@@ -53,8 +47,17 @@ def _check(recipe: str, raw: object) -> Action | str:
         return "has an invalid command"
     if kind not in ACTION_TYPES:
         return "has an unknown type"
-    return Action(id=aid, recipe=recipe, name=name, description=description,
-                  command=command, type=kind)
+    used = raw.get("connections")
+    if used is None:
+        used = []
+    if (not isinstance(used, list) or len(used) > MAX_CONNECTIONS
+            or not all(is_slug(c) for c in used) or len(set(used)) != len(used)):
+        return "has invalid connections"
+    questions = parse_questions(raw.get("questions"))
+    if isinstance(questions, str):
+        return f"has invalid questions ({questions})"
+    return Action(id=aid, recipe=recipe, name=name, description=description, command=command,
+                  type=kind, connections=tuple(used), questions=questions)
 
 
 def parse_actions(recipe: str, payload: object) -> tuple[list[Action], list[str]]:

@@ -16,7 +16,7 @@ IOS = {
 def test_a_valid_action_is_kept_with_its_recipe():
     actions, problems = parse_actions("mobile-app", {"slug": "mobile-app", "version": 3, "actions": [IOS]})
     assert problems == [] and actions[0].recipe == "mobile-app" and actions[0].type == "one-off"
-    assert actions[0].to_wire() == {**IOS, "recipe": "mobile-app"}
+    assert actions[0].to_wire() == {**IOS, "recipe": "mobile-app", "connections": [], "asks": False}
 
 
 def test_description_may_be_absent_or_null_and_unknown_keys_are_ignored():
@@ -35,6 +35,27 @@ def test_description_may_be_absent_or_null_and_unknown_keys_are_ignored():
 def test_a_broken_action_is_dropped_with_a_problem(bad):
     actions, problems = parse_actions("mobile-app", {"actions": [bad, {**IOS, "id": "ok"}]})
     assert [a.id for a in actions] == ["ok"] and len(problems) == 1
+
+
+def test_an_action_without_the_new_keys_has_no_connections_or_questions():
+    actions, _ = parse_actions("r", {"actions": [IOS]})
+    assert actions[0].connections == () and actions[0].questions == ()
+
+
+@pytest.mark.parametrize("bad", [
+    ["a", "b", "c", "d", "e", "f"], ["expo", "expo"], ["Expo"], "expo", [1],
+])
+def test_action_connections_must_be_at_most_five_distinct_slugs(bad):
+    actions, problems = parse_actions("r", {"actions": [{**IOS, "connections": bad}, {**IOS, "id": "ok"}]})
+    assert [a.id for a in actions] == ["ok"] and len(problems) == 1
+
+
+def test_the_wire_names_connections_and_never_questions():
+    ask = {"id": "go", "match": "Continue?", "reply": ""}
+    actions, problems = parse_actions("r", {"actions": [{**IOS, "connections": ["expo"], "questions": [ask]}]})
+    wire = actions[0].to_wire()
+    assert problems == [] and wire["connections"] == ["expo"] and wire["asks"] is True
+    assert "questions" not in wire
 
 
 @pytest.mark.parametrize("payload", [None, [], {"actions": "x"}, {}])

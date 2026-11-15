@@ -4,7 +4,7 @@ import { Badge, Button, Modal, Notice } from "@eggie/ui";
 import { actionLog, actionOutput, useProjectActions, useStartAction, useStopAction } from "../../actions/queries";
 import { stripAnsi } from "../../actions/ansi";
 import { cardFor, runStatus } from "../../actions/card";
-import type { Action } from "../../actions/types";
+import type { Action, TerminalTarget } from "../../actions/types";
 import { ApiError } from "../../api/client";
 import { actionError } from "../../projects/copy";
 import s from "./ActionCard.module.css";
@@ -49,7 +49,7 @@ export function ActionCard({
 }: {
   projectId: string;
   id: string;
-  onOpenTerminal: (action: Action) => void;
+  onOpenTerminal: (target: TerminalTarget) => void;
 }) {
   const actions = useProjectActions(projectId);
   const start = useStartAction(projectId);
@@ -70,9 +70,9 @@ export function ActionCard({
   const begin = () => {
     setProblem(null);
     start.mutate(action.id, {
-      onSuccess: () => onOpenTerminal(action),
+      onSuccess: () => onOpenTerminal({ kind: "action", action }),
       onError: (error) => {
-        if (error instanceof ApiError && error.code === "action_running") onOpenTerminal(action);
+        if (error instanceof ApiError && error.code === "action_running") onOpenTerminal({ kind: "action", action });
         else setProblem(actionError(error));
       },
     });
@@ -99,13 +99,13 @@ export function ActionCard({
             ) : (
               <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>Start</Button>
             )}
-            <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Open terminal</Button>
+            <Button icon="terminal" onClick={() => onOpenTerminal({ kind: "action", action })}>Open terminal</Button>
             <Button variant="ghost" onClick={() => setView("log")}>Logs</Button>
           </>
         ) : (
           <>
             {!running && <Button variant="primary" icon="play" onClick={begin} disabled={start.isPending}>{action.run ? "Run again" : "Run"}</Button>}
-            {action.run && <Button icon="terminal" onClick={() => onOpenTerminal(action)}>Open terminal</Button>}
+            {action.run && <Button icon="terminal" onClick={() => onOpenTerminal({ kind: "action", action })}>Open terminal</Button>}
             {action.run && <Button variant="ghost" onClick={() => setView("output")}>Full output</Button>}
           </>
         )}

@@ -1,14 +1,17 @@
+export const actionTerminalPath = (projectId: string, actionId: string): string =>
+  `/api/projects/${encodeURIComponent(projectId)}/actions/${encodeURIComponent(actionId)}/terminal`;
+
+export const connectionTerminalPath = (id: string): string => `/api/connections/${encodeURIComponent(id)}/terminal`;
+
 export type CloseReason = "gone" | "refused" | "unavailable" | "failed" | "ended" | "dropped";
 
 export function terminalUrl(
   location: { protocol: string; host: string },
-  projectId: string,
-  actionId: string,
+  path: string,
   cols: number,
   rows: number,
 ): string {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-  const path = `/api/projects/${encodeURIComponent(projectId)}/actions/${encodeURIComponent(actionId)}/terminal`;
   return `${scheme}//${location.host}${path}?cols=${cols}&rows=${rows}`;
 }
 

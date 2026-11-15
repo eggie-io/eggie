@@ -3,28 +3,41 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import { Button, Modal, Notice } from "@eggie/ui";
-import { useProjectActions } from "../../actions/queries";
-import { closeReason, reconnectDelay, terminalUrl, type CloseReason } from "../../actions/socket";
-import type { Action } from "../../actions/types";
+import { useConnection, useProjectActions } from "../../actions/queries";
+import {
+  actionTerminalPath,
+  closeReason,
+  connectionTerminalPath,
+  reconnectDelay,
+  terminalUrl,
+  type CloseReason,
+} from "../../actions/socket";
+import type { TerminalTarget } from "../../actions/types";
 import s from "./TerminalPanel.module.css";
 
 const NOTES: Partial<Record<CloseReason, string>> = {
   refused: "Eggie couldn't open the terminal. Reload the page and sign in again.",
   unavailable: "The part of Eggie that runs actions isn't answering. Restart the machine from the desktop app and try again.",
   failed: "Eggie couldn't open this action's terminal.",
-  gone: "This action isn't running.",
+  gone: "Nothing is running here.",
 };
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function TerminalPanel({ projectId, action, onClose }: { projectId: string; action: Action; onClose: () => void }) {
+export function TerminalPanel({ projectId, target, onClose }: { projectId: string; target: TerminalTarget; onClose: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [ended, setEnded] = useState<CloseReason | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const isAction = target.kind === "action";
+  const targetId = isAction ? target.action.id : target.id;
   const actions = useProjectActions(projectId);
-  const run = actions.data?.actions.find((a) => a.id === action.id)?.run ?? null;
+  const connection = useConnection(isAction ? "" : target.id, !isAction);
+  const run = isAction
+    ? (actions.data?.actions.find((a) => a.id === target.action.id)?.run ?? null)
+    : (connection.data?.run ?? null);
+  const title = isAction ? target.action.name : `Sign in to ${target.name}`;
 
   useEffect(() => {
     const el = host.current;
@@ -56,7 +69,7 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
     const connect = () => {
       // The server redraws the screen on attach.
       term.reset();
-      const ws = new WebSocket(terminalUrl(window.location, projectId, action.id, term.cols, term.rows));
+      const ws = new WebSocket(terminalUrl(window.location, isAction ? actionTerminalPath(projectId, targetId) : connectionTerminalPath(targetId), term.cols, term.rows));
       ws.binaryType = "arraybuffer";
       socket = ws;
       let attached = false;
@@ -110,11 +123,11 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
       socket?.close();
       term.dispose();
     };
-  }, [projectId, action.id]);
+  }, [projectId, isAction, targetId]);
 
   const finished = run?.state === "exited";
   return (
-    <Modal open onClose={onClose} title={action.name} wide footer={<Button onClick={onClose}>Close</Button>}>
+    <Modal open onClose={onClose} title={title} wide footer={<Button onClick={onClose}>Close</Button>}>
       <div className={s.body}>
         <div className={s.term} ref={host} />
         {finished && (

@@ -1,6 +1,6 @@
 import { createElement, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { Action } from "../../actions/types";
+import type { TerminalTarget } from "../../actions/types";
 import { Qr } from "../../components/Qr";
 import { qrModules } from "../../components/qr";
 import { openExternal } from "../../desktop/desktop";
@@ -45,7 +45,7 @@ function Inlines({ id, nodes }: { id: string; nodes: Inline[] }): ReactNode {
   });
 }
 
-function Blocks({ id, blocks, onOpenTerminal }: { id: string; blocks: Block[]; onOpenTerminal: (action: Action) => void }): ReactNode {
+function Blocks({ id, blocks, onOpenTerminal }: { id: string; blocks: Block[]; onOpenTerminal: (target: TerminalTarget) => void }): ReactNode {
   return blocks.map((block, i) => {
     switch (block.kind) {
       case "heading":
@@ -88,11 +88,11 @@ function Blocks({ id, blocks, onOpenTerminal }: { id: string; blocks: Block[]; o
 }
 
 export function DocView({ id, blocks }: { id: string; blocks: Block[] }) {
-  const [terminalFor, setTerminalFor] = useState<Action | null>(null);
+  const [terminalFor, setTerminalFor] = useState<TerminalTarget | null>(null);
   return (
     <article className={s.doc}>
       <Blocks id={id} blocks={blocks} onOpenTerminal={setTerminalFor} />
-      {terminalFor && <TerminalPanel projectId={id} action={terminalFor} onClose={() => setTerminalFor(null)} />}
+      {terminalFor && <TerminalPanel projectId={id} target={terminalFor} onClose={() => setTerminalFor(null)} />}
     </article>
   );
 }

@@ -1,5 +1,5 @@
 import { ApiError } from "../api/client";
-import type { Action, ActionsAnswer, Run } from "./types";
+import type { Action, ActionsAnswer, Asking, ConnectionAnswer, ConnectionInfo, ConnectionState, Run } from "./types";
 
 export type Card =
   | { kind: "loading" }
@@ -28,4 +28,37 @@ export function runStatus(run: Run | null): { tone: "success" | "neutral" | "dan
   if (run?.state === "exited" && run.exit_code === null) return { tone: "neutral", text: "Stopped" };
   if (run?.state === "exited") return { tone: run.exit_code === 0 ? "neutral" : "danger", text: `Exited ${run.exit_code}` };
   return { tone: "neutral", text: "Stopped" };
+}
+
+export type ConnectionView =
+  | { kind: "checking" | "connected" | "signed-out" | "unknown" | "getting-link" | "failed" | "timed-out" }
+  | { kind: "waiting"; link: string; code: string | null }
+  | { kind: "asking"; asking: Asking };
+
+export function connectionView(answer: ConnectionAnswer | undefined, startedHere: boolean): ConnectionView {
+  if (!answer) return { kind: "checking" };
+  const { run, state } = answer;
+  if (run?.state === "running") {
+    if (run.asking) return { kind: "asking", asking: run.asking };
+    if (run.link) return { kind: "waiting", link: run.link, code: run.code };
+    return { kind: "getting-link" };
+  }
+  // An old failed login shouldn't haunt the card; only the one this card started reports.
+  if (startedHere && run?.state === "exited" && state !== "connected" && state !== "checking") {
+    if (run.timed_out) return { kind: "timed-out" };
+    if (run.exit_code !== 0 || state === "signed-out") return { kind: "failed" };
+  }
+  return { kind: state };
+}
+
+export function gate(
+  action: Action,
+  info: ConnectionInfo[],
+  states: Record<string, ConnectionState | undefined>,
+): string | null {
+  for (const id of action.connections) {
+    const known = info.find((c) => c.id === id);
+    if (known?.login && states[id] === "signed-out") return `Connect ${known.name} first`;
+  }
+  return null;
 }

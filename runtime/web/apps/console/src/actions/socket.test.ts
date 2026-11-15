@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { closeReason, terminalUrl } from "./socket";
+import { actionTerminalPath, closeReason, connectionTerminalPath, terminalUrl } from "./socket";
 
 describe("terminalUrl", () => {
   it("uses ws on http and wss on https, with encoded ids", () => {
-    expect(terminalUrl({ protocol: "http:", host: "localhost:39080" }, "my app", "a/b", 80, 24))
+    expect(terminalUrl({ protocol: "http:", host: "localhost:39080" }, actionTerminalPath("my app", "a/b"), 80, 24))
       .toBe("ws://localhost:39080/api/projects/my%20app/actions/a%2Fb/terminal?cols=80&rows=24");
-    expect(terminalUrl({ protocol: "https:", host: "foo.eggie.io" }, "p", "a", 100, 30).startsWith("wss://foo.eggie.io/")).toBe(true);
+    expect(terminalUrl({ protocol: "https:", host: "foo.eggie.io" }, actionTerminalPath("p", "a"), 100, 30).startsWith("wss://foo.eggie.io/")).toBe(true);
+  });
+});
+
+describe("connection terminal", () => {
+  it("points at the connection's socket, wss over https", () => {
+    expect(terminalUrl({ protocol: "https:", host: "foo.eggie.io" }, connectionTerminalPath("expo"), 80, 24))
+      .toBe("wss://foo.eggie.io/api/connections/expo/terminal?cols=80&rows=24");
   });
 });
 

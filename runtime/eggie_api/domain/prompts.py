@@ -66,6 +66,8 @@ def asking(screen: Screen,
     row = screen.rows[screen.cursor_y].lower()
     for source, questions in sources:
         for question in questions:
-            if question.match.lower() in row:
+            # Rows come right-stripped, so "Apple ID: " is on screen as "Apple ID:".
+            needle = question.match.rstrip().lower()
+            if needle and needle in row:
                 return source, question
     return None

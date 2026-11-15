@@ -23,6 +23,7 @@ from .services.actions import ActionService
 from .services.agents import AgentStatus
 from .services.certificate import Certificate
 from .services.clone import CloneService
+from .services.connections import ConnectionService
 from .services.files import FileService
 from .services.github_link import GitHubLink
 from .services.instance_projects import InstanceProjects
@@ -75,6 +76,7 @@ class Services:
     push: PushService
     recipes: RecipeService
     actions: ActionService
+    connections: ConnectionService
     transfers: Transfers
     github_link: GitHubLink
     sessions: Sessions
@@ -91,7 +93,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, instance=None,
           sleep=None, clock=None, free_bytes=None, timer=None,
-          actions_helper=None) -> Services:
+          actions_helper=None, connection_spawn=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -160,8 +162,11 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         sleep=sleep or time.sleep, timer=timer)
     transfers.sweep()
     recipes = RecipeService(config, account, cloud, loader)
-    actions = ActionService(loader, recipes, actions_helper or ActionsHelper(config.actions_socket),
-                            config.actions_logs, clock=clock or time.monotonic)
+    actions_helper = actions_helper or ActionsHelper(config.actions_socket)
+    actions = ActionService(loader, recipes, actions_helper, config.actions_logs,
+                            clock=clock or time.monotonic)
+    connections = ConnectionService(recipes, actions_helper, clock=clock or time.monotonic,
+                                    spawn=connection_spawn)
     lifecycle.on_stopped = actions.stop_project
     transfers.before_replace = actions.stop_project
     projects = ProjectService(config, runner, loader, repos.projects, secrets, jobs, locks,
@@ -177,7 +182,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, push=push, transfers=transfers,
-        recipes=recipes, actions=actions,
+        recipes=recipes, actions=actions, connections=connections,
         github_link=github_link,
         sessions=sessions, site=site,
         instances=instances,

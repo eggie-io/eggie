@@ -78,3 +78,9 @@ def test_from_wire_refuses_other_shapes():
     assert Screen.from_wire({**good, "cursor_y": True}) is None
     assert Screen.from_wire({**good, "cursor_y": "0"}) is None
     assert Screen.from_wire(None) is None
+
+
+def test_a_match_ending_in_a_space_finds_the_right_stripped_row():
+    # The helper strips each row, so "Apple ID: " is on screen as "Apple ID:".
+    spaced = Question("apple-id", "Apple ID: ", None, "Apple ID", "text")
+    assert asking(screen(("Apple ID:",), 0), [("apple", [spaced])]) == ("apple", spaced)

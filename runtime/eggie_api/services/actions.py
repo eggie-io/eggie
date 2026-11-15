@@ -18,7 +18,7 @@ log = logging.getLogger("eggie.api")
 CACHE_SECONDS = 300
 DEFAULT_TAIL = 64 * 1024
 MAX_TAIL = 1024 * 1024
-_HELPER_DOWN = ("Eggie can't reach the part of this machine that runs actions. "
+HELPER_DOWN = ("Eggie can't reach the part of this machine that runs actions. "
                 "Restart the machine, or run setup again if it keeps happening.")
 
 
@@ -73,7 +73,7 @@ class ActionService:
         try:
             return fn()
         except HelperUnavailable:
-            raise Unavailable("actions_unavailable", _HELPER_DOWN)
+            raise Unavailable("actions_unavailable", HELPER_DOWN)
         except HelperError as e:
             if e.code == "action_running":
                 raise Conflict("action_running", "This action is already running.")
@@ -98,7 +98,7 @@ class ActionService:
                 runs = self._helper.status(project_id)
             except HelperUnavailable:
                 problems.append({"recipe": None, "code": "actions_unavailable",
-                                 "message": _HELPER_DOWN})
+                                 "message": HELPER_DOWN})
             except HelperError as e:
                 problems.append({"recipe": None, "code": "actions_failed", "message": e.message})
         return {"actions": [{**a.to_wire(), "run": runs.get(aid)} for aid, a in actions.items()],

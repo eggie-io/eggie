@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 import pty
 import pwd
@@ -37,10 +38,12 @@ MAX_FRAME = 1024 * 1024
 LOG_CAP = 10 * 1024 * 1024
 # Measured JSON-escaped, so the reply always fits the API client's 16 MiB read.
 OUTPUT_CAP = 4 * 1024 * 1024
+MAX_DEADLINE = 86400
 STOP_GRACE = 5.0
+EXPIRE_EVERY = 5.0
 FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
 PANES = ("#{session_name}\t#{pane_dead}\t#{@exit}\t#{pane_dead_status}"
-         "\t#{session_created}\t#{pane_pid}")
+         "\t#{session_created}\t#{pane_pid}\t#{@deadline}\t#{@timed_out}")
 
 
 class Refused(Exception):
@@ -62,14 +65,21 @@ class Pane:
     exit_code: int | None
     created: int
     pid: int
+    deadline: int | None = None
+    timed_out: bool = False
 
     def run(self) -> dict:
         return {"state": "exited" if self.dead else "running",
-                "exit_code": self.exit_code, "started_at": self.created}
+                "exit_code": self.exit_code, "started_at": self.created,
+                "timed_out": self.timed_out}
 
 
 def session(project: str, action: str) -> str:
     return f"{project}--{action}"
+
+
+def connection_session(cid: str) -> str:
+    return f"+{cid}"
 
 
 class Actions:
@@ -113,7 +123,8 @@ class Actions:
         out = self.tmux("list-panes", "-a", "-F", PANES, check=False)
         panes = {}
         for line in out.splitlines():
-            name, dead, recorded, status, created, pid = (line.split("\t") + [""] * 6)[:6]
+            name, dead, recorded, status, created, pid, deadline, timed_out = \
+                (line.split("\t") + [""] * 8)[:8]
             if not (created.isdigit() and pid.isdigit()):
                 continue
             # Only the session's first pane is the action's; a stray one never overwrites it.
@@ -121,7 +132,8 @@ class Actions:
                 continue
             code = recorded if recorded.isdigit() else status
             panes[name] = Pane(dead == "1", int(code) if dead == "1" and code.isdigit() else None,
-                               int(created), int(pid))
+                               int(created), int(pid), int(deadline) if deadline.isdigit() else None,
+                               timed_out == "1")
         return panes
 
     def project_runs(self, project: str) -> dict[str, Pane]:
@@ -129,44 +141,58 @@ class Actions:
         return {name[len(prefix):]: pane for name, pane in self.panes().items()
                 if name.startswith(prefix)}
 
-    def start(self, project: str, action: str, command: str, log: bool) -> dict:
-        name = session(project, action)
+    def start(self, name: str, cwd: Path, command: str, *, log_path: Path | None,
+              deadline: int | None) -> dict:
         with self.starting:
             pane = self.panes().get(name)
             if pane and not pane.dead:
-                raise Refused("action_running", f"{action} is already running")
+                raise Refused("action_running", f"{name} is already running")
             if pane:
                 self.tmux("kill-session", "-t", f"={name}")
             # The command waits for `go` so pipe-pane is in place before its first byte.
             # Its exit code is recorded in @exit, not left to pane_dead_status: tmux
             # sometimes never reaps a pane's process, and then has no status at all.
             # The newline: tmux reads an argument ending in `;` as a command separator.
-            self.tmux("new-session", "-d", "-s", name, "-c", str(self.projects / project),
+            self.tmux("new-session", "-d", "-s", name, "-c", str(cwd),
                       "-x", "120", "-y", "32", "-e", f"EGGIE_ACTION_COMMAND={command}\n",
                       f'tmux -L {SERVER} wait-for go-{name}; bash -lc "$EGGIE_ACTION_COMMAND"; '
                       f'tmux -L {SERVER} set-option -p -t "$TMUX_PANE" @exit $?')
             try:
-                if log:
-                    path = self.fresh_log(project, action)
+                if deadline is not None:
+                    # In tmux, not here, so the deadline outlives a helper restart.
+                    self.tmux("set-option", "-t", f"={name}:", "@deadline",
+                              str(math.ceil(time.time() + deadline)))
+                if log_path is not None:
+                    self.fresh_log(log_path)
                     # Past the cap, output is dropped until the next start.
                     self.tmux("pipe-pane", "-o", "-t", f"={name}:",
-                              f"stdbuf -o0 head -c {self.log_cap} >> {shlex.quote(str(path))}")
+                              f"stdbuf -o0 head -c {self.log_cap} >> {shlex.quote(str(log_path))}")
             except BaseException:
                 self.tmux("kill-session", "-t", f"={name}", check=False)
                 raise
             self.tmux("wait-for", "-S", f"go-{name}")
             pane = self.panes().get(name)
         if pane is None:
-            raise Refused("failed", f"{action} did not start")
+            raise Refused("failed", f"{name} did not start")
         return pane.run()
 
-    def fresh_log(self, project: str, action: str) -> Path:
-        folder = self.logs / project
+    def expire(self, now: float) -> None:
+        with self.starting:
+            # Under the lock: a run restarted meanwhile must not inherit the old one's mark.
+            late = [name for name, pane in self.panes().items()
+                    if not pane.dead and pane.deadline is not None and pane.deadline <= now]
+            for name in late:
+                self.tmux("set-option", "-t", f"={name}:", "@timed_out", "1", check=False)
+        if late:
+            self.stop(late)
+
+    def fresh_log(self, path: Path) -> None:
+        folder = path.parent
         folder.mkdir(exist_ok=True)
         # The docker group can write logs/: never truncate or chown through a planted link.
         dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            fd = os.open(f"{action}.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+            fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
                          0o640, dir_fd=dir_fd)
         finally:
             os.close(dir_fd)
@@ -176,7 +202,6 @@ class Actions:
             os.fchmod(fd, 0o640)
         finally:
             os.close(fd)
-        return folder / f"{action}.log"
 
     def stop(self, names: list[str], *, remove: bool = False) -> None:
         panes = self.panes()
@@ -363,29 +388,50 @@ class Handler(socketserver.StreamRequestHandler):
             project = self.slug(request, "project")
             actions.stop([session(project, a) for a in actions.project_runs(project)], remove=True)
             return {"ok": True}
-        if op not in ("start", "stop", "attach", "output"):
+        if op not in ("start", "stop", "attach", "output", "run"):
             raise Refused("invalid", f"unknown op {op!r}")
-        project, action = self.slug(request, "project"), self.slug(request, "action")
-        name = session(project, action)
-        if op == "stop":
-            actions.stop([name])
+        name, cwd = self.target(request)
+        if op in ("stop", "run"):
+            if op == "stop":
+                actions.stop([name])
             pane = actions.panes().get(name)
             return {"ok": True, "run": pane.run() if pane else None}
         if op == "output":
             return {"ok": True, "text": actions.output(name)}
         if op == "start":
             command, log = request.get("command"), request.get("log")
+            deadline = request.get("deadline")
             if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND \
                     or "\0" in command or not isinstance(log, bool):
                 raise Refused("invalid", "start needs a command and a log flag")
-            if not (actions.projects / project).is_dir():
-                raise Refused("invalid", f"no project {project!r}")
-            return {"ok": True, "run": actions.start(project, action, command, log)}
+            if deadline is not None and not (type(deadline) is int and 1 <= deadline <= MAX_DEADLINE):
+                raise Refused("invalid", f"deadline must be 1 to {MAX_DEADLINE} seconds")
+            log_path = None
+            if "connection" in request:
+                if log:
+                    raise Refused("invalid", "a connection login is never logged")
+            else:
+                if not cwd.is_dir():
+                    raise Refused("invalid", f"no project {request['project']!r}")
+                if log:
+                    log_path = actions.logs / request["project"] / f"{request['action']}.log"
+            return {"ok": True, "run": actions.start(name, cwd, command, log_path=log_path,
+                                                     deadline=deadline)}
         cols, rows = request.get("cols"), request.get("rows")
         if not all(type(v) is int and 1 <= v <= 1000 for v in (cols, rows)):
             raise Refused("invalid", "attach needs cols and rows")
         actions.attach(self, name, cols, rows)
         return None
+
+    def target(self, request: dict) -> tuple[str, Path]:
+        """The run's session name and the folder it starts in."""
+        if "connection" in request:
+            if "project" in request or "action" in request:
+                raise Refused("invalid", "name a connection or a project's action, not both")
+            return connection_session(self.slug(request, "connection")), \
+                Path(self.server.actions.account().home)
+        project, action = self.slug(request, "project"), self.slug(request, "action")
+        return session(project, action), self.server.actions.projects / project
 
     def slug(self, request: dict, key: str) -> str:
         value = request.get(key)
@@ -408,6 +454,7 @@ def main() -> None:
     parser.add_argument("--tmux-tmpdir")
     parser.add_argument("--log-cap", type=int, default=LOG_CAP)
     parser.add_argument("--output-cap", type=int, default=OUTPUT_CAP)
+    parser.add_argument("--expire-every", type=float, default=EXPIRE_EVERY)
     args = parser.parse_args()
     sock = Path(args.socket)
     sock.unlink(missing_ok=True)
@@ -419,7 +466,19 @@ def main() -> None:
         os.umask(previous)
     server.actions = Actions(Path(args.projects_root), Path(args.logs), Path(args.connect),
                              args.tmux_tmpdir, args.log_cap, args.output_cap)
+    threading.Thread(target=expire_forever, args=(server.actions, args.expire_every),
+                     daemon=True).start()
     server.serve_forever()
+
+
+def expire_forever(actions: Actions, every: float) -> None:
+    while True:
+        time.sleep(every)
+        try:
+            actions.expire(time.time())
+        except Exception:
+            # One bad pass must not end the loop: no deadline would ever fire again.
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

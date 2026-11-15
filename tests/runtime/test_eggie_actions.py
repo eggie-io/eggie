@@ -1,5 +1,6 @@
 import getpass
 import os
+import pwd
 import shutil
 import time
 
@@ -245,3 +246,62 @@ def test_output_past_its_cap_keeps_the_newest_whole_lines(helper):
     text = helper.ask(op="output", project="app", action="build")["text"]
     assert len(text) <= 100
     assert text.startswith("line-") and "line-200" in text.split("\n")
+
+
+def test_a_connection_login_runs_in_the_accounts_home(helper, tmp_path):
+    out = tmp_path / "out"
+    helper.start_connection("expo", f"pwd > {out}")
+    assert eventually(lambda: helper.connection_run("expo")["state"] == "exited")
+    assert out.read_text().strip() == pwd.getpwnam(getpass.getuser()).pw_dir
+
+
+def test_a_run_past_its_deadline_is_stopped_and_marked_timed_out(helper):
+    run = helper.start_connection("expo", "sleep 600", deadline=1)
+    assert run["timed_out"] is False
+    run = eventually(lambda: (r := helper.connection_run("expo")) and r["state"] == "exited" and r)
+    assert run and run["timed_out"] is True
+
+
+def test_a_run_stopped_by_hand_is_not_timed_out(helper):
+    assert helper.ask(op="start", project="app", action="slow", command="sleep 600", log=False,
+                      deadline=600)["ok"]
+    reply = helper.ask(op="stop", project="app", action="slow")
+    # As in the stop test: a session killed past the grace has no run left to read.
+    assert reply["ok"] and (reply["run"] is None or reply["run"]["timed_out"] is False)
+
+
+def test_a_deadline_holds_across_a_helper_restart(helper):
+    helper.start_connection("expo", "sleep 600", deadline=2)
+    helper.kill()
+    helper.start()
+    assert eventually(lambda: helper.connection_run("expo")["timed_out"])
+    assert helper.connection_run("expo")["state"] == "exited"
+
+
+def test_connection_sessions_are_not_a_projects_runs(helper):
+    helper.start_connection("expo", "sleep 600")
+    assert helper.ask(op="status", project="app") == {"ok": True, "runs": {}}
+    assert helper.ask(op="stop-project", project="app") == {"ok": True}
+    assert helper.connection_run("expo")["state"] == "running"
+
+
+@pytest.mark.parametrize("deadline", [0, "5", 86401, True])
+def test_start_refuses_a_bad_deadline(helper, deadline):
+    reply = helper.ask(op="start", connection="expo", command="true", log=False, deadline=deadline)
+    assert reply["ok"] is False and reply["code"] == "invalid"
+
+
+@pytest.mark.parametrize("request_", [
+    {"connection": "expo", "project": "app", "action": "a"},
+    {"connection": "expo", "action": "a"},
+    {"connection": "+expo"},
+    {},
+])
+def test_a_request_needs_exactly_one_valid_target(helper, request_):
+    reply = helper.ask(op="run", **request_)
+    assert reply["ok"] is False and reply["code"] == "invalid", reply
+
+
+def test_a_connection_login_refuses_a_log(helper):
+    reply = helper.ask(op="start", connection="expo", command="true", log=True)
+    assert reply["ok"] is False and reply["code"] == "invalid"

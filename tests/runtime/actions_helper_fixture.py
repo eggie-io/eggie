@@ -90,7 +90,8 @@ class Helper:
             self.proc = subprocess.Popen(
                 [sys.executable, str(HELPER), "--socket", str(self.socket),
                  "--projects-root", str(self.projects), "--logs", str(self.logs),
-                 "--connect", str(self.connect), "--tmux-tmpdir", str(self.tmux_tmpdir), *extra],
+                 "--connect", str(self.connect), "--tmux-tmpdir", str(self.tmux_tmpdir),
+                 "--expire-every", "0.2", *extra],
                 env=self.env, stdout=subprocess.DEVNULL, stderr=err)
         assert eventually(self._answers, 5), self.stderr.read_text()
 
@@ -129,6 +130,17 @@ class Helper:
 
     def start_action(self, action: str, command: str, project: str = "app", log: bool = False) -> dict:
         reply = self.ask(op="start", project=project, action=action, command=command, log=log)
+        assert reply["ok"], reply
+        return reply["run"]
+
+    def start_connection(self, cid: str, command: str, deadline: int | None = None) -> dict:
+        extra = {} if deadline is None else {"deadline": deadline}
+        reply = self.ask(op="start", connection=cid, command=command, log=False, **extra)
+        assert reply["ok"], reply
+        return reply["run"]
+
+    def connection_run(self, cid: str) -> dict | None:
+        reply = self.ask(op="run", connection=cid)
         assert reply["ok"], reply
         return reply["run"]
 

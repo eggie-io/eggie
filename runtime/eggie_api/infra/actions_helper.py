@@ -148,7 +148,8 @@ class ActionsHelper:
         return self._ask({"op": "run", **target}).get("run")
 
     def screen(self, target: dict) -> dict:
-        reply = self._ask({"op": "screen", **target})
+        # 32 rows plus a joined capture of 232, JSON-escaped, can pass a status reply's cap.
+        reply = self._ask({"op": "screen", **target}, max_reply=MAX_OUTPUT_REPLY)
         return {k: v for k, v in reply.items() if k != "ok"}
 
     def type(self, target: dict, text: str) -> None:

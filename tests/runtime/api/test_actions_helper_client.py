@@ -143,6 +143,15 @@ def test_output_reads_a_whole_scrollback_longer_than_a_status_reply(helper):
     assert server.requests == [{"op": "output", "project": "app", "action": "ios-build"}]
 
 
+def test_a_screen_of_wide_lines_longer_than_a_status_reply_is_read_whole(helper):
+    server, client = helper
+    # Non-ASCII is JSON-escaped six bytes a character.
+    text = "\n".join("є" * 300 for _ in range(232))
+    screen = {"rows": [], "cursor_y": 0, "history_size": 0, "text": text, "cursor_line": ""}
+    server.answers = {"screen": {"ok": True, **screen}}
+    assert client.screen(APP) == screen
+
+
 def test_connection_calls_send_the_connection_target_and_a_deadline(helper):
     server, client = helper
     server.answers = {"screen": {"ok": True, "rows": 24, "cursor_y": 3, "history_size": 0,

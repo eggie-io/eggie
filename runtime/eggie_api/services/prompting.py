@@ -18,7 +18,8 @@ def _not_asking() -> Conflict:
     return Conflict("not_asking", "That question isn't being asked any more.")
 
 
-def _answer_parts(body: object) -> tuple[str, str, str]:
+def parse_answer(body: object) -> tuple[str, str, str]:
+    """`(source, question, value)` from an answer body, or `400 invalid_answer` without the value."""
     if isinstance(body, dict):
         source, question, value = body.get("source"), body.get("question"), body.get("value")
         if (type(source) is str and type(question) is str and type(value) is str
@@ -32,41 +33,54 @@ def _running(run: dict | None) -> bool:
     return isinstance(run, dict) and run.get("state") == "running"
 
 
+class _Target:
+    """One target's lock and what was answered in it, touched only under that lock:
+    (run started_at, source, question id) -> (position, text) last seen answered."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.answered: dict[tuple, tuple[int, str]] = {}
+
+
 class Prompter:
     def __init__(self, helper):
         self._helper = helper
-        self._locks: dict[tuple, threading.Lock] = {}
-        self._locks_guard = threading.Lock()
-        # (target key, run started_at, source, question id) -> (position, text) when answered.
-        self._answered: dict[tuple, tuple[int, str]] = {}
+        self._targets: dict[tuple, _Target] = {}
+        self._guard = threading.Lock()
 
-    def _lock(self, target: dict) -> threading.Lock:
-        with self._locks_guard:
-            return self._locks.setdefault(target_key(target), threading.Lock())
+    def _target(self, target: dict) -> _Target:
+        with self._guard:
+            return self._targets.setdefault(target_key(target), _Target())
 
-    def _key(self, target: dict, run: dict, source: str, question: Question) -> tuple:
-        return target_key(target), run.get("started_at"), source, question.id
-
-    def _asking(self, target: dict, run: dict, sources: Sources
+    def _asking(self, mine: _Target, target: dict, run: dict, sources: Sources
                 ) -> tuple[Screen | None, tuple[str, Question] | None]:
         screen = Screen.from_wire(self._helper.screen(target))
         found = asking(screen, sources) if screen is not None else None
         if found is None:
             return screen, None
-        last = self._answered.get(self._key(target, run, *found))
+        key = (run.get("started_at"), found[0], found[1].id)
+        last = mine.answered.get(key)
         # A typed echo keeps the position and a resize reflow keeps the joined text;
-        # only a real re-ask changes both.
+        # only a real re-ask changes both. Each suppressed sighting moves the mark, so an
+        # echo followed by a reflow is still the answered prompt.
         if last is not None and (last[0] == screen.position or last[1] == screen.text):
+            mine.answered[key] = (screen.position, screen.text)
             return screen, None
         return screen, found
 
-    def _type(self, target: dict, run: dict, screen: Screen, source: str,
+    def _type(self, mine: _Target, target: dict, run: dict, screen: Screen, source: str,
               question: Question, text: str) -> None:
         self._helper.type(target, text)
-        mine, started = target_key(target), run.get("started_at")
-        for key in [k for k in self._answered if k[0] == mine and k[1] != started]:
-            del self._answered[key]
-        self._answered[self._key(target, run, source, question)] = (screen.position, screen.text)
+        started = run.get("started_at")
+        for key in [k for k in mine.answered if k[0] != started]:
+            del mine.answered[key]
+        mine.answered[(started, source, question.id)] = (screen.position, screen.text)
+
+    def forget(self, target: dict) -> None:
+        """Drop what was answered: a run restarted within a second keeps its started_at."""
+        mine = self._target(target)
+        with mine.lock:
+            mine.answered.clear()
 
     def look(self, target: dict, run: dict | None, sources: Sources
              ) -> tuple[Screen | None, dict | None]:
@@ -74,18 +88,21 @@ class Prompter:
         A fixed reply is typed here, once."""
         if not _running(run):
             return None, None
-        with self._lock(target):
+        mine = self._target(target)
+        with mine.lock:
             try:
-                screen, found = self._asking(target, run, sources)
+                screen, found = self._asking(mine, target, run, sources)
                 if found is None:
                     return screen, None
                 source, question = found
                 if question.reply is not None:
-                    self._type(target, run, screen, source, question, question.reply)
+                    self._type(mine, target, run, screen, source, question, question.reply)
                     return screen, None
-            except HelperError:
+            except HelperError as e:
                 # The run ended between reading its state and its screen.
-                return None, None
+                if e.code == "not_running":
+                    return None, None
+                raise
         return screen, {"source": source, "id": question.id, "label": question.label,
                         "type": question.type}
 
@@ -93,16 +110,17 @@ class Prompter:
         return self.look(target, run, sources)[1]
 
     def answer(self, target: dict, run: dict | None, sources: Sources, body: object) -> None:
-        source, question_id, value = _answer_parts(body)
+        source, question_id, value = parse_answer(body)
         if not _running(run):
             raise _not_asking()
-        with self._lock(target):
+        mine = self._target(target)
+        with mine.lock:
             try:
-                screen, found = self._asking(target, run, sources)
+                screen, found = self._asking(mine, target, run, sources)
                 if (found is None or found[0] != source or found[1].id != question_id
                         or found[1].label is None):
                     raise _not_asking()
-                self._type(target, run, screen, source, found[1], value)
+                self._type(mine, target, run, screen, source, found[1], value)
             except HelperError as e:
                 if e.code == "not_running":
                     raise _not_asking()

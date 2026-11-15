@@ -8,7 +8,7 @@ from ..domain.prompts import find_code, find_link
 from ..errors import BadRequest, Conflict, NotFound, Unavailable, Upstream
 from ..infra.actions_helper import HelperError, HelperUnavailable, Terminal, connection_target
 from .actions import HELPER_DOWN
-from .prompting import Prompter
+from .prompting import Prompter, parse_answer
 from .recipes import RecipeService
 
 CATALOG_SECONDS = 300
@@ -147,6 +147,7 @@ class ConnectionService:
             self._started[cid] = run.get("started_at") if isinstance(run, dict) else None
             self._ended.pop(cid, None)
         self._drop(cid)
+        self.prompter.forget(connection_target(cid))
         return {"run": run}
 
     def cancel(self, cid: str) -> dict:
@@ -155,6 +156,7 @@ class ConnectionService:
 
     def answer(self, cid: str, body: object) -> dict:
         conn = self._connection(cid)
+        parse_answer(body)
         target = connection_target(cid)
         run = self._call(lambda: self._helper.run(target))
         self._call(lambda: self.prompter.answer(target, run, [(cid, conn.questions)], body))

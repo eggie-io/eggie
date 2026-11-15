@@ -4,6 +4,7 @@ import time
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from eggie_api.infra.actions_helper import HelperError, HelperUnavailable
 from eggie_api.infra.cloud import CloudUnavailable
 from tests.runtime.api.conftest import _make_env
 from tests.runtime.api.fake_cloud import FakeCloud
@@ -167,6 +168,42 @@ def test_a_reflowed_screen_does_not_type_the_reply_again(make):
     assert env.helper.typed == [(KEY, "")]
 
 
+def test_an_echo_then_a_reflow_does_not_type_the_reply_again(make):
+    env = make(EXPO)
+    _login(env)
+    env.helper.screens[KEY] = _screen(["Do you want to continue? › (Y/n)"], 0)
+    env.client.get("/connections/expo")
+    echoed = ["Do you want to continue? › (Y/n) y"]
+    env.helper.screens[KEY] = _screen(echoed, 0)
+    env.client.get("/connections/expo")
+    env.helper.screens[KEY] = _screen(["", "", "", *echoed], 3, text="\n".join(echoed))
+    env.client.get("/connections/expo")
+    assert env.helper.typed == [(KEY, "")]
+
+
+def test_a_new_login_answers_its_prompts_afresh(make):
+    env = make(EXPO)
+    _login(env)
+    env.helper.screens[KEY] = _screen(["Do you want to continue? › (Y/n)"], 0)
+    env.client.get("/connections/expo")
+    env.helper.runs[KEY].update(state="exited", exit_code=1)
+    # The fake's started_at never changes, like a real restart within the same second.
+    _login(env)
+    env.client.get("/connections/expo")
+    assert env.helper.typed == [(KEY, ""), (KEY, "")]
+
+
+def test_a_reply_the_helper_refuses_to_type_is_actions_failed(make):
+    class RefusingHelper(FakeHelper):
+        def type(self, target, text):
+            raise HelperError("failed", "tmux said no")
+
+    env = make(EXPO, helper=RefusingHelper())
+    _login(env)
+    env.helper.screens[KEY] = _screen(["Do you want to continue? › (Y/n)"], 0)
+    assert _error(env.client.get("/connections/expo")) == (502, "actions_failed")
+
+
 def test_two_readers_at_once_type_a_reply_once(make):
     class SlowHelper(FakeHelper):
         # Slow between seeing the question and remembering the reply: the race window.
@@ -227,6 +264,14 @@ def test_an_invalid_answer_is_refused_without_echoing_it(make):
     assert _error(resp) == (400, "invalid_answer")
     assert "hunter2" not in resp.text
     assert env.helper.typed == []
+
+
+def test_an_invalid_answer_is_refused_even_while_the_helper_is_down(make):
+    env = make(EXPO)
+    env.helper.fail = HelperUnavailable("no socket")
+    resp = env.client.post("/connections/expo/answer",
+                           json={"source": "expo", "question": "otp", "value": "a\nb"})
+    assert _error(resp) == (400, "invalid_answer")
 
 
 def test_an_unknown_connection_is_connection_not_found(make):

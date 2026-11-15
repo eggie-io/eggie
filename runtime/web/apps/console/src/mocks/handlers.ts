@@ -625,10 +625,13 @@ export function handlersFor(scenario: Scenario) {
   const terminalHandler = terminal.addEventListener("connection", ({ client }) => {
     // MSW hands a typed array to the page as-is; a real socket delivers an ArrayBuffer.
     const text = { encode: (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer };
-    client.send(text.encode("Mock terminal. Type something.\r\n$ "));
+    // tmux attach switches to the alternate screen first, as the real terminal does.
+    client.send(text.encode("\x1b[?1049h\x1b[HMock terminal. Type something.\r\n$ "));
     client.addEventListener("message", ({ data }) => {
       if (typeof data === "string") return;
       const bytes = new Uint8Array(data as ArrayBuffer);
+      // What the page typed, for browser checks.
+      ((globalThis as { __terminalInput?: string[] }).__terminalInput ??= []).push(new TextDecoder().decode(bytes));
       // Enter comes as \r; echo it as a new prompt line.
       client.send(text.encode(new TextDecoder().decode(bytes).replace(/\r/g, "\r\n$ ")));
     });

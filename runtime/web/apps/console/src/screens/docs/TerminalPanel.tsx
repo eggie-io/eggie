@@ -38,6 +38,11 @@ export function TerminalPanel({ projectId, action, onClose }: { projectId: strin
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(el);
+    // tmux keeps xterm on the alternate screen, where xterm turns the wheel into arrow keys and
+    // types them into the action (a login prompt echoes ^[[A). History is behind Full output.
+    term.attachCustomWheelEventHandler(
+      () => term.buffer.active.type !== "alternate" || term.modes.mouseTrackingMode !== "none",
+    );
 
     let socket: WebSocket | null = null;
     let timer: number | undefined;

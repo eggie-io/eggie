@@ -12,6 +12,9 @@ def cmd_actions(env: Env, project: str | None = None) -> None:
     id_width = max((len(a["id"]) for a in actions), default=0)
     type_width = max((len(a["type"]) for a in actions), default=0)
     for a in actions:
-        print(f"{a['id']:<{id_width}}  {a['type']:<{type_width}}  {a['name']}", file=env.out)
+        uses = a.get("connections") or []
+        suffix = f"  (uses {', '.join(uses)})" if uses else ""
+        print(f"{a['id']:<{id_width}}  {a['type']:<{type_width}}  {a['name']}{suffix}",
+              file=env.out)
     for p in problems:
         print(f"! {p['message']}", file=env.out)

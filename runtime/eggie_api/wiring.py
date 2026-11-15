@@ -163,10 +163,10 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     transfers.sweep()
     recipes = RecipeService(config, account, cloud, loader)
     actions_helper = actions_helper or ActionsHelper(config.actions_socket)
-    actions = ActionService(loader, recipes, actions_helper, config.actions_logs,
-                            clock=clock or time.monotonic)
     connections = ConnectionService(recipes, actions_helper, clock=clock or time.monotonic,
                                     spawn=connection_spawn)
+    actions = ActionService(loader, recipes, actions_helper, config.actions_logs, connections,
+                            clock=clock or time.monotonic)
     lifecycle.on_stopped = actions.stop_project
     transfers.before_replace = actions.stop_project
     projects = ProjectService(config, runner, loader, repos.projects, secrets, jobs, locks,

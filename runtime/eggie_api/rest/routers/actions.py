@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, Request, WebSocket
 from fastapi.responses import PlainTextResponse
+from starlette.concurrency import run_in_threadpool
 
 from ...services.actions import DEFAULT_TAIL
 from .. import auth, terminal
+from .connections import json_body
 
 if TYPE_CHECKING:
     from ...wiring import Services
@@ -26,6 +28,15 @@ def build(s: Services) -> APIRouter:
     @router.post("/projects/{project_id}/actions/{action_id}/stop")
     def stop_action(project_id: str, action_id: str) -> dict:
         return s.actions.stop(project_id, action_id)
+
+    @router.get("/projects/{project_id}/actions/{action_id}/run")
+    def action_run(project_id: str, action_id: str) -> dict:
+        return s.actions.run(project_id, action_id)
+
+    @router.post("/projects/{project_id}/actions/{action_id}/answer")
+    async def answer_action(project_id: str, action_id: str, request: Request) -> dict:
+        body = await json_body(request)
+        return await run_in_threadpool(s.actions.answer, project_id, action_id, body)
 
     return router
 

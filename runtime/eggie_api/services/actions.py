@@ -6,12 +6,18 @@ import stat
 import threading
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..domain.actions import Action, is_slug, merge, parse_actions
+from ..domain.connections import Connection
 from ..errors import Conflict, EggieError, Invalid, NotFound, Unavailable, Upstream
 from ..infra.actions_helper import HelperError, HelperUnavailable, Terminal, project_target
 from .loader import ProjectLoader
+from .prompting import parse_answer
 from .recipes import RecipeService
+
+if TYPE_CHECKING:
+    from .connections import ConnectionService
 
 log = logging.getLogger("eggie.api")
 
@@ -27,10 +33,11 @@ class ActionService:
     root `eggie-actions` helper. Nothing in a project folder defines one."""
 
     def __init__(self, loader: ProjectLoader, recipes: RecipeService, helper, logs_dir: Path,
-                 *, clock=time.monotonic):
+                 connections: ConnectionService, *, clock=time.monotonic):
         self._loader = loader
         self._recipes = recipes
         self._helper = helper
+        self._connections = connections
         self._logs = Path(logs_dir)
         self._clock = clock
         self._cache: dict[str, tuple[float, list[Action], list[str]]] = {}
@@ -48,14 +55,15 @@ class ActionService:
         return actions, dropped
 
     def _resolve(self, project_id: str):
-        """Runnable actions by id, problems for the list, and the service errors behind them."""
+        """Runnable actions by id, problems for the list, the service errors behind them,
+        and the connections catalog (empty unless some action uses connections)."""
         per_recipe: dict[str, list[Action]] = {}
         problems: list[dict] = []
         failures: list[EggieError] = []
         try:
             slugs = self._loader.recipes(project_id)
         except Invalid as e:
-            return {}, [{"recipe": None, "code": e.code, "message": e.message}], [e]
+            return {}, [{"recipe": None, "code": e.code, "message": e.message}], [e], {}
         for slug in slugs:
             try:
                 actions, dropped = self._recipe(slug)
@@ -67,7 +75,43 @@ class ActionService:
             problems += [{"recipe": slug, "code": "invalid_action", "message": m}
                          for m in dropped]
         merged, duplicates = merge(per_recipe)
-        return merged, problems + duplicates, failures
+        problems += duplicates
+        catalog: dict[str, Connection] = {}
+        if any(a.connections for a in merged.values()):
+            try:
+                catalog = self._connections.catalog()
+            except (Upstream, Unavailable) as e:
+                failures.append(e)
+                for recipe in dict.fromkeys(a.recipe for a in merged.values() if a.connections):
+                    problems.append({"recipe": recipe, "code": e.code, "message": e.message})
+                return ({aid: a for aid, a in merged.items() if not a.connections},
+                        problems, failures, catalog)
+        runnable: dict[str, Action] = {}
+        for aid, action in merged.items():
+            unknown = [c for c in action.connections if c not in catalog]
+            if unknown:
+                problems.append({"recipe": action.recipe, "code": "unknown_connection",
+                                 "message": f"Action {aid} uses a connection Eggie doesn't know "
+                                            f"({', '.join(unknown)}), so it can't be run."})
+            else:
+                runnable[aid] = action
+        return runnable, problems, failures, catalog
+
+    def _runnable(self, project_id: str, action_id: str) -> tuple[Action, dict[str, Connection]]:
+        actions, _, failures, catalog = self._resolve(project_id)
+        action = actions.get(action_id)
+        if action is None:
+            # The id may well exist; the service just could not say so.
+            for e in failures:
+                if not isinstance(e, NotFound):
+                    raise e
+            raise self._not_found(action_id)
+        return action, catalog
+
+    @staticmethod
+    def _sources(action: Action, catalog: dict[str, Connection]) -> list:
+        return [("action", action.questions),
+                *((cid, catalog[cid].questions) for cid in action.connections)]
 
     def _call(self, fn):
         try:
@@ -91,7 +135,7 @@ class ActionService:
         return NotFound("action_not_found", f"This project has no action '{action_id}'.")
 
     def list(self, project_id: str) -> dict:
-        actions, problems, _ = self._resolve(project_id)
+        actions, problems, _, catalog = self._resolve(project_id)
         runs: dict[str, dict] = {}
         if actions:
             try:
@@ -101,20 +145,37 @@ class ActionService:
                                  "message": HELPER_DOWN})
             except HelperError as e:
                 problems.append({"recipe": None, "code": "actions_failed", "message": e.message})
-        return {"actions": [{**a.to_wire(), "run": runs.get(aid)} for aid, a in actions.items()],
+        used = dict.fromkeys(c for a in actions.values() for c in a.connections)
+        return {"actions": [{**a.to_wire(), "run": runs.get(aid),
+                             "asks": any(q for _, q in self._sources(a, catalog))}
+                            for aid, a in actions.items()],
+                "connections": [catalog[cid].to_wire() for cid in used],
                 "problems": problems}
 
     def start(self, project_id: str, action_id: str) -> dict:
-        actions, _, failures = self._resolve(project_id)
-        action = actions.get(action_id)
-        if action is None:
-            # The id may well exist; the service just could not say so.
-            for e in failures:
-                if not isinstance(e, NotFound):
-                    raise e
-            raise self._not_found(action_id)
-        return {"run": self._call(lambda: self._helper.start(
-            project_target(project_id, action.id), action.command, log=action.type == "long-running"))}
+        action, _ = self._runnable(project_id, action_id)
+        target = project_target(project_id, action.id)
+        run = self._call(lambda: self._helper.start(
+            target, action.command, log=action.type == "long-running"))
+        self._connections.prompter.forget(target)
+        return {"run": run}
+
+    def run(self, project_id: str, action_id: str) -> dict:
+        action, catalog = self._runnable(project_id, action_id)
+        target = project_target(project_id, action.id)
+        run = self._call(lambda: self._helper.run(target))
+        asking = self._call(lambda: self._connections.prompter.read(
+            target, run, self._sources(action, catalog)))
+        return {"run": run, "asking": asking}
+
+    def answer(self, project_id: str, action_id: str, body: object) -> dict:
+        action, catalog = self._runnable(project_id, action_id)
+        parse_answer(body)
+        target = project_target(project_id, action.id)
+        run = self._call(lambda: self._helper.run(target))
+        self._call(lambda: self._connections.prompter.answer(
+            target, run, self._sources(action, catalog), body))
+        return {}
 
     def stop(self, project_id: str, action_id: str) -> dict:
         self._action_id(project_id, action_id)

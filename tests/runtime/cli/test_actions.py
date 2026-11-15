@@ -53,3 +53,22 @@ def test_actions_of_a_named_project_from_anywhere(actions_guest):
 def test_a_project_without_actions_says_so(actions_guest):
     code, out, _err = actions_guest.run("actions", cwd=actions_guest.folder)
     assert (code, out) == (0, "No actions in app.\n")
+
+
+def test_actions_lists_the_connections_an_action_uses(actions_guest):
+    _recipes(actions_guest, "mobile-app")
+    actions_guest.cloud.replies["recipe_actions"] = [{"actions": [
+        {"id": "ios-build", "name": "Build the iPhone app", "description": None,
+         "command": "eas build -p ios", "type": "one-off", "connections": ["expo", "apple"]},
+        {"id": "login", "name": "Sign in to Expo", "description": None,
+         "command": "eas login", "type": "one-off"}]}]
+    actions_guest.cloud.replies["connections"] = [{"connections": [
+        {"id": "expo", "name": "Expo", "description": None,
+         "login": {"command": "eas login", "link_after": None, "code_after": None},
+         "check": None, "questions": []},
+        {"id": "apple", "name": "Apple", "description": None, "login": None, "check": None,
+         "questions": [{"id": "password", "match": "Password", "label": "Apple ID password"}]}]}]
+    code, out, _err = actions_guest.run("actions", cwd=actions_guest.folder)
+    assert code == 0
+    assert out == ("ios-build  one-off  Build the iPhone app  (uses expo, apple)\n"
+                   "login      one-off  Sign in to Expo\n")

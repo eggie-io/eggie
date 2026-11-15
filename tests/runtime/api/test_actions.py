@@ -270,3 +270,103 @@ def test_the_output_route_is_console_only(make):
     resp = env.client.get("/projects/app/actions/expo-login/output")
     assert resp.status_code in (404, 405)
     assert "output" not in env.helper.names()
+
+
+EXPO_CONNECTION = {"id": "expo", "name": "Expo", "description": "Your Expo account.",
+                   "login": {"command": "npx eas-cli login --sso", "link_after": None,
+                             "code_after": None},
+                   "check": "npx eas-cli whoami", "questions": []}
+APPLE_CONNECTION = {"id": "apple", "name": "Apple", "description": None, "login": None,
+                    "check": None, "questions": [
+                        {"id": "password", "match": "Password (for", "label": "Apple ID password",
+                         "type": "secret"},
+                        {"id": "code", "match": "Please enter the 6 digit code",
+                         "label": "Code from your Apple device", "type": "secret"}]}
+CATALOG = {"connections": [EXPO_CONNECTION, APPLE_CONNECTION]}
+IOS_BUILD = {"id": "ios-build", "name": "Build the iPhone app", "description": None,
+             "command": "eas build -p ios", "type": "one-off", "connections": ["expo", "apple"]}
+SHELL = {"id": "shell", "name": "Open a shell", "description": None, "command": "bash",
+         "type": "one-off"}
+IOS_KEY = ("project", "app", "ios-build")
+
+
+def _screen(rows, cursor_y):
+    return {"rows": list(rows), "cursor_y": cursor_y, "history_size": 0, "text": "\n".join(rows)}
+
+
+def _asking(env):
+    resp = env.client.get("/projects/app/actions/ios-build/run")
+    assert resp.status_code == 200, resp.text
+    return resp.json()["asking"]
+
+
+def _answer(env, question, value):
+    resp = env.client.post("/projects/app/actions/ios-build/answer",
+                           json={"source": "apple", "question": question, "value": value})
+    assert resp.status_code == 200, resp.text
+
+
+def test_an_action_using_an_unknown_connection_is_not_runnable(make):
+    env = make(recipe_actions=[{"actions": [IOS_BUILD]}],
+               connections=[{"connections": [APPLE_CONNECTION]}])
+    out = env.client.get("/projects/app/actions").json()
+    assert out["actions"] == []
+    assert out["problems"] == [{
+        "recipe": "mobile-app", "code": "unknown_connection",
+        "message": "Action ios-build uses a connection Eggie doesn't know (expo), "
+                   "so it can't be run."}]
+    assert _error(env.client.post("/projects/app/actions/ios-build/start")) == (
+        404, "action_not_found")
+
+
+def test_a_service_without_connections_leaves_out_only_actions_that_use_them(make):
+    env = make(recipe_actions=[{"actions": [SHELL, IOS_BUILD]}],
+               connections=[CloudError("not_found", "m", 404)] * 2)
+    out = env.client.get("/projects/app/actions").json()
+    assert [a["id"] for a in out["actions"]] == ["shell"]
+    assert out["problems"] == [{
+        "recipe": "mobile-app", "code": "connections_unavailable",
+        "message": "The Eggie service doesn't offer sign-in connections yet."}]
+    assert env.client.post("/projects/app/actions/shell/start").status_code == 200
+
+
+def test_list_describes_the_connections_actions_use(make):
+    env = make(recipe_actions=[{"actions": [SHELL, IOS_BUILD]}], connections=[CATALOG])
+    out = env.client.get("/projects/app/actions").json()
+    assert out["connections"] == [
+        {"id": "expo", "name": "Expo", "description": "Your Expo account.", "login": True,
+         "check": True},
+        {"id": "apple", "name": "Apple", "description": None, "login": False, "check": False}]
+    assert {a["id"]: a["asks"] for a in out["actions"]} == {"shell": False, "ios-build": True}
+
+
+def test_an_apple_question_reaches_the_card_and_the_answer_is_typed(make):
+    env = make(recipe_actions=[{"actions": [IOS_BUILD]}], connections=[CATALOG])
+    env.client.post("/projects/app/actions/ios-build/start")
+    env.helper.screens[IOS_KEY] = _screen(["Logging in...", "Password (for me@x.com):"], 1)
+    assert _asking(env) == {"source": "apple", "id": "password", "label": "Apple ID password",
+                            "type": "secret"}
+    _answer(env, "password", "hunter2")
+    assert env.helper.typed == [(IOS_KEY, "hunter2")]
+    assert _asking(env) is None
+
+
+def test_a_wrong_code_asked_again_on_a_new_line_asks_again(make):
+    env = make(recipe_actions=[{"actions": [IOS_BUILD]}], connections=[CATALOG])
+    env.client.post("/projects/app/actions/ios-build/start")
+    prompt = "Please enter the 6 digit code:"
+    env.helper.screens[IOS_KEY] = _screen([prompt], 0)
+    _answer(env, "code", "123456")
+    env.helper.screens[IOS_KEY] = _screen([prompt, "Invalid code", prompt], 2)
+    assert _asking(env)["id"] == "code"
+
+
+def test_a_restarted_action_answers_its_prompts_afresh(make):
+    env = make(recipe_actions=[{"actions": [IOS_BUILD]}], connections=[CATALOG])
+    env.client.post("/projects/app/actions/ios-build/start")
+    env.helper.screens[IOS_KEY] = _screen(["Password (for me@x.com):"], 0)
+    _answer(env, "password", "hunter2")
+    env.helper.runs[IOS_KEY].update(state="exited", exit_code=1)
+    # The fake's started_at never changes, like a real restart within the same second.
+    env.client.post("/projects/app/actions/ios-build/start")
+    assert _asking(env)["id"] == "password"

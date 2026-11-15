@@ -94,6 +94,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 
 ## Things that will bite you
 
+- The actions terminal sits on tmux's alternate screen, where xterm.js has no scrollback and turns
+  the mouse wheel into arrow keys typed into the action. `TerminalPanel` swallows the wheel there;
+  `smcup@`/`indn@` tmux overrides don't give real scrollback (tmux skips lines on fast output).
+  Mock `?scenario=actions` records what the page typed in `globalThis.__terminalInput`.
 - `apps/console/src/projects/slugify.test.ts` reaches `tests/fixtures/slugify-cases.json` by
   counting `../` segments from its own location, and that count must agree with `Dockerfile`'s
   `WORKDIR` (and the `COPY --from=fixtures` destination). Changing one without the other passes

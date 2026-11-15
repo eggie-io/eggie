@@ -135,6 +135,9 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 
 - tmux's argv parser treats a trailing `;` as a command separator, so the helper sends the command
   with a trailing newline. Address sessions with an exact `=NAME` target; a bare name matches by prefix.
+- tmux now and then never reaps a pane's shell: the zombie keeps `killpg(pid, 0)` succeeding, so
+  the helper's stop checks `/proc` for a live, non-zombie group member instead. A test command that
+  must outlive a stop ignores HUP as well as TERM: the pane shell's death sends the pane's group a SIGHUP.
 - Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
   `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
   for the API token: it must be written after the sweep.

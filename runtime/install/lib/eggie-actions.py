@@ -21,6 +21,7 @@ import socket
 import socketserver
 import struct
 import subprocess
+import sys
 import termios
 import threading
 import time
@@ -179,12 +180,13 @@ class Actions:
     def expire(self, now: float) -> None:
         with self.starting:
             # Under the lock: a run restarted meanwhile must not inherit the old one's mark.
-            late = [name for name, pane in self.panes().items()
+            seen = self.panes()
+            late = [name for name, pane in seen.items()
                     if not pane.dead and pane.deadline is not None and pane.deadline <= now]
             for name in late:
                 self.tmux("set-option", "-t", f"={name}:", "@timed_out", "1", check=False)
         if late:
-            self.stop(late)
+            self.stop(late, keep=True, seen=seen)
 
     def fresh_log(self, path: Path) -> None:
         folder = path.parent
@@ -203,8 +205,11 @@ class Actions:
         finally:
             os.close(fd)
 
-    def stop(self, names: list[str], *, remove: bool = False) -> None:
-        panes = self.panes()
+    def stop(self, names: list[str], *, remove: bool = False, keep: bool = False,
+             seen: dict[str, Pane] | None = None) -> None:
+        """`keep` leaves a killed run's dead pane, and its marks, in place. `seen` is a
+        reading taken under the start lock, so a run started since is not this stop's."""
+        panes = self.panes() if seen is None else seen
         groups = {n: panes[n].pid for n in names if n in panes and not panes[n].dead}
         for pid in groups.values():
             signal_group(pid, signal.SIGTERM)
@@ -212,21 +217,26 @@ class Actions:
         # the command it started ignores it and keeps running.
         deadline = time.monotonic() + STOP_GRACE
         while True:
-            alive = [n for n, pid in groups.items() if signal_group(pid, 0)]
+            alive = [n for n, pid in groups.items() if group_alive(pid)]
             if not alive or time.monotonic() >= deadline:
                 break
             time.sleep(0.1)
-        for name in names:
-            if name in alive:
-                signal_group(groups[name], signal.SIGKILL)
-            if name in alive or (remove and name in panes):
-                self.tmux("kill-session", "-t", f"={name}", check=False)
+        for name in alive:
+            signal_group(groups[name], signal.SIGKILL)
+        doomed = [n for n in names if n in panes and (remove or (n in alive and not keep))]
+        if doomed:
+            # By pid: a start during the grace may have put a new run under the same name.
+            with self.starting:
+                now = self.panes()
+                for name in doomed:
+                    if name in now and now[name].pid == panes[name].pid:
+                        self.tmux("kill-session", "-t", f"={name}", check=False)
         # tmux marks a pane dead a moment after its last process goes.
-        ended = [n for n in groups if n not in alive and not remove]
+        ended = [n for n in groups if n not in doomed]
         deadline = time.monotonic() + 1
         while ended and time.monotonic() < deadline:
-            panes = self.panes()
-            ended = [n for n in ended if n in panes and not panes[n].dead]
+            now = self.panes()
+            ended = [n for n in ended if n in now and now[n].pid == groups[n] and not now[n].dead]
             if ended:
                 time.sleep(0.05)
 
@@ -285,6 +295,22 @@ def signal_group(pid: int, sig: int) -> bool:
         return True
     except (ProcessLookupError, PermissionError):
         return False
+
+
+def group_alive(pgid: int) -> bool:
+    """A group of zombies only is gone: tmux now and then never reaps a pane's shell."""
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = Path(entry.path, "stat").read_text()
+        except OSError:
+            continue
+        # The command name can hold spaces and parentheses; the fields after it can't.
+        state, _ppid, pgrp = stat[stat.rindex(")") + 2:].split()[:3]
+        if pgrp == str(pgid) and state != "Z":
+            return True
+    return False
 
 
 def set_size(fd: int, cols: int, rows: int) -> None:
@@ -472,13 +498,19 @@ def main() -> None:
 
 
 def expire_forever(actions: Actions, every: float) -> None:
+    last = None
     while True:
         time.sleep(every)
+        # One bad pass must not end the loop: no deadline would ever fire again. A lasting
+        # error, such as connect.json naming a missing account, is logged once.
         try:
             actions.expire(time.time())
-        except Exception:
-            # One bad pass must not end the loop: no deadline would ever fire again.
-            traceback.print_exc()
+            last = None
+        except Exception as e:
+            problem = f"deadlines: {type(e).__name__}: {e}"
+            if problem != last:
+                print(problem, file=sys.stderr, flush=True)
+                last = problem
 
 
 if __name__ == "__main__":

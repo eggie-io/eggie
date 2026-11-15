@@ -263,11 +263,39 @@ def test_a_run_past_its_deadline_is_stopped_and_marked_timed_out(helper):
 
 
 def test_a_run_stopped_by_hand_is_not_timed_out(helper):
-    assert helper.ask(op="start", project="app", action="slow", command="sleep 600", log=False,
+    assert helper.ask(op="start", project="app", action="slow", command="exec sleep 600", log=False,
                       deadline=600)["ok"]
     reply = helper.ask(op="stop", project="app", action="slow")
-    # As in the stop test: a session killed past the grace has no run left to read.
-    assert reply["ok"] and (reply["run"] is None or reply["run"]["timed_out"] is False)
+    assert reply["ok"] and reply["run"]["state"] == "exited" and reply["run"]["timed_out"] is False
+
+
+def test_a_stopped_run_keeps_its_screen_even_when_tmux_leaves_a_zombie(helper):
+    # tmux now and then never reaps the pane's shell; a lone zombie is not a live group.
+    for i in range(6):
+        helper.start_action(f"s{i}", "sleep 600")
+        started = time.monotonic()
+        reply = helper.ask(op="stop", project="app", action=f"s{i}")
+        assert reply["run"] and reply["run"]["state"] == "exited", (i, reply)
+        assert time.monotonic() - started < 2
+
+
+def test_a_login_that_ignores_sigterm_and_sighup_still_reads_timed_out(helper):
+    helper.start_connection("expo", "trap '' TERM HUP; sleep 600", deadline=1)
+    assert eventually(lambda: helper.connection_run("expo")["state"] == "exited", 5)
+    # Past the stop grace, when the stubborn command is killed.
+    time.sleep(6)
+    run = helper.connection_run("expo")
+    assert run and run["state"] == "exited" and run["timed_out"] is True
+
+
+def test_a_login_started_again_after_its_deadline_is_not_stopped_with_the_old_one(helper):
+    # The old pane reads dead while its stubborn command lives on through the stop grace.
+    helper.start_connection("expo", "trap '' TERM HUP; sleep 600", deadline=1)
+    assert eventually(lambda: helper.connection_run("expo")["state"] == "exited", 5)
+    helper.start_connection("expo", "sleep 600")
+    time.sleep(6)
+    run = helper.connection_run("expo")
+    assert run and run["state"] == "running" and run["timed_out"] is False
 
 
 def test_a_deadline_holds_across_a_helper_restart(helper):

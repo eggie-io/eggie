@@ -142,7 +142,8 @@ never written to disk. Stopping or deleting a project, or a kitchen import repla
 **Connections** sit beside actions: sign-ins such as Expo and Apple. The service holds a small
 catalog (`GET /v1/connections`, cached 5 minutes); an action lists the connections it uses. A
 connection can have a login command (the Connect button), a check command (Connected or not) and
-questions the tool asks while it runs. The API reads the run's screen through the helper, shows the
+questions the tool asks: in its own login session, or, for a connection without a login (Apple), in
+the action runs that use it. The API reads the run's screen through the helper, shows the
 sign-in link or a field in the action card, and types the answer back. Login sessions run in the
 account's home, one per VM (tmux session `+<id>`), not per project. The browser sends only ids and
 answers; commands, questions and link markers come from the service.

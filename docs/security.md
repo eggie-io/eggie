@@ -109,9 +109,10 @@ without one (a site).
 - **A one-off action keeps no log**, so what it prints, a typed code included, stays out of files. Long-running
   actions log their output to `/opt/eggie/actions/logs/`, and that log holds whatever the program prints.
 - **Answers to a tool's questions** (an Apple password, a 2FA code) go browser → API → helper → tmux
-  paste buffer → the process, never in a command line, a log or an error message. While the run
-  lasts, the login account can read the tmux server it owns. A `text` answer is echoed by the tool
-  into the run's scrollback; whether a secret echoes is the tool's choice. Expo's and Apple's
+  paste buffer → the process, never in a command line or an error message. While the run lasts,
+  the login account can read the tmux server it owns. A `text` answer the tool echoes is in the
+  run's scrollback, and in its log for a long-running action; whether a secret echoes is the
+  tool's choice. Expo's and Apple's
   sessions are kept by `eas-cli` in the account's home, readable by the agent like any CLI login.
 
 ## Public URLs

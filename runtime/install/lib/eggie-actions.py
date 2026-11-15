@@ -283,10 +283,17 @@ class Actions:
         rows = [row.rstrip() for row in visible.removesuffix("\n").split("\n")]
         cursor_y, history_size = self.tmux(
             "display-message", "-p", "-t", target, "#{cursor_y}\t#{history_size}").strip().split("\t")
+        # Both captures start at the same row, so the joined lines up to the cursor's row
+        # count to the index of the whole (unwrapped) line the cursor sits on.
+        upto = self.tmux("capture-pane", "-p", "-J", "-S", f"-{SCREEN_HISTORY}",
+                         "-E", "#{cursor_y}", "-t", target)
         joined = self.tmux("capture-pane", "-p", "-J", "-S", f"-{SCREEN_HISTORY}", "-t", target)
-        text = "\n".join(line.rstrip() for line in joined.split("\n"))
-        return {"rows": rows, "cursor_y": int(cursor_y), "history_size": int(history_size),
-                "text": text}
+        lines = [line.rstrip() for line in joined.split("\n")]
+        at = upto.removesuffix("\n").count("\n")
+        y = int(cursor_y)
+        cursor_line = lines[at] if at < len(lines) else rows[y] if y < len(rows) else ""
+        return {"rows": rows, "cursor_y": y, "history_size": int(history_size),
+                "text": "\n".join(lines), "cursor_line": cursor_line}
 
     def type(self, name: str, text: str) -> None:
         """Types one line into the run. The text reaches tmux on stdin, never in argv."""

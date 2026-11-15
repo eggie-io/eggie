@@ -72,7 +72,8 @@ a helper restart or a runtime update. Long-running actions log to `actions/logs/
 `eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
 picks up a changed conf only once it has no action sessions left (finished runs keep theirs) or reboots.
 Also: `check` (a command's exit code, 60 s, output discarded), `screen` (visible lines, cursor row,
-history size) and `type` (a line plus Enter through tmux's paste buffer from stdin, so it is never in
+history size, the joined last 200 lines and `cursor_line`, the whole line the cursor is on even when
+a narrow terminal wrapped it) and `type` (a line plus Enter through tmux's paste buffer from stdin, so it is never in
 argv). A connection login is a `start` with a connection scope: session `+<id>`, started in the
 account's home. Its `deadline` is a tmux session option, so the timeout survives a helper restart.
 
@@ -142,6 +143,8 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - tmux now and then never reaps a pane's shell: the zombie keeps `killpg(pid, 0)` succeeding, so
   the helper's stop checks `/proc` for a live, non-zombie group member instead. A test command that
   must outlive a stop ignores HUP as well as TERM: the pane shell's death sends the pane's group a SIGHUP.
+- `capture-pane -J` joins wrapped rows only within its range, and `-S`/`-E` expand formats
+  (`-E '#{cursor_y}'`): `screen` counts the joined lines through the cursor's row to find its line.
 - `tmux load-buffer -` with empty stdin makes no buffer, so `type` sends an empty answer as Enter
   alone. `bash -lc 'sleep 600 # mark'` execs `sleep` and the mark leaves every cmdline: a test
   that looks for leftovers by marker puts it in a forked subshell, `(sleep 600; : mark); : mark`.

@@ -378,6 +378,14 @@ def test_screen_has_the_prompt_on_the_cursor_row(helper):
     assert isinstance(shown["history_size"], int)
 
 
+def test_a_prompt_wider_than_the_pane_comes_back_whole_as_the_cursor_line(helper):
+    prompt = "? " + "Do you want to log in to your Apple account? " * 4 + "(Y/n)"
+    helper.start_action("login", f"printf 'one\\n{prompt} '; read -r x")
+    shown = eventually(lambda: (s := screen(helper, "login")) and "(Y/n)" in s["text"] and s)
+    assert prompt not in shown["rows"][shown["cursor_y"]], "the prompt must wrap for this test"
+    assert shown["cursor_line"] == prompt
+
+
 def test_a_long_link_comes_back_whole_in_text(helper):
     link = "https://expo.dev/" + "a" * 200
     helper.start_action("login", f"echo {link}; read -r x")

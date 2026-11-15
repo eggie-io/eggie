@@ -1,4 +1,4 @@
-"""Reading a tmux screen of a running sign-in: its link, code and the question on the cursor row."""
+"""Reading a tmux screen of a running sign-in: its link, code and the question on the cursor's line."""
 from __future__ import annotations
 
 import re
@@ -21,6 +21,8 @@ class Screen:
     cursor_y: int
     history_size: int
     text: str
+    # The whole line the cursor is on, joined back where tmux wrapped it.
+    cursor_line: str
 
     @property
     def position(self) -> int:
@@ -36,7 +38,13 @@ class Screen:
             return None
         if not _is_count(cursor_y) or not _is_count(history_size) or type(text) is not str:
             return None
-        return Screen(tuple(rows), cursor_y, history_size, text)
+        if "cursor_line" in d:
+            line = d["cursor_line"]
+            if type(line) is not str:
+                return None
+        else:
+            line = rows[cursor_y] if cursor_y < len(rows) else ""
+        return Screen(tuple(rows), cursor_y, history_size, text, line)
 
 
 def _tail(text: str, after: str | None) -> str | None:
@@ -60,14 +68,14 @@ def find_code(text: str, after: str | None) -> str | None:
 
 def asking(screen: Screen,
            sources: Sequence[tuple[str, Sequence[Question]]]) -> tuple[str, Question] | None:
-    """The first question whose match is on the cursor's row, in source then file order."""
+    """The first question whose match is on the cursor's line, in source then file order."""
     if screen.cursor_y >= len(screen.rows):
         return None
-    row = screen.rows[screen.cursor_y].lower()
+    line = screen.cursor_line.lower()
     for source, questions in sources:
         for question in questions:
-            # Rows come right-stripped, so "Apple ID: " is on screen as "Apple ID:".
+            # Lines come right-stripped, so "Apple ID: " is on screen as "Apple ID:".
             needle = question.match.rstrip().lower()
-            if needle and needle in row:
+            if needle and needle in line:
                 return source, question
     return None

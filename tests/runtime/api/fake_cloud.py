@@ -81,6 +81,9 @@ class FakeCloud:
     def recipe(self, token, slug):
         return self._next("recipe", token, slug)
 
+    def connections(self, token):
+        return self._next("connections", token)
+
     def recipe_actions(self, token, slug):
         return self._next("recipe_actions", token, slug)
 

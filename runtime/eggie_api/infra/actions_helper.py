@@ -16,6 +16,22 @@ MAX_REPLY = 64 * 1024
 MAX_OUTPUT_REPLY = 16 * 1024 * 1024
 # The helper's stop waits out a 5 s grace before it kills, then asks tmux again.
 STOP_TIMEOUT = 20.0
+# The helper's check gives the command 60 s, plus a margin.
+CHECK_TIMEOUT = 75.0
+
+
+def project_target(project: str, action: str) -> dict:
+    return {"project": project, "action": action}
+
+
+def connection_target(connection: str) -> dict:
+    return {"connection": connection}
+
+
+def target_key(target: dict) -> tuple:
+    if "connection" in target:
+        return ("connection", target["connection"])
+    return ("project", target["project"], target["action"])
 
 
 class HelperUnavailable(Exception):
@@ -117,13 +133,33 @@ class ActionsHelper:
         sock.close()
         return reply
 
-    def start(self, project: str, action: str, command: str, *, log: bool) -> dict:
-        return self._ask({"op": "start", "project": project, "action": action,
-                          "command": command, "log": log}).get("run")
+    def start(self, target: dict, command: str, *, log: bool,
+              deadline: int | None = None) -> dict:
+        request = {"op": "start", **target, "command": command, "log": log}
+        if deadline is not None:
+            request["deadline"] = deadline
+        return self._ask(request).get("run")
 
-    def stop(self, project: str, action: str) -> dict | None:
-        return self._ask({"op": "stop", "project": project, "action": action},
+    def stop(self, target: dict) -> dict | None:
+        return self._ask({"op": "stop", **target},
                          max(self._timeout, STOP_TIMEOUT)).get("run")
+
+    def run(self, target: dict) -> dict | None:
+        return self._ask({"op": "run", **target}).get("run")
+
+    def screen(self, target: dict) -> dict:
+        reply = self._ask({"op": "screen", **target})
+        return {k: v for k, v in reply.items() if k != "ok"}
+
+    def type(self, target: dict, text: str) -> None:
+        self._ask({"op": "type", **target, "text": text})
+
+    def check(self, command: str) -> int | None:
+        reply = self._ask({"op": "check", "command": command}, CHECK_TIMEOUT)
+        if "exit_code" not in reply:
+            raise HelperError("failed", "eggie-actions sent an answer Eggie can't read")
+        code = reply["exit_code"]
+        return code if type(code) is int else None
 
     def status(self, project: str) -> dict[str, dict]:
         runs = self._ask({"op": "status", "project": project}).get("runs")
@@ -132,14 +168,14 @@ class ActionsHelper:
     def stop_project(self, project: str) -> None:
         self._ask({"op": "stop-project", "project": project}, max(self._timeout, STOP_TIMEOUT))
 
-    def output(self, project: str, action: str) -> str:
-        text = self._ask({"op": "output", "project": project, "action": action},
+    def output(self, target: dict) -> str:
+        text = self._ask({"op": "output", **target},
                          max_reply=MAX_OUTPUT_REPLY).get("text")
         return text if isinstance(text, str) else ""
 
-    def attach(self, project: str, action: str, cols: int, rows: int) -> Terminal:
-        sock, reader, _reply = self._open({"op": "attach", "project": project,
-                                           "action": action, "cols": cols, "rows": rows})
+    def attach(self, target: dict, cols: int, rows: int) -> Terminal:
+        sock, reader, _reply = self._open({"op": "attach", **target,
+                                           "cols": cols, "rows": rows})
         # A terminal sits idle for as long as its user does.
         sock.settimeout(None)
         return Terminal(sock, reader)

@@ -181,6 +181,9 @@ class Cloud:
         return self.call(
             "GET", f"/v1/recipes/{urllib.parse.quote(slug, safe='')}/actions", token=token)
 
+    def connections(self, token: str | None) -> dict:
+        return self.call("GET", "/v1/connections", token=token)
+
     def recipe_bundle(self, token: str | None, slug: str, version: int, dest: Path,
                       *, max_bytes: int) -> None:
         """Streams the zip to `dest`; on any failure `dest` is gone."""

@@ -61,7 +61,7 @@ def test_the_opening_size_comes_from_the_query_clamped(running):
     with running.browser.websocket_connect(TERMINAL + "?cols=0&rows=abc") as ws:
         ws.send_bytes(b"sync")
         ws.receive_bytes()
-    assert running.helper.calls[-1] == ("attach", "app", "ios-build", 1, 32)
+    assert running.helper.calls[-1] == ("attach", ("project", "app", "ios-build"), 1, 32)
 
 
 def test_a_wrong_origin_is_refused_even_with_a_cookie(running):

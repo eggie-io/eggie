@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..domain.actions import Action, is_slug, merge, parse_actions
 from ..errors import Conflict, EggieError, Invalid, NotFound, Unavailable, Upstream
-from ..infra.actions_helper import HelperError, HelperUnavailable, Terminal
+from ..infra.actions_helper import HelperError, HelperUnavailable, Terminal, project_target
 from .loader import ProjectLoader
 from .recipes import RecipeService
 
@@ -114,19 +114,19 @@ class ActionService:
                     raise e
             raise self._not_found(action_id)
         return {"run": self._call(lambda: self._helper.start(
-            project_id, action.id, action.command, log=action.type == "long-running"))}
+            project_target(project_id, action.id), action.command, log=action.type == "long-running"))}
 
     def stop(self, project_id: str, action_id: str) -> dict:
         self._action_id(project_id, action_id)
-        return {"run": self._call(lambda: self._helper.stop(project_id, action_id))}
+        return {"run": self._call(lambda: self._helper.stop(project_target(project_id, action_id)))}
 
     def attach(self, project_id: str, action_id: str, cols: int, rows: int) -> Terminal:
         self._action_id(project_id, action_id)
-        return self._call(lambda: self._helper.attach(project_id, action_id, cols, rows))
+        return self._call(lambda: self._helper.attach(project_target(project_id, action_id), cols, rows))
 
     def output(self, project_id: str, action_id: str) -> str:
         self._action_id(project_id, action_id)
-        return self._call(lambda: self._helper.output(project_id, action_id))
+        return self._call(lambda: self._helper.output(project_target(project_id, action_id)))
 
     def log(self, project_id: str, action_id: str, tail: int = DEFAULT_TAIL) -> str:
         self._action_id(project_id, action_id)

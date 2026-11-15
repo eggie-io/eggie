@@ -69,7 +69,7 @@ def test_start_sends_the_helper_the_services_command_for_the_id(make):
     resp = env.client.post("/projects/app/actions/ios-build/start")
     assert resp.status_code == 200, resp.text
     assert resp.json()["run"]["state"] == "running"
-    assert env.helper.calls[-1] == ("start", "app", "ios-build", "eas build -p ios", True)
+    assert env.helper.calls[-1] == ("start", ("project", "app", "ios-build"), "eas build -p ios", True, None)
 
 
 def test_an_id_this_projects_recipes_do_not_define_is_action_not_found(make):
@@ -177,7 +177,7 @@ def test_start_while_running_is_409(make):
 
 def test_stop_needs_no_service(make):
     env = make(recipe_actions=[CloudUnavailable("down")])
-    env.helper.runs[("app", "ios-build")] = {"state": "running", "exit_code": None,
+    env.helper.runs[("project", "app", "ios-build")] = {"state": "running", "exit_code": None,
                                              "started_at": 1}
     resp = env.client.post("/projects/app/actions/ios-build/stop")
     assert resp.status_code == 200, resp.text
@@ -189,7 +189,7 @@ def test_a_long_running_start_asks_for_a_log_and_a_one_off_does_not(make):
     env = make(recipes=("mobile-app", "expo"), recipe_actions=[IOS, LOGIN])
     env.client.post("/projects/app/actions/ios-build/start")
     env.client.post("/projects/app/actions/expo-login/start")
-    starts = {c[2]: c[4] for c in env.helper.calls if c[0] == "start"}
+    starts = {c[1][2]: c[3] for c in env.helper.calls if c[0] == "start"}
     assert starts == {"ios-build": True, "expo-login": False}
 
 
@@ -248,8 +248,8 @@ def test_the_log_route_is_console_only(make):
 
 def test_the_output_is_the_helpers_capture_of_the_run(make):
     env = make()
-    env.helper.runs[("app", "expo-login")] = {"state": "exited", "exit_code": 1, "started_at": 1}
-    env.helper.outputs[("app", "expo-login")] = "line-1\nerror: no network\n"
+    env.helper.runs[("project", "app", "expo-login")] = {"state": "exited", "exit_code": 1, "started_at": 1}
+    env.helper.outputs[("project", "app", "expo-login")] = "line-1\nerror: no network\n"
     browser = console(env.app, env.client)
     resp = browser.get("/api/projects/app/actions/expo-login/output")
     assert resp.status_code == 200, resp.text
@@ -266,7 +266,7 @@ def test_the_output_of_an_action_with_no_run_is_409_action_not_running(make):
 
 def test_the_output_route_is_console_only(make):
     env = make()
-    env.helper.runs[("app", "expo-login")] = {"state": "exited", "exit_code": 0, "started_at": 1}
+    env.helper.runs[("project", "app", "expo-login")] = {"state": "exited", "exit_code": 0, "started_at": 1}
     resp = env.client.get("/projects/app/actions/expo-login/output")
     assert resp.status_code in (404, 405)
     assert "output" not in env.helper.names()

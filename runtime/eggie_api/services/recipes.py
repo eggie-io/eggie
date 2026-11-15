@@ -82,6 +82,15 @@ class RecipeService:
         except CloudError as e:
             raise self._missing(e, slug)
 
+    def connections(self) -> dict:
+        try:
+            return self._ask(lambda token: self._cloud.connections(token))
+        except CloudError as e:
+            if e.status == 404:
+                raise Upstream("connections_unavailable",
+                               "The Eggie service doesn't offer sign-in connections yet.")
+            raise Upstream("cloud_error", e.message)
+
     def add(self, project_id: str, slug: str) -> dict:
         self._loader.require(project_id)
         self._published(slug)

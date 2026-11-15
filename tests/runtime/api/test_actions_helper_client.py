@@ -9,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from eggie_api.infra.actions_helper import ActionsHelper, HelperError, HelperUnavailable
+from eggie_api.infra.actions_helper import (
+    ActionsHelper, HelperError, HelperUnavailable, connection_target, project_target)
 
+APP = project_target("app", "ios-build")
 RUN = {"state": "running", "exit_code": None, "started_at": 1700000000}
 
 
@@ -63,8 +65,8 @@ def test_each_op_sends_one_request_line_of_its_own_shape(helper):
     server, client = helper
     server.answers = {"start": {"ok": True, "run": RUN}, "stop": {"ok": True, "run": None},
                       "status": {"ok": True, "runs": {"ios-build": RUN}}}
-    assert client.start("app", "ios-build", "eas build", log=True) == RUN
-    assert client.stop("app", "ios-build") is None
+    assert client.start(APP, "eas build", log=True) == RUN
+    assert client.stop(APP) is None
     assert client.status("app") == {"ios-build": RUN}
     assert client.stop_project("app") is None
     assert server.requests == [
@@ -81,7 +83,7 @@ def test_a_refusal_carries_the_helpers_code_and_message(helper):
     server.answers = {"start": {"ok": False, "code": "action_running",
                                 "message": "ios-build is already running"}}
     with pytest.raises(HelperError) as caught:
-        client.start("app", "ios-build", "eas build", log=True)
+        client.start(APP, "eas build", log=True)
     assert (caught.value.code, caught.value.message) == (
         "action_running", "ios-build is already running")
 
@@ -98,7 +100,7 @@ def test_a_stop_may_take_longer_than_other_requests(tmp_path):
     threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
     try:
         client = ActionsHelper(folder / "s", timeout=0.2)
-        assert client.stop("app", "ios-build") is None
+        assert client.stop(APP) is None
         client.stop_project("app")
         with pytest.raises(HelperUnavailable):
             client.status("app")
@@ -110,7 +112,7 @@ def test_a_stop_may_take_longer_than_other_requests(tmp_path):
 
 def test_attach_relays_terminal_bytes_and_resizes_both_ways(helper):
     server, client = helper
-    terminal = client.attach("app", "ios-build", 120, 32)
+    terminal = client.attach(APP, 120, 32)
     assert server.requests[-1] == {"op": "attach", "project": "app", "action": "ios-build",
                                    "cols": 120, "rows": 32}
     received = b""
@@ -129,7 +131,7 @@ def test_attach_to_nothing_running_is_a_refusal(helper):
     server, client = helper
     server.answers = {"attach": {"ok": False, "code": "not_running", "message": "no run"}}
     with pytest.raises(HelperError) as caught:
-        client.attach("app", "ios-build", 80, 24)
+        client.attach(APP, 80, 24)
     assert caught.value.code == "not_running"
 
 
@@ -137,5 +139,35 @@ def test_output_reads_a_whole_scrollback_longer_than_a_status_reply(helper):
     server, client = helper
     text = "".join(f"line-{i}\n" for i in range(20000))
     server.answers = {"output": {"ok": True, "text": text}}
-    assert client.output("app", "ios-build") == text
+    assert client.output(APP) == text
     assert server.requests == [{"op": "output", "project": "app", "action": "ios-build"}]
+
+
+def test_connection_calls_send_the_connection_target_and_a_deadline(helper):
+    server, client = helper
+    server.answers = {"screen": {"ok": True, "rows": 24, "cursor_y": 3, "history_size": 0,
+                                 "text": "Password:"}}
+    github = connection_target("github")
+    client.start(github, "gh auth login", log=False, deadline=900)
+    client.run(github)
+    assert client.screen(github) == {"rows": 24, "cursor_y": 3, "history_size": 0,
+                                     "text": "Password:"}
+    client.type(github, "hunter2")
+    assert server.requests == [
+        {"op": "start", "connection": "github", "command": "gh auth login", "log": False,
+         "deadline": 900},
+        {"op": "run", "connection": "github"},
+        {"op": "screen", "connection": "github"},
+        {"op": "type", "connection": "github", "text": "hunter2"},
+    ]
+
+
+def test_check_returns_the_exit_code_and_none_when_the_helper_has_none(helper):
+    server, client = helper
+    server.answers = {"check": {"ok": True, "exit_code": 1}}
+    assert client.check("gh auth status") == 1
+    server.answers = {"check": {"ok": True, "exit_code": None}}
+    assert client.check("gh auth status") is None
+    server.answers = {"check": {"ok": True}}
+    with pytest.raises(HelperError):
+        client.check("gh auth status")

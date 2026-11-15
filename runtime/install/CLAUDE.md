@@ -71,6 +71,10 @@ a helper restart or a runtime update. Long-running actions log to `actions/logs/
 (10 MiB cap, truncated at start); one-off actions keep none (`output` reads any run's tmux scrollback instead, newest 4 MiB). `snapshot-prep.sh` strips the logs.
 `eggie-actions.tmux.conf` (no prefix, no bindings) is read only when that tmux server starts: a live VM
 picks up a changed conf only once it has no action sessions left (finished runs keep theirs) or reboots.
+Also: `check` (a command's exit code, 60 s, output discarded), `screen` (visible lines, cursor row,
+history size) and `type` (a line plus Enter through tmux's paste buffer from stdin, so it is never in
+argv). A connection login is a `start` with a connection scope: session `+<id>`, started in the
+account's home. Its `deadline` is a tmux session option, so the timeout survives a helper restart.
 
 ## `install.sh` — numbered steps, order matters
 

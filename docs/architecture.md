@@ -139,6 +139,14 @@ keeps going when the panel closes or the runtime updates; only a long-running ac
 (10 MiB cap). A one-off's whole output is read from tmux's scrollback when the owner asks (Full output),
 never written to disk. Stopping or deleting a project, or a kitchen import replacing it, stops its actions.
 
+**Connections** sit beside actions: sign-ins such as Expo and Apple. The service holds a small
+catalog (`GET /v1/connections`, cached 5 minutes); an action lists the connections it uses. A
+connection can have a login command (the Connect button), a check command (Connected or not) and
+questions the tool asks while it runs. The API reads the run's screen through the helper, shows the
+sign-in link or a field in the action card, and types the answer back. Login sessions run in the
+account's home, one per VM (tmux session `+<id>`), not per project. The browser sends only ids and
+answers; commands, questions and link markers come from the service.
+
 ### Site mode
 
 The runtime also runs on a server the Eggie service provisions. Nothing in the host changes: the
@@ -215,7 +223,7 @@ is the one way in from outside the machine. The API token tells the host apart f
 container; it is not authentication. Secrets live in `state.db`, readable by anything root-equivalent in the VM,
 coding agents included: they protect against leaks into files, git and chat, not against the
 agent. Action commands come only from the Eggie service and run as the login account, or root on a
-machine without one (a site); the agent's account can see an action's terminal. Details: [security.md](security.md).
+machine without one (a site); the agent's account can see an action's terminal and what is typed into a connection's. Details: [security.md](security.md).
 
 ## Where things live
 

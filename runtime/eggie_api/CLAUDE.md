@@ -168,6 +168,15 @@ and a host release. Prefer additive changes.
   helper's `output` op, nothing on disk) and the terminal WebSocket only under `/api`.
   Start/stop go to the root helper `eggie-actions` over `/opt/eggie/actions/actions.sock`; the API
   holds no tmux state. Stopping or deleting a project, and a kitchen import replacing one, stop its actions.
+- **Connections** (`services/connections.py`, `domain/prompts.py`, `rest/routers/connections.py`,
+  `services/prompting.py`) — sign-ins from the service's catalog (`GET /v1/connections`, cached 5 min),
+  listed by an action's `connections`. `status` runs the connection's `check` through the helper
+  (cached 2 min, dropped when a login starts or ends); a login is a helper session named `+<id>` in
+  the account's home with a 15-minute deadline. `prompting` reads the screen, answers `reply`
+  questions itself and offers `label` ones to the card as `asking`; actions use the same code over their
+  own questions plus their connections'. Answer bodies are parsed by hand so FastAPI's 422 can't echo
+  them; an answer is one line, never logged. Connection routes: GET/login/cancel/answer on both
+  mounts, the terminal only under `/api`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)

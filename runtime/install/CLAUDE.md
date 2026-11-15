@@ -138,6 +138,9 @@ the network — apt, NodeSource, npm and ghcr are covered only by the live-VM ac
 - tmux now and then never reaps a pane's shell: the zombie keeps `killpg(pid, 0)` succeeding, so
   the helper's stop checks `/proc` for a live, non-zombie group member instead. A test command that
   must outlive a stop ignores HUP as well as TERM: the pane shell's death sends the pane's group a SIGHUP.
+- `tmux load-buffer -` with empty stdin makes no buffer, so `type` sends an empty answer as Enter
+  alone. `bash -lc 'sleep 600 # mark'` execs `sleep` and the mark leaves every cmdline: a test
+  that looks for leftovers by marker puts it in a forked subshell, `(sleep 600; : mark); : mark`.
 - Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
   `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
   for the API token: it must be written after the sweep.

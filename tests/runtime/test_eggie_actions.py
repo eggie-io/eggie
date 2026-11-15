@@ -3,6 +3,7 @@ import os
 import pwd
 import shutil
 import time
+import uuid
 
 import pytest
 
@@ -333,3 +334,86 @@ def test_a_request_needs_exactly_one_valid_target(helper, request_):
 def test_a_connection_login_refuses_a_log(helper):
     reply = helper.ask(op="start", connection="expo", command="true", log=True)
     assert reply["ok"] is False and reply["code"] == "invalid"
+
+
+def test_check_returns_the_commands_exit_code(helper):
+    assert helper.ask(op="check", command="exit 0") == {"ok": True, "exit_code": 0}
+    assert helper.ask(op="check", command="exit 3") == {"ok": True, "exit_code": 3}
+
+
+def test_a_check_past_its_timeout_is_null_and_leaves_nothing_behind(helper):
+    # The subshell is a forked bash, so it carries the marker; a lone `sleep` would be exec'd
+    # and lose it.
+    marker = f"chk-{uuid.uuid4()}"
+    command = f"(sleep 600; : {marker}); : {marker}"
+    assert helper.ask(op="check", command=command) == {"ok": True, "exit_code": None}
+
+    def gone() -> bool:
+        return not any(marker in cmdline for cmdline in cmdlines())
+
+    assert eventually(gone, 3)
+
+
+def cmdlines() -> list[str]:
+    found = []
+    for entry in os.scandir("/proc"):
+        if entry.name.isdigit():
+            try:
+                found.append(open(f"{entry.path}/cmdline", "rb").read().decode(errors="replace"))
+            except OSError:
+                pass
+    return found
+
+
+def screen(helper, action):
+    reply = helper.ask(op="screen", project="app", action=action)
+    assert reply["ok"], reply
+    return reply
+
+
+def test_screen_has_the_prompt_on_the_cursor_row(helper):
+    helper.start_action("login", "printf 'one\\nApple ID: '; read -r x")
+    shown = eventually(lambda: (s := screen(helper, "login")) and "Apple ID:" in s["text"] and s)
+    assert shown["rows"][shown["cursor_y"]].startswith("Apple ID:")
+    assert isinstance(shown["history_size"], int)
+
+
+def test_a_long_link_comes_back_whole_in_text(helper):
+    link = "https://expo.dev/" + "a" * 200
+    helper.start_action("login", f"echo {link}; read -r x")
+    assert eventually(lambda: link in screen(helper, "login")["text"])
+
+
+def test_screen_without_a_session_is_not_running(helper):
+    reply = helper.ask(op="screen", project="app", action="never")
+    assert reply["ok"] is False and reply["code"] == "not_running"
+
+
+def test_type_reaches_the_command_verbatim_and_never_argv(helper, tmp_path):
+    out = tmp_path / "out"
+    helper.start_action("login", f'read -r x; printf %s "$x" > {out}')
+    answer = "-t x; 'q' $HOME"
+    assert helper.ask(op="type", project="app", action="login", text=answer) == {"ok": True}
+    assert eventually(lambda: out.exists() and out.read_text() == answer), \
+        out.read_text() if out.exists() else None
+    assert "'q' $HOME" not in helper.argv_log.read_text()
+
+
+def test_type_refuses_a_second_line(helper):
+    helper.start_action("login", "read -r x")
+    reply = helper.ask(op="type", project="app", action="login", text="a\nb")
+    assert reply["ok"] is False and reply["code"] == "invalid"
+
+
+def test_type_into_a_finished_run_is_not_running(helper):
+    helper.start_action("login", "true")
+    helper.wait_exited("login")
+    reply = helper.ask(op="type", project="app", action="login", text="x")
+    assert reply["ok"] is False and reply["code"] == "not_running"
+
+
+def test_an_empty_answer_is_just_enter(helper, tmp_path):
+    out = tmp_path / "out"
+    helper.start_action("login", f'read -r x; printf "[%s]" "$x" > {out}')
+    assert helper.ask(op="type", project="app", action="login", text="") == {"ok": True}
+    assert eventually(lambda: out.exists() and out.read_text() == "[]")

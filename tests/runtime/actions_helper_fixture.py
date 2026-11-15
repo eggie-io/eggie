@@ -17,6 +17,7 @@ HELPER = ROOT / "runtime" / "install" / "lib" / "eggie-actions.py"
 FAKE_RUNUSER = """#!/usr/bin/env bash
 # runuser -u NAME -- CMD...: log who, then run CMD as us.
 echo "$2" >> "$RUNUSER_LOG"
+printf '%s\n' "$*" >> "$ARGV_LOG"
 shift 3
 exec "$@"
 """
@@ -73,12 +74,13 @@ class Helper:
         self.tmux_tmpdir.mkdir()
         self.socket = tmp_path / "s"
         self.runuser_log = tmp_path / "runuser.log"
+        self.argv_log = tmp_path / "argv.log"
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         (bin_dir / "runuser").write_text(FAKE_RUNUSER)
         (bin_dir / "runuser").chmod(0o755)
         self.env = {**os.environ, "PATH": f"{bin_dir}:/usr/bin:/bin",
-                    "RUNUSER_LOG": str(self.runuser_log)}
+                    "RUNUSER_LOG": str(self.runuser_log), "ARGV_LOG": str(self.argv_log)}
         self.stderr = tmp_path / "helper.err"
         self.proc: subprocess.Popen | None = None
 
@@ -91,7 +93,7 @@ class Helper:
                 [sys.executable, str(HELPER), "--socket", str(self.socket),
                  "--projects-root", str(self.projects), "--logs", str(self.logs),
                  "--connect", str(self.connect), "--tmux-tmpdir", str(self.tmux_tmpdir),
-                 "--expire-every", "0.2", *extra],
+                 "--expire-every", "0.2", "--check-timeout", "1", *extra],
                 env=self.env, stdout=subprocess.DEVNULL, stderr=err)
         assert eventually(self._answers, 5), self.stderr.read_text()
 

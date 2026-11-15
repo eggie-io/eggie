@@ -42,6 +42,9 @@ OUTPUT_CAP = 4 * 1024 * 1024
 MAX_DEADLINE = 86400
 STOP_GRACE = 5.0
 EXPIRE_EVERY = 5.0
+CHECK_TIMEOUT = 60.0
+MAX_ANSWER = 4096
+SCREEN_HISTORY = 200
 FRAME_DATA, FRAME_RESIZE = 0x00, 0x01
 PANES = ("#{session_name}\t#{pane_dead}\t#{@exit}\t#{pane_dead_status}"
          "\t#{session_created}\t#{pane_pid}\t#{@deadline}\t#{@timed_out}")
@@ -85,10 +88,13 @@ def connection_session(cid: str) -> str:
 
 class Actions:
     def __init__(self, projects: Path, logs: Path, connect: Path, tmux_tmpdir: str | None,
-                 log_cap: int = LOG_CAP, output_cap: int = OUTPUT_CAP):
+                 log_cap: int = LOG_CAP, output_cap: int = OUTPUT_CAP,
+                 check_timeout: float = CHECK_TIMEOUT):
         self.projects, self.logs, self.connect = projects, logs, connect
         self.tmux_tmpdir, self.log_cap, self.output_cap = tmux_tmpdir, log_cap, output_cap
+        self.check_timeout = check_timeout
         self.starting = threading.Lock()
+        self.typing = threading.Lock()
 
     def account(self) -> Account:
         try:
@@ -103,17 +109,20 @@ class Actions:
             raise Refused("failed", f"no account {name!r} in this machine") from None
         return Account(name, entry.pw_uid, entry.pw_dir)
 
-    def tmux_argv(self, *args: str) -> list[str]:
-        a = self.account()
+    def account_env(self, a: Account) -> list[str]:
         env = [f"HOME={a.home}", f"USER={a.name}", f"LOGNAME={a.name}", "SHELL=/bin/bash",
                "PATH=/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"]
         if self.tmux_tmpdir:
             env.append(f"TMUX_TMPDIR={self.tmux_tmpdir}")
-        return ["runuser", "-u", a.name, "--", "env", "-i", *env,
+        return env
+
+    def tmux_argv(self, *args: str) -> list[str]:
+        a = self.account()
+        return ["runuser", "-u", a.name, "--", "env", "-i", *self.account_env(a),
                 "tmux", "-L", SERVER, "-f", str(CONF), *args]
 
-    def tmux(self, *args: str, check: bool = True) -> str:
-        result = subprocess.run(self.tmux_argv(*args), capture_output=True,
+    def tmux(self, *args: str, check: bool = True, input: str | None = None) -> str:
+        result = subprocess.run(self.tmux_argv(*args), capture_output=True, input=input,
                                 encoding="utf-8", errors="replace")
         if check and result.returncode != 0:
             raise Refused("failed", result.stderr.strip() or f"tmux {args[0]} failed")
@@ -251,6 +260,50 @@ class Actions:
         while lines and not lines[-1]:
             lines.pop()
         return keep_tail(lines, self.output_cap) if lines else ""
+
+    def check(self, command: str) -> int | None:
+        """The command's exit code as the account in its home, or None past the timeout."""
+        a = self.account()
+        proc = subprocess.Popen(["runuser", "-u", a.name, "--", "env", "-i", *self.account_env(a),
+                                 "bash", "-lc", command], cwd=a.home, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+        try:
+            return proc.wait(self.check_timeout)
+        except subprocess.TimeoutExpired:
+            signal_group(proc.pid, signal.SIGKILL)
+            proc.wait()
+            return None
+
+    def screen(self, name: str) -> dict:
+        if name not in self.panes():
+            raise Refused("not_running", "this run has no screen to read")
+        target = f"={name}:"
+        visible = self.tmux("capture-pane", "-p", "-t", target)
+        rows = [row.rstrip() for row in visible.removesuffix("\n").split("\n")]
+        cursor_y, history_size = self.tmux(
+            "display-message", "-p", "-t", target, "#{cursor_y}\t#{history_size}").strip().split("\t")
+        joined = self.tmux("capture-pane", "-p", "-J", "-S", f"-{SCREEN_HISTORY}", "-t", target)
+        text = "\n".join(line.rstrip() for line in joined.split("\n"))
+        return {"rows": rows, "cursor_y": int(cursor_y), "history_size": int(history_size),
+                "text": text}
+
+    def type(self, name: str, text: str) -> None:
+        """Types one line into the run. The text reaches tmux on stdin, never in argv."""
+        target, buffer = f"={name}:", f"answer-{name}"
+        with self.typing:
+            pane = self.panes().get(name)
+            if pane is None or pane.dead:
+                raise Refused("not_running", "this run is not waiting for an answer")
+            # Empty stdin makes no buffer at all, so an empty answer is Enter alone.
+            if text:
+                self.tmux("load-buffer", "-b", buffer, "-", input=text)
+                try:
+                    self.tmux("paste-buffer", "-d", "-b", buffer, "-t", target)
+                except BaseException:
+                    self.tmux("delete-buffer", "-b", buffer, check=False)
+                    raise
+            self.tmux("send-keys", "-t", target, "Enter")
 
     def attach(self, handler: socketserver.StreamRequestHandler, name: str, cols: int, rows: int) -> None:
         if name not in self.panes():
@@ -414,7 +467,13 @@ class Handler(socketserver.StreamRequestHandler):
             project = self.slug(request, "project")
             actions.stop([session(project, a) for a in actions.project_runs(project)], remove=True)
             return {"ok": True}
-        if op not in ("start", "stop", "attach", "output", "run"):
+        if op == "check":
+            command = request.get("command")
+            if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND \
+                    or "\0" in command:
+                raise Refused("invalid", "check needs a command")
+            return {"ok": True, "exit_code": actions.check(command)}
+        if op not in ("start", "stop", "attach", "output", "run", "screen", "type"):
             raise Refused("invalid", f"unknown op {op!r}")
         name, cwd = self.target(request)
         if op in ("stop", "run"):
@@ -424,6 +483,16 @@ class Handler(socketserver.StreamRequestHandler):
             return {"ok": True, "run": pane.run() if pane else None}
         if op == "output":
             return {"ok": True, "text": actions.output(name)}
+        if op == "screen":
+            return {"ok": True, **actions.screen(name)}
+        if op == "type":
+            text = request.get("text")
+            # The message never echoes the text: it can be a password.
+            if not isinstance(text, str) or len(text) > MAX_ANSWER \
+                    or any(c in text for c in "\0\n\r"):
+                raise Refused("invalid", f"an answer is one line of at most {MAX_ANSWER} characters")
+            actions.type(name, text)
+            return {"ok": True}
         if op == "start":
             command, log = request.get("command"), request.get("log")
             deadline = request.get("deadline")
@@ -481,6 +550,7 @@ def main() -> None:
     parser.add_argument("--log-cap", type=int, default=LOG_CAP)
     parser.add_argument("--output-cap", type=int, default=OUTPUT_CAP)
     parser.add_argument("--expire-every", type=float, default=EXPIRE_EVERY)
+    parser.add_argument("--check-timeout", type=float, default=CHECK_TIMEOUT)
     args = parser.parse_args()
     sock = Path(args.socket)
     sock.unlink(missing_ok=True)
@@ -491,7 +561,8 @@ def main() -> None:
     finally:
         os.umask(previous)
     server.actions = Actions(Path(args.projects_root), Path(args.logs), Path(args.connect),
-                             args.tmux_tmpdir, args.log_cap, args.output_cap)
+                             args.tmux_tmpdir, args.log_cap, args.output_cap,
+                             args.check_timeout)
     threading.Thread(target=expire_forever, args=(server.actions, args.expire_every),
                      daemon=True).start()
     server.serve_forever()

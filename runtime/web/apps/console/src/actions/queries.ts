@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { ActionRun, ActionsAnswer, AnswerBody, ConnectionAnswer, ConnectionRun, Run } from "./types";
+import type { ActionRun, ActionsAnswer, AnswerBody, ConnectionAnswer, ConnectionRun, ConnectionState, Run } from "./types";
 
 const base = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/actions`;
 const key = (projectId: string) => ["actions", projectId] as const;
@@ -37,13 +37,22 @@ export function actionOutput(projectId: string, actionId: string): Promise<strin
 const connectionBase = (id: string) => `/api/connections/${encodeURIComponent(id)}`;
 const connectionKey = (id: string) => ["connection", id] as const;
 
+const connectionQuery = (id: string) => ({
+  queryKey: connectionKey(id),
+  queryFn: () => api.get<ConnectionAnswer>(connectionBase(id)),
+  refetchInterval: (query: { state: { data?: ConnectionAnswer } }) =>
+    query.state.data?.state === "checking" || query.state.data?.run?.state === "running" ? 1_000 : 30_000,
+});
+
 export function useConnection(id: string, enabled = true) {
-  return useQuery({
-    queryKey: connectionKey(id),
-    queryFn: () => api.get<ConnectionAnswer>(connectionBase(id)),
-    enabled,
-    refetchInterval: (query) =>
-      query.state.data?.state === "checking" || query.state.data?.run?.state === "running" ? 1_000 : 30_000,
+  return useQuery({ ...connectionQuery(id), enabled });
+}
+
+// Same keys as useConnection, so a card's gate and its rows share one poll per connection.
+export function useConnectionStates(ids: string[]): Record<string, ConnectionState | undefined> {
+  return useQueries({
+    queries: ids.map(connectionQuery),
+    combine: (results) => Object.fromEntries(ids.map((id, i) => [id, results[i]?.data?.state])),
   });
 }
 

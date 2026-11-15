@@ -96,6 +96,14 @@ describe("connectionView", () => {
     expect(connectionView(conn("signed-out", run({ state: "exited", exit_code: 0 })), true)).toEqual({ kind: "failed" });
   });
 
+  it("a login this card started that exited 1 and is signed out failed", () => {
+    expect(connectionView(conn("signed-out", run({ state: "exited", exit_code: 1 })), true)).toEqual({ kind: "failed" });
+  });
+
+  it("a login this card started and then cancelled shows the plain state, not a failure", () => {
+    expect(connectionView(conn("signed-out", run({ state: "exited", exit_code: null })), true)).toEqual({ kind: "signed-out" });
+  });
+
   it("an old failed login shows the plain state", () => {
     expect(connectionView(conn("signed-out", run({ state: "exited", exit_code: 1 })), false)).toEqual({ kind: "signed-out" });
   });

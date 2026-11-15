@@ -18,7 +18,7 @@ import s from "./TerminalPanel.module.css";
 const NOTES: Partial<Record<CloseReason, string>> = {
   refused: "Eggie couldn't open the terminal. Reload the page and sign in again.",
   unavailable: "The part of Eggie that runs actions isn't answering. Restart the machine from the desktop app and try again.",
-  failed: "Eggie couldn't open this action's terminal.",
+  failed: "Eggie couldn't open this terminal.",
   gone: "Nothing is running here.",
 };
 

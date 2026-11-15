@@ -46,7 +46,8 @@ export function connectionView(answer: ConnectionAnswer | undefined, startedHere
   // An old failed login shouldn't haunt the card; only the one this card started reports.
   if (startedHere && run?.state === "exited" && state !== "connected" && state !== "checking") {
     if (run.timed_out) return { kind: "timed-out" };
-    if (run.exit_code !== 0 || state === "signed-out") return { kind: "failed" };
+    // No exit code without the deadline: the owner pressed Cancel.
+    if (run.exit_code !== null && (run.exit_code !== 0 || state === "signed-out")) return { kind: "failed" };
   }
   return { kind: state };
 }

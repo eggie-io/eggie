@@ -1,4 +1,4 @@
-import { delay, http, HttpResponse, ws } from "msw";
+import { delay, http, HttpResponse, ws, type WebSocketHandlerConnection } from "msw";
 import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
@@ -576,13 +576,76 @@ export function handlersFor(scenario: Scenario) {
     error: scenario === "update-failed" ? "could not pull the new images" : (null as string | null),
   };
 
-  type MockRun = { state: "running" | "exited"; exit_code: number | null; started_at: number };
+  type MockRun = { state: "running" | "exited"; exit_code: number | null; started_at: number; timed_out: boolean };
+  const newRun = (over: Partial<MockRun> = {}): MockRun =>
+    ({ state: "running", exit_code: null, started_at: nowSec(), timed_out: false, ...over });
+  const mockConnections = [
+    { id: "expo", name: "Expo", description: "Your Expo account, for builds on Expo's servers.", login: true, check: true },
+    { id: "apple", name: "Apple", description: null, login: false, check: false },
+  ];
   const mockActions = [
-    { id: "ios-build", recipe: "expo", name: "Build for iPhone", description: "Makes a build you can install through TestFlight.", command: "eas build --platform ios", type: "one-off" },
-    { id: "expo-tunnel", recipe: "expo", name: "Share on your phone", description: null, command: "npx expo start --tunnel", type: "long-running" },
-  ] as const;
+    {
+      id: "ios-build", recipe: "expo", name: "Build for iPhone", description: "Makes a build you can install through TestFlight.",
+      command: "eas build --platform ios", type: "one-off", connections: ["expo", "apple"], asks: true,
+    },
+    {
+      id: "expo-tunnel", recipe: "expo", name: "Share on your phone", description: null,
+      command: "npx expo start --tunnel", type: "long-running", connections: [], asks: false,
+    },
+  ];
   const mockRuns = new Map<string, MockRun>();
-  if (scenario === "actions") mockRuns.set("expo-tunnel", { state: "running", exit_code: null, started_at: nowSec() - 90 });
+  if (scenario === "actions") mockRuns.set("expo-tunnel", newRun({ started_at: nowSec() - 90 }));
+
+  // Expo's sign-in, counted in polls of GET /connections/expo: no link on the first, the link
+  // and code while the owner "finishes in the browser", then signed in.
+  const SIGN_IN_POLLS = 5;
+  const expo = { state: "signed-out", run: null as MockRun | null, polls: 0 };
+  const APPLE_PASSWORD = { source: "apple", id: "password", label: "Apple ID password", type: "secret" };
+  let buildAnswered = false;
+  const notAsking = () => refuse("not_asking", "Nothing is being asked right now.", 409);
+  const badAnswer = (value: unknown) =>
+    typeof value !== "string" || value === "" || value.length > 4096 || /[\n\r\0]/.test(value);
+
+  const connectionHandlers = [
+    http.get("/api/connections/:id", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const id = String(params.id);
+      const conn = mockConnections.find((c) => c.id === id);
+      if (!conn) return refuse("connection_not_found", `no connection called ${id}`, 404);
+      if (id !== "expo") return HttpResponse.json({ id, name: conn.name, state: "unknown", run: null });
+      if (expo.run?.state === "running" && ++expo.polls > SIGN_IN_POLLS) {
+        expo.run = { ...expo.run, state: "exited", exit_code: 0 };
+        expo.state = "connected";
+      }
+      const linked = expo.run?.state === "running" && expo.polls > 1;
+      return HttpResponse.json({
+        id, name: conn.name, state: expo.state,
+        run: expo.run && {
+          ...expo.run,
+          link: linked ? "https://expo.dev/login/device?code=WXYZ-4821" : null,
+          code: linked ? "WXYZ-4821" : null,
+          asking: null,
+        },
+      });
+    }),
+    http.post("/api/connections/:id/login", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      if (params.id !== "expo") return refuse("no_login", "Apple has no sign-in to start.", 400);
+      if (expo.run?.state === "running") return refuse("connection_running", "Expo is already signing in.", 409);
+      expo.run = newRun();
+      expo.polls = 0;
+      return HttpResponse.json({ run: expo.run });
+    }),
+    http.post("/api/connections/:id/cancel", () => {
+      const denied = guard();
+      if (denied) return denied;
+      if (expo.run?.state === "running") expo.run = { ...expo.run, state: "exited", exit_code: null };
+      return HttpResponse.json({ run: expo.run });
+    }),
+    http.post("/api/connections/:id/answer", () => guard() ?? notAsking()),
+  ];
 
   const actionHandlers = [
     http.get("/api/projects/:id/actions", () => {
@@ -591,6 +654,7 @@ export function handlersFor(scenario: Scenario) {
       return HttpResponse.json({
         actions: mockActions.map((a) => ({ ...a, run: mockRuns.get(a.id) ?? null })),
         problems: [],
+        connections: mockConnections,
       });
     }),
     http.post("/api/projects/:id/actions/:action/start", ({ params }) => {
@@ -599,12 +663,35 @@ export function handlersFor(scenario: Scenario) {
       const id = String(params.action);
       if (!mockActions.some((a) => a.id === id)) return refuse("action_not_found", `no action called ${id}`, 404);
       if (mockRuns.get(id)?.state === "running") return refuse("action_running", "That action is already running", 409);
-      const run: MockRun = { state: "running", exit_code: null, started_at: nowSec() };
+      const run = newRun();
       mockRuns.set(id, run);
-      if (mockActions.find((a) => a.id === id)?.type === "one-off") {
+      // The build waits for its Apple question; it finishes once answered.
+      if (id === "ios-build") buildAnswered = false;
+      else if (mockActions.find((a) => a.id === id)?.type === "one-off") {
         window.setTimeout(() => mockRuns.set(id, { ...run, state: "exited", exit_code: 0 }), 4000);
       }
       return HttpResponse.json({ run });
+    }),
+    http.get("/api/projects/:id/actions/:action/run", ({ params }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const id = String(params.action);
+      const run = mockRuns.get(id) ?? null;
+      const asking = id === "ios-build" && run?.state === "running" && !buildAnswered ? APPLE_PASSWORD : null;
+      return HttpResponse.json({ run, asking });
+    }),
+    http.post("/api/projects/:id/actions/:action/answer", async ({ params, request }) => {
+      const denied = guard();
+      if (denied) return denied;
+      const id = String(params.action);
+      const run = mockRuns.get(id);
+      const body = (await request.json().catch(() => null)) as { source?: unknown; question?: unknown; value?: unknown } | null;
+      if (id !== "ios-build" || run?.state !== "running" || buildAnswered) return notAsking();
+      if (body?.source !== APPLE_PASSWORD.source || body.question !== APPLE_PASSWORD.id) return notAsking();
+      if (badAnswer(body.value)) return refuse("invalid_answer", "An answer must be one line of text.", 400);
+      buildAnswered = true;
+      window.setTimeout(() => mockRuns.set(id, { ...run, state: "exited", exit_code: 0 }), 2000);
+      return HttpResponse.json({});
     }),
     http.post("/api/projects/:id/actions/:action/stop", ({ params }) => {
       const denied = guard();
@@ -621,8 +708,7 @@ export function handlersFor(scenario: Scenario) {
     }),
   ];
 
-  const terminal = ws.link("*/api/projects/:id/actions/:action/terminal");
-  const terminalHandler = terminal.addEventListener("connection", ({ client }) => {
+  const mockTerminal = ({ client }: WebSocketHandlerConnection) => {
     // MSW hands a typed array to the page as-is; a real socket delivers an ArrayBuffer.
     const text = { encode: (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer };
     // tmux attach switches to the alternate screen first, as the real terminal does.
@@ -635,11 +721,16 @@ export function handlersFor(scenario: Scenario) {
       // Enter comes as \r; echo it as a new prompt line.
       client.send(text.encode(new TextDecoder().decode(bytes).replace(/\r/g, "\r\n$ ")));
     });
-  });
+  };
+  const terminalHandlers = [
+    ws.link("*/api/projects/:id/actions/:action/terminal").addEventListener("connection", mockTerminal),
+    ws.link("*/api/connections/:id/terminal").addEventListener("connection", mockTerminal),
+  ];
 
   return [
     ...actionHandlers,
-    terminalHandler,
+    ...connectionHandlers,
+    ...terminalHandlers,
     http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
     http.post("/api/runtime/update", () => {
       if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);

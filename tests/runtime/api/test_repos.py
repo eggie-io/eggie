@@ -80,8 +80,8 @@ def test_secrets_are_kept_per_project_and_never_listed_with_values(tmp_path):
     s.secrets.set("b", {"KEY": ("three", "text", None)}, at=11.0)
     assert [r["name"] for r in s.secrets.names("a")] == ["KEY", "OTHER"]
     assert all(set(r) == {"name", "kind", "filename", "updated_at", "unused_at"} for r in s.secrets.names("a"))
-    assert s.secrets.values("a") == {"KEY": "one", "OTHER": "two"}
-    assert s.secrets.values("b") == {"KEY": "three"}
+    assert s.secrets.entries("a") == {"KEY": ("one", "text"), "OTHER": ("two", "text")}
+    assert s.secrets.entries("b") == {"KEY": ("three", "text")}
 
 
 def test_setting_a_secret_again_replaces_it_and_stamps_the_change(tmp_path):
@@ -89,7 +89,7 @@ def test_setting_a_secret_again_replaces_it_and_stamps_the_change(tmp_path):
     s.projects.add("a", "/p/a", "d")
     s.secrets.set("a", {"KEY": ("one", "text", None)}, at=10.0)
     s.secrets.set("a", {"KEY": ("two", "text", None)}, at=20.0)
-    assert s.secrets.values("a") == {"KEY": "two"}
+    assert s.secrets.entries("a") == {"KEY": ("two", "text")}
     assert s.projects.get("a")["secrets_changed_at"] == 20.0
 
 
@@ -100,7 +100,7 @@ def test_deleting_an_absent_secret_reports_it_and_stamps_nothing(tmp_path):
     assert s.secrets.delete("a", "NOPE", at=20.0) is False
     assert s.projects.get("a")["secrets_changed_at"] == 10.0
     assert s.secrets.delete("a", "KEY", at=30.0) is True
-    assert s.secrets.values("a") == {}
+    assert s.secrets.entries("a") == {}
     assert s.projects.get("a")["secrets_changed_at"] == 30.0
 
 
@@ -109,9 +109,9 @@ def test_secrets_outlive_the_project_row_until_dropped(tmp_path):
     s.projects.add("a", "/p/a", "d")
     s.secrets.set("a", {"KEY": ("one", "text", None)}, at=10.0)
     s.projects.remove("a")
-    assert s.secrets.values("a") == {"KEY": "one"}
+    assert s.secrets.entries("a") == {"KEY": ("one", "text")}
     s.secrets.drop("a")
-    assert s.secrets.values("a") == {}
+    assert s.secrets.entries("a") == {}
 
 
 def test_without_an_explicit_time_the_change_is_stamped_at_write(tmp_path):
@@ -165,7 +165,7 @@ def test_drop_secrets_clears_values_and_requests(tmp_path):
     s.secrets.set("a", {"A": ("1", "text", None)})
     s.secrets.request("a", "B", "hint", "text")
     s.secrets.drop("a")
-    assert s.secrets.values("a") == {} and s.secrets.requests("a") == []
+    assert s.secrets.entries("a") == {} and s.secrets.requests("a") == []
 
 
 def test_tx_rolls_back_a_failed_transaction_so_the_next_commit_is_clean(tmp_path):

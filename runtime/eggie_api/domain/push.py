@@ -133,7 +133,7 @@ def merge_secret_names(pushed: dict[str, PushedSecret], stored: dict[str, str],
                  for n in sorted(names - same)},
         keep=tuple(sorted(same)),
         unused=tuple(sorted(set(stored) - names)),
-        drop_requests=tuple(sorted(requested - names)))
+        drop_requests=tuple(sorted((requested - names) | (requested & same))))
 
 
 def pinned_project_yml(project_yml: dict, project_id: str) -> dict | None:

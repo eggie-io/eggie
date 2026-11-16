@@ -20,7 +20,8 @@ def _project(guest, name="blog"):
 
 
 def _values(guest, pid="blog"):
-    return guest._client.app.state.services.repos.secrets.values(pid)
+    entries = guest._client.app.state.services.repos.secrets.entries(pid)
+    return {n: v for n, (v, _) in entries.items()}
 
 
 class _RecordingOpener:
@@ -29,9 +30,8 @@ class _RecordingOpener:
         self.sent = []
 
     def open(self, request, timeout=None):
-        if request.data:
-            self.sent.append((request.get_method(), request.selector,
-                              json.loads(request.data)))
+        self.sent.append((request.get_method(), request.selector,
+                          json.loads(request.data) if request.data else None))
         return self._inner.open(request, timeout=timeout)
 
 
@@ -159,6 +159,23 @@ def test_secret_rm_dismisses_a_request(guest):
     assert "Dismissed the request" in out
     _, out, _ = guest.run("secret", "list", cwd=folder)
     assert "STRIPE_KEY" not in out
+
+
+def test_secret_rm_on_a_request_only_name_dismisses_the_request(guest):
+    folder = _project(guest)
+    guest.run("secret", "request", "STRIPE_KEY", "hint", cwd=folder)
+    sent = _record_requests(guest)
+    assert guest.run("secret", "rm", "STRIPE_KEY", cwd=folder)[0] == 0
+    assert [x[:2] for x in sent.sent if x[0] == "DELETE"] == [
+        ("DELETE", "/projects/blog/secret-requests/STRIPE_KEY")]
+
+
+def test_secret_request_file_over_a_text_value_is_sent(guest):
+    folder = _project(guest)
+    guest.run("secret", "set", "AUTH_KEY", cwd=folder, stdin="v")
+    sent = _record_requests(guest)
+    assert guest.run("secret", "request", "AUTH_KEY", "key", "--file", cwd=folder)[0] == 0
+    assert [x[0] for x in sent.sent if x[0] == "PUT"] == ["PUT"]
 
 
 def test_request_file_sends_kind(guest):

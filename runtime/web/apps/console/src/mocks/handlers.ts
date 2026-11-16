@@ -147,12 +147,12 @@ export function handlersFor(scenario: Scenario) {
   const linkedRepos = new Map<string, string>([["ada/recipe-box", "recipe-box"]]);
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; files: Map<string, string>; requested: Map<string, string>; unused: Set<string> }>();
+  const secrets = new Map<string, { names: Map<string, number>; files: Map<string, string>; requested: Map<string, string>; fileRequests: Set<string>; unused: Set<string> }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), files: new Map<string, string>(), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]), unused: new Set<string>() }
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), files: new Map<string, string>(), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"], ["APPLE_AUTH_KEY", "Apple → Users and Access → Keys → download the .p8"]]), fileRequests: new Set(["APPLE_AUTH_KEY"]), unused: new Set<string>() }
         : scenario === "instance-waiting-secrets" && id === "weekend-shop"
         ? {
             files: new Map<string, string>(),
@@ -161,9 +161,10 @@ export function handlersFor(scenario: Scenario) {
               ["STRIPE_KEY", "Set on your computer. Enter its value for the kitchen."],
               ["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"],
             ]),
+            fileRequests: new Set<string>(),
             unused: new Set(["OLD_SENTRY_DSN"]),
           }
-        : { names: new Map(), files: new Map<string, string>(), requested: new Map(), unused: new Set<string>() };
+        : { names: new Map(), files: new Map<string, string>(), requested: new Map(), fileRequests: new Set<string>(), unused: new Set<string>() };
       secrets.set(id, entry);
     }
     return entry;
@@ -758,7 +759,7 @@ export function handlersFor(scenario: Scenario) {
         secrets: [...entry.names].sort().map(([name, updated_at]) => ({
           name, kind: entry.files.has(name) ? "file" : "text", filename: entry.files.get(name) ?? null, updated_at, unused: entry.unused.has(name),
         })),
-        requested: [...entry.requested].map(([name, hint]) => ({ name, hint, kind: "text" })),
+        requested: [...entry.requested].map(([name, hint]) => ({ name, hint, kind: entry.fileRequests.has(name) ? "file" : "text" })),
         restart_needed: target.restart_needed,
       });
     }),
@@ -775,7 +776,12 @@ export function handlersFor(scenario: Scenario) {
       if (body.kind === "file" && body.filename) entry.files.set(name, body.filename);
       else entry.files.delete(name);
       entry.unused.delete(name);
-      const hadRequest = entry.requested.delete(name);
+      const savedKind = body.kind === "file" ? "file" : "text";
+      const hadRequest = entry.requested.has(name) && entry.fileRequests.has(name) === (savedKind === "file");
+      if (hadRequest) {
+        entry.requested.delete(name);
+        entry.fileRequests.delete(name);
+      }
       target.secrets_requested = entry.requested.size;
       touched(target);
       if (hadRequest && entry.requested.size === 0 && target.start_when_ready && !target.job) {
@@ -792,10 +798,18 @@ export function handlersFor(scenario: Scenario) {
       entry.files.delete(name);
       const hadValue = entry.names.delete(name);
       entry.unused.delete(name);
-      const hadRequest = entry.requested.delete(name);
-      if (!hadValue && !hadRequest) return refuse("secret_not_found", "no such secret", 404);
+      if (!hadValue) return refuse("secret_not_found", "no such secret", 404);
+      touched(target);
+      return new HttpResponse(null, { status: 204 });
+    }),
+    http.delete("/api/projects/:id/secret-requests/:name", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const entry = secretsOf(target.id);
+      const name = String(params.name);
+      if (!entry.requested.delete(name)) return refuse("secret_request_not_found", "no such request", 404);
+      entry.fileRequests.delete(name);
       target.secrets_requested = entry.requested.size;
-      if (hadValue) touched(target);
       return new HttpResponse(null, { status: 204 });
     }),
     http.post("/api/projects/:id/adopt", ({ params }) => {

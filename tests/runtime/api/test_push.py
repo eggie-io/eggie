@@ -1,3 +1,4 @@
+import base64
 import json
 import tarfile
 import threading
@@ -159,6 +160,9 @@ def test_push_happy_path_mints_opens_uploads_and_records(env):
 
 def test_bundle_carries_secret_names_never_values(env):
     env.client.put("/projects/shop/secrets/STRIPE_KEY", json={"value": "sk-very-secret"})
+    env.client.put("/projects/shop/secrets/CERT", json={
+        "value": base64.b64encode(b"file-secret-bytes").decode(), "kind": "file",
+        "filename": "cert.pem"})
     env.client.put("/projects/shop/secret-requests/MAIL_KEY", json={"hint": "from Mailgun"})
     env.client.put("/projects/shop/secret-requests/ASC_API_KEY", json={"hint": "App Store", "kind": "file"})
     seen = {}
@@ -173,9 +177,11 @@ def test_bundle_carries_secret_names_never_values(env):
     assert push(env)["state"] == "done"
     assert seen["manifest"]["secrets"] == [
         {"name": "ASC_API_KEY", "hint": "App Store", "kind": "file"},
+        {"name": "CERT", "hint": "", "kind": "file"},
         {"name": "MAIL_KEY", "hint": "from Mailgun", "kind": "text"},
         {"name": "STRIPE_KEY", "hint": "", "kind": "text"}]
     assert b"sk-very-secret" not in seen["bytes"]
+    assert b"file-secret-bytes" not in seen["bytes"]
 
 
 def test_every_push_sends_bind_folders_as_files_and_only_volumes_that_exist(env):

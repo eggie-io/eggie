@@ -86,11 +86,15 @@ class SecretService:
 
     def delete(self, project_id: str, name: str) -> None:
         self._loader.require(project_id)
-        removed = self._secrets.delete(project_id, name)
-        dismissed = self._secrets.delete_request(project_id, name)
-        if not (removed or dismissed):
+        if not self._secrets.delete(project_id, name):
             raise NotFound("secret_not_found",
                            f"project '{project_id}' has no secret '{name}'")
+
+    def dismiss_request(self, project_id: str, name: str) -> None:
+        self._loader.require(project_id)
+        if not self._secrets.delete_request(project_id, name):
+            raise NotFound("secret_request_not_found",
+                           f"project '{project_id}' has no request for '{name}'")
 
     # The env view: what a container's environment holds. A file secret's
     # value is its mount path, never its content.

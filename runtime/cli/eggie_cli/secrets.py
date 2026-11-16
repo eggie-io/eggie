@@ -55,11 +55,13 @@ def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
 
 def cmd_secret_request(env: Env, name: str, hint: str, file: bool = False) -> None:
     client, project_id = _secret_project(env, name)
-    if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
+    kind = "file" if file else "text"
+    if any(s["name"] == name and s["kind"] == kind
+           for s in client.secrets(project_id).get("secrets", [])):
         print(f"{name} already has a value; ask the owner to Replace it on "
               f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
         return
-    client.request_secret(project_id, name, hint, "file" if file else "text")
+    client.request_secret(project_id, name, hint, kind)
     print(f"Requested {name}. Ask the owner to fill it on {project_id}'s Secrets "
           "page in Eggie.", file=env.out)
 
@@ -88,9 +90,10 @@ def cmd_secret_list(env: Env) -> None:
 
 def cmd_secret_rm(env: Env, name: str) -> None:
     client, project_id = _secret_project(env, name)
-    had_value = any(s["name"] == name for s in client.secrets(project_id).get("secrets", []))
-    client.delete_secret(project_id, name)
-    if had_value:
+    data = client.secrets(project_id)
+    if any(s["name"] == name for s in data.get("secrets", [])):
+        client.delete_secret(project_id, name)
         print(f"Removed {name} from {project_id}.", file=env.out)
     else:
+        client.dismiss_secret_request(project_id, name)
         print(f"Dismissed the request for {name}.", file=env.out)

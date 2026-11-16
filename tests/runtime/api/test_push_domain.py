@@ -68,6 +68,12 @@ def test_kind_mismatch_requests_the_pushed_kind():
     assert m.keep == () and m.unused == ()
 
 
+def test_request_of_the_other_kind_is_dropped_once_the_stored_kind_is_pushed():
+    m = merge_secret_names({"K": PushedSecret("", "text")},
+                           stored={"K": "text"}, requested={"K"})
+    assert m.keep == ("K",) and m.drop_requests == ("K",) and m.request == {}
+
+
 def test_instance_project_id_suffixes_taken_ids():
     assert instance_project_id("My Shop", set()) == "my-shop"
     assert instance_project_id("My Shop", {"my-shop", "my-shop-2"}) == "my-shop-3"

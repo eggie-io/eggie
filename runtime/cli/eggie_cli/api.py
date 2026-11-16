@@ -169,6 +169,10 @@ class ApiClient:
         self._call("DELETE", f"/projects/{project_id}/secrets/"
                              f"{urllib.parse.quote(name, safe='')}")
 
+    def dismiss_secret_request(self, project_id: str, name: str) -> None:
+        self._call("DELETE", f"/projects/{project_id}/secret-requests/"
+                             f"{urllib.parse.quote(name, safe='')}")
+
     def request_secret(self, project_id: str, name: str, hint: str,
                        kind: str = "text") -> None:
         self._call("PUT", f"/projects/{project_id}/secret-requests/"

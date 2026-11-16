@@ -26,10 +26,6 @@ class SecretRepo:
                 "UPDATE secrets SET unused_at=NULL WHERE project_id=? AND name=?",
                 [(project_id, n) for n in names])
 
-    def values(self, project_id) -> dict[str, str]:
-        return {r["name"]: r["value"] for r in self._db.all(
-            "SELECT name, value FROM secrets WHERE project_id=?", (project_id,))}
-
     def entries(self, project_id) -> dict[str, tuple[str, str]]:
         return {r["name"]: (r["value"], r["kind"]) for r in self._db.all(
             "SELECT name, value, kind FROM secrets WHERE project_id=?",

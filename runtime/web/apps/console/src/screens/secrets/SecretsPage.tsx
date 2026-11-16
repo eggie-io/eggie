@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { Button, Card, Notice, TextField, cx } from "@eggie/ui";
 import { FilePicker } from "../../components/FilePicker";
 import { actionError } from "../../projects/copy";
-import { useDeleteSecret, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
+import { useDeleteSecret, useDismissSecretRequest, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
 import { nameProblem, splitSecrets } from "../../projects/secrets";
 import { trimValue, useSecretSave, type SecretKind } from "../../projects/useSecretSave";
 import { TitleRow } from "../project/TitleRow";
@@ -11,7 +11,7 @@ import s from "./SecretsPage.module.css";
 
 function RequestedRow({ id, name, hint, kind }: { id: string; name: string; hint: string; kind: SecretKind }) {
   const save = useSecretSave(id, name, kind, () => {});
-  const dismiss = useDeleteSecret(id);
+  const dismiss = useDismissSecretRequest(id);
   return (
     <li className={cx(s.row, s.requested)}>
       <div className={s.who}>

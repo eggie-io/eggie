@@ -213,9 +213,30 @@ def test_dismissing_a_request_does_not_need_a_restart(env):
     _project(env)
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     env.client.put("/projects/blog/secret-requests/STRIPE_KEY", json={"hint": "x"})
-    assert env.client.delete("/projects/blog/secrets/STRIPE_KEY").status_code == 204
+    assert env.client.delete("/projects/blog/secret-requests/STRIPE_KEY").status_code == 204
     body = env.client.get("/projects/blog/secrets").json()
     assert body["requested"] == [] and body["restart_needed"] is False
+
+
+def test_value_and_request_of_one_name_are_removed_independently(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/KEY", json={"value": "plain"})
+    env.client.put("/projects/blog/secret-requests/KEY", json={"hint": "x", "kind": "file"})
+    assert env.client.delete("/projects/blog/secret-requests/KEY").status_code == 204
+    assert env.repos.secrets.entries("blog") == {"KEY": ("plain", "text")}
+
+    env.client.put("/projects/blog/secret-requests/KEY", json={"hint": "x", "kind": "file"})
+    assert env.client.delete("/projects/blog/secrets/KEY").status_code == 204
+    assert env.repos.secrets.entries("blog") == {}
+    assert [r["name"] for r in env.repos.secrets.requests("blog")] == ["KEY"]
+
+
+def test_removing_what_is_not_there_is_not_found(env):
+    _project(env)
+    env.client.put("/projects/blog/secret-requests/ONLY_ASKED", json={"hint": "x"})
+    env.client.put("/projects/blog/secrets/ONLY_SET", json={"value": "v"})
+    assert env.client.delete("/projects/blog/secrets/ONLY_ASKED").json()["error"]["code"] == "secret_not_found"
+    assert env.client.delete("/projects/blog/secret-requests/ONLY_SET").json()["error"]["code"] == "secret_request_not_found"
 
 
 def test_the_projects_env_files_are_neither_read_nor_touched(env):
@@ -235,14 +256,14 @@ def test_purge_drops_secrets_and_requests_and_plain_delete_keeps_them(env):
     env.client.put("/projects/kept/secrets/A", json={"value": "1"})
     env.client.put("/projects/kept/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/kept")
-    assert env.repos.secrets.values("kept") == {"A": "1"}
+    assert env.repos.secrets.entries("kept") == {"A": ("1", "text")}
     assert env.repos.secrets.requests("kept") == [{"name": "B", "hint": "x", "kind": "text"}]
 
     _project(env, "gone")
     env.client.put("/projects/gone/secrets/A", json={"value": "1"})
     env.client.put("/projects/gone/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/gone?purge=true")
-    assert env.repos.secrets.values("gone") == {}
+    assert env.repos.secrets.entries("gone") == {}
     assert env.repos.secrets.requests("gone") == []
 
 
@@ -474,7 +495,7 @@ def test_kind_mismatch_keeps_the_stored_value_and_asks_for_the_pushed_kind(env):
     env.client.put("/projects/blog/secrets/ASC_API_KEY", json={"value": "plain"})
     svc = env.app.state.services.secrets
     assert svc.apply_pushed("blog", {"ASC_API_KEY": PushedSecret("", "file")}) == 1
-    assert env.repos.secrets.values("blog") == {"ASC_API_KEY": "plain"}
+    assert env.repos.secrets.entries("blog") == {"ASC_API_KEY": ("plain", "text")}
     body = env.client.get("/projects/blog/secrets").json()
     assert [(r["name"], r["kind"]) for r in body["requested"]] == [("ASC_API_KEY", "file")]
     assert body["secrets"][0]["unused"] is False

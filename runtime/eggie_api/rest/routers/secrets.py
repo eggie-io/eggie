@@ -28,6 +28,11 @@ def build(s: Services) -> APIRouter:
         s.secrets.request(project_id, name, body.hint, body.kind)
         return Response(status_code=204)
 
+    @router.delete("/projects/{project_id}/secret-requests/{name}", status_code=204)
+    def dismiss_secret_request(project_id: str, name: str) -> Response:
+        s.secrets.dismiss_request(project_id, name)
+        return Response(status_code=204)
+
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)
     def delete_secret(project_id: str, name: str) -> Response:
         s.secrets.delete(project_id, name)

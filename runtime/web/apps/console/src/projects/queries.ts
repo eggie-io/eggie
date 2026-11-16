@@ -153,6 +153,14 @@ export function useDeleteSecret(id: string) {
   });
 }
 
+export function useDismissSecretRequest(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.del<void>(`${projectPath(id)}/secret-requests/${encodeURIComponent(name)}`),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
 const PUSH_TARGETS = (id: string) => ["push-targets", id] as const;
 const STARTING_MS = 5000;
 const OFFLINE_MS = 15_000;

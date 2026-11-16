@@ -20,7 +20,7 @@ def build_overlay(project_id: str, webs: list[WebSpec], domain: str, *,
                   services: Sequence[str] = (),
                   secret_names: Iterable[str] = (),
                   declared: Mapping[str, set[str]] | None = None,
-                  file_secrets: Mapping[str, str] = {}) -> dict:
+                  file_secrets: Mapping[str, str] | None = None) -> dict:
     overlay_services: dict = {}
     for web in webs:
         router = f"{project_id}--{web.service}"

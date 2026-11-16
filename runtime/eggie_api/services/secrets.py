@@ -40,7 +40,9 @@ class SecretService:
                               "a value can't be empty; delete the secret instead")
         rules.check_name(name)
         rules.check_value(value)
-        rules.check_total({**self._secrets.values(project_id), name: value})
+        rules.check_total({
+            **{n: (v, "text") for n, v in self._secrets.values(project_id).items()},
+            name: (value, "text")})
         outstanding = self.requested_count(project_id)
         self._secrets.set(project_id, {name: value})
         self._secrets.clear_unused(project_id, [name])

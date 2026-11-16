@@ -117,7 +117,12 @@ imaged (`tests/runtime/test_snapshot_prep.py`).
 `git` on `PATH`; `install-agents.sh`/`login-users.sh` run against temporary homes;
 `install-skills.sh` against a fake `runuser` on `PATH`; `update-check.sh` with fake `git`/`curl` and
 `update-now.sh` with fake sibling scripts in a temp `lib/` (`tests/runtime/test_update_*.py`). Nothing touches
-the network — apt, NodeSource, npm and ghcr are covered only by the live-VM acceptance run.
+the network. apt, NodeSource and npm are covered by CI's `runtime` job
+(`scripts/ci/runtime_acceptance.py`): it installs this checkout on a GitHub Ubuntu 24.04 runner
+through the host's own `bootstrap()`, as root from `/root` like WSL, with an `eggie` account made by
+`wsl-user.sh`, then runs setup's connect and verify, checks every account, repairs and checks again.
+It uses images built from the checkout, so ghcr pulls, WSL, Lima and the Docker install itself
+(the runner already has docker-ce) are still covered only by the live-VM acceptance run.
 
 ## Things that will bite you
 

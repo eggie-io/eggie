@@ -10,10 +10,6 @@ CLI=$3
 SOURCE=$4
 shift 4
 
-# runuser keeps the caller's cwd, /root, which the account cannot enter: npx
-# then fails to spawn its sh there with EACCES.
-cd "$HOME_DIR"
-
 as_user() {
   runuser -u "$NAME" -- env HOME="$HOME_DIR" "$@"
 }

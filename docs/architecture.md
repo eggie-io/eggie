@@ -110,6 +110,8 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    reach containers as environment variables through the compose process environment and win over
    the project's own `.env`; a non-empty literal a service sets in the compose file wins over them; the
    overlay lists names only.
+   File secrets (up to 64 KB) are written to `/opt/eggie/secrets/<project>/` at each start and mounted
+   read-only at `/run/secrets/NAME` through the overlay's `secrets:`; the variable holds that path.
 4. `*.local.eggie.space` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.

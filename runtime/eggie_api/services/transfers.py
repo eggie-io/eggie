@@ -482,10 +482,10 @@ class _ImportJob:
             raise Invalid("bad_manifest", "The bundle's manifest is not JSON.") from None
         compose = self.s._loader.parse_yaml(compose_path)
         manifest = rules.parse_manifest(raw, compose)
-        for hint in manifest.secrets.values():
-            if hint:
+        for secret in manifest.secrets.values():
+            if secret.hint:
                 try:
-                    check_hint(hint)
+                    check_hint(secret.hint)
                 except SecretError as e:
                     raise Invalid("bad_manifest", e.message) from None
         # Compose takes `name:` as its project: another project's would have this

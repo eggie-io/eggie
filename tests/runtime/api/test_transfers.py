@@ -10,7 +10,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from eggie_api.domain.push import build_manifest
+from eggie_api.domain.push import PushedSecret, build_manifest
 from eggie_api.infra import bundle as bundle_io
 from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.runner import Completed
@@ -380,7 +380,7 @@ def test_an_import_replaces_files_and_restores_each_volume(instance, tmp_path):
 def test_import_with_missing_secrets_waits_instead_of_starting(instance):
     local_project(instance)
 
-    status = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": "from the dashboard"}))
+    status = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": PushedSecret("from the dashboard", "text")}))
 
     assert status["result"]["secrets_missing"] == 1
     row = instance.repos.projects.get("my-shop")
@@ -423,7 +423,7 @@ def test_a_failed_import_with_missing_secrets_waits_for_them(instance):
     instance_project(instance, status="started_ok")
     local_project(instance)
 
-    result = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": ""}), replace="all",
+    result = push(instance, make_bundle(instance, secrets={"STRIPE_KEY": PushedSecret("", "text")}), replace="all",
                   complete=[CloudError("project_not_found", "gone", 404)])
     settle(instance, "my-shop")
 

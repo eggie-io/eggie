@@ -3,6 +3,7 @@ import threading
 
 import yaml
 
+from eggie_api.domain.push import PushedSecret
 from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
                                         _write_compose)
@@ -327,7 +328,7 @@ def test_apply_pushed_marks_unused_and_requests_missing(env):
     env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
     env.client.put("/projects/blog/secrets/A", json={"value": "2"})
     svc = env.app.state.services.secrets
-    assert svc.apply_pushed("blog", {"A": "", "NEW": "where to find it"}) == 1
+    assert svc.apply_pushed("blog", {"A": PushedSecret("", "text"), "NEW": PushedSecret("where to find it", "text")}) == 1
     body = env.client.get("/projects/blog/secrets").json()
     assert [r["name"] for r in body["requested"]] == ["NEW"]
     assert {s["name"]: s["unused"] for s in body["secrets"]} == {"A": False, "OLD": True}
@@ -338,8 +339,8 @@ def test_a_later_push_clears_the_mark_and_drops_stale_requests(env):
     _project(env)
     env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
     svc = env.app.state.services.secrets
-    svc.apply_pushed("blog", {"GONE": "h"})
-    assert svc.apply_pushed("blog", {"OLD": ""}) == 0
+    svc.apply_pushed("blog", {"GONE": PushedSecret("h", "text")})
+    assert svc.apply_pushed("blog", {"OLD": PushedSecret("", "text")}) == 0
     body = env.client.get("/projects/blog/secrets").json()
     assert body["requested"] == []
     assert body["secrets"][0]["unused"] is False
@@ -466,3 +467,14 @@ def test_a_file_write_failure_fails_the_restart_before_compose_down(env, tmp_pat
     assert job["state"] == "failed"
     assert "file secrets" in job["detail"]
     assert not any(a[1:2] == ["compose"] for a in env.runner.calls)
+
+
+def test_kind_mismatch_keeps_the_stored_value_and_asks_for_the_pushed_kind(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={"value": "plain"})
+    svc = env.app.state.services.secrets
+    assert svc.apply_pushed("blog", {"ASC_API_KEY": PushedSecret("", "file")}) == 1
+    assert env.repos.secrets.values("blog") == {"ASC_API_KEY": "plain"}
+    body = env.client.get("/projects/blog/secrets").json()
+    assert [(r["name"], r["kind"]) for r in body["requested"]] == [("ASC_API_KEY", "file")]
+    assert body["secrets"][0]["unused"] is False

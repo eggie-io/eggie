@@ -4,7 +4,7 @@ import time
 from typing import Callable
 
 from ..domain import secrets as rules
-from ..domain.push import merge_secret_names
+from ..domain.push import PushedSecret, merge_secret_names
 from ..domain.project import CRASH_LOOPING, STARTED_OK
 from ..domain.secrets import SecretError
 from ..errors import NotFound
@@ -58,17 +58,18 @@ class SecretService:
                 and self.requested_count(project_id) == 0):
             self.on_all_set(project_id)
 
-    def apply_pushed(self, project_id: str, pushed: dict[str, str]) -> int:
+    def apply_pushed(self, project_id: str, pushed: dict[str, PushedSecret]) -> int:
         self._loader.require(project_id)
-        for name, hint in pushed.items():
+        for name, secret in pushed.items():
             rules.check_name(name)
-            if hint:
-                rules.check_hint(hint)
+            rules.check_kind(secret.kind)
+            if secret.hint:
+                rules.check_hint(secret.hint)
         merge = merge_secret_names(
-            pushed, {s["name"] for s in self._secrets.names(project_id)},
+            pushed, {s["name"]: s["kind"] for s in self._secrets.names(project_id)},
             {r["name"] for r in self._secrets.requests(project_id)})
-        for name, hint in merge.request.items():
-            self._secrets.request(project_id, name, hint, "text")
+        for name, secret in merge.request.items():
+            self._secrets.request(project_id, name, secret.hint, secret.kind)
         for name in merge.drop_requests:
             self._secrets.delete_request(project_id, name)
         self._secrets.mark_unused(project_id, merge.unused, time.time())

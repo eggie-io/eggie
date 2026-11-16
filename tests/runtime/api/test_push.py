@@ -160,6 +160,7 @@ def test_push_happy_path_mints_opens_uploads_and_records(env):
 def test_bundle_carries_secret_names_never_values(env):
     env.client.put("/projects/shop/secrets/STRIPE_KEY", json={"value": "sk-very-secret"})
     env.client.put("/projects/shop/secret-requests/MAIL_KEY", json={"hint": "from Mailgun"})
+    env.client.put("/projects/shop/secret-requests/ASC_API_KEY", json={"hint": "App Store", "kind": "file"})
     seen = {}
 
     def upload(host, push_id, token, path):
@@ -170,8 +171,10 @@ def test_bundle_carries_secret_names_never_values(env):
     script(env, mints=[ticket()], opens=[OPENED], uploads=[upload], statuses=[DONE])
 
     assert push(env)["state"] == "done"
-    assert seen["manifest"]["secrets"] == [{"name": "MAIL_KEY", "hint": "from Mailgun"},
-                                           {"name": "STRIPE_KEY", "hint": ""}]
+    assert seen["manifest"]["secrets"] == [
+        {"name": "ASC_API_KEY", "hint": "App Store", "kind": "file"},
+        {"name": "MAIL_KEY", "hint": "from Mailgun", "kind": "text"},
+        {"name": "STRIPE_KEY", "hint": "", "kind": "text"}]
     assert b"sk-very-secret" not in seen["bytes"]
 
 

@@ -1,0 +1,79 @@
+name: CI
+
+# Every PR and every push to main: the Python and web suites, and this
+# checkout's runtime installed on a fresh Ubuntu 24.04 machine the way the host
+# installs it into a new VM (scripts/ci/runtime_acceptance.py).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Python tests
+        run: |
+          pip install -e ".[dev]" "fastapi>=0.110" "uvicorn[standard]>=0.30" pyyaml httpx
+          python -m pytest -q
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: runtime/web/package-lock.json
+      - name: Web tests
+        working-directory: runtime/web
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+
+  runtime:
+    # The guest's own release. The runner is a throwaway VM with passwordless
+    # sudo, so the install runs on it for real: apt, NodeSource, npm, systemd.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build eggie-api and eggie-web from this checkout
+        run: packaging/images/build.sh --tag ci
+
+      # The runner ships its own Node in /usr/local/bin, ahead of /usr/bin on
+      # PATH. A fresh VM has none, and install.sh's NodeSource install would
+      # land behind it and fail its version check.
+      - name: Remove what a fresh VM would not have
+        run: sudo rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
+      - name: Install the runtime as the host does, then check it
+        # The system python3 (3.12 on 24.04): the host code it imports is stdlib only.
+        run: /usr/bin/python3 scripts/ci/runtime_acceptance.py --images ci
+
+      - name: What the machine looked like
+        if: failure()
+        run: |
+          set +e
+          sudo cat /opt/eggie/runtime.version /opt/eggie/.env /opt/eggie/runtime.env
+          sudo ls -la /opt/eggie
+          sudo docker compose -f /opt/eggie/stack.yml ps -a
+          sudo docker compose -f /opt/eggie/stack.yml logs --no-color --tail 200
+          sudo systemctl list-units 'eggie-*' 'docker*' --all --no-pager
+          sudo journalctl -u 'eggie-*' --no-pager -n 300
+          getent passwd | bash runtime/install/lib/login-users.sh /etc/shells

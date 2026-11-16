@@ -26,6 +26,12 @@ The API's dependencies aren't part of `.[dev]`, which covers only the host. They
 Tests never start a VM or use the network. Providers get a fake runner, and the runtime shell
 scripts run under `bash` with fake tools on `PATH`.
 
+CI (`.github/workflows/ci.yml`) runs these suites and the web tests on every PR and push to
+`main`. Its `runtime` job also installs the PR's runtime for real on a throwaway Ubuntu 24.04
+runner, the way the host does in a new VM, and runs setup's checks against it
+(`scripts/ci/runtime_acceptance.py`). Don't run that script on your own machine: it installs
+Docker units, systemd units and an `eggie` account system-wide.
+
 ### Known failures on a macOS dev machine
 
 The suite targets Linux/WSL and Python 3.12. On macOS with Python 3.13, 11 tests fail, and none

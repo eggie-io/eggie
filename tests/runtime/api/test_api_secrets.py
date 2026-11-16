@@ -164,10 +164,14 @@ services:
 """
 
 
-def _overlay_names(env):
+def _overlay(env):
     write = [a for a in env.runner.calls if a[0] == "bash" and "overlay.yml" in a[-1]][-1]
     text = base64.b64decode(write[-1].split("echo ", 1)[1].split(" ", 1)[0]).decode()
-    return yaml.safe_load(text)["services"]
+    return yaml.safe_load(text)
+
+
+def _overlay_names(env):
+    return _overlay(env)["services"]
 
 
 def test_a_service_that_declares_a_name_keeps_its_own_value(env):
@@ -441,6 +445,24 @@ def test_start_writes_file_secrets_and_a_later_start_drops_deleted_ones(env):
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     folder = env.config.secrets_root / "blog"
     assert (folder / "ASC_API_KEY").read_bytes() == b"\x00key"
+    overlay = _overlay(env)
+    assert overlay["secrets"]["ASC_API_KEY"]["file"] == f"{folder}/ASC_API_KEY"
+    assert all("ASC_API_KEY" in svc["secrets"]
+               for svc in overlay["services"].values())
     env.client.delete("/projects/blog/secrets/OTHER")
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     assert sorted(p.name for p in folder.iterdir()) == ["ASC_API_KEY"]
+
+
+def test_a_file_write_failure_fails_the_restart_before_compose_down(env, tmp_path):
+    _project(env)
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={
+        "value": base64.b64encode(b"k").decode(), "kind": "file",
+        "filename": "k.p8"})
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x")
+    env.config.__dict__["secrets_root"] = blocker / "secrets"
+    job = _run_to_completion(env, env.client.post("/projects/blog/restart"))
+    assert job["state"] == "failed"
+    assert "file secrets" in job["detail"]
+    assert not any(a[1:2] == ["compose"] for a in env.runner.calls)

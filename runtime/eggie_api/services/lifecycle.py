@@ -66,10 +66,22 @@ class LifecycleService:
         def work(write):
             try:
                 self._projects.set_start_when_ready(project_id, False)
+                # Stamped before the values are read, so a secret changed while
+                # compose runs still shows as needing a restart. Files are
+                # written before compose down, so a write error leaves the old
+                # stack running.
+                began = time.time()
+                env, files = self._secrets.snapshot(project_id)
+                values = env or {}
+                try:
+                    folder = secret_files.write_all(
+                        self._config.secrets_root, project_id, files)
+                except OSError as e:
+                    raise JobFailed(f"could not write the project's file secrets: {e}")
                 if stop_first:
                     write(f"compose down {project_id}\n")
                     down_result = docker.compose_down(
-                        self._runner, directory, env=self._secrets.values(project_id))
+                        self._runner, directory, env=env)
                     if not down_result.ok:
                         raise JobFailed(
                             (down_result.stderr or down_result.stdout).strip()
@@ -79,16 +91,6 @@ class LifecycleService:
                 # when `up` never reaches STARTED_OK.
                 self._projects.set_compose_name(project_id, name)
                 write(f"compose up {project_id}\n")
-                # Stamped before the values are read, so a secret changed while
-                # compose runs still shows as needing a restart.
-                began = time.time()
-                values = self._secrets.values(project_id) or {}
-                files = self._secrets.files(project_id)
-                try:
-                    folder = secret_files.write_all(
-                        self._config.secrets_root, project_id, files)
-                except OSError as e:
-                    raise JobFailed(f"could not write the project's file secrets: {e}")
                 status, detail = docker.compose_up(
                     self._runner, project, directory, domain, on_phase=write.phase,
                     services=services, secrets=values, declared=declared_by,

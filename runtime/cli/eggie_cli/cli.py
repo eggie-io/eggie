@@ -13,7 +13,7 @@ from .secrets import cmd_secret_list, cmd_secret_request, cmd_secret_rm, cmd_sec
 
 def _secret_usage_error(message: str) -> NoReturn:
     # argparse would quote the offending argument, which may be a typed value.
-    print('usage: eggie secret set NAME | request NAME "hint" | list | rm NAME'
+    print('usage: eggie secret set NAME | request NAME "hint" [--file] | list | rm NAME'
           " — values are never taken on the command line", file=sys.stderr)
     sys.exit(2)
 
@@ -54,6 +54,8 @@ def _parser() -> argparse.ArgumentParser:
     secret_request.error = _secret_usage_error
     secret_request.add_argument("name")
     secret_request.add_argument("hint")
+    secret_request.add_argument("--file", action="store_true",
+                                help="the owner uploads a file, not a value")
     secret_sub.add_parser("list", help="show secret names and open requests")
     secret_rm = secret_sub.add_parser("rm", help="remove a secret or a request")
     secret_rm.error = _secret_usage_error
@@ -85,7 +87,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         "clone": lambda: cmd_clone(env, args.url, args.name),
         "secret": lambda: {
             "set": lambda: cmd_secret_set(env, args.name, args.extra),
-            "request": lambda: cmd_secret_request(env, args.name, args.hint),
+            "request": lambda: cmd_secret_request(env, args.name, args.hint, args.file),
             "list": lambda: cmd_secret_list(env),
             "rm": lambda: cmd_secret_rm(env, args.name),
         }[args.secret_command](),

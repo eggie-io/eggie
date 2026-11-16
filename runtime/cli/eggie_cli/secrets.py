@@ -53,13 +53,13 @@ def cmd_secret_set(env: Env, name: str, extra: list[str]) -> None:
         print(_APPLY_HINT, file=env.out)
 
 
-def cmd_secret_request(env: Env, name: str, hint: str) -> None:
+def cmd_secret_request(env: Env, name: str, hint: str, file: bool = False) -> None:
     client, project_id = _secret_project(env, name)
     if any(s["name"] == name for s in client.secrets(project_id).get("secrets", [])):
         print(f"{name} already has a value; ask the owner to Replace it on "
               f"{project_id}'s Secrets page in Eggie if it's wrong.", file=env.out)
         return
-    client.request_secret(project_id, name, hint)
+    client.request_secret(project_id, name, hint, "file" if file else "text")
     print(f"Requested {name}. Ask the owner to fill it on {project_id}'s Secrets "
           "page in Eggie.", file=env.out)
 
@@ -69,14 +69,17 @@ def cmd_secret_list(env: Env) -> None:
     client = env.client()
     client.ensure_project(project_id)
     data = client.secrets(project_id)
-    names = [s["name"] for s in data.get("secrets", [])]
-    for name in names:
-        print(name, file=env.out)
+    stored = data.get("secrets", [])
+    names = [s["name"] for s in stored]
+    for s in stored:
+        label = f"{s['name']} (file {s['filename']})" if s["kind"] == "file" else s["name"]
+        print(label, file=env.out)
     requested = data.get("requested") or []
     if requested:
         print("Requested:", file=env.out)
         for r in requested:
-            print(f"  {r['name']} — {r['hint']}", file=env.out)
+            suffix = " (file)" if r["kind"] == "file" else ""
+            print(f"  {r['name']} — {r['hint']}{suffix}", file=env.out)
     if not names and not requested:
         print(f"{project_id} has no secrets.", file=env.out)
     if data.get("restart_needed"):

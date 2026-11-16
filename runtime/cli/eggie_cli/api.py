@@ -169,9 +169,11 @@ class ApiClient:
         self._call("DELETE", f"/projects/{project_id}/secrets/"
                              f"{urllib.parse.quote(name, safe='')}")
 
-    def request_secret(self, project_id: str, name: str, hint: str) -> None:
+    def request_secret(self, project_id: str, name: str, hint: str,
+                       kind: str = "text") -> None:
         self._call("PUT", f"/projects/{project_id}/secret-requests/"
-                          f"{urllib.parse.quote(name, safe='')}", {"hint": hint})
+                          f"{urllib.parse.quote(name, safe='')}",
+                   {"hint": hint, "kind": kind})
 
     def recipes(self) -> list[dict]:
         return self._call("GET", "/recipes").get("recipes", [])

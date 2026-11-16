@@ -60,8 +60,8 @@ export interface Project {
 }
 
 export interface SecretsView {
-  secrets: { name: string; updated_at: number; unused: boolean }[];
-  requested: { name: string; hint: string }[];
+  secrets: { name: string; kind: "text" | "file"; filename: string | null; updated_at: number; unused: boolean }[];
+  requested: { name: string; hint: string; kind: "text" | "file" }[];
   restart_needed: boolean;
 }
 

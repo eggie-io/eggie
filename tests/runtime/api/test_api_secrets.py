@@ -3,6 +3,7 @@ import threading
 
 import yaml
 
+from eggie_api.domain.push import PushedSecret
 from eggie_api.infra.runner import Completed
 from tests.runtime.api.conftest import (PS_RESTARTING, _create, _run_to_completion,
                                         _write_compose)
@@ -164,10 +165,14 @@ services:
 """
 
 
-def _overlay_names(env):
+def _overlay(env):
     write = [a for a in env.runner.calls if a[0] == "bash" and "overlay.yml" in a[-1]][-1]
     text = base64.b64decode(write[-1].split("echo ", 1)[1].split(" ", 1)[0]).decode()
-    return yaml.safe_load(text)["services"]
+    return yaml.safe_load(text)
+
+
+def _overlay_names(env):
+    return _overlay(env)["services"]
 
 
 def test_a_service_that_declares_a_name_keeps_its_own_value(env):
@@ -189,7 +194,8 @@ def test_a_request_is_listed_with_its_hint_until_a_value_is_saved(env):
                        json={"hint": "Stripe → Developers → API keys"})
     assert r.status_code == 204
     body = env.client.get("/projects/blog/secrets").json()
-    assert body["requested"] == [{"name": "STRIPE_KEY", "hint": "Stripe → Developers → API keys"}]
+    assert body["requested"] == [
+        {"name": "STRIPE_KEY", "hint": "Stripe → Developers → API keys", "kind": "text"}]
     assert env.client.get("/projects/blog").json()["secrets_requested"] == 1
     env.client.put("/projects/blog/secrets/STRIPE_KEY", json={"value": SECRET})
     assert env.client.get("/projects/blog/secrets").json()["requested"] == []
@@ -207,9 +213,30 @@ def test_dismissing_a_request_does_not_need_a_restart(env):
     _project(env)
     _run_to_completion(env, env.client.post("/projects/blog/up"))
     env.client.put("/projects/blog/secret-requests/STRIPE_KEY", json={"hint": "x"})
-    assert env.client.delete("/projects/blog/secrets/STRIPE_KEY").status_code == 204
+    assert env.client.delete("/projects/blog/secret-requests/STRIPE_KEY").status_code == 204
     body = env.client.get("/projects/blog/secrets").json()
     assert body["requested"] == [] and body["restart_needed"] is False
+
+
+def test_value_and_request_of_one_name_are_removed_independently(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/KEY", json={"value": "plain"})
+    env.client.put("/projects/blog/secret-requests/KEY", json={"hint": "x", "kind": "file"})
+    assert env.client.delete("/projects/blog/secret-requests/KEY").status_code == 204
+    assert env.repos.secrets.entries("blog") == {"KEY": ("plain", "text")}
+
+    env.client.put("/projects/blog/secret-requests/KEY", json={"hint": "x", "kind": "file"})
+    assert env.client.delete("/projects/blog/secrets/KEY").status_code == 204
+    assert env.repos.secrets.entries("blog") == {}
+    assert [r["name"] for r in env.repos.secrets.requests("blog")] == ["KEY"]
+
+
+def test_removing_what_is_not_there_is_not_found(env):
+    _project(env)
+    env.client.put("/projects/blog/secret-requests/ONLY_ASKED", json={"hint": "x"})
+    env.client.put("/projects/blog/secrets/ONLY_SET", json={"value": "v"})
+    assert env.client.delete("/projects/blog/secrets/ONLY_ASKED").json()["error"]["code"] == "secret_not_found"
+    assert env.client.delete("/projects/blog/secret-requests/ONLY_SET").json()["error"]["code"] == "secret_request_not_found"
 
 
 def test_the_projects_env_files_are_neither_read_nor_touched(env):
@@ -229,14 +256,14 @@ def test_purge_drops_secrets_and_requests_and_plain_delete_keeps_them(env):
     env.client.put("/projects/kept/secrets/A", json={"value": "1"})
     env.client.put("/projects/kept/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/kept")
-    assert env.repos.secrets.values("kept") == {"A": "1"}
-    assert env.repos.secrets.requests("kept") == [{"name": "B", "hint": "x"}]
+    assert env.repos.secrets.entries("kept") == {"A": ("1", "text")}
+    assert env.repos.secrets.requests("kept") == [{"name": "B", "hint": "x", "kind": "text"}]
 
     _project(env, "gone")
     env.client.put("/projects/gone/secrets/A", json={"value": "1"})
     env.client.put("/projects/gone/secret-requests/B", json={"hint": "x"})
     env.client.delete("/projects/gone?purge=true")
-    assert env.repos.secrets.values("gone") == {}
+    assert env.repos.secrets.entries("gone") == {}
     assert env.repos.secrets.requests("gone") == []
 
 
@@ -322,19 +349,19 @@ def test_apply_pushed_marks_unused_and_requests_missing(env):
     env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
     env.client.put("/projects/blog/secrets/A", json={"value": "2"})
     svc = env.app.state.services.secrets
-    assert svc.apply_pushed("blog", {"A": "", "NEW": "where to find it"}) == 1
+    assert svc.apply_pushed("blog", {"A": PushedSecret("", "text"), "NEW": PushedSecret("where to find it", "text")}) == 1
     body = env.client.get("/projects/blog/secrets").json()
     assert [r["name"] for r in body["requested"]] == ["NEW"]
     assert {s["name"]: s["unused"] for s in body["secrets"]} == {"A": False, "OLD": True}
-    assert all(set(s) == {"name", "updated_at", "unused"} for s in body["secrets"])
+    assert all(set(s) == {"name", "kind", "filename", "updated_at", "unused"} for s in body["secrets"])
 
 
 def test_a_later_push_clears_the_mark_and_drops_stale_requests(env):
     _project(env)
     env.client.put("/projects/blog/secrets/OLD", json={"value": "1"})
     svc = env.app.state.services.secrets
-    svc.apply_pushed("blog", {"GONE": "h"})
-    assert svc.apply_pushed("blog", {"OLD": ""}) == 0
+    svc.apply_pushed("blog", {"GONE": PushedSecret("h", "text")})
+    assert svc.apply_pushed("blog", {"OLD": PushedSecret("", "text")}) == 0
     body = env.client.get("/projects/blog/secrets").json()
     assert body["requested"] == []
     assert body["secrets"][0]["unused"] is False
@@ -354,3 +381,121 @@ def test_stop_clears_start_when_ready(env):
     env.client.post("/projects/blog/start-when-ready")
     _run_to_completion(env, env.client.post("/projects/blog/down"))
     assert env.client.get("/projects/blog").json()["start_when_ready"] is False
+
+
+KEY_FILE = b"-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n"
+
+
+def _put_file(env, name="ASC_API_KEY", filename="AuthKey_ABC.p8"):
+    return env.client.put(
+        f"/projects/blog/secrets/{name}",
+        json={"value": base64.b64encode(KEY_FILE).decode(), "kind": "file",
+              "filename": filename})
+
+
+def test_put_file_secret_lists_kind_and_filename_not_value(env):
+    _project(env)
+    assert _put_file(env).status_code == 204
+    listed = env.client.get("/projects/blog/secrets").json()["secrets"]
+    assert [{k: s[k] for k in ("name", "kind", "filename")} for s in listed] == [
+        {"name": "ASC_API_KEY", "kind": "file", "filename": "AuthKey_ABC.p8"}]
+    text = _every_response_text(env, "blog")
+    assert base64.b64encode(KEY_FILE).decode() not in text
+    assert "PRIVATE KEY" not in text
+
+
+def test_file_request_stays_open_until_a_file_is_saved(env):
+    _project(env)
+    env.client.put("/projects/blog/secret-requests/ASC_API_KEY",
+                   json={"hint": "App Store key", "kind": "file"})
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={"value": "text"})
+    requested = env.client.get("/projects/blog/secrets").json()["requested"]
+    assert requested == [{"name": "ASC_API_KEY", "hint": "App Store key", "kind": "file"}]
+    _put_file(env)
+    assert env.client.get("/projects/blog/secrets").json()["requested"] == []
+
+
+def test_replacing_file_with_text_clears_filename(env):
+    _project(env)
+    _put_file(env)
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={"value": "plain"})
+    [entry] = env.client.get("/projects/blog/secrets").json()["secrets"]
+    assert (entry["kind"], entry["filename"]) == ("text", None)
+
+
+def test_a_file_secret_needs_a_valid_filename_and_base64(env):
+    _project(env)
+    missing = env.client.put("/projects/blog/secrets/K", json={
+        "value": base64.b64encode(b"x").decode(), "kind": "file"})
+    assert missing.json()["error"]["code"] == "secret_filename_invalid"
+    bad = _put_file(env, filename="a/b")
+    assert bad.json()["error"]["code"] == "secret_filename_invalid"
+    notb64 = env.client.put("/projects/blog/secrets/K", json={
+        "value": "not base64!", "kind": "file", "filename": "k.pem"})
+    assert notb64.json()["error"]["code"] == "secret_invalid_value"
+
+
+def test_the_project_total_counts_a_files_decoded_bytes(env):
+    _project(env)
+    big = base64.b64encode(b"x" * 60000).decode()
+    for i in range(8):
+        assert env.client.put(f"/projects/blog/secrets/K{i}", json={
+            "value": big, "kind": "file", "filename": "k"}).status_code == 204
+    over = env.client.put("/projects/blog/secrets/K8", json={
+        "value": big, "kind": "file", "filename": "k"})
+    assert over.json()["error"]["code"] == "secrets_too_large"
+
+
+def test_values_gives_path_for_file_secret(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/EXPO_TOKEN", json={"value": "tok"})
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={
+        "value": base64.b64encode(b"\x00key").decode(), "kind": "file",
+        "filename": "k.p8"})
+    svc = env.app.state.services.secrets
+    assert svc.values("blog") == {"EXPO_TOKEN": "tok",
+                                  "ASC_API_KEY": "/run/secrets/ASC_API_KEY"}
+    assert svc.files("blog") == {"ASC_API_KEY": b"\x00key"}
+
+
+def test_start_writes_file_secrets_and_a_later_start_drops_deleted_ones(env):
+    _project(env)
+    for name, data in (("ASC_API_KEY", b"\x00key"), ("OTHER", b"x")):
+        env.client.put(f"/projects/blog/secrets/{name}", json={
+            "value": base64.b64encode(data).decode(), "kind": "file",
+            "filename": "f.bin"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    folder = env.config.secrets_root / "blog"
+    assert (folder / "ASC_API_KEY").read_bytes() == b"\x00key"
+    overlay = _overlay(env)
+    assert overlay["secrets"]["ASC_API_KEY"]["file"] == f"{folder}/ASC_API_KEY"
+    assert all("ASC_API_KEY" in svc["secrets"]
+               for svc in overlay["services"].values())
+    env.client.delete("/projects/blog/secrets/OTHER")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert sorted(p.name for p in folder.iterdir()) == ["ASC_API_KEY"]
+
+
+def test_a_file_write_failure_fails_the_restart_before_compose_down(env, tmp_path):
+    _project(env)
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={
+        "value": base64.b64encode(b"k").decode(), "kind": "file",
+        "filename": "k.p8"})
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x")
+    env.config.__dict__["secrets_root"] = blocker / "secrets"
+    job = _run_to_completion(env, env.client.post("/projects/blog/restart"))
+    assert job["state"] == "failed"
+    assert "file secrets" in job["detail"]
+    assert not any(a[1:2] == ["compose"] for a in env.runner.calls)
+
+
+def test_kind_mismatch_keeps_the_stored_value_and_asks_for_the_pushed_kind(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={"value": "plain"})
+    svc = env.app.state.services.secrets
+    assert svc.apply_pushed("blog", {"ASC_API_KEY": PushedSecret("", "file")}) == 1
+    assert env.repos.secrets.entries("blog") == {"ASC_API_KEY": ("plain", "text")}
+    body = env.client.get("/projects/blog/secrets").json()
+    assert [(r["name"], r["kind"]) for r in body["requested"]] == [("ASC_API_KEY", "file")]
+    assert body["secrets"][0]["unused"] is False

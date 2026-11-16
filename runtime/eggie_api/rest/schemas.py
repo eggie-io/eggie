@@ -31,10 +31,13 @@ class Handoff(BaseModel):
 
 class SecretValue(BaseModel):
     value: str
+    kind: Literal["text", "file"] = "text"
+    filename: str | None = None
 
 
 class SecretHint(BaseModel):
     hint: str
+    kind: Literal["text", "file"] = "text"
 
 
 class CloneRepo(BaseModel):

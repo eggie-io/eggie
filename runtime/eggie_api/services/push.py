@@ -318,10 +318,11 @@ class _PushJob:
         if disk.usage(self.s._staging)["free_bytes"] < need:
             raise DiskFull("disk_full", DISK_FULL)
 
-    def _secret_names(self) -> dict[str, str]:
+    def _secret_names(self) -> dict[str, rules.PushedSecret]:
         listing = self.s._secrets.list(self.project_id)
-        names = {s["name"]: "" for s in listing["secrets"]}
-        names.update({r["name"]: r["hint"] for r in listing["requested"]})
+        names = {s["name"]: rules.PushedSecret("", s["kind"]) for s in listing["secrets"]}
+        names.update({r["name"]: rules.PushedSecret(r["hint"], r["kind"])
+                      for r in listing["requested"]})
         return names
 
     def _pack(self, bundle: Path, manifest: Path) -> int:

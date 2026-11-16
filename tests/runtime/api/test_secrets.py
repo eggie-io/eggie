@@ -1,8 +1,11 @@
+import base64
+
 import pytest
 
-from eggie_api.domain.secrets import (SecretError, check_hint, check_name,
-                                    check_total, check_value, declared,
-                                    is_reserved)
+from eggie_api.domain.secrets import (SecretError, check_filename, check_hint,
+                                    check_kind, check_name, check_total,
+                                    check_value, declared, decode_file,
+                                    is_reserved, stored_size)
 
 
 @pytest.mark.parametrize("name", ["API_KEY", "_x", "a1"])
@@ -36,9 +39,60 @@ def test_a_nul_byte_cannot_travel_through_an_environment():
 
 
 def test_the_project_total_is_capped():
-    check_total({f"K{i}": "x" * 60000 for i in range(8)})
+    check_total({f"K{i}": ("x" * 60000, "text") for i in range(8)})
     with pytest.raises(SecretError) as e:
-        check_total({f"K{i}": "x" * 60000 for i in range(9)})
+        check_total({f"K{i}": ("x" * 60000, "text") for i in range(9)})
+    assert e.value.code == "secrets_too_large"
+
+
+def test_file_accepts_binary_with_nul():
+    assert decode_file(base64.b64encode(b"\x00\x01PK").decode()) == b"\x00\x01PK"
+
+
+def test_file_limit_counts_decoded_bytes():
+    decode_file(base64.b64encode(b"a" * 64 * 1024).decode())
+    with pytest.raises(SecretError) as e:
+        decode_file(base64.b64encode(b"a" * (64 * 1024 + 1)).decode())
+    assert e.value.code == "secret_too_large"
+
+
+@pytest.mark.parametrize("bad", ["not base64!", ""])
+def test_file_rejects_non_base64_and_empty(bad):
+    with pytest.raises(SecretError) as e:
+        decode_file(bad)
+    assert e.value.code == "secret_invalid_value"
+
+
+@pytest.mark.parametrize("bad", ["", "a/b.p8", "a\\b", "x\ny", "x" * 201])
+def test_filename_rejected(bad):
+    with pytest.raises(SecretError) as e:
+        check_filename(bad)
+    assert e.value.code == "secret_filename_invalid"
+
+
+def test_filename_accepts_ordinary_and_200_chars():
+    check_filename("AuthKey_ABC123.p8")
+    check_filename("x" * 200)
+
+
+def test_kind_must_be_text_or_file():
+    check_kind("text")
+    check_kind("file")
+    with pytest.raises(SecretError) as e:
+        check_kind("binary")
+    assert e.value.code == "secret_kind_invalid"
+
+
+def test_stored_size_is_decoded_for_files_and_utf8_for_text():
+    assert stored_size(base64.b64encode(b"abc").decode(), "file") == 3
+    assert stored_size("é", "text") == 2
+
+
+def test_total_counts_files_decoded():
+    big = base64.b64encode(b"a" * 60 * 1024).decode()
+    check_total({f"K{i}": (big, "file") for i in range(8)})
+    with pytest.raises(SecretError) as e:
+        check_total({f"K{i}": (big, "file") for i in range(9)})
     assert e.value.code == "secrets_too_large"
 
 

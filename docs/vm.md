@@ -76,6 +76,7 @@ With no Windows folders on `PATH`, nothing in the VM can open a Windows browser.
 | `/opt/eggie/api.token` | Shared secret between the host and the API |
 | `/opt/eggie/state.db` | Project state (sqlite) |
 | `/opt/eggie/projects/<id>/` | Each project; the generated Traefik overlay is at `.eggie/overlay.yml` |
+| `/opt/eggie/secrets/<project>/` | File secrets of the project, rewritten at each start |
 | `/opt/eggie/uploads/` | Partially uploaded files |
 | `/opt/eggie/tunnel/token` | Public-URL tunnel token; present only while a public URL is on |
 | `/opt/eggie/connect.json` | VM kind and login user, shown by the console's agent guide |

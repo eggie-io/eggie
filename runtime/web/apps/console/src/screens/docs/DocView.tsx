@@ -6,6 +6,7 @@ import { openExternal } from "../../desktop/desktop";
 import type { Block, Inline } from "../../docs/markdown";
 import { docsRoute } from "../../docs/pages";
 import { fileUrl } from "../../uploads/paths";
+import { SecretField } from "./SecretField";
 import s from "./DocsPage.module.css";
 
 // Renders parseDoc's tree as elements; nothing from the page reaches raw HTML.
@@ -55,6 +56,8 @@ function Blocks({ id, blocks }: { id: string; blocks: Block[] }): ReactNode {
         return qrModules(block.value)
           ? <figure key={i} className={s.qr}><Qr value={block.value} label="QR code" /></figure>
           : <pre key={i} className={s.pre}><code>{block.value}</code></pre>;
+      case "secret":
+        return <SecretField key={i} id={id} name={block.name} file={block.file} />;
       case "list": {
         const items = block.items.map((item, j) => <li key={j}><Blocks id={id} blocks={item} /></li>);
         return block.ordered ? <ol key={i} start={block.start}>{items}</ol> : <ul key={i}>{items}</ul>;

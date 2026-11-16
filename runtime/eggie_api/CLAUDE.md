@@ -99,6 +99,9 @@ and a host release. Prefer additive changes.
   `started_ok` or `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped
   before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`/`BUILDX_`/`BUILDKIT_`, `PATH`, `HOME`) are refused.
   Services pulled in through compose `include:` get no names. Purge drops values and requests.
+  A secret has a `kind`: `text` or `file` (≤64 KB, any bytes, base64 in `state.db`). At every start the API writes
+  files to `<secrets_root>/<project_id>/` (dir 0700, files 0444, `EGGIE_SECRETS_ROOT`), and the overlay mounts them
+  read-only at `/run/secrets/NAME` via top-level `secrets:`; env `NAME` is that path. Push manifests are format 2 (carry kind).
 - **Files** (`infra/files.py`, `services/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
   `extract_archive` **merges** an uploaded tar or tar.gz (the console sends plain tar, the host

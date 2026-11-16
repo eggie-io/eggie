@@ -42,6 +42,13 @@ describe("parseDoc", () => {
     expect(list.kind === "list" && list.items.map((item) => item.map((b) => text([b])))).toEqual([["☐ one"], ["☑ two"]]);
   });
 
+  it("secret block parses name and file", () => {
+    expect(parseDoc("```secret\nname: ASC_API_KEY\nfile: true\n```")).toEqual([{ kind: "secret", name: "ASC_API_KEY", file: true }]);
+    expect(parseDoc("```secret\nname: STRIPE_KEY\n```")).toEqual([{ kind: "secret", name: "STRIPE_KEY", file: false }]);
+  });
+  it.each(["name: 1BAD", "name: DOCKER_HOST", "file: true"])("bad secret block %s falls back to code", (body) => {
+    expect(parseDoc("```secret\n" + body + "\n```")[0]).toMatchObject({ kind: "code", lang: "secret" });
+  });
   it("turns a qr code block into a QR of its trimmed text", () => {
     expect(parseDoc("```qr\nexp://192.168.1.5:8081\n```")).toEqual([{ kind: "qr", value: "exp://192.168.1.5:8081" }]);
   });

@@ -112,6 +112,13 @@ chmod 2770 /opt/eggie/github
 [[ -e /opt/eggie/github/token ]] && chmod 600 /opt/eggie/github/token
 [[ -e /opt/eggie/github/desired.json ]] && chmod 640 /opt/eggie/github/desired.json
 
+# File secrets get the same treatment: the sweep opened them to the group,
+# the API puts 0700/0444 back at each start. 00700 also drops the setgid bit.
+if [[ -d /opt/eggie/secrets ]]; then
+  find /opt/eggie/secrets -mindepth 1 -type d -exec chmod 00700 {} +
+  find /opt/eggie/secrets -type f -exec chmod 0444 {} +
+fi
+
 # 5. this VM's real docker GID, for stack.yml's group_add.
 # The chgrp above used whatever GID this VM's docker group has, while the API
 # image bakes in 999 -- where those differ the API can write neither

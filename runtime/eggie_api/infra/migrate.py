@@ -151,6 +151,12 @@ def _v8_push(conn: sqlite3.Connection) -> None:
     _add_column(conn, "projects", "start_when_ready", "INTEGER NOT NULL DEFAULT 0")
 
 
+def _v9_secret_kind(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "secrets", "kind", "TEXT NOT NULL DEFAULT 'text'")
+    _add_column(conn, "secrets", "filename", "TEXT")
+    _add_column(conn, "secret_requests", "kind", "TEXT NOT NULL DEFAULT 'text'")
+
+
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -162,6 +168,7 @@ MIGRATIONS = [
     _v6_secrets,
     _v7_project_origin,
     _v8_push,
+    _v9_secret_kind,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

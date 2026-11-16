@@ -5,6 +5,9 @@ set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_DIR="$(dirname "$INSTALL_DIR")"
+# WSL execs start us in /root, and `runuser` keeps the cwd: a command run as an
+# account there fails on a directory it cannot enter (npx: `spawn sh EACCES`).
+cd /
 
 REF="${1:?usage: install.sh <runtime ref> [--repair]}"
 REPAIR=0
@@ -392,7 +395,9 @@ install -m 644 "$INSTALL_DIR/systemd/eggie-agents.path" \
 systemctl daemon-reload
 systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
-systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
+# --no-block: a requested setup runs in this unit for up to 10 minutes, and the
+# install would wait on it while holding update.lock.
+systemctl start --no-block eggie-agents.service || echo "could not check this machine's coding agents" >&2
 
 # 11d. stop Claude Code Desktop sessions idle for hours: Desktop keeps one
 # process per session alive for 30 days. Settings live in an env file a run

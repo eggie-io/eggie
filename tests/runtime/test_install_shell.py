@@ -53,11 +53,23 @@ def test_install_guards_on_the_package_not_the_docker_binary():
 _BARE_DOCKER = re.compile(r"(?:^|[|&;(!]|\b(?:then|else|do)\s)\s*docker\b")
 
 
-def test_install_invokes_docker_by_absolute_path():
+def test_install_scripts_invoke_docker_by_absolute_path():
     # A bare `docker` would reach Docker Desktop's CLI when its WSL integration
     # is on, sending this VM's containers to Desktop's engine instead.
-    for line in _commands():
-        assert not _BARE_DOCKER.search(line), f"bare docker invocation: {line}"
+    scripts = sorted(INSTALL.parent.rglob("*.sh"))
+    assert INSTALL in scripts and len(scripts) > 5
+    for script in scripts:
+        for line in script.read_text().splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            assert not _BARE_DOCKER.search(line.strip()), \
+                f"bare docker invocation in {script.name}: {line.strip()}"
+
+
+def test_install_leaves_root_home_before_running_as_an_account():
+    commands = _commands()
+    assert commands.index("cd /") < _index_of("lib/install-skills.sh")
+
 
 
 def _commands() -> list[str]:
@@ -439,11 +451,13 @@ def test_install_keeps_ssh_host_keys_across_reboots():
     assert "/mnt/lima-cidata" in guard
 
 
-def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
+def test_install_enables_the_agent_runner_and_queues_it_before_the_marker():
     text = INSTALL.read_text()
     assert "systemctl enable --now eggie-agents.path" in text
     assert "install -d -m 2770 -o root -g docker /opt/eggie/agent-status" in text
-    assert text.index("systemctl start eggie-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
+    # --no-block: waiting would hold update.lock for as long as a requested setup runs.
+    start = "systemctl start --no-block eggie-agents.service"
+    assert text.index(start) < text.index(f"> {constants.RUNTIME_MARKER}")
 
 
 def test_the_agent_instructions_check_for_the_vm_by_the_projects_folder():

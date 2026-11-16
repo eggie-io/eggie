@@ -4,42 +4,12 @@ import { Button, Card, Notice, TextField, cx } from "@eggie/ui";
 import { FilePicker } from "../../components/FilePicker";
 import { actionError } from "../../projects/copy";
 import { useDeleteSecret, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
-import { baseName, fileToBase64, nameProblem, splitSecrets } from "../../projects/secrets";
+import { nameProblem, splitSecrets } from "../../projects/secrets";
+import { trimValue, useSecretSave, type SecretKind } from "../../projects/useSecretSave";
 import { TitleRow } from "../project/TitleRow";
 import s from "./SecretsPage.module.css";
 
-// Pasted keys often carry a stray space or tab at the ends; newlines belong to PEM bodies.
-const trimValue = (v: string) => v.replace(/^[ \t]+|[ \t]+$/g, "");
-
-type Kind = "text" | "file";
-
-// Saves a typed value, or the picked file as base64 with its bare name.
-function useSecretSave(id: string, name: string, kind: Kind, onSaved: () => void) {
-  const save = useSetSecret(id);
-  const [value, setValue] = useState("");
-  const [picked, setPicked] = useState<File | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const ready = kind === "file" ? picked !== null : trimValue(value) !== "";
-  const submit = async () => {
-    setProblem(null);
-    try {
-      await save.mutateAsync(
-        kind === "file" && picked
-          ? { name, kind, filename: baseName(picked.name), value: await fileToBase64(picked) }
-          : { name, value: trimValue(value) },
-      );
-      setValue("");
-      setPicked(null);
-      onSaved();
-    } catch (error) {
-      setProblem(actionError(error));
-    }
-  };
-  const reset = () => { setValue(""); setPicked(null); setProblem(null); };
-  return { value, setValue, setPicked, problem, ready, pending: save.isPending, submit, reset };
-}
-
-function RequestedRow({ id, name, hint, kind }: { id: string; name: string; hint: string; kind: Kind }) {
+function RequestedRow({ id, name, hint, kind }: { id: string; name: string; hint: string; kind: SecretKind }) {
   const save = useSecretSave(id, name, kind, () => {});
   const dismiss = useDeleteSecret(id);
   return (
@@ -58,7 +28,7 @@ function RequestedRow({ id, name, hint, kind }: { id: string; name: string; hint
   );
 }
 
-function StoredRow({ id, name, kind, filename }: { id: string; name: string; kind: Kind; filename: string | null }) {
+function StoredRow({ id, name, kind, filename }: { id: string; name: string; kind: SecretKind; filename: string | null }) {
   const [editing, setEditing] = useState(false);
   const save = useSecretSave(id, name, kind, () => setEditing(false));
   const remove = useDeleteSecret(id);

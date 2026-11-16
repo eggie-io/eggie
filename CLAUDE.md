@@ -91,7 +91,8 @@ In the WSL sandbox `/tmp/pytest-of-$USER` is root-owned, which breaks `tmp_path`
 - Packaging lives in `packaging/<platform>/` (Inno Setup on Windows, `pkgbuild`/`productbuild` on
   macOS); images in `packaging/images/build.sh`. Manual release gates: `../eggie-resources/ops/release-testing.md`.
 - Gotchas go in the CLAUDE.md of the layer they belong to, under "Things that will bite you". Add
-  one when you hit it.
+  one when you hit it, but first try to remove it in code or pin it with a test plus a comment
+  where it runs; note only what neither can carry.
 
 ## Commits
 

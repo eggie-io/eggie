@@ -126,25 +126,10 @@ It uses images built from the checkout, so ghcr pulls, WSL, Lima and the Docker 
 
 ## Things that will bite you
 
-- Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
-  `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
-  for the API token: it must be written after the sweep.
-- Login accounts are never the API's uid 1000: WSL2's `eggie` is created from 1001 up, and Lima's
-  user carries the macOS uid. The WSL default user, drive mounts and `PATH` are read at boot. Host setup restarts a VM it
-  has just created right after the first install; an existing VM keeps the old behaviour until it
-  next starts. Never turn interop off, in wsl.conf or live (`/proc/sys/fs/binfmt_misc/WSLInterop`): every WSL
-  distro shares that kernel registration, so it breaks the user's other distros. These settings
-  only guard against accidents: root in the VM can mount a drive or edit wsl.conf. The API writes into projects through the docker group; `/etc/gitconfig` trusts
-  `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
-  every session over the ssh control master opened at boot, before step 10's `usermod`, so those
-  sessions never get the docker group. Step 11 therefore also grants each account access by uid
-  (ACLs on `/opt/eggie/projects` and `api.token`, default ACLs on `/opt/eggie/transfers`), and
-  step 4's default ACL makes new project and transfer entries group-writable whatever the creator's umask (the API's is 022).
-- Every console status poll starts `eggie-agents.service`, so journald shows a Started/Finished
-  pair every 3 s while an agents screen is open; and `systemctl start eggie-agents.service` in
-  `install.sh` step 11c blocks while a requested setup runs.
-- install.sh runs from `/root` (WSL execs pass `--cd ~` as root). `runuser` keeps that cwd, which
-  no account can enter: anything run as an account must `cd` to its home first, or npx fails
-  with `spawn sh EACCES`.
-- Use `/usr/bin/docker` by absolute path: Docker Desktop's WSL integration can put its own `docker`
-  on `PATH`, which talks to Desktop's engine instead of this VM's.
+Only what no test or script comment already holds; the permission, ACL and WSL guards are
+explained where they run.
+
+- uid 1000 is the API container's (`runtime/eggie_api/Dockerfile`), so no login account may take
+  it: WSL2's `eggie` is created from 1001 up (`lib/wsl-user.sh`).
+- While the console's agents screen is open, journald shows an `eggie-agents.service`
+  Started/Finished pair every 3 s: each status poll triggers a detection pass.

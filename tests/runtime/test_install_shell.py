@@ -71,7 +71,6 @@ def test_install_leaves_root_home_before_running_as_an_account():
     assert commands.index("cd /") < _index_of("lib/install-skills.sh")
 
 
-
 def _commands() -> list[str]:
     """Executable lines only -- a comment mentioning `docker run traefik` must
     not satisfy or trip the assertions below."""

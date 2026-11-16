@@ -61,7 +61,8 @@ def _guest(tmp_path, **overrides):
     root.mkdir()
     config = ApiConfig(domain="test.local", edge_port=41080,
                          projects_root=root, state_db=tmp_path / "state.db",
-                         token_path=tmp_path / "api.token", ready_timeout=0.0)
+                         token_path=tmp_path / "api.token", ready_timeout=0.0,
+                         secrets_root=tmp_path / "secrets")
     runner = FakeRunner()
     app = create_app(config=config, runner=runner, http_probe=FakeProbe(), **overrides)
     with TestClient(app) as client:

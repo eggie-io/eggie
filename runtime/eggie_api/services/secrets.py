@@ -91,8 +91,17 @@ class SecretService:
             raise NotFound("secret_not_found",
                            f"project '{project_id}' has no secret '{name}'")
 
+    # The env view: what a container's environment holds. A file secret's
+    # value is its mount path, never its content.
     def values(self, project_id: str) -> dict[str, str] | None:
-        return self._secrets.values(project_id) or None
+        env = {name: f"{rules.MOUNT_DIR}/{name}" if kind == "file" else value
+               for name, (value, kind) in self._secrets.entries(project_id).items()}
+        return env or None
+
+    def files(self, project_id: str) -> dict[str, bytes]:
+        return {name: rules.decode_file(value)
+                for name, (value, kind) in self._secrets.entries(project_id).items()
+                if kind == "file"}
 
     def requested_count(self, project_id: str) -> int:
         return len(self._secrets.requests(project_id))

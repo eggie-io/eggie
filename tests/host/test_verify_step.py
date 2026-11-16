@@ -43,6 +43,7 @@ def api(tmp_path):
     config = ApiConfig(projects_root=tmp_path / "projects",
                          state_db=tmp_path / "state.db",
                          token_path=tmp_path / "api.token",
+                         secrets_root=tmp_path / "secrets",
                          # The API's own readiness window is covered in
                          # test_health.py; this file is about the host's.
                          ready_timeout=0.0)

@@ -13,7 +13,7 @@ from .. import constants
 from ..config import ApiConfig
 from ..domain.project import FAILED_TO_START, _slug
 from ..errors import Conflict, EggieError, Invalid, NotFound
-from ..infra import docker, files
+from ..infra import docker, files, secret_files
 from ..infra.github import origin_repo
 from ..infra.health import answers
 from ..infra.reconcile import discover, examine
@@ -191,6 +191,7 @@ class ProjectService:
             if purge:
                 self._uploads.drop_project(project_id)
                 self._secrets.drop(project_id)
+                secret_files.remove(self._config.secrets_root, project_id)
             if purge and folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
                 if folder.exists():

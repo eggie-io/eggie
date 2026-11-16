@@ -418,3 +418,29 @@ def test_the_project_total_counts_a_files_decoded_bytes(env):
     over = env.client.put("/projects/blog/secrets/K8", json={
         "value": big, "kind": "file", "filename": "k"})
     assert over.json()["error"]["code"] == "secrets_too_large"
+
+
+def test_values_gives_path_for_file_secret(env):
+    _project(env)
+    env.client.put("/projects/blog/secrets/EXPO_TOKEN", json={"value": "tok"})
+    env.client.put("/projects/blog/secrets/ASC_API_KEY", json={
+        "value": base64.b64encode(b"\x00key").decode(), "kind": "file",
+        "filename": "k.p8"})
+    svc = env.app.state.services.secrets
+    assert svc.values("blog") == {"EXPO_TOKEN": "tok",
+                                  "ASC_API_KEY": "/run/secrets/ASC_API_KEY"}
+    assert svc.files("blog") == {"ASC_API_KEY": b"\x00key"}
+
+
+def test_start_writes_file_secrets_and_a_later_start_drops_deleted_ones(env):
+    _project(env)
+    for name, data in (("ASC_API_KEY", b"\x00key"), ("OTHER", b"x")):
+        env.client.put(f"/projects/blog/secrets/{name}", json={
+            "value": base64.b64encode(data).decode(), "kind": "file",
+            "filename": "f.bin"})
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    folder = env.config.secrets_root / "blog"
+    assert (folder / "ASC_API_KEY").read_bytes() == b"\x00key"
+    env.client.delete("/projects/blog/secrets/OTHER")
+    _run_to_completion(env, env.client.post("/projects/blog/up"))
+    assert sorted(p.name for p in folder.iterdir()) == ["ASC_API_KEY"]

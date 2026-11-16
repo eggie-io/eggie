@@ -7,7 +7,7 @@ from typing import Callable, Iterator
 from ..config import ApiConfig
 from ..domain.project import FAILED_TO_START, STARTED_OK
 from ..errors import Conflict, EggieError
-from ..infra import docker
+from ..infra import docker, secret_files
 from ..infra.health import diagnose
 from ..infra.repos.projects import ProjectRepo
 from .jobs import JobFailed, JobRegistry
@@ -83,9 +83,16 @@ class LifecycleService:
                 # compose runs still shows as needing a restart.
                 began = time.time()
                 values = self._secrets.values(project_id) or {}
+                files = self._secrets.files(project_id)
+                try:
+                    folder = secret_files.write_all(
+                        self._config.secrets_root, project_id, files)
+                except OSError as e:
+                    raise JobFailed(f"could not write the project's file secrets: {e}")
                 status, detail = docker.compose_up(
                     self._runner, project, directory, domain, on_phase=write.phase,
-                    services=services, secrets=values, declared=declared_by)
+                    services=services, secrets=values, declared=declared_by,
+                    secret_files_dir=folder, file_names=list(files))
                 diagnosis = None
                 if status in RUNNING:
                     # A crash-looping stack still got these values.

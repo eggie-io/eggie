@@ -18,6 +18,7 @@ MAX_PROJECT_BYTES = 512 * 1024
 MAX_HINT_CHARS = 500
 MAX_FILENAME_CHARS = 200
 KINDS = ("text", "file")
+MOUNT_DIR = "/run/secrets"
 
 
 class SecretError(BadRequest):

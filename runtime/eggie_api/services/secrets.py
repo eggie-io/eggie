@@ -24,7 +24,8 @@ class SecretService:
 
     def list(self, project_id: str) -> dict:
         row = self._loader.require(project_id)
-        stored = [{"name": s["name"], "updated_at": s["updated_at"],
+        stored = [{"name": s["name"], "kind": s["kind"],
+                   "filename": s["filename"], "updated_at": s["updated_at"],
                    "unused": s["unused_at"] is not None}
                   for s in self._secrets.names(project_id)]
         return {"secrets": stored,
@@ -33,18 +34,25 @@ class SecretService:
 
     # No project lock: one sqlite statement, and a start in flight is caught
     # by restart_needed because the start is stamped before it reads values.
-    def put(self, project_id: str, name: str, value: str) -> None:
+    def put(self, project_id: str, name: str, value: str,
+            kind: str = "text", filename: str | None = None) -> None:
         row = self._loader.require(project_id)
-        if value == "":
-            raise SecretError("secret_invalid_value",
-                              "a value can't be empty; delete the secret instead")
+        rules.check_kind(kind)
         rules.check_name(name)
-        rules.check_value(value)
-        rules.check_total({
-            **{n: (v, "text") for n, v in self._secrets.values(project_id).items()},
-            name: (value, "text")})
+        if kind == "file":
+            rules.check_filename(filename or "")
+            rules.decode_file(value)
+        else:
+            if value == "":
+                raise SecretError(
+                    "secret_invalid_value",
+                    "a value can't be empty; delete the secret instead")
+            rules.check_value(value)
+            filename = None
+        rules.check_total({**self._secrets.entries(project_id),
+                           name: (value, kind)})
         outstanding = self.requested_count(project_id)
-        self._secrets.set(project_id, {name: value})
+        self._secrets.set(project_id, {name: (value, kind, filename)})
         self._secrets.clear_unused(project_id, [name])
         if (outstanding and row["start_when_ready"]
                 and self.requested_count(project_id) == 0):
@@ -60,18 +68,20 @@ class SecretService:
             pushed, {s["name"] for s in self._secrets.names(project_id)},
             {r["name"] for r in self._secrets.requests(project_id)})
         for name, hint in merge.request.items():
-            self._secrets.request(project_id, name, hint)
+            self._secrets.request(project_id, name, hint, "text")
         for name in merge.drop_requests:
             self._secrets.delete_request(project_id, name)
         self._secrets.mark_unused(project_id, merge.unused, time.time())
         self._secrets.clear_unused(project_id, [*merge.keep, *merge.request])
         return self.requested_count(project_id)
 
-    def request(self, project_id: str, name: str, hint: str) -> None:
+    def request(self, project_id: str, name: str, hint: str,
+                kind: str = "text") -> None:
         self._loader.require(project_id)
+        rules.check_kind(kind)
         rules.check_name(name)
         rules.check_hint(hint)
-        self._secrets.request(project_id, name, hint)
+        self._secrets.request(project_id, name, hint, kind)
 
     def delete(self, project_id: str, name: str) -> None:
         self._loader.require(project_id)

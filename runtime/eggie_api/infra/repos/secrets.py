@@ -11,7 +11,7 @@ class SecretRepo:
 
     def names(self, project_id) -> list[dict]:
         return self._db.all(
-            "SELECT name, updated_at, unused_at FROM secrets WHERE project_id=? "
+            "SELECT name, kind, filename, updated_at, unused_at FROM secrets WHERE project_id=? "
             "ORDER BY name", (project_id,))
 
     def mark_unused(self, project_id, names, at) -> None:
@@ -30,17 +30,27 @@ class SecretRepo:
         return {r["name"]: r["value"] for r in self._db.all(
             "SELECT name, value FROM secrets WHERE project_id=?", (project_id,))}
 
-    def set(self, project_id, values: dict[str, str],
+    def entries(self, project_id) -> dict[str, tuple[str, str]]:
+        return {r["name"]: (r["value"], r["kind"]) for r in self._db.all(
+            "SELECT name, value, kind FROM secrets WHERE project_id=?",
+            (project_id,))}
+
+    def set(self, project_id,
+            entries: dict[str, tuple[str, str, str | None]],
             at: float | None = None) -> None:
         with self._db.tx() as conn:
             at = time.time() if at is None else at
             conn.executemany(
-                "INSERT OR REPLACE INTO secrets(project_id, name, value, updated_at) "
-                "VALUES (?,?,?,?)",
-                [(project_id, name, value, at) for name, value in values.items()])
+                "INSERT OR REPLACE INTO secrets"
+                "(project_id, name, value, kind, filename, updated_at) "
+                "VALUES (?,?,?,?,?,?)",
+                [(project_id, name, value, kind, filename, at)
+                 for name, (value, kind, filename) in entries.items()])
+            # A request for a file stays open until a file is saved.
             conn.executemany(
-                "DELETE FROM secret_requests WHERE project_id=? AND name=?",
-                [(project_id, name) for name in values])
+                "DELETE FROM secret_requests WHERE project_id=? AND name=? AND kind=?",
+                [(project_id, name, kind)
+                 for name, (_, kind, _) in entries.items()])
             conn.execute("UPDATE projects SET secrets_changed_at=? WHERE id=?",
                          (at, project_id))
 
@@ -58,15 +68,16 @@ class SecretRepo:
 
     def requests(self, project_id) -> list[dict]:
         return self._db.all(
-            "SELECT name, hint FROM secret_requests r WHERE project_id=? "
+            "SELECT name, hint, kind FROM secret_requests r WHERE project_id=? "
             "AND NOT EXISTS (SELECT 1 FROM secrets s WHERE s.project_id=r.project_id "
-            "AND s.name=r.name) ORDER BY name", (project_id,))
+            "AND s.name=r.name AND s.kind=r.kind) ORDER BY name", (project_id,))
 
-    def request(self, project_id, name, hint) -> None:
+    def request(self, project_id, name, hint, kind) -> None:
         with self._db.tx() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO secret_requests(project_id, name, hint, created_at) "
-                "VALUES (?,?,?,?)", (project_id, name, hint, time.time()))
+                "INSERT OR REPLACE INTO secret_requests"
+                "(project_id, name, hint, kind, created_at) VALUES (?,?,?,?,?)",
+                (project_id, name, hint, kind, time.time()))
 
     def delete_request(self, project_id, name) -> bool:
         with self._db.tx() as conn:

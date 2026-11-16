@@ -76,10 +76,10 @@ def test_secrets_are_kept_per_project_and_never_listed_with_values(tmp_path):
     s = Repos.open(Database(tmp_path / "state.db"))
     s.projects.add("a", "/p/a", "d")
     s.projects.add("b", "/p/b", "d")
-    s.secrets.set("a", {"KEY": "one", "OTHER": "two"}, at=10.0)
-    s.secrets.set("b", {"KEY": "three"}, at=11.0)
+    s.secrets.set("a", {"KEY": ("one", "text", None), "OTHER": ("two", "text", None)}, at=10.0)
+    s.secrets.set("b", {"KEY": ("three", "text", None)}, at=11.0)
     assert [r["name"] for r in s.secrets.names("a")] == ["KEY", "OTHER"]
-    assert all(set(r) == {"name", "updated_at", "unused_at"} for r in s.secrets.names("a"))
+    assert all(set(r) == {"name", "kind", "filename", "updated_at", "unused_at"} for r in s.secrets.names("a"))
     assert s.secrets.values("a") == {"KEY": "one", "OTHER": "two"}
     assert s.secrets.values("b") == {"KEY": "three"}
 
@@ -87,8 +87,8 @@ def test_secrets_are_kept_per_project_and_never_listed_with_values(tmp_path):
 def test_setting_a_secret_again_replaces_it_and_stamps_the_change(tmp_path):
     s = Repos.open(Database(tmp_path / "state.db"))
     s.projects.add("a", "/p/a", "d")
-    s.secrets.set("a", {"KEY": "one"}, at=10.0)
-    s.secrets.set("a", {"KEY": "two"}, at=20.0)
+    s.secrets.set("a", {"KEY": ("one", "text", None)}, at=10.0)
+    s.secrets.set("a", {"KEY": ("two", "text", None)}, at=20.0)
     assert s.secrets.values("a") == {"KEY": "two"}
     assert s.projects.get("a")["secrets_changed_at"] == 20.0
 
@@ -96,7 +96,7 @@ def test_setting_a_secret_again_replaces_it_and_stamps_the_change(tmp_path):
 def test_deleting_an_absent_secret_reports_it_and_stamps_nothing(tmp_path):
     s = Repos.open(Database(tmp_path / "state.db"))
     s.projects.add("a", "/p/a", "d")
-    s.secrets.set("a", {"KEY": "one"}, at=10.0)
+    s.secrets.set("a", {"KEY": ("one", "text", None)}, at=10.0)
     assert s.secrets.delete("a", "NOPE", at=20.0) is False
     assert s.projects.get("a")["secrets_changed_at"] == 10.0
     assert s.secrets.delete("a", "KEY", at=30.0) is True
@@ -107,7 +107,7 @@ def test_deleting_an_absent_secret_reports_it_and_stamps_nothing(tmp_path):
 def test_secrets_outlive_the_project_row_until_dropped(tmp_path):
     s = Repos.open(Database(tmp_path / "state.db"))
     s.projects.add("a", "/p/a", "d")
-    s.secrets.set("a", {"KEY": "one"}, at=10.0)
+    s.secrets.set("a", {"KEY": ("one", "text", None)}, at=10.0)
     s.projects.remove("a")
     assert s.secrets.values("a") == {"KEY": "one"}
     s.secrets.drop("a")
@@ -119,7 +119,7 @@ def test_without_an_explicit_time_the_change_is_stamped_at_write(tmp_path):
     s = Repos.open(Database(tmp_path / "state.db"))
     s.projects.add("a", "/p/a", "d")
     before = time.time()
-    s.secrets.set("a", {"KEY": "v"})
+    s.secrets.set("a", {"KEY": ("v", "text", None)})
     stamped = s.projects.get("a")["secrets_changed_at"]
     assert before <= stamped <= time.time()
     assert s.secrets.delete("a", "KEY") is True
@@ -134,36 +134,36 @@ def _state_with_project(tmp_path):
 
 def test_a_request_shows_until_its_name_gets_a_value(tmp_path):
     s = _state_with_project(tmp_path)
-    s.secrets.request("a", "STRIPE_KEY", "Stripe dashboard")
-    assert s.secrets.requests("a") == [{"name": "STRIPE_KEY", "hint": "Stripe dashboard"}]
-    s.secrets.set("a", {"STRIPE_KEY": "sk"})
+    s.secrets.request("a", "STRIPE_KEY", "Stripe dashboard", "text")
+    assert s.secrets.requests("a") == [{"name": "STRIPE_KEY", "hint": "Stripe dashboard", "kind": "text"}]
+    s.secrets.set("a", {"STRIPE_KEY": ("sk", "text", None)})
     assert s.secrets.requests("a") == []
 
 
 def test_a_request_for_a_name_that_already_has_a_value_is_not_listed(tmp_path):
     s = _state_with_project(tmp_path)
-    s.secrets.set("a", {"STRIPE_KEY": "sk"})
-    s.secrets.request("a", "STRIPE_KEY", "again")
+    s.secrets.set("a", {"STRIPE_KEY": ("sk", "text", None)})
+    s.secrets.request("a", "STRIPE_KEY", "again", "text")
     assert s.secrets.requests("a") == []
 
 
 def test_a_request_never_marks_secrets_changed(tmp_path):
     s = _state_with_project(tmp_path)
-    s.secrets.request("a", "STRIPE_KEY", "hint")
+    s.secrets.request("a", "STRIPE_KEY", "hint", "text")
     assert s.projects.get("a")["secrets_changed_at"] is None
 
 
 def test_deleting_a_request_reports_whether_it_existed(tmp_path):
     s = _state_with_project(tmp_path)
-    s.secrets.request("a", "K", "hint")
+    s.secrets.request("a", "K", "hint", "text")
     assert s.secrets.delete_request("a", "K") is True
     assert s.secrets.delete_request("a", "K") is False
 
 
 def test_drop_secrets_clears_values_and_requests(tmp_path):
     s = _state_with_project(tmp_path)
-    s.secrets.set("a", {"A": "1"})
-    s.secrets.request("a", "B", "hint")
+    s.secrets.set("a", {"A": ("1", "text", None)})
+    s.secrets.request("a", "B", "hint", "text")
     s.secrets.drop("a")
     assert s.secrets.values("a") == {} and s.secrets.requests("a") == []
 
@@ -203,7 +203,7 @@ def test_pushed_project_claim_keeps_first_pushed_at(tmp_path):
 def test_unused_mark_is_set_and_cleared(tmp_path):
     repos = Repos.open(Database(tmp_path / "s.db"))
     repos.projects.add("shop", "/p/shop", "d")
-    repos.secrets.set("shop", {"A": "1"})
+    repos.secrets.set("shop", {"A": ("1", "text", None)})
     repos.secrets.mark_unused("shop", ["A"], 3.0)
     assert repos.secrets.names("shop")[0]["unused_at"] == 3.0
     repos.secrets.clear_unused("shop", ["A"])

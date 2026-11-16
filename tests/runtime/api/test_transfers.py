@@ -387,7 +387,7 @@ def test_import_with_missing_secrets_waits_instead_of_starting(instance):
     assert row["start_when_ready"] == 1
     assert instance.runner.argv_containing("up") == []
     assert instance.services.secrets.list("my-shop")["requested"] == [
-        {"name": "STRIPE_KEY", "hint": "from the dashboard"}]
+        {"name": "STRIPE_KEY", "hint": "from the dashboard", "kind": "text"}]
 
 
 def test_complete_project_not_found_fails_and_keeps_files(instance):

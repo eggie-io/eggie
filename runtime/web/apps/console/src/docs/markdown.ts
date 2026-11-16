@@ -1,6 +1,7 @@
 // A page's Markdown, lexed by marked and mapped to a tree of the kinds the console draws.
 // marked's HTML output is never used: raw HTML in a page stays text.
 import { lexer, type MarkedToken, type Token } from "marked";
+import { nameProblem } from "../projects/secrets";
 import { resolveImage, resolveLink, type LinkTarget } from "./pages";
 
 export type Inline =
@@ -19,6 +20,7 @@ export type Block =
   | { kind: "paragraph"; children: Inline[] }
   | { kind: "code"; lang: string; text: string }
   | { kind: "qr"; value: string }
+  | { kind: "secret"; name: string; file: boolean }
   | { kind: "list"; ordered: boolean; start: number; items: Block[][] }
   | { kind: "table"; align: Align[]; header: Inline[][]; rows: Inline[][][] }
   | { kind: "quote"; children: Block[] }
@@ -37,6 +39,18 @@ function decode(text: string): string {
     const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
     return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
   });
+}
+
+// `name: X` plus optional `file: true`; a bad name leaves the block as plain code.
+export function parseSecretBlock(text: string): { name: string; file: boolean } | null {
+  const keys = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    const at = line.indexOf(":");
+    if (at > 0) keys.set(line.slice(0, at).trim().toLowerCase(), line.slice(at + 1).trim());
+  }
+  const name = keys.get("name") ?? "";
+  if (nameProblem(name, [])) return null;
+  return { name, file: keys.get("file")?.toLowerCase() === "true" };
 }
 
 const box = (checked: boolean | undefined) => (checked ? "☑ " : "☐ ");
@@ -89,8 +103,11 @@ function blocks(tokens: Token[] | undefined): Block[] {
         return [{ kind: "paragraph", children: inlines(t.tokens) }];
       case "text":
         return [{ kind: "paragraph", children: t.tokens ? inlines(t.tokens) : [decode(t.text)] }];
-      case "code":
+      case "code": {
+        const secret = t.lang === "secret" ? parseSecretBlock(t.text) : null;
+        if (secret) return [{ kind: "secret", ...secret }];
         return t.lang === "qr" ? [{ kind: "qr", value: t.text.trim() }] : [{ kind: "code", lang: t.lang ?? "", text: t.text }];
+      }
       case "list":
         return [{ kind: "list", ordered: t.ordered, start: t.start === "" ? 1 : t.start, items: t.items.map((i) => item(i.tokens)) }];
       case "table":

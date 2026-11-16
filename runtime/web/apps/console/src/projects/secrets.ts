@@ -19,3 +19,21 @@ export function splitSecrets(view: SecretsView) {
     unused: view.secrets.filter((x) => x.unused),
   };
 }
+
+export const MAX_FILE_BYTES = 64 * 1024;
+
+export async function fileToBase64(file: File): Promise<string> {
+  if (file.size > MAX_FILE_BYTES) throw new Error("A key file can be at most 64 KB.");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+// The API wants a bare file name; some browsers/webviews report a path.
+export const baseName = (name: string) => name.split(/[\\/]/).pop() ?? name;
+
+export function fieldState(view: SecretsView | undefined, name: string, file: boolean) {
+  const stored = view?.secrets.find((x) => x.name === name && (x.kind === "file") === file);
+  return { saved: stored !== undefined, filename: stored?.filename ?? null, updatedAt: stored?.updated_at ?? null };
+}

@@ -59,7 +59,7 @@ export function UpdateButton() {
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
       >
-        <Icon name="upload" />
+        <Icon name="download" />
         <span>Update available</span>
       </button>
       <div id={panelId} className={s.updatePanel} hidden={!open}>

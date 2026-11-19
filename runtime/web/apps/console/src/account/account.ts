@@ -30,6 +30,41 @@ export function signInError(code: string | null): string | null {
   return REASONS[code] ?? "Sign-in didn't finish.";
 }
 
+// The link of a code that can still be approved, so a press can open it at once.
+export function liveLink(account: Account | null, nowMs: number): string | null {
+  if (account?.state !== "pending" || account.expires_at * 1000 <= nowMs) return null;
+  return signInLink(account.url);
+}
+
+// The web app's sign-up page, which sends the new account on to the approval page.
+export function createAccountLink(link: string): string {
+  const { origin, pathname, search } = new URL(link);
+  return `${origin}/signup?${new URLSearchParams({ redirect: pathname + search })}`;
+}
+
+// Which button the person pressed: it decides the page that opens and step 1.
+export type Intent = "new" | "existing";
+
+export type SignInView =
+  | { kind: "choose"; reason: string | null }
+  | { kind: "finish"; intent: Intent; code: string; target: string; host: string; expiresAt: number }
+  | { kind: "badLink"; url: string };
+
+export function signInView(account: Account | null, intent: Intent | null): SignInView {
+  if (account?.state === "pending" && intent !== null) {
+    const link = signInLink(account.url);
+    if (link === null) return { kind: "badLink", url: account.url };
+    return {
+      kind: "finish", intent, code: account.user_code, expiresAt: account.expires_at,
+      target: intent === "new" ? createAccountLink(link) : link, host: new URL(link).host,
+    };
+  }
+  // The screen asks for a code before anyone presses a button, so one that
+  // ran out unused is not news.
+  const error = account?.state === "signed_out" && account.error !== "expired_token" ? account.error : null;
+  return { kind: "choose", reason: signInError(error) };
+}
+
 export type StartOutcome =
   | { kind: "sessionLost"; reason: SessionLoss }
   | { kind: "unreachable"; message: string }

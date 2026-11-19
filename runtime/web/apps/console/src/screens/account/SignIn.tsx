@@ -105,12 +105,12 @@ export function SignIn({
       update(() => next);
       return;
     }
-    update((v) => ({ ...v, starting: true, notice: null }));
+    update(() => ({ ...next, starting: true }));
     try {
       const account = await ask();
       if (account.state === "signed_in") return onSignedIn();
       // Too late to open a window for this press: the waiting view offers the page instead.
-      update((v) => ({ ...v, account, intent, opened: false, notice: null, starting: false }));
+      update((v) => ({ ...v, account, intent, notice: null, starting: false }));
     } catch (error) {
       const outcome = startError(error);
       if (outcome.kind === "sessionLost") {

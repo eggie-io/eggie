@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
-import { type Account, createAccountLink, liveLink, signInLink, signInView, startError } from "./account";
+import {
+  type Account, afterPoll, afterQuietCode, createAccountLink, liveLink, signInLink, signInView, startError,
+} from "./account";
 
 describe("signInLink", () => {
   it("accepts an https sign-in page", () => {
@@ -52,18 +54,14 @@ describe("createAccountLink", () => {
 });
 
 describe("liveLink", () => {
-  it("gives the link of a code that can still be approved", () => {
-    expect(liveLink(pending(), 1_999_000)).toBe(LINK);
+  it("gives the link of a waiting code, whatever this computer's clock says", () => {
+    expect(liveLink(pending({ expires_at: 1 }))).toBe(LINK);
   });
 
-  it("gives nothing once the code has run out", () => {
-    expect(liveLink(pending(), 2_000_000)).toBeNull();
-  });
-
-  it("gives nothing without a pending code or for a link that is not https", () => {
-    expect(liveLink(null, 0)).toBeNull();
-    expect(liveLink({ state: "signed_out", error: null }, 0)).toBeNull();
-    expect(liveLink(pending({ url: "http://localhost:5174/device?user_code=X" }), 0)).toBeNull();
+  it("gives nothing without a waiting code or for a link that is not https", () => {
+    expect(liveLink(null)).toBeNull();
+    expect(liveLink({ state: "signed_out", error: null })).toBeNull();
+    expect(liveLink(pending({ url: "http://localhost:5174/device?user_code=X" }))).toBeNull();
   });
 });
 
@@ -90,5 +88,39 @@ describe("signInView", () => {
       kind: "choose", reason: "The sign-in was turned down.",
     });
     expect(signInView({ state: "signed_out", error: "expired_token" }, null)).toEqual({ kind: "choose", reason: null });
+  });
+});
+
+describe("afterPoll", () => {
+  const waiting = { account: pending(), intent: "new" as const, notice: null };
+
+  it("keeps waiting while the code is still there", () => {
+    expect(afterPoll(waiting, pending())).toEqual(waiting);
+  });
+
+  it("goes back to the choice and says why when the code was turned down", () => {
+    const account: Account = { state: "signed_out", error: "access_denied" };
+    expect(afterPoll(waiting, account)).toEqual({ account, intent: null, notice: "The sign-in was turned down." });
+  });
+
+  it("tells a person who was waiting that the code ran out", () => {
+    const next = afterPoll(waiting, { state: "signed_out", error: "expired_token" });
+    expect(next.notice).toBe("That code ran out before it was approved.");
+  });
+});
+
+describe("afterQuietCode", () => {
+  it("keeps the reason on screen when a new code replaces the account that carried it", () => {
+    const was = { account: { state: "signed_out", error: "revoked" } as Account, intent: null, notice: null };
+    const next = afterQuietCode(was, pending());
+    expect(next.notice).toBe("This computer was signed out of your Eggie account.");
+    expect(signInView(next.account, next.intent).kind).toBe("choose");
+  });
+
+  it("does not bring the waiting view back after a refusal", () => {
+    const refused = afterPoll({ account: pending(), intent: "existing", notice: null }, { state: "signed_out", error: "access_denied" });
+    const next = afterQuietCode(refused, pending());
+    expect(signInView(next.account, next.intent).kind).toBe("choose");
+    expect(next.notice).toBe("The sign-in was turned down.");
   });
 });

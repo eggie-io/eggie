@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@eggie/ui";
 import {
-  type Account, type Intent, type SignInView, type StartOutcome,
-  liveLink, signInError, signInView, startError,
+  type Account, type Intent, type SignInView, type Waiting,
+  afterPoll, afterQuietCode, liveLink, signInView, startError,
 } from "../../account/account";
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
@@ -19,9 +19,7 @@ import own from "./SignIn.module.css";
 const api = createApi((input, init) => fetch(input, init));
 const POLL_MS = 3000;
 
-// A "sessionLost" outcome is handed to onSessionLost and never stored here.
-type ScreenOutcome = Exclude<StartOutcome, { kind: "sessionLost" }>;
-type View = { account: Account | null; intent: Intent | null; outcome: ScreenOutcome | null; starting: boolean };
+type View = Waiting & { starting: boolean };
 
 function hostOf(url: string | null | undefined): string | null {
   try {
@@ -41,31 +39,19 @@ export function SignIn({
   const site = useSite();
   const webApp = useWebApp();
   const managed = typeof site === "string";
-  const [view, setView] = useState<View>({ account: null, intent: null, outcome: null, starting: false });
+  const [view, setView] = useState<View>({ account: null, intent: null, notice: null, starting: false });
+  // The ref is what the handlers read: a press must see the answer that
+  // landed a moment ago, before the next render.
   const latest = useRef(view);
-  latest.current = view;
+  const update = useCallback((next: (v: View) => View) => {
+    latest.current = next(latest.current);
+    setView(latest.current);
+  }, []);
   const asking = useRef<Promise<Account> | null>(null);
   // Bumped around every code request, so a poll that overlapped one is dropped
   // instead of putting back the account it saw before the code existed.
   const asked = useRef(0);
-
-  const refresh = useCallback(async () => {
-    const before = asked.current;
-    try {
-      const account = await api.get<Account>("/api/account");
-      if (asked.current !== before) return;
-      if (account.state === "signed_in") return onSignedIn();
-      setView((v) => {
-        if (account.state === "pending" || v.intent === null) return { ...v, account };
-        // The code they were waiting on is gone: back to the choice, saying why.
-        const message = signInError(account.error);
-        return { ...v, account, intent: null, outcome: message ? { kind: "error", message } : null };
-      });
-    } catch (error) {
-      // A missed poll is retried on the next tick; a lost session is not.
-      if (isSessionLost(error)) onSessionLost(error.code);
-    }
-  }, [onSignedIn, onSessionLost]);
+  const polled = useRef(false);
 
   const ask = useCallback(() => {
     if (asking.current === null) {
@@ -79,21 +65,38 @@ export function SignIn({
   }, []);
 
   // WKWebView refuses a new window opened after an await, so the code is
-  // asked for ahead of the press and the press only opens its link.
+  // asked for ahead of the press and the press only opens its link. Not
+  // before the first poll: asking makes the API forget why it signed out.
   const prepare = useCallback(() => {
-    if (managed || liveLink(latest.current.account, Date.now()) !== null) return;
+    if (managed || !polled.current || liveLink(latest.current.account) !== null) return;
     ask().then(
-      (account) => (account.state === "signed_in" ? onSignedIn() : setView((v) => ({ ...v, account }))),
+      (account) => (account.state === "signed_in" ? onSignedIn() : update((v) => afterQuietCode(v, account))),
       () => {},
     );
-  }, [managed, ask, onSignedIn]);
+  }, [managed, ask, onSignedIn, update]);
+
+  const refresh = useCallback(async () => {
+    const before = asked.current;
+    try {
+      const account = await api.get<Account>("/api/account");
+      if (asked.current !== before) return;
+      if (account.state === "signed_in") return onSignedIn();
+      update((v) => afterPoll(v, account));
+      if (!polled.current) {
+        polled.current = true;
+        prepare();
+      }
+    } catch (error) {
+      // A missed poll is retried on the next tick; a lost session is not.
+      if (isSessionLost(error)) onSessionLost(error.code);
+    }
+  }, [onSignedIn, onSessionLost, update, prepare]);
 
   useEffect(() => {
     void refresh();
-    prepare();
     const timer = setInterval(() => void refresh(), POLL_MS);
     return () => clearInterval(timer);
-  }, [refresh, prepare]);
+  }, [refresh]);
 
   const open = (account: Account, intent: Intent) => {
     const next = signInView(account, intent);
@@ -102,25 +105,25 @@ export function SignIn({
 
   const choose = async (intent: Intent) => {
     const ready = latest.current.account;
-    if (ready !== null && liveLink(ready, Date.now()) !== null) {
+    if (ready !== null && liveLink(ready) !== null) {
       open(ready, intent);
-      setView((v) => ({ ...v, intent, outcome: null }));
+      update((v) => ({ ...v, intent, notice: null }));
       return;
     }
-    setView((v) => ({ ...v, starting: true, outcome: null }));
+    update((v) => ({ ...v, starting: true, notice: null }));
     try {
       const account = await ask();
       if (account.state === "signed_in") return onSignedIn();
       // Opens where the press outlives the request; "Open the page again" covers the rest.
       open(account, intent);
-      setView({ account, intent, outcome: null, starting: false });
+      update(() => ({ account, intent, notice: null, starting: false }));
     } catch (error) {
       const outcome = startError(error);
       if (outcome.kind === "sessionLost") {
         onSessionLost(outcome.reason);
         return;
       }
-      setView((v) => ({ ...v, outcome, starting: false }));
+      update((v) => ({ ...v, notice: outcome.message, starting: false }));
     }
   };
 
@@ -145,7 +148,7 @@ export function SignIn({
 
   const shown = signInView(view.account, view.intent);
   if (shown.kind === "finish") {
-    return <Finish view={shown} onBack={() => setView((v) => ({ ...v, intent: null, outcome: null }))} />;
+    return <Finish view={shown} onBack={() => update((v) => ({ ...v, intent: null, notice: null }))} />;
   }
   if (shown.kind === "badLink") {
     return (
@@ -156,7 +159,7 @@ export function SignIn({
     );
   }
 
-  const reason = view.outcome?.message ?? shown.reason;
+  const reason = view.notice ?? shown.reason;
   const ahead = { onPointerEnter: prepare, onPointerDown: prepare, onFocus: prepare };
   return (
     <StatusScreen
@@ -174,7 +177,7 @@ export function SignIn({
       }
       footer={`Both open ${hostOf(webApp) ?? "the Eggie web app"} in your browser. This window waits for you.`}
     >
-      {reason && <p className={own.error}>{reason}</p>}
+      {reason && <p className={own.error} role="alert">{reason}</p>}
       <p className={s.lead}>
         An Eggie account keeps track of your projects. It’s free, takes about a minute, and you only set it up once on
         this computer.
@@ -191,14 +194,14 @@ function Finish({ view, onBack }: { view: Extract<SignInView, { kind: "finish" }
       <div className={own.finish}>
         <div className={own.main}>
           <div className={own.head}>
-            <p className={own.waiting}><span className={own.spinner} aria-hidden="true" />Waiting for you in the browser</p>
+            <p className={own.waiting} role="status"><span className={own.spinner} aria-hidden="true" />Waiting for you in the browser</p>
             <h1 className={own.title}>Finish in your browser</h1>
             <p className={own.lead}>
               We opened <span className={own.host}>{view.host}</span> for you. Do these three things there. This window
               carries on by itself when you’re done.
             </p>
           </div>
-          <ol className={own.steps}>
+          <ol className={own.steps} role="list">
             {view.intent === "new" ? (
               <Step n={1} title="Create your account" hint="With your email and a password. It’s free." />
             ) : (

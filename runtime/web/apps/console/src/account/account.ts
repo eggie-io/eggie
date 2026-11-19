@@ -30,10 +30,10 @@ export function signInError(code: string | null): string | null {
   return REASONS[code] ?? "Sign-in didn't finish.";
 }
 
-// The link of a code that can still be approved, so a press can open it at once.
-export function liveLink(account: Account | null, nowMs: number): string | null {
-  if (account?.state !== "pending" || account.expires_at * 1000 <= nowMs) return null;
-  return signInLink(account.url);
+// The link of a waiting code, so a press can open it at once. The API drops a
+// code that ran out; this computer's clock, which may differ from the VM's, is not asked.
+export function liveLink(account: Account | null): string | null {
+  return account?.state === "pending" ? signInLink(account.url) : null;
 }
 
 // The web app's sign-up page, which sends the new account on to the approval page.
@@ -59,10 +59,28 @@ export function signInView(account: Account | null, intent: Intent | null): Sign
       target: intent === "new" ? createAccountLink(link) : link, host: new URL(link).host,
     };
   }
-  // The screen asks for a code before anyone presses a button, so one that
-  // ran out unused is not news.
-  const error = account?.state === "signed_out" && account.error !== "expired_token" ? account.error : null;
-  return { kind: "choose", reason: signInError(error) };
+  return { kind: "choose", reason: idleReason(account) };
+}
+
+// The screen asks for a code before anyone presses a button, so one that
+// ran out unused is not news.
+function idleReason(account: Account | null): string | null {
+  return signInError(account?.state === "signed_out" && account.error !== "expired_token" ? account.error : null);
+}
+
+// What the screen keeps between answers; `notice` outlives the account that carried it.
+export type Waiting = { account: Account | null; intent: Intent | null; notice: string | null };
+
+export function afterPoll<T extends Waiting>(was: T, account: Account): T {
+  if (account.state === "pending" || was.intent === null) return { ...was, account };
+  // The code they were waiting on is gone: back to the choice, saying why.
+  return { ...was, account, intent: null, notice: signInError(account.state === "signed_out" ? account.error : null) };
+}
+
+// A code asked for ahead of a press replaces the account whose error the
+// screen was showing, and the API forgets that error with it.
+export function afterQuietCode<T extends Waiting>(was: T, account: Account): T {
+  return { ...was, account, notice: was.notice ?? idleReason(was.account) };
 }
 
 export type StartOutcome =

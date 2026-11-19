@@ -23,6 +23,7 @@ export const SCENARIOS = [
   "account-needed",
   "account-pending",
   "account-denied",
+  "account-revoked",
   "account-unreachable",
   "public-on",
   "public-expiring",
@@ -128,7 +129,7 @@ export function handlersFor(scenario: Scenario) {
   let account: Record<string, unknown> = scenario.startsWith("account-") || scenario === "fresh"
     ? scenario === "account-pending"
       ? pendingAccount()
-      : { state: "signed_out", error: null }
+      : { state: "signed_out", error: scenario === "account-revoked" ? "revoked" : null }
     : { state: "signed_in", email: "ada@example.com", sync: { last_ok_at: nowSec(), last_error: null } };
   let approveAt = 0;
   // The sign-in screen asks for a code as soon as it shows, so the stand-in

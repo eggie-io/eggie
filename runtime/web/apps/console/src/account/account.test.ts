@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
 import {
-  type Account, afterPoll, afterQuietCode, createAccountLink, liveLink, signInLink, signInView, startError,
+  type Account, afterPoll, afterPress, afterQuietCode, createAccountLink, liveLink, signInLink, signInView, startError,
 } from "./account";
 
 describe("signInLink", () => {
@@ -92,7 +92,7 @@ describe("signInView", () => {
 });
 
 describe("afterPoll", () => {
-  const waiting = { account: pending(), intent: "new" as const, notice: null };
+  const waiting = { account: pending(), intent: "new" as const, notice: null, opened: true };
 
   it("keeps waiting while the code is still there", () => {
     expect(afterPoll(waiting, pending())).toEqual(waiting);
@@ -100,7 +100,7 @@ describe("afterPoll", () => {
 
   it("goes back to the choice and says why when the code was turned down", () => {
     const account: Account = { state: "signed_out", error: "access_denied" };
-    expect(afterPoll(waiting, account)).toEqual({ account, intent: null, notice: "The sign-in was turned down." });
+    expect(afterPoll(waiting, account)).toMatchObject({ account, intent: null, notice: "The sign-in was turned down." });
   });
 
   it("tells a person who was waiting that the code ran out", () => {
@@ -111,16 +111,30 @@ describe("afterPoll", () => {
 
 describe("afterQuietCode", () => {
   it("keeps the reason on screen when a new code replaces the account that carried it", () => {
-    const was = { account: { state: "signed_out", error: "revoked" } as Account, intent: null, notice: null };
+    const was = { account: { state: "signed_out", error: "revoked" } as Account, intent: null, notice: null, opened: false };
     const next = afterQuietCode(was, pending());
     expect(next.notice).toBe("This computer was signed out of your Eggie account.");
     expect(signInView(next.account, next.intent).kind).toBe("choose");
   });
 
   it("does not bring the waiting view back after a refusal", () => {
-    const refused = afterPoll({ account: pending(), intent: "existing", notice: null }, { state: "signed_out", error: "access_denied" });
+    const refused = afterPoll({ account: pending(), intent: "existing", notice: null, opened: true }, { state: "signed_out", error: "access_denied" });
     const next = afterQuietCode(refused, pending());
     expect(signInView(next.account, next.intent).kind).toBe("choose");
     expect(next.notice).toBe("The sign-in was turned down.");
+  });
+});
+
+describe("afterPress", () => {
+  it("opens the page at once when the code is already here", () => {
+    const { next, open } = afterPress({ account: pending(), intent: null, notice: "old", opened: false }, "new");
+    expect(open).toBe("https://app.eggie.io/signup?redirect=%2Fdevice%3Fuser_code%3DABCD-EFGH");
+    expect(next).toMatchObject({ intent: "new", opened: true, notice: null });
+  });
+
+  it("opens nothing, and does not claim to have, while there is no code yet", () => {
+    const { next, open } = afterPress({ account: { state: "signed_out", error: null }, intent: null, notice: null, opened: true }, "existing");
+    expect(open).toBeNull();
+    expect(next.opened).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@eggie/ui";
 import {
   type Account, type Intent, type SignInView, type Waiting,
-  afterPoll, afterQuietCode, liveLink, signInView, startError,
+  afterPoll, afterPress, afterQuietCode, liveLink, signInView, startError,
 } from "../../account/account";
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
@@ -39,7 +39,7 @@ export function SignIn({
   const site = useSite();
   const webApp = useWebApp();
   const managed = typeof site === "string";
-  const [view, setView] = useState<View>({ account: null, intent: null, notice: null, starting: false });
+  const [view, setView] = useState<View>({ account: null, intent: null, notice: null, opened: false, starting: false });
   // The ref is what the handlers read: a press must see the answer that
   // landed a moment ago, before the next render.
   const latest = useRef(view);
@@ -98,25 +98,19 @@ export function SignIn({
     return () => clearInterval(timer);
   }, [refresh]);
 
-  const open = (account: Account, intent: Intent) => {
-    const next = signInView(account, intent);
-    if (next.kind === "finish") openExternal(next.target);
-  };
-
   const choose = async (intent: Intent) => {
-    const ready = latest.current.account;
-    if (ready !== null && liveLink(ready) !== null) {
-      open(ready, intent);
-      update((v) => ({ ...v, intent, notice: null }));
+    const { next, open } = afterPress(latest.current, intent);
+    if (open !== null) {
+      openExternal(open);
+      update(() => next);
       return;
     }
     update((v) => ({ ...v, starting: true, notice: null }));
     try {
       const account = await ask();
       if (account.state === "signed_in") return onSignedIn();
-      // Opens where the press outlives the request; "Open the page again" covers the rest.
-      open(account, intent);
-      update(() => ({ account, intent, notice: null, starting: false }));
+      // Too late to open a window for this press: the waiting view offers the page instead.
+      update((v) => ({ ...v, account, intent, opened: false, notice: null, starting: false }));
     } catch (error) {
       const outcome = startError(error);
       if (outcome.kind === "sessionLost") {
@@ -148,7 +142,14 @@ export function SignIn({
 
   const shown = signInView(view.account, view.intent);
   if (shown.kind === "finish") {
-    return <Finish view={shown} onBack={() => update((v) => ({ ...v, intent: null, notice: null }))} />;
+    return (
+      <Finish
+        view={shown}
+        opened={view.opened}
+        onOpened={() => update((v) => ({ ...v, opened: true }))}
+        onBack={() => update((v) => ({ ...v, intent: null, notice: null }))}
+      />
+    );
   }
   if (shown.kind === "badLink") {
     return (
@@ -186,9 +187,24 @@ export function SignIn({
   );
 }
 
-function Finish({ view, onBack }: { view: Extract<SignInView, { kind: "finish" }>; onBack: () => void }) {
+function Finish({
+  view,
+  opened,
+  onOpened,
+  onBack,
+}: {
+  view: Extract<SignInView, { kind: "finish" }>;
+  opened: boolean;
+  onOpened: () => void;
+  onBack: () => void;
+}) {
   const now = useNow(1000);
   const left = Math.max(0, Math.round(view.expiresAt - now / 1000));
+  const host = <span className={own.host}>{view.host}</span>;
+  const openPage = () => {
+    openExternal(view.target);
+    onOpened();
+  };
   return (
     <Shell tone="yolk">
       <div className={own.finish}>
@@ -197,8 +213,8 @@ function Finish({ view, onBack }: { view: Extract<SignInView, { kind: "finish" }
             <p className={own.waiting} role="status"><span className={own.spinner} aria-hidden="true" />Waiting for you in the browser</p>
             <h1 className={own.title}>Finish in your browser</h1>
             <p className={own.lead}>
-              We opened <span className={own.host}>{view.host}</span> for you. Do these three things there. This window
-              carries on by itself when you’re done.
+              {opened ? <>We opened {host} for you. Do these three things there.</> : <>Open {host} and do these three things there.</>}
+              {" "}This window carries on by itself when you’re done.
             </p>
           </div>
           <ol className={own.steps} role="list">
@@ -213,9 +229,11 @@ function Finish({ view, onBack }: { view: Extract<SignInView, { kind: "finish" }
             <Step n={3} title="Press Approve" hint="The page asks “Approve this device?”. After that, Eggie opens here by itself." />
           </ol>
           <div className={own.row}>
-            <Button variant="secondary" iconRight="external" onClick={() => openExternal(view.target)}>
-              Open the page again
-            </Button>
+            {opened ? (
+              <Button variant="secondary" iconRight="external" onClick={openPage}>Open the page again</Button>
+            ) : (
+              <Button variant="primary" iconRight="external" onClick={openPage}>Open {view.host}</Button>
+            )}
             <Button variant="ghost" icon="chevron-left" onClick={onBack}>Back</Button>
             <span className={own.left}>
               {left > 0 ? `This code works for ${Math.ceil(left / 60)} more minute${left > 60 ? "s" : ""}.` : "This code has run out."}

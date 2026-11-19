@@ -68,8 +68,17 @@ function idleReason(account: Account | null): string | null {
   return signInError(account?.state === "signed_out" && account.error !== "expired_token" ? account.error : null);
 }
 
-// What the screen keeps between answers; `notice` outlives the account that carried it.
-export type Waiting = { account: Account | null; intent: Intent | null; notice: string | null };
+// What the screen keeps between answers; `notice` outlives the account that
+// carried it, `opened` says whether the browser page was really opened.
+export type Waiting = { account: Account | null; intent: Intent | null; notice: string | null; opened: boolean };
+
+// A press can open the page only while its link is already here: a window
+// opened after waiting for the code is refused by the desktop webview on macOS.
+export function afterPress<T extends Waiting>(was: T, intent: Intent): { next: T; open: string | null } {
+  const view = signInView(was.account, intent);
+  const open = view.kind === "finish" ? view.target : null;
+  return { next: { ...was, intent: open === null ? was.intent : intent, opened: open !== null, notice: null }, open };
+}
 
 export function afterPoll<T extends Waiting>(was: T, account: Account): T {
   if (account.state === "pending" || was.intent === null) return { ...was, account };

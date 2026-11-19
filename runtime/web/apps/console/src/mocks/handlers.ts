@@ -131,6 +131,10 @@ export function handlersFor(scenario: Scenario) {
       : { state: "signed_out", error: null }
     : { state: "signed_in", email: "ada@example.com", sync: { last_ok_at: nowSec(), last_error: null } };
   let approveAt = 0;
+  // The sign-in screen asks for a code as soon as it shows, so the stand-in
+  // for "approved in the browser" counts from a click, not from the code.
+  let pressed = false;
+  if (typeof document !== "undefined") document.addEventListener("click", () => { pressed = true; });
   let agentsConnectAt = 0;
   const GH_CODE = "C0DE-F00D";
   const ghConnected = (setup: string, setup_error: string | null = null) =>
@@ -628,8 +632,9 @@ export function handlersFor(scenario: Scenario) {
       return HttpResponse.json({ signed_in: false });
     }),
     http.get("/api/account", () => {
-      if (account.state === "pending" && approveAt === 0) approveAt = Date.now() + 6000;
-      if (account.state === "pending" && Date.now() >= approveAt) {
+      if (account.state === "pending" && pressed && approveAt === 0) approveAt = Date.now() + 6000;
+      if (account.state === "pending" && approveAt !== 0 && Date.now() >= approveAt) {
+        pressed = false;
         account =
           scenario === "account-denied"
             ? { state: "signed_out", error: "access_denied" }

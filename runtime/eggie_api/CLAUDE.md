@@ -98,9 +98,9 @@ and a host release. Prefer additive changes.
   `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
   Routes (`rest/routers/addresses.py`, site only): `GET /projects/{id}/addresses` on both mounts;
   add / remove / primary / check at `/api` only. `GET /.well-known/acme-challenge/{token}` is the
-  one open path on a site (`rest/auth.py`, any Host): token shape `[A-Za-z0-9_-]{20,200}`, 20 a
-  minute per client address (first `X-Forwarded-For`, else the peer) and 300 in all, else 404
-  without calling the service. The payload's `domains` comes from the
+  one open path on a site (`rest/auth.py`, any Host). `Domains.challenge` checks the token shape
+  `[A-Za-z0-9_-]{20,200}`, 20 a minute per client address (`ratelimit.client_address`) and 300 in
+  all, else 404 without calling the service. The payload's `domains` comes from the
   mirror; `loader.primary_url` puts the serving primary domain in `urls[0]` (probe keeps `host_for`).
   `DELETE /projects/{id}` forgets the project's domains unless `keep_domains=true` (replace import).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable, Collection
@@ -15,12 +16,17 @@ from ..infra.cloud import CloudError, CloudUnavailable
 from ..infra.repos.domains import DomainRepo
 from .account import NotSignedIn
 from .loader import ProjectLoader
+from .ratelimit import KeyedWindow, Window, client_address
 
 log = logging.getLogger("eggie.domains")
 
 SYNC_PENDING = 60.0
 SYNC_IDLE = 600.0
 PAGE_FRESH = 10.0
+CHALLENGE_TOKEN = re.compile(r"[A-Za-z0-9_-]{20,200}")
+CHALLENGES_PER_CLIENT = 20
+CHALLENGES_ALL = 300
+CHALLENGE_WINDOW = 60.0
 
 _BY_STATUS = {404: NotFound, 409: Conflict, 422: Invalid, 429: TooMany}
 
@@ -76,6 +82,10 @@ class Domains:
         # refresh whose list predates a store is dropped instead of undoing it.
         self._lock = threading.Lock()
         self._generation = 0
+        self._challenges_per_client = KeyedWindow(
+            CHALLENGES_PER_CLIENT, CHALLENGE_WINDOW, clock, what="certificate checks")
+        self._challenges = Window(CHALLENGES_ALL, CHALLENGE_WINDOW, clock,
+                                  what="certificate checks")
 
     def sync(self) -> None:
         if not self._account.signed_in:
@@ -152,16 +162,16 @@ class Domains:
         return self._addresses(project_id, project)
 
     def summary(self, project_id: str) -> list[dict]:
-        self._loader.require(project_id)
         return [{"hostname": r["hostname"], "display": r["display"], "status": r["status"],
                  "primary": bool(r["is_primary"])}
                 for r in self._repo.for_project(project_id)]
 
     def primary_url(self, project_id: str) -> str | None:
-        if self._eggie_host(project_id, self._loader.require(project_id)) is None:
+        rows = self._repo.for_project(project_id)
+        if not rows or self._eggie_host(project_id, self._loader.require(project_id)) is None:
             return None
         installed = set(self._installed())
-        for row in self._repo.for_project(project_id):
+        for row in rows:
             domain = _domain(row)
             if domain.primary and serving(domain, installed):
                 return f"https://{domain.hostname}"
@@ -267,7 +277,13 @@ class Domains:
             return
         self._store(lambda: self._repo.forget_project(project_id))
 
-    def challenge(self, token: str) -> str:
+    def challenge(self, token: str, *, forwarded_for: str = "", peer: str = "") -> str:
+        """Open to anyone on the internet: only a well-formed token, within both
+        windows, costs a call to the service."""
+        if not (CHALLENGE_TOKEN.fullmatch(token)
+                and self._challenges_per_client.take(client_address(forwarded_for, peer))
+                and self._challenges.take()):
+            raise NotFound("challenge_not_found", "no such challenge")
         try:
             out = self._account.authed(lambda t: self._cloud.acme_challenge(t, token))
             value = out["key_authorization"]

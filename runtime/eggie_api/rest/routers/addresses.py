@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 
-from ...errors import NotFound
-from ...services.ratelimit import KeyedWindow, Window
 from ..schemas import AddAddress
 
 if TYPE_CHECKING:
     from ...wiring import Services
-
-CHALLENGE_TOKEN = re.compile(r"[A-Za-z0-9_-]{20,200}")
 
 
 def build(s: Services) -> APIRouter:
@@ -51,20 +46,13 @@ def build_console(s: Services) -> APIRouter:
 
 
 def build_challenge(s: Services) -> APIRouter:
-    # Open to anyone on the internet (rest/auth.py): only a well-formed token,
-    # within the window, costs a call to the service.
+    # Open to anyone on the internet (rest/auth.py); Domains.challenge limits it.
     router = APIRouter()
-    per_client = KeyedWindow(20, 60.0, what="certificate checks")
-    overall = Window(300, 60.0, what="certificate checks")
 
     @router.get("/.well-known/acme-challenge/{token}", response_class=PlainTextResponse)
     def challenge(token: str, request: Request) -> PlainTextResponse:
-        # Traefik replaces a client's own X-Forwarded-For with the address it came from.
-        client = (request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-                  or getattr(request.client, "host", ""))
-        if not (CHALLENGE_TOKEN.fullmatch(token) and per_client.take(client)
-                and overall.take()):
-            raise NotFound("challenge_not_found", "no such challenge")
-        return PlainTextResponse(s.domains.challenge(token))
+        return PlainTextResponse(s.domains.challenge(
+            token, forwarded_for=request.headers.get("x-forwarded-for", ""),
+            peer=getattr(request.client, "host", "")))
 
     return router

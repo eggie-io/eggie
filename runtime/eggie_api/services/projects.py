@@ -203,10 +203,10 @@ class ProjectService:
                     removed = docker.remove_tree_as_root(self._runner, folder)
                     if not removed.ok and result.ok:
                         result = removed
-            self._projects.remove(project_id)
-            self._pushed_projects.remove(project_id)
             if not keep_domains:
                 self._forget_domains(project_id)
+            self._projects.remove(project_id)
+            self._pushed_projects.remove(project_id)
             self._wake()
         return {"id": project_id, "stopped": result.ok,
                 "detail": "" if result.ok else (result.stderr or result.stdout).strip()}

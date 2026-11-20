@@ -7,11 +7,13 @@ from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
 from eggie_api.services.account import Account
-from eggie_api.services.domains import PAGE_FRESH, SYNC_IDLE, SYNC_PENDING, Domains
+from eggie_api.services.domains import (CHALLENGE_WINDOW, PAGE_FRESH, SYNC_IDLE,
+                                      SYNC_PENDING, Domains)
 from eggie_api.services.loader import ProjectLoader
 from tests.runtime.api.fake_cloud import FakeCloud
 
 TOKEN = "at"
+CHALLENGE = "a" * 43
 WEB = "services:\n  web:\n    image: nginx\n    ports: ['8080:80']\n"
 DNS = [{"type": "A", "name": "@", "value": "198.51.100.7"}]
 PROBLEM = {"code": "dns_elsewhere", "message": "example.com points to another server.",
@@ -255,9 +257,9 @@ def test_a_challenge_the_service_does_not_know_is_not_found(tmp_path):
     cloud = FakeCloud(acme_challenge=[{"key_authorization": "tok.thumb"},
                                       CloudError("challenge_not_found", "no", 404)])
     domains, _, _, _ = make(tmp_path, cloud)
-    assert domains.challenge("tok") == "tok.thumb"
+    assert domains.challenge(CHALLENGE) == "tok.thumb"
     with pytest.raises(NotFound) as e:
-        domains.challenge("other")
+        domains.challenge("b" * 43)
     assert e.value.code == "challenge_not_found"
 
 
@@ -337,4 +339,69 @@ def test_a_project_without_a_web_service_has_no_primary_url(tmp_path):
     installed.add("c1")
     domains.sync()
     (tmp_path / "projects" / "shop" / "docker-compose.yml").write_text("services: {}\n")
+    assert domains.primary_url("shop") is None
+
+
+def refused(domains, **client):
+    with pytest.raises(NotFound) as e:
+        domains.challenge(CHALLENGE, **client)
+    return e.value.code == "challenge_not_found"
+
+
+def test_a_malformed_challenge_token_never_reaches_the_service(tmp_path):
+    cloud = FakeCloud()
+    domains, _, _, _ = make(tmp_path, cloud)
+    for bad in ("too-short", "a" * 201, "a" * 42 + ".", "a" * 42 + "/", ""):
+        with pytest.raises(NotFound):
+            domains.challenge(bad, peer="203.0.113.9")
+    assert cloud.calls == []
+
+
+def test_one_address_gets_twenty_challenges_a_minute_and_others_still_get_theirs(tmp_path):
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 21)
+    domains, _, _, _ = make(tmp_path, cloud)
+    for _ in range(20):
+        assert domains.challenge(CHALLENGE, forwarded_for="203.0.113.9, 10.0.0.2") == "k.t"
+    assert refused(domains, forwarded_for="203.0.113.9")
+    assert domains.challenge(CHALLENGE, peer="198.51.100.1") == "k.t"
+    assert cloud.names().count("acme_challenge") == 21
+
+
+def test_a_refused_address_is_answered_again_once_its_minute_has_passed(tmp_path):
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 21)
+    domains, _, _, clock = make(tmp_path, cloud)
+    for _ in range(20):
+        domains.challenge(CHALLENGE, peer="203.0.113.9")
+    assert refused(domains, peer="203.0.113.9")
+    clock.now += CHALLENGE_WINDOW
+    assert domains.challenge(CHALLENGE, peer="203.0.113.9") == "k.t"
+
+
+def test_the_three_hundred_and_first_challenge_in_a_minute_is_refused(tmp_path):
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 300)
+    domains, _, _, _ = make(tmp_path, cloud)
+    for n in range(300):
+        domains.challenge(CHALLENGE, forwarded_for=f"203.0.113.{n % 20}")
+    assert refused(domains, forwarded_for="198.51.100.1")
+    assert cloud.names().count("acme_challenge") == 300
+
+
+def test_the_summary_of_a_project_with_no_row_is_empty_not_an_error(tmp_path):
+    # A project deleted mid-listing must not take the listing down.
+    domains, _, _, _ = make(tmp_path, FakeCloud())
+    assert domains.summary("gone") == []
+
+
+class NoLoad(ProjectLoader):
+    def load(self, project_id):
+        raise AssertionError(f"{project_id} was loaded")
+
+
+def test_primary_url_of_a_project_without_domains_loads_nothing(tmp_path):
+    config = ApiConfig(projects_root=tmp_path / "projects", site_host="foo.eggie.io",
+                       domain="foo.eggie.space")
+    repos = Repos.open(Database(tmp_path / "state.db"))
+    repos.projects.add("shop", str(tmp_path / "projects" / "shop"), config.domain)
+    domains = Domains(repos.domains, NoLoad(config, repos.projects), None, FakeCloud(),
+                      config, installed=lambda: set(), changed=lambda: None)
     assert domains.primary_url("shop") is None

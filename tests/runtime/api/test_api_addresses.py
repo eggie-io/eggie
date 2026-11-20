@@ -127,7 +127,9 @@ def test_the_challenge_answers_plain_text_without_any_credential(site_env):
 
 def test_a_malformed_challenge_token_never_reaches_the_service(site_env):
     bare = site_env.bare
-    assert bare.get(CHALLENGE + "..%2Fhealth").status_code == 404
+    # A decoded slash matches no route at all; the open path reaches nothing else.
+    resp = bare.get(CHALLENGE + "..%2Fhealth")
+    assert (resp.status_code, resp.json()["error"]["code"]) == (404, "not_found")
     for bad in ("too-short", "a" * 201, "a" * 42 + ".", "a" * 42 + "%20"):
         resp = bare.get(CHALLENGE + bad)
         assert (resp.status_code, resp.json()["error"]["code"]) == (
@@ -135,29 +137,17 @@ def test_a_malformed_challenge_token_never_reaches_the_service(site_env):
     assert "acme_challenge" not in site_env.cloud.names()
 
 
-def from_client(k, address):
-    return k.bare.get(CHALLENGE + TOKEN, headers={"X-Forwarded-For": address})
+def test_the_router_hands_the_client_address_to_the_service(site_env):
+    seen = []
 
+    def challenge(token, **client):
+        seen.append((token, client))
+        return "a.b"
 
-def test_the_twenty_first_challenge_from_one_address_is_refused_but_not_others(site_env):
-    site_env.cloud.replies["acme_challenge"] = [{"key_authorization": "a.b"}] * 21
-    for _ in range(20):
-        assert from_client(site_env, "203.0.113.9").status_code == 200
-    refused = from_client(site_env, "203.0.113.9")
-    assert (refused.status_code, refused.json()["error"]["code"]) == (
-        404, "challenge_not_found")
-    assert from_client(site_env, "198.51.100.1").status_code == 200
-    assert site_env.cloud.names().count("acme_challenge") == 21
-
-
-def test_the_three_hundred_and_first_challenge_in_a_minute_is_refused(site_env):
-    site_env.cloud.replies["acme_challenge"] = [{"key_authorization": "a.b"}] * 300
-    for n in range(300):
-        assert from_client(site_env, f"203.0.113.{n % 20}").status_code == 200, n
-    refused = from_client(site_env, "198.51.100.1")
-    assert (refused.status_code, refused.json()["error"]["code"]) == (
-        404, "challenge_not_found")
-    assert site_env.cloud.names().count("acme_challenge") == 300
+    site_env.services.domains.challenge = challenge
+    resp = site_env.bare.get(CHALLENGE + TOKEN, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert (resp.text, resp.headers["content-type"].split(";")[0]) == ("a.b", "text/plain")
+    assert seen == [(TOKEN, {"forwarded_for": "203.0.113.9", "peer": "testclient"})]
 
 
 def test_a_custom_host_reaches_nothing_else_on_the_api(site_env):
@@ -202,6 +192,22 @@ def test_deleting_a_project_forgets_its_domains(site_env):
     assert site_env.client.delete("/projects/shop").status_code == 200
     assert site_env.repos.domains.list() == []
     assert site_env.repos.domains.queued() == ["example.com"]
+
+
+def test_a_delete_whose_domains_cannot_be_forgotten_can_be_retried(site_env):
+    serve(site_env)
+    domains = site_env.repos.domains
+    forget = domains.forget_project
+
+    def broken(project_id):
+        raise RuntimeError("database is locked")
+
+    domains.forget_project = broken
+    assert site_env.raw_client.delete("/projects/shop").status_code == 500
+    assert site_env.repos.projects.get("shop") is not None
+    domains.forget_project = forget
+    assert site_env.client.delete("/projects/shop").status_code == 200
+    assert domains.queued() == ["example.com"]
 
 
 def test_a_replace_delete_keeps_them(site_env):

@@ -135,13 +135,29 @@ def test_a_malformed_challenge_token_never_reaches_the_service(site_env):
     assert "acme_challenge" not in site_env.cloud.names()
 
 
-def test_the_sixty_first_challenge_in_a_minute_is_refused(site_env):
-    site_env.cloud.replies["acme_challenge"] = [{"key_authorization": "a.b"}] * 61
-    for _ in range(60):
-        assert site_env.bare.get(CHALLENGE + TOKEN).status_code == 200
-    resp = site_env.bare.get(CHALLENGE + TOKEN)
-    assert (resp.status_code, resp.json()["error"]["code"]) == (404, "challenge_not_found")
-    assert site_env.cloud.names().count("acme_challenge") == 60
+def from_client(k, address):
+    return k.bare.get(CHALLENGE + TOKEN, headers={"X-Forwarded-For": address})
+
+
+def test_the_twenty_first_challenge_from_one_address_is_refused_but_not_others(site_env):
+    site_env.cloud.replies["acme_challenge"] = [{"key_authorization": "a.b"}] * 21
+    for _ in range(20):
+        assert from_client(site_env, "203.0.113.9").status_code == 200
+    refused = from_client(site_env, "203.0.113.9")
+    assert (refused.status_code, refused.json()["error"]["code"]) == (
+        404, "challenge_not_found")
+    assert from_client(site_env, "198.51.100.1").status_code == 200
+    assert site_env.cloud.names().count("acme_challenge") == 21
+
+
+def test_the_three_hundred_and_first_challenge_in_a_minute_is_refused(site_env):
+    site_env.cloud.replies["acme_challenge"] = [{"key_authorization": "a.b"}] * 300
+    for n in range(300):
+        assert from_client(site_env, f"203.0.113.{n % 20}").status_code == 200, n
+    refused = from_client(site_env, "198.51.100.1")
+    assert (refused.status_code, refused.json()["error"]["code"]) == (
+        404, "challenge_not_found")
+    assert site_env.cloud.names().count("acme_challenge") == 300
 
 
 def test_a_custom_host_reaches_nothing_else_on_the_api(site_env):

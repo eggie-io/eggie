@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 
 from ...errors import NotFound
-from ...services.ratelimit import Window
+from ...services.ratelimit import KeyedWindow, Window
 from ..schemas import AddAddress
 
 if TYPE_CHECKING:
@@ -54,11 +54,16 @@ def build_challenge(s: Services) -> APIRouter:
     # Open to anyone on the internet (rest/auth.py): only a well-formed token,
     # within the window, costs a call to the service.
     router = APIRouter()
-    window = Window(60, 60.0, what="certificate checks")
+    per_client = KeyedWindow(20, 60.0, what="certificate checks")
+    overall = Window(300, 60.0, what="certificate checks")
 
     @router.get("/.well-known/acme-challenge/{token}", response_class=PlainTextResponse)
-    def challenge(token: str) -> PlainTextResponse:
-        if not CHALLENGE_TOKEN.fullmatch(token) or not window.take():
+    def challenge(token: str, request: Request) -> PlainTextResponse:
+        # Traefik replaces a client's own X-Forwarded-For with the address it came from.
+        client = (request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+                  or getattr(request.client, "host", ""))
+        if not (CHALLENGE_TOKEN.fullmatch(token) and per_client.take(client)
+                and overall.take()):
             raise NotFound("challenge_not_found", "no such challenge")
         return PlainTextResponse(s.domains.challenge(token))
 

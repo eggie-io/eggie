@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 from . import registry
+from .theme_win import ThemeWatch
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +50,11 @@ class WindowsDesktop:
     def __init__(self, registry_writer=registry.write_value,
                  registry_reader=registry.read_value,
                  registry_deleter=registry.delete_value,
-                 registry_binary_reader=registry.read_binary):
+                 registry_binary_reader=registry.read_binary,
+                 theme_watch=None):
         self._write_registry = registry_writer
+        self._theme = theme_watch or ThemeWatch()
+        self._restyle = None
         self._read_registry = registry_reader
         self._delete_registry = registry_deleter
         self._read_registry_binary = registry_binary_reader
@@ -63,20 +67,30 @@ class WindowsDesktop:
 
     def style_title_bar(self, window) -> None:
         try:
-            from . import title_bar_win
+            from . import theme_win, title_bar_win
             hwnd = int(window.native.Handle.ToInt64())
-            title_bar_win.apply(hwnd, title_bar_win.os_uses_dark(),
-                                title_bar_win.dwm_set_attribute)
         except Exception as e:
             log.warning("could not style the title bar: %r", e)
+            return
+
+        def restyle() -> None:
+            title_bar_win.apply(hwnd, theme_win.apps_use_dark(), title_bar_win.dwm_set_attribute)
+
+        # before_show may fire again; keep one subscription that styles the newest window.
+        first = self._restyle is None
+        self._restyle = restyle
+        restyle()
+        if first:
+            self._theme.subscribe(lambda: self._restyle())
 
     def let_session_end_close(self, on_session_end) -> None:
         from .tray_win import let_session_end_close
         let_session_end_close(on_session_end)
 
-    def tray(self, *, icon, on_open, on_settings, on_quit):
+    def tray(self, *, icons, on_open, on_settings, on_quit):
         from .tray_win import WinTray
-        return WinTray(icon=icon, on_open=on_open, on_settings=on_settings, on_quit=on_quit)
+        return WinTray(icons=icons, theme=self._theme, on_open=on_open,
+                       on_settings=on_settings, on_quit=on_quit)
 
     def single_instance(self, on_show, *, announce: bool) -> bool:
         from . import instance

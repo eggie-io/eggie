@@ -60,7 +60,7 @@ Every feature router (`FEATURES` in `rest/app.py`) is mounted **twice**:
 
 The desktop gets the browser a session via `POST /sessions/handoff`; a signed-in page gets the
 system browser one via `POST /api/sessions/handoff`
-(`docs/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`).
+(`../eggie-resources/superpowers/specs/2026-09-21-web-ui-agent-prerequisites-design.md`).
 Every non-2xx body is `{"error": {"code": ..., "message": ...}}`, produced by one exception
 handler — the host's `ApiClient` and the console both depend on that shape.
 
@@ -85,7 +85,10 @@ and a host release. Prefer additive changes.
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;
   `connect.facts` knows `"site"`; `Public` reports `not_available`. Browser allowlist and `Secure`
-  cookie: `rest/auth.py::cookie_options`.
+  cookie: `rest/auth.py::cookie_options`. `InstanceProjects.report`
+  (`services/instance_projects.py`) is a site-only sync pass: it `PUT`s the full project list to
+  `/v1/instances/me/projects` on change and every 10 minutes; `public_url` only while
+  `started_ok`. Lifecycle status writes wake the loop (`on_status`).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service
@@ -96,6 +99,9 @@ and a host release. Prefer additive changes.
   `started_ok` or `crash_looping` and `secrets_changed_at > last_started_at`; a start is stamped
   before it reads values. Reserved names (`COMPOSE_`/`DOCKER_`/`LD_`/`BUILDX_`/`BUILDKIT_`, `PATH`, `HOME`) are refused.
   Services pulled in through compose `include:` get no names. Purge drops values and requests.
+  A secret has a `kind`: `text` or `file` (≤64 KB, any bytes, base64 in `state.db`). At every start the API writes
+  files to `<secrets_root>/<project_id>/` (dir 0700, files 0444, `EGGIE_SECRETS_ROOT`), and the overlay mounts them
+  read-only at `/run/secrets/NAME` via top-level `secrets:`; env `NAME` is that path. Push manifests are format 2 (carry kind).
 - **Files** (`infra/files.py`, `services/files.py`) — `POST/GET /projects/{id}/files`, `PUT/GET/DELETE
   /projects/{id}/files/{path}`; replaces the 32,767-char `wsl.exe` command-line ceiling.
   `extract_archive` **merges** an uploaded tar or tar.gz (the console sends plain tar, the host
@@ -112,11 +118,12 @@ and a host release. Prefer additive changes.
   `{vm, ssh}`; the SSH port is `host/providers/eggie.yaml`'s `ssh.localPort`, held equal by
   `tests/test_constants_agree.py`.
 - **Account / cloud sync** (`infra/cloud.py`, `services/account.py`, `services/sync.py`) — the Eggie service
-  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Device-code sign-in, tokens in
+  (`EGGIE_CLOUD_URL`, default `https://app.eggie.io/api`). Every call sends
+  `User-Agent: Eggie/<version> (<host OS from connect.json>)`. Device-code sign-in, tokens in
   `state.db`; `sync.py` gives each local project a service record
   (`client_ref = <device_id>/<local_id>`) on a thread. Only the console is locked until sign-in —
   the CLI and agents never wait on it. Service gaps are **not** worked around here; see
-  `docs/superpowers/specs/2026-09-23-account-sign-in-sync-design.md` §7.
+  `../eggie-resources/superpowers/specs/2026-09-23-account-sign-in-sync-design.md` §7.
 - **GitHub** (`infra/github.py`, `services/github_link.py`) — Device Flow (`EGGIE_GITHUB_CLIENT_ID`, no
   secret); token in `/opt/eggie/github/token` (0600). The API never touches a user home: it writes
   a token-free `desired.json` with a rising `generation`; a systemd path unit runs
@@ -134,12 +141,24 @@ and a host release. Prefer additive changes.
   and re-reads the account's active URL (`GET /v1/tunnels/url`) on each sync pass. The `tunnel`
   network reaches the VM through its gateway, so every port published on 0.0.0.0 (the api's, a
   project's `ports:`) is reachable from the tunnel client. Design:
-  `docs/superpowers/specs/2026-09-24-public-url-design.md`.
+  `../eggie-resources/superpowers/specs/2026-09-24-public-url-design.md`.
 - **Agents** (`services/agents.py`) — `GET /agents/status` and `POST /agents/{id}/setup`. The API never
   reads a home: it bumps counters in `/opt/eggie/agent-status/` (`check`, `setup/<id>`) and returns
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
+- **Runtime update** (`services/runtime_update.py`) — `GET|POST /api/runtime/update` (console only). Holds
+  no state: `available.json` (written by `install/lib/update-check.sh`) and `status.json` (by
+  `update-now.sh`) are read on every call, since the update recreates this container. POST bumps
+  `update/request`; a bump nobody picked up in 2 minutes, or a `running` status older than 30, reads
+  as `failed`. `available` is shown only when it is a newer `runtime-vX.Y.Z` than `runtime.version`.
+- **Recipes** (`services/recipes.py`, `infra/recipe_zip.py`) — `GET /recipes` (published recipes
+  with a `summary`) and `POST /recipes/{slug}/get` for `eggie recipe list|get`. `get` downloads the
+  bundle from the Eggie service inside the request (no job), checks size and sha256, unpacks into
+  `<projects_root>/.recipes/<slug>/<version>/` and returns `RECIPE.md`'s text as `instructions`; a
+  version already there is not downloaded again. Caps: zip 100 MB, 10 000 entries, 500 MB unpacked;
+  no links, no paths leaving the folder, modes reset to 0664/0775, folders 2775 (group-writable). The API never runs anything from a
+  bundle. Design: `../eggie-resources/superpowers/specs/2026-11-13-recipe-bundles-design.md`.
 - **Push / Transfers** — local side: `services/push.py` (job kind `push`, console-only routes
   `GET|POST /api/projects/{id}/push` in `rest/routers/push.py`) packs a bundle with `infra/bundle.py`
   (tar: `manifest.json`, `files/`, `volumes/<key>/`; data is every named volume that exists locally, a bind folder is a file)
@@ -155,7 +174,7 @@ and a host release. Prefer additive changes.
   console's confirmation and replaces files and volumes alike. Opens are limited to 10 a minute per sender address (1024 tracked) and 60
   in all; a compose `name:` that is another kitchen project's is `bad_bundle`. It takes project identity from the grant only (a pushed `project.yml` `id` is rewritten) and drops an opened push with no upload after 10 minutes. `pushed_projects` keeps pushed projects out of the kitchen's
   sync; `instance_pushes` (sender) turns a local delete into `Forget`. Error copy is rendered here;
-  the console shows the API's messages. Design: `docs/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
+  the console shows the API's messages. Design: `../eggie-resources/superpowers/specs/2026-10-20-push-to-kitchen-design.md`.
 
 ## Testing
 

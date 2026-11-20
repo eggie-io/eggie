@@ -91,7 +91,7 @@ def test_the_windows_tray_dependencies_are_platform_scoped():
 
 
 def test_packaging_bundles_the_tray_icon_and_uses_it_as_the_app_icon():
-    # The tray loads icon.ico at runtime; a spec without it starts a tray
+    # The tray loads its icons from resources at runtime; a spec without it starts a tray
     # with no image and pystray raises on the first draw.
     for spec_path in ("packaging/windows/eggie.spec", "packaging/macos/eggie.spec"):
         spec = (REPO_ROOT / spec_path).read_text()

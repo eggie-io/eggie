@@ -10,6 +10,7 @@ for them.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from host.core import constants
@@ -58,6 +59,37 @@ def screen_for(route: str, state: str, *, first_run: bool, resumed: bool,
             return Screen("runtime-update:running", action="start_runtime_update")
         return Screen("runtime-update:failed", message=update_error or problem)
     return Screen(f"home:{state}" if route == "home" else route)
+
+
+# --- connecting a coding agent from the console's guide ----------------
+#
+# The console's guide sends the window to `#connect=<agent>&back=<path>` on
+# the local UI. Both values come from a page served by the VM, so they are
+# checked here, and nothing happens until the user confirms on the local
+# screen.
+
+# The agents ui/index.html has an agent-connect section for, by their
+# runtime/agents/ id. A provider may offer only these.
+CONNECTABLE_AGENTS = frozenset({"claude-code", "codex"})
+# The guide pages the console may ask to come back to.
+_GUIDE_PATH = re.compile(r"/(agents|welcome)/[a-z0-9][a-z0-9-]*")
+
+
+def connectable(available) -> list[str]:
+    """What the handoff link tells the console it may offer, in order."""
+    return [agent for agent in available if agent in CONNECTABLE_AGENTS]
+
+
+def agent_offer(agent_id: object, available) -> dict:
+    """The agent-connect screen's data: `<agent>: True` picks its section."""
+    if not isinstance(agent_id, str) or agent_id not in connectable(available):
+        return {"ok": False, "message": "Eggie can't connect that agent on this computer."}
+    return {"ok": True, "agent": agent_id, agent_id: True}
+
+
+def console_path(back: object) -> str:
+    """Where the console opens: the guide it came from, else its front page."""
+    return back if isinstance(back, str) and _GUIDE_PATH.fullmatch(back) else "/"
 
 
 def route_for(readiness: Readiness) -> tuple[str, str]:

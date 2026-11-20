@@ -32,7 +32,10 @@ export function AgentPicker({ base }: { base: AgentBase }) {
                   </span>
                 </span>
                 <span className={s.cardText}>
-                  <span className={s.cardName}>{agent.name}</span>
+                  <span className={s.cardName}>
+                    {agent.name}
+                    {agent.note && <span className={s.nameNote}> {agent.note}</span>}
+                  </span>
                   <span className={s.cardTagline}>{agent.platforms[platform]!.tagline}</span>
                 </span>
               </Card>

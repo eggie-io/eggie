@@ -1,7 +1,10 @@
+import base64
 import io
+import json
 
 import pytest
 
+from tests.host.test_client_seam import TOKEN, AppOpener
 from tests.runtime.api.conftest import COMPOSE_ONE_WEB
 from tests.runtime.cli.loader import load
 
@@ -17,7 +20,26 @@ def _project(guest, name="blog"):
 
 
 def _values(guest, pid="blog"):
-    return guest._client.app.state.services.repos.secrets.values(pid)
+    entries = guest._client.app.state.services.repos.secrets.entries(pid)
+    return {n: v for n, (v, _) in entries.items()}
+
+
+class _RecordingOpener:
+    def __init__(self, inner):
+        self._inner = inner
+        self.sent = []
+
+    def open(self, request, timeout=None):
+        self.sent.append((request.get_method(), request.selector,
+                          json.loads(request.data) if request.data else None))
+        return self._inner.open(request, timeout=timeout)
+
+
+def _record_requests(guest):
+    recorder = _RecordingOpener(AppOpener(guest._client))
+    guest._api_client = lambda: cli.ApiClient(TOKEN, opener=recorder,
+                                              sleep=lambda _s: None)
+    return recorder
 
 
 def test_secret_set_reads_the_value_from_stdin_without_its_trailing_newline(guest):
@@ -137,6 +159,49 @@ def test_secret_rm_dismisses_a_request(guest):
     assert "Dismissed the request" in out
     _, out, _ = guest.run("secret", "list", cwd=folder)
     assert "STRIPE_KEY" not in out
+
+
+def test_secret_rm_on_a_request_only_name_dismisses_the_request(guest):
+    folder = _project(guest)
+    guest.run("secret", "request", "STRIPE_KEY", "hint", cwd=folder)
+    sent = _record_requests(guest)
+    assert guest.run("secret", "rm", "STRIPE_KEY", cwd=folder)[0] == 0
+    assert [x[:2] for x in sent.sent if x[0] == "DELETE"] == [
+        ("DELETE", "/projects/blog/secret-requests/STRIPE_KEY")]
+
+
+def test_secret_request_file_over_a_text_value_is_sent(guest):
+    folder = _project(guest)
+    guest.run("secret", "set", "AUTH_KEY", cwd=folder, stdin="v")
+    sent = _record_requests(guest)
+    assert guest.run("secret", "request", "AUTH_KEY", "key", "--file", cwd=folder)[0] == 0
+    assert [x[0] for x in sent.sent if x[0] == "PUT"] == ["PUT"]
+
+
+def test_request_file_sends_kind(guest):
+    folder = _project(guest)
+    sent = _record_requests(guest)
+    code, _, err = guest.run("secret", "request", "AUTH_KEY", "Apple → keys", "--file",
+                             cwd=folder)
+    assert (code, err) == (0, "")
+    assert [x for x in sent.sent if x[0] == "PUT"] == [
+        ("PUT", "/projects/blog/secret-requests/AUTH_KEY",
+         {"hint": "Apple → keys", "kind": "file"})]
+
+
+def test_list_marks_files(guest):
+    folder = _project(guest)
+    key = base64.b64encode(b"-----BEGIN PRIVATE KEY-----").decode()
+    guest._client.put("/projects/blog/secrets/AUTH_KEY",
+                      json={"value": key, "kind": "file", "filename": "AuthKey_ABC.p8"},
+                      headers={"Authorization": f"Bearer {TOKEN}"})
+    guest.run("secret", "set", "API_KEY", cwd=folder, stdin="v")
+    guest.run("secret", "request", "OTHER_KEY", "from the vendor", "--file", cwd=folder)
+    _, out, _ = guest.run("secret", "list", cwd=folder)
+    lines = out.splitlines()
+    assert "AUTH_KEY (file AuthKey_ABC.p8)" in lines
+    assert "API_KEY" in lines
+    assert "  OTHER_KEY — from the vendor (file)" in lines
 
 
 def test_secret_set_on_a_running_project_says_how_to_apply_it(guest):

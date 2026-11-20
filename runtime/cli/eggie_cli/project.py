@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import grp
 import os
+import pwd
 import re
 from pathlib import Path
 
@@ -54,8 +55,11 @@ def docker_gid() -> int:
 def prepare_overlay_dir(project: Path, gid: int) -> None:
     """Let the API write .eggie/overlay.yml, the one file it writes here.
 
-    It runs as a non-root member of the docker group, while a coding agent
-    working as root leaves directories 755 and files 644.
+    The API runs as a non-root member of the docker group (uid 1000), while
+    a coding agent working as root leaves directories 755 and files 644.
+    When the API creates overlay.yml itself, the file belongs to it, and only
+    a file's owner may chown or chmod it -- so nothing is changed that is
+    already right, and a foreign overlay that is wrong is replaced instead.
     """
     eggie_dir = project / ".eggie"
     overlay = eggie_dir / "overlay.yml"
@@ -67,15 +71,58 @@ def prepare_overlay_dir(project: Path, gid: int) -> None:
                 "command again.")
     try:
         eggie_dir.mkdir(exist_ok=True)
-        os.chown(eggie_dir, -1, gid)
-        os.chmod(eggie_dir, 0o2775)
-        if overlay.exists():
-            os.chown(overlay, -1, gid)
-            os.chmod(overlay, 0o664)
     except PermissionError as e:
         raise EggieError(
-            f"Eggie could not make {eggie_dir} writable for itself "
-            f"({e.strerror}). Run the command as the folder's owner.") from None
+            f"Eggie could not create {eggie_dir} ({e.strerror}). "
+            "Run the command as the folder's owner.") from None
+    try:
+        _make_group_writable(eggie_dir, gid, 0o2775)
+    except PermissionError as e:
+        raise _not_writable(eggie_dir, e) from None
+    if not overlay.exists():
+        return
+    try:
+        _make_group_writable(overlay, gid, 0o664)
+    except PermissionError:
+        _replace_with_own_copy(overlay, gid)
+
+
+def _make_group_writable(path: Path, gid: int, mode: int) -> None:
+    st = path.stat()
+    if st.st_gid == gid and st.st_mode & mode == mode:
+        return
+    os.chown(path, -1, gid)
+    os.chmod(path, mode)
+
+
+def _replace_with_own_copy(overlay: Path, gid: int) -> None:
+    # The folder is group-writable without the sticky bit, so a member of the
+    # docker group may replace a file there that it is not allowed to chmod.
+    tmp = overlay.with_name(".overlay.yml.tmp")
+    try:
+        tmp.write_bytes(overlay.read_bytes())
+        os.chown(tmp, -1, gid)
+        os.chmod(tmp, 0o664)
+        os.replace(tmp, overlay)
+    except PermissionError as e:
+        tmp.unlink(missing_ok=True)
+        raise _not_writable(overlay, e) from None
+
+
+def _not_writable(path: Path, e: PermissionError) -> EggieError:
+    st = path.stat()
+    return EggieError(
+        f"Eggie could not make {path} writable for itself ({e.strerror}): "
+        f"it is owned by {_user(st.st_uid)} with mode "
+        f"{oct(st.st_mode & 0o7777)[2:]}. Ask its owner, or root, to remove "
+        "it or run the command again.")
+
+
+def _user(uid: int) -> str:
+    try:
+        return f"{pwd.getpwuid(uid).pw_name} (uid {uid})"
+    except KeyError:
+        return f"uid {uid}"
 
 
 def alt_compose_file(folder: Path) -> str | None:

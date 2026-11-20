@@ -21,8 +21,8 @@ from host.core.status import probe
 from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
-from .view import (progress_event, route_for, rows_for, screen_for,
-                   terminal_event)
+from .view import (agent_offer, connectable, console_path, progress_event,
+                   route_for, rows_for, screen_for, terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -159,7 +159,9 @@ class DesktopApi:
 
     # --- actions ------------------------------------------------------
 
-    def enter_console(self) -> dict:
+    def enter_console(self, back: str = "") -> dict:
+        """`back` is the console page to open, from the agent-connect screen;
+        anything but a guide page opens the front page."""
         if self.jobs.running():
             # Leaving the local UI now would strand the job's events.
             return {"ok": False, "message": "Wait for the current job to finish first."}
@@ -169,15 +171,53 @@ class DesktopApi:
             # Never load the console without a code: its signed-out screen
             # sends the user to the desktop app they are already in.
             return {"ok": False, "message": f"{e}"}
-        url = f"http://localhost:{constants.EDGE_PORT}/#handoff={code}"
+        url = f"http://localhost:{constants.EDGE_PORT}{console_path(back)}#handoff={code}"
         home = self._local_url()
         if home:
             # The console's Home button comes back here.
             url += f"&home={quote(home, safe='')}"
+            # Which agents its guide may send back here to be connected.
+            agents = connectable(self._agents())
+            if agents:
+                url += f"&connect={','.join(agents)}"
+            # Those that have it already: their guide starts past the button.
+            added = [a for a in agents if self._added(a)]
+            if added:
+                url += f"&added={','.join(added)}"
         # The page navigates itself: pywebview resolves this call's promise
         # with evaluate_js after we return, and a page loaded meanwhile lacks
         # the callback.
         return {"ok": True, "url": url}
+
+    def agent_connection(self, agent_id: str) -> dict:
+        """What the agent-connect screen draws, or why it can't."""
+        return agent_offer(agent_id, self._agents())
+
+    def connect_agent(self, agent_id: str) -> dict:
+        offer = agent_offer(agent_id, self._agents())
+        if not offer["ok"]:
+            return offer
+        if self.jobs.running():
+            # Setup and repair rewrite the same SSH files.
+            return {"ok": False, "message": "Wait for the current job to finish first."}
+        try:
+            message = self._provider.connect_agent(agent_id)
+        except Exception as e:
+            log.warning("connecting %s failed: %s", agent_id, e)
+            return {"ok": False, "message": f"{e}"}
+        return {"ok": True, "message": message}
+
+    def _added(self, agent_id: str) -> bool:
+        try:
+            return bool(self._provider.agent_connected(agent_id))
+        except Exception as e:
+            # Only decides which steps show first; never block the console.
+            log.warning("checking %s's connection failed: %s", agent_id, e)
+            return False
+
+    def _agents(self):
+        # Every real provider has it (test_provider_surface); fakes need not.
+        return getattr(self._provider, "agent_connections", ())
 
     def start_install(self) -> dict:
         from host.core.install import run_install

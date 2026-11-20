@@ -49,6 +49,16 @@ jobs:
             exit 1
           fi
 
+      - name: Release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: >-
+            --unreleased --tag runtime-v${{ inputs.version }} --tag-pattern '^runtime-v'
+            --include-path 'runtime/**' --include-path 'packaging/images/**' --strip all
+        env:
+          OUTPUT: NOTES.md
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -85,3 +95,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "runtime-v$VERSION" -m "Eggie runtime $VERSION"
           git push origin "runtime-v$VERSION"
+
+      # Not "latest": that badge stays on the desktop app download.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ -s NOTES.md ]] || echo "No user-facing changes." > NOTES.md
+          gh release create "runtime-v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --latest=false \
+            --title "Eggie runtime $VERSION" \
+            --notes-file NOTES.md

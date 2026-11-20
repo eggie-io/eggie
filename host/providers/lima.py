@@ -5,8 +5,8 @@ from __future__ import annotations
 # provider's `create()` against the pre-33571da revision of eggie.yaml
 # booted under `vz`, ran the full engine bootstrap, and answered both
 # declared portForwards (39080, 39099) -- confirmed after the fact, not by a
-# controlled session anyone recorded as it happened. See
-# docs/macos-status.md (it points at the full command trail in git history).
+# controlled session anyone recorded as it happened. The full command trail
+# is in git history.
 # Still unrun anywhere: the `--cpus`/`--memory` flags `create()` passes,
 # `forward()`/`forwards()` and the ssh control master
 # they assume, `stop()`/`destroy()`, the uninstall path, whether
@@ -21,7 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import lima_install, ssh_alias
+from . import claude_ssh, lima_install, ssh_alias
 from ..core.provider import Access, AccessField, Completed, Diagnosis, CheckResult, Runtime
 
 LOOPBACK = "127.0.0.1"
@@ -29,8 +29,8 @@ LOOPBACK = "127.0.0.1"
 # The value eggie.yaml's `ssh.localPort` requests -- not confirmed as what
 # Lima actually binds. Not shown to the user for that reason (see
 # _PORT_UNCONFIRMED below): the one VM this project has inspected predates
-# the field, so whether Lima honours it is still an open question in
-# docs/macos-status.md. Kept here only as the value asked for.
+# the field, so whether Lima honours it is still an open question. Kept here
+# only as the value asked for.
 DECLARED_SSH_PORT = "39022"
 
 # What the screen shows for Port before Lima has written its own ssh.config
@@ -81,7 +81,7 @@ def parse_ssh_config(text: str) -> dict[str, str]:
 # check. Port is different: Eggie requests it via eggie.yaml's
 # `ssh.localPort`, but no run of this project has ever confirmed Lima honours
 # that field rather than picking its own free port -- the one VM inspected so
-# far predates the field entirely (see docs/macos-status.md).
+# far predates the field entirely.
 # User and Identity file are never configured anywhere: they are guesses at
 # Lima's usual behaviour for a fresh guest account (`getpass.getuser()`,
 # `_config/user`), and a host username Lima sanitizes when provisioning the
@@ -181,7 +181,8 @@ class LimaProvider:
     def __init__(self, name="eggie-vm", config: Path | None = None,
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
-                 mac_ver=None, machine=None, ssh_dir: Path | None = None):
+                 mac_ver=None, machine=None, ssh_dir: Path | None = None,
+                 claude_dir: Path | None = None):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
@@ -191,6 +192,12 @@ class LimaProvider:
         # The user's own ~/.ssh, where setup adds the `eggie` host. Injectable
         # so no test can edit the real one.
         self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
+        # Claude Code's ~/.claude, where the agent-connect screen adds the
+        # "Eggie" SSH connection.
+        # Next to the injected ~/.ssh by default, so a test that moves one
+        # moves both.
+        self.claude_dir = (Path(claude_dir) if claude_dir
+                           else self.ssh_dir.parent / ".claude")
         # Injectable for the same reason Wsl2Provider's `facts` is: platform.mac_ver()
         # returns ('', ..., ...) on the Windows host this suite mostly runs on, so a
         # test exercising preflight()/is_supported() needs a real version to check
@@ -332,6 +339,10 @@ class LimaProvider:
                 ssh_alias.forget(self.ssh_dir / "known_hosts", address, self._spawn)
         except (OSError, ValueError):
             pass    # a stale `eggie` host is harmless; the VM is what mattered
+        try:
+            claude_ssh.remove(self.claude_dir)
+        except (OSError, ValueError):
+            pass
 
     def recover(self, *, everything: bool = False) -> None:
         # Nothing outside this instance to restart, so `everything` is the same
@@ -393,6 +404,26 @@ class LimaProvider:
             return f"Connect with: ssh {ssh_alias.ALIAS}"
 
         return write
+
+    # The agents the desktop app can connect to this VM by itself, by their
+    # runtime/agents/ id. The console shows the guide's button only for these.
+    agent_connections = ("claude-code",)
+
+    def connect_agent(self, agent_id: str) -> str:
+        """Point the agent at the VM. For Claude Code: an "Eggie" entry in its
+        SSH connections naming the `eggie` alias, which is refreshed first
+        so the entry never names a host that is missing or stale."""
+        if agent_id not in self.agent_connections:
+            raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
+        ssh_alias.install(self.ssh_dir / "config", self._lima_ssh())
+        self._trust_host_keys()
+        claude_ssh.install(self.claude_dir)
+        return "Claude Code now lists Eggie as an SSH connection."
+
+    def agent_connected(self, agent_id: str) -> bool:
+        """Whether connect_agent's entry is there, so the guide can skip the
+        button. Only the entry: it says nothing about whether the agent uses it."""
+        return agent_id == "claude-code" and claude_ssh.installed(self.claude_dir)
 
     def _control(self, verb: str, guest_port: int, host_port: int) -> Completed:
         return self._spawn(["ssh", "-F", str(self._ssh_config()),

@@ -359,6 +359,37 @@ const ROUTES = {
   'quit': () => fromTray(() => startQuit(false)),
 };
 
+// The console's agent guide sends the window here as
+// #connect=<agent>&back=<guide path> after the user clicked "Add Eggie to
+// <agent>". The window adds it straight away and goes back: the click in the
+// guide is the request. The bridge checks both values again, and what it can
+// write is fixed (an entry for this VM), so a page sending the window here
+// unasked can do no more than that.
+let connectRequest = null;
+
+async function openConnect(agent, back) {
+  const offer = await api().agent_connection(agent);
+  if (!offer.ok) {
+    showNotice(offer.message);
+    return refresh();
+  }
+  connectRequest = { agent, back, offer };
+  return ACTIONS['connect-agent']();
+}
+
+ACTIONS['connect-agent'] = async () => {
+  show('agent-connect', connectRequest.offer);
+  const result = await api().connect_agent(connectRequest.agent);
+  if (!result.ok) return show('agent-connect:failed', result);
+  // The guide shows the result: it opens with the connection marked added.
+  return ACTIONS['connect-back']();
+};
+ACTIONS['connect-back'] = async () => {
+  const result = await api().enter_console(connectRequest ? connectRequest.back : '');
+  if (result.ok) window.location.assign(result.url);
+  else show('agent-connect:failed', result);
+};
+
 window.eggie.route = (name) => {
   const go = ROUTES[name];
   if (go) go();
@@ -488,6 +519,11 @@ function start() {
   if (route && ROUTES[route]) {
     history.replaceState(null, '', window.location.pathname);
     return ROUTES[route]();
+  }
+  const params = new URLSearchParams(route);
+  if (params.has('connect')) {
+    history.replaceState(null, '', window.location.pathname);
+    return openConnect(params.get('connect'), params.get('back') || '');
   }
   return refresh();
 }

@@ -13,7 +13,7 @@ DATAS = [
      "host/provision/nginx-hello"),
     ("../../host/providers/eggie.yaml", "host/providers"),
     ("../../host/desktop/ui", "host/desktop/ui"),
-    # The tray loads icon.ico at runtime.
+    # The tray loads its tray-on-*.ico icons at runtime.
     ("../../host/desktop/resources", "host/desktop/resources"),
 ]
 # Nothing from runtime/ is bundled: the VM pulls the API image and fetches the

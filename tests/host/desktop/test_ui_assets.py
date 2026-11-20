@@ -346,3 +346,21 @@ def test_every_home_tile_has_an_icon():
     missing = [a for a in sorted(actions)
                if f'.tiles [data-action="{a}"] {{ --icon:' not in css]
     assert not missing, f"home tiles without an icon: {missing}"
+
+
+def test_every_connectable_agent_has_words_on_the_connect_screen():
+    from host.desktop.view import CONNECTABLE_AGENTS
+    markup = (UI / "index.html").read_text()
+    start = markup.index('data-screen="agent-connect"')
+    screen = markup[start:markup.index("</template>", start)]
+    assert CONNECTABLE_AGENTS, "nothing to check"
+    for agent in CONNECTABLE_AGENTS:
+        assert f'data-when="{agent}"' in screen, agent
+    assert 'data-screen="agent-connect:failed"' in markup
+
+
+def test_the_connect_route_is_handled_and_its_actions_exist():
+    script = (UI / "app.js").read_text()
+    assert "params.has('connect')" in script
+    for action in ("connect-agent", "connect-back"):
+        assert f"ACTIONS['{action}']" in script, action

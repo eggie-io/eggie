@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
 
@@ -27,6 +28,13 @@ class CheckResult:
     ok: bool
     fix: str | None = None
     remedy: str | None = None
+
+
+@dataclass(frozen=True)
+class TrayIcons:
+    """Icon files for a light and a dark menu bar or taskbar."""
+    on_light: Path
+    on_dark: Path
 
 
 @dataclass(frozen=True)
@@ -97,7 +105,7 @@ class DesktopPlatform(Protocol):
     def single_instance(self, on_show: Callable[[], None], *, announce: bool) -> bool: ...
     def watch_login_launch(self, on_login: Callable[[], None]) -> None: ...
     def on_window_shown(self, visible: bool) -> None: ...
-    def tray(self, *, icon, on_open, on_settings, on_quit): ...
+    def tray(self, *, icons: TrayIcons, on_open, on_settings, on_quit): ...
     def let_session_end_close(self, on_session_end: Callable[[], None]) -> None: ...
     # Called once the native window exists, before it first shows.
     def style_title_bar(self, window) -> None: ...

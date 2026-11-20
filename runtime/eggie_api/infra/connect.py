@@ -6,6 +6,7 @@ from pathlib import Path
 from .. import constants
 
 _KINDS = {"wsl", "lima", "site"}
+_HOST_OS = {"wsl": "Windows", "lima": "macOS"}
 
 
 def facts(path: Path, site_host: str | None = None,
@@ -29,3 +30,8 @@ def facts(path: Path, site_host: str | None = None,
         # The service installed the user's own key; there is no file to name.
         ssh = {"host": site_host, "port": 22, "user": site_user or user, "key_file": None}
     return {"vm": vm, "ssh": ssh}
+
+
+def host_os(path: Path) -> str:
+    """The OS of the computer the VM runs on; a site is its own host."""
+    return _HOST_OS.get(facts(path)["vm"], "Linux")

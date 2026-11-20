@@ -411,9 +411,11 @@ def selfcheck():
     ]
 
     try:
-        from host.desktop.__main__ import icon_path, ui_dir
+        from host.desktop.__main__ import tray_icons, ui_dir
         checks.append(("host/desktop/ui", ui_dir() / "index.html"))
-        checks.append(("host/desktop/resources", icon_path()))
+        icons = tray_icons()
+        checks.append(("host/desktop/resources", icons.on_light))
+        checks.append(("host/desktop/resources", icons.on_dark))
     except ImportError as e:
         # host.desktop.__main__ is itself one of the hidden-import modules
         # checked below -- if it can't even be imported, there is no ui_dir()

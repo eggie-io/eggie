@@ -25,7 +25,7 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
 
 - `packages/ui` — the kit: tokens, fonts, components, drawn from the Eggie design system
   (claude.ai/design project "Omelet: Linux VM Setup UI": `Eggie Host + Console v3.dc.html` and
-  `_ds/eggie-console-design-system-…`), never from `host/desktop/ui` or the old `docs/design/` board.
+  `_ds/eggie-console-design-system-…`), never from `host/desktop/ui`.
   Imports are held to React and its fonts by `packages/ui/test/boundary.test.ts`.
   - Every icon is `<Icon name=…>`; the glyphs (the design system's 24px stroke set) are paths in
     `src/icons.ts`, so a new one is added there, not drawn inline. `Button`, `IconButton`, `Badge`
@@ -42,9 +42,16 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     bare menu. `projects/color.ts`'s `projectColor` gives a project its tile colour, stable per id.
   - `/p/:id/secrets` — the Secrets page; `projects/secrets.ts`'s `nameProblem` mirrors the API's
     name rule. Sections: Requested (name with its hint, value), Your secrets (write-only, typed values visible), Not used by the latest push, Add. While `start_when_ready` is set a notice offers "Start without them" (the ordinary `up`). Start on a project with `secrets_requested > 0` calls `start-when-ready` and lands here. Mock: `?scenario=secrets`, `instance-waiting-secrets`.
+  - `/p/:id/docs/:page?` — pages an agent wrote in the project's `.eggie/docs/*.md`, read through the
+    files API (no API of their own); the menu item shows only when one exists. `docs/markdown.ts` maps
+    `marked`'s lexer tokens to a tree `DocView.tsx` draws (never `marked`'s HTML; raw HTML stays text),
+    `docs/pages.ts` resolves links and images. A ```` ```qr ```` block draws a QR code. A ```` ```secret ```` block (`name: NAME`, optional `file: true`) draws a write-only field that saves into the project's secrets; values are never shown.
+    The Secrets page shows a file picker for file secrets (requested with `--file` or by a `file: true` block); its Add form is text-only. `eggie secret request NAME "hint" --file` asks for one. Mock: `?scenario=docs`.
   - `push/push.ts` decides the Push dialog (kitchen rows, the repeat-push confirmation, floating-tag warnings, menu state, secrets link) with no React; `screens/project/PushModal.tsx` renders it and shows the API's messages as they come (the server renders the error copy). Mock: `?scenario=push-no-account`, `push-offline`, `push-no-instances`, `push-instances`, `push-running`, `push-done-secrets`, `push-rate-limited`, `instance-waiting-secrets`.
-  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM, never clickable), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openInstanceUrl`, through `openExternal` in the desktop window). Mock: `?scenario=instances`, `no-instances`, `instances-down`.
+  - Instance switcher: `instances/instances.ts` decides the rows (`switcherEntries`: owner check, then status, then signed-out; "This computer" only on the local VM, never clickable), `shell/InstanceSwitcher.tsx` is the top-bar popover (fetches `GET /api/instances` when opened; a pick navigates to `openInstanceUrl`, through `openExternal` in the desktop window; "New cloud kitchen" at the bottom opens `<web_app>/kitchens/new`). On a site the shell's back arrow links `<web_app>/kitchens/<id>` (the `current` row of the same query; `/kitchens` until it loads). The account menu's "Account settings" opens `<web_app>/account`. Mock: `?scenario=instances`, `no-instances`, `instances-down`.
   - `boot/boot.ts` carries `site` from `/api/health` on its result (App keeps the last one) into `SiteContext` (`useSite()`, and `webApp` likewise into `WebAppContext`/`useWebApp()`; the initial state comes from the page address via `isLocalHost`, so `undefined` occurs only on a non-local address before the first boot answer); on a site the signed-out screen redirects (`window.location.replace`) to `<web_app>/kitchens/open?host=…` via `site/signIn.ts`, or shows a Sign in button after a refused code (`handoff_spent`, so a failing redeem cannot loop), the sign-in screen says the server lost its sign-in (no button), the project menu's Public address item and sign-out are hidden, and the agents card drops rows for facts that do not exist (`key_file: null`). Mock: `?scenario=site`, `?scenario=site-signed-out`.
+  - Runtime update: `update/update.ts`'s `updateView` decides the header pill (`shell/UpdateButton.tsx`, shown only when `GET /api/runtime/update` has an `available` release), the full-page `screens/UpdatingOverlay.tsx` while `state` is running, and a one-time reload once `installed` moves from where this tab started. Fetch errors keep the last data, since the API restarts mid-update. Mock: `?scenario=update-available`, `update-failed`, `updating`.
+  - Sign-in (`screens/account/SignIn.tsx`, shown for boot's `needsAccount`): `account/account.ts`'s `signInView` decides the choice (Create free account / I already have an account) or "Finish in your browser", and the address each opens (`createAccountLink`: the web app's `/signup?redirect=` back to the device page). The code is asked for when the screen shows, so a press only opens a link; a press that comes before the code opens nothing, and the waiting view then offers "Open <host>" instead of saying "We opened". The decisions between answers (`afterPoll`, `afterQuietCode`, `afterPress`) live there too. Mock: `?scenario=account-needed`, `account-denied`, `account-revoked`, `account-unreachable`; the mock approves 6 s after a click.
   - `boot/boot.ts` decides signed-in / signed-out / needs-update / not-answering from `/api/health`
     and `/api/session`. `api/version.ts`'s `SUPPORTED_API` is held to the API's `API_VERSION` by
     `tests/test_constants_agree.py`.
@@ -61,7 +68,12 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     mode with no React in it. One `POST /projects/{id}/files` request, no resume; the API unpacks
     it with Python's `tarfile`.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
-    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser".
+    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser", and
+    `connect=` (agent ids the window can connect by itself) and `added=` (those already connected):
+    those agents' guides then show the manifest's `auto` steps, whose `"action": "connect"` step
+    fills the picture frame with a card (`ConnectCard`) whose "Add Eggie to <agent>" (or the step's `button`) sends the window to its `#connect=` screen (`desktopConnectUrl`),
+    with "Set it up manually" switching to the ordinary `steps`. With `added=` the list opens
+    past the button. All three are empty in a plain browser, which gets only `steps`.
   - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
     connection" last step. `onboarding/onboarding.ts` decides: shown only when no agent is connected,
     the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.

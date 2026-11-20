@@ -76,6 +76,7 @@ With no Windows folders on `PATH`, nothing in the VM can open a Windows browser.
 | `/opt/eggie/api.token` | Shared secret between the host and the API |
 | `/opt/eggie/state.db` | Project state (sqlite) |
 | `/opt/eggie/projects/<id>/` | Each project; the generated Traefik overlay is at `.eggie/overlay.yml` |
+| `/opt/eggie/secrets/<project>/` | File secrets of the project, rewritten at each start |
 | `/opt/eggie/uploads/` | Partially uploaded files |
 | `/opt/eggie/tunnel/token` | Public-URL tunnel token; present only while a public URL is on |
 | `/opt/eggie/connect.json` | VM kind and login user, shown by the console's agent guide |
@@ -89,6 +90,35 @@ bash /opt/eggie/runtime/install/install.sh "$(cat /opt/eggie/runtime.version)" -
 
 Ports: the API listens on `39099`, and all project and console traffic enters through Traefik on
 `39080`. Project URLs look like `http://<name>.local.eggie.space:39080`.
+
+## Idle Claude Code sessions
+
+Claude Code Desktop, connected over SSH, keeps one `claude` process per session alive (so a task
+survives the laptop sleeping) and stops it only after 30 days without a connection. At 60–300 MB
+each, a day of new sessions fills the VM's memory. `eggie-claude-reaper.timer` runs
+`install/lib/claude-reaper.sh` 30 minutes after boot and every 30 minutes after that, on local
+VMs and sites alike. It sends `SIGTERM` to a process whose binary is
+`~/.claude/remote/ccd-cli/<version>` when that session's transcript,
+`~/.claude/projects/*/<session id>.jsonl`, has not changed for 2 hours. The transcript stays;
+the next message from Desktop starts a fresh process on the same session.
+
+It goes by the transcript, not CPU: an idle session still uses 9–39 s of CPU per 30 minutes, so
+CPU can't tell idle from busy. The transcript is appended on every message and agent step.
+
+Settings, in `/opt/eggie/claude-reaper.env` (read on every run; an install never overwrites it):
+
+| Variable | Default | |
+|---|---|---|
+| `EGGIE_REAPER_IDLE_MIN` | `120` | Minutes without a transcript change before the process is stopped |
+| `EGGIE_REAPER_DRY` | `0` | `1` logs what would be stopped and stops nothing |
+
+```bash
+systemctl list-timers eggie-claude-reaper.timer
+journalctl -t eggie-reaper        # one line per ccd-cli process with its idle_min; "reap ..." when stopped
+```
+
+Accepted trade-offs: a session that waits more than 2 hours on a permission prompt is stopped, and
+the user sends the message again; a `/loop` with an interval over 2 hours is stopped between runs.
 
 ## Site mode (a server)
 
@@ -107,8 +137,12 @@ console, e.g. `foo.eggie.io`) and `EGGIE_SITE_DOMAIN` (projects, e.g. `foo.eggie
 | Public URLs | optional | not available (everything already is) |
 
 Build a snapshot: install with no site variables, run `bash /opt/eggie/runtime/install/snapshot-prep.sh`
-(it also drops root's key and shell history and resets the machine id), image. First boot of a droplet from it: cloud-init writes `account.json`, creates the login user,
-and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names (spec §3.2).
+(it also drops root's key and shell history and resets the machine id), image. First boot of a server from it: cloud-init writes `account.json`, creates the login user,
+and runs `get.sh` with `EGGIE_RUNTIME_REPAIR=1` plus the two site names.
+
+On a site server the memory limits for login accounts, the swap size and swappiness, the disabled
+dynamic motd and the sshd hardening come from the service's snapshot, not from the
+runtime; leave them as they are.
 
 ## Troubleshooting
 

@@ -1,11 +1,14 @@
 import { useId, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router";
-import { Button, Card, Icon, Notice, cx } from "@eggie/ui";
-import type { Agent, Connect, Guide } from "../../agents/catalog";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
+import { BrandMark, Button, Card, Icon, Notice, cx } from "@eggie/ui";
+import { firstStep, guideSteps, type Agent, type Connect, type Guide, type Step } from "../../agents/catalog";
 import { cardRows } from "../../agents/card";
 import { useAgents, useAgentStatus } from "../../agents/queries";
 import { CopyButton } from "../../components/CopyButton";
+import { desktopConnectUrl } from "../../desktop/desktop";
+import { useDesktopAdded, useDesktopConnect, useDesktopHome } from "../../desktop/DesktopContext";
 import { SkipButton, useOnboarding } from "../onboarding/Onboarding";
+import { AgentMark } from "./AgentMark";
 import { AgentMenu } from "./AgentMenu";
 import type { AgentBase } from "./AgentPicker";
 import { AgentStatusLine } from "./AgentStatusLine";
@@ -16,6 +19,7 @@ import s from "./Agents.module.css";
 export function AgentGuide({ base }: { base: AgentBase }) {
   const { id } = useParams();
   const { platform, agents, connect, error } = useAgents();
+  const [byHand, setByHand] = useState(false);
 
   if (error)
     return (
@@ -38,8 +42,16 @@ export function AgentGuide({ base }: { base: AgentBase }) {
         <h1 className={s.guideTitle}>Connect a coding agent</h1>
         <AgentMenu agents={agents} current={agent} base={base} />
       </div>
-      {/* Keyed so switching agent starts again at step 1. */}
-      <Steps key={agent.id} agent={agent} guide={agent.platforms[platform]!} connect={connect} welcome={base === "/welcome"} />
+      {/* Keyed so switching agent, or between the two ways, starts the list again. */}
+      <Steps
+        key={`${agent.id}:${byHand}`}
+        agent={agent}
+        guide={agent.platforms[platform]!}
+        connect={connect}
+        welcome={base === "/welcome"}
+        byHand={byHand}
+        setByHand={setByHand}
+      />
     </div>
   );
 }
@@ -57,6 +69,46 @@ function Hint({ label, text }: { label: string; text: string }) {
   );
 }
 
+// The desktop window, for an agent it can connect by itself. Undefined in a
+// plain browser or for any other agent: the guide then shows only the manual steps.
+function useConnectOffer(agent: Agent): { url: string; added: boolean } | undefined {
+  const home = useDesktopHome();
+  const connect = useDesktopConnect();
+  const added = useDesktopAdded();
+  const { pathname } = useLocation();
+  if (!home || !connect.includes(agent.id)) return undefined;
+  return { url: desktopConnectUrl(home, agent.id, pathname), added: added.includes(agent.id) };
+}
+
+// The automatic list's connect step, drawn in the picture frame: the button
+// is the step. It sends the desktop window to its own screen, which adds the
+// connection and brings the user straight back here.
+function ConnectCard({ agent, step, offer }: { agent: Agent; step: Step; offer: { url: string; added: boolean } }) {
+  const go = () => window.location.assign(offer.url);
+  return (
+    <div className={s.connectCard}>
+      <div className={s.connectMarks} aria-hidden="true">
+        <span className={s.mark}><BrandMark size={22} /></span>
+        <Icon name="chevron-right" />
+        <AgentMark agent={agent} />
+      </div>
+      {offer.added ? (
+        <>
+          <h2 className={s.connectTitle}><Icon name="check-circle" />{step.done ?? `Eggie is in ${agent.name}'s connections`}</h2>
+          <p className={s.connectText}>{step.done ? "Go on to the next step." : `Go on to the next step to choose it in ${agent.name}.`}</p>
+          <Button variant="ghost" size="sm" onClick={go}>{step.button ? "Do it again" : "Add it again"}</Button>
+        </>
+      ) : (
+        <>
+          <h2 className={s.connectTitle}>{step.title}</h2>
+          <div className={cx(s.connectText, s.rich)}><RichText nodes={step.body} /></div>
+          <Button variant="primary" icon="check-circle" onClick={go}>{step.button ?? `Add Eggie to ${agent.name}`}</Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 type Check = "idle" | "checking" | "notYet" | "unreachable";
 
 const CHECK_TEXT: Record<"notYet" | "unreachable", (name: string) => string> = {
@@ -64,8 +116,19 @@ const CHECK_TEXT: Record<"notYet" | "unreachable", (name: string) => string> = {
   unreachable: () => "Couldn't reach your kitchen just now. Check again in a moment.",
 };
 
-function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide; connect: Connect | undefined; welcome: boolean }) {
-  const [active, setActiveStep] = useState(0);
+function Steps({ agent, guide: shown, connect, welcome, byHand, setByHand }: {
+  agent: Agent;
+  guide: Guide;
+  connect: Connect | undefined;
+  welcome: boolean;
+  byHand: boolean;
+  setByHand: (byHand: boolean) => void;
+}) {
+  const offer = useConnectOffer(agent);
+  const { steps, auto } = guideSteps(shown, offer !== undefined, byHand);
+  // The automatic list shows only the card it names, if any.
+  const guide = { ...shown, steps, card: auto ? shown.autoCard : shown.card };
+  const [active, setActiveStep] = useState(() => (auto ? firstStep(steps, offer!.added) : 0));
   const [check, setCheck] = useState<Check>("idle");
   const navigate = useNavigate();
   const { finish } = useOnboarding();
@@ -129,6 +192,11 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
             </li>
           ))}
         </ol>
+        {offer && shown.auto && (
+          <button type="button" className={s.otherWay} onClick={() => setByHand(!byHand)}>
+            {auto ? "Set it up manually" : "Let Eggie add the connection"}
+          </button>
+        )}
         <AgentStatusLine agent={agent} />
         {rows && (
           <section className={s.key} aria-label="Connection details">
@@ -151,7 +219,9 @@ function Steps({ agent, guide, connect, welcome }: { agent: Agent; guide: Guide;
       </div>
       <div className={s.main}>
         <Card className={s.frame}>
-          <MediaSlider key={active} media={step.media} alt={step.alt} />
+          {step.action === "connect" && offer
+            ? <ConnectCard agent={agent} step={step} offer={offer} />
+            : <MediaSlider key={active} media={step.media} alt={step.alt} />}
         </Card>
         <div className={s.nav}>
           {/* Mounted before it has text, so screen readers announce the message. */}

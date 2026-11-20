@@ -1,15 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, Icon, cx } from "@eggie/ui";
-import { createApi } from "../api/client";
 import { openExternal } from "../desktop/desktop";
 import { useDesktopHome } from "../desktop/DesktopContext";
-import { switcherEntries, type Instance, type SwitcherEntry } from "../instances/instances";
-import { openInstanceUrl, webAppInstances } from "../site/signIn";
+import { switcherEntries, type SwitcherEntry } from "../instances/instances";
+import { instancesQuery } from "../instances/query";
+import { openInstanceUrl, webAppNewInstance } from "../site/signIn";
 import { useSite, useWebApp } from "../site/SiteContext";
 import s from "./Shell.module.css";
-
-const api = createApi((input, init) => fetch(input, init));
 
 export function InstanceSwitcher() {
   const [open, setOpen] = useState(false);
@@ -18,13 +16,7 @@ export function InstanceSwitcher() {
   const site = useSite();
   const webApp = useWebApp();
   const desktopHome = useDesktopHome();
-  const { data, isError, isFetching, refetch } = useQuery({
-    queryKey: ["instances"],
-    queryFn: () => api.get<{ instances: Instance[] }>("/api/instances"),
-    enabled: open,
-    staleTime: 0,
-    retry: false,
-  });
+  const { data, isError, isFetching, refetch } = useQuery({ ...instancesQuery, enabled: open, staleTime: 0 });
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +38,6 @@ export function InstanceSwitcher() {
   const current = instances?.find((instance) => instance.current);
   const label = site === null ? "This computer" : (current?.display_name ?? site ?? "Kitchen");
   const entries = instances ? switcherEntries({ instances, site }) : [];
-  const listed = instances?.length ?? 0;
 
   const linkFor = (entry: SwitcherEntry) =>
     entry.target !== null && webApp ? openInstanceUrl(webApp, entry.target.host) : null;
@@ -61,7 +52,7 @@ export function InstanceSwitcher() {
       window.location.assign(url);
     }
   };
-  const instancesPage = webAppInstances(webApp);
+  const newInstance = webAppNewInstance(webApp);
 
   return (
     <div className={s.switcher} ref={root}>
@@ -103,23 +94,21 @@ export function InstanceSwitcher() {
               </button>
             );
           })}
-        {instances && listed === 0 && (
-          <span className={s.switcherNote}>
-            {instancesPage ? (
-              <a
-                href={instancesPage}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setOpen(false);
-                  openExternal(instancesPage);
-                }}
-              >
-                Kitchens are created in the Eggie web app
-              </a>
-            ) : (
-              "Kitchens are created in the Eggie web app"
-            )}
-          </span>
+        {newInstance && (
+          <>
+            <span className={s.rule} aria-hidden="true" />
+            <button
+              type="button"
+              className={s.item}
+              onClick={() => {
+                setOpen(false);
+                openExternal(newInstance);
+              }}
+            >
+              <Icon name="plus" />
+              <span className={s.itemLabel}>New cloud kitchen</span>
+            </button>
+          </>
         )}
       </div>
     </div>

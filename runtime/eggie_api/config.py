@@ -42,6 +42,9 @@ class ApiConfig:
     # Partial uploads, outside projects_root so neither a listing, the
     # reconcile scan nor the coding agent ever sees a half-written file.
     uploads_root: Path = Path(f"{constants.GUEST_ROOT}/uploads")
+    # File secrets, written by the API and mounted by compose from this same
+    # path (/opt/eggie is bind-mounted into the API at the identical path).
+    secrets_root: Path = Path(f"{constants.GUEST_ROOT}/secrets")
     # A runaway/abuse guard on file uploads, not a policy. A folder import is
     # an uncompressed tar of the whole project, media included, so this sits
     # well above any real project; free disk is checked separately.
@@ -55,6 +58,8 @@ class ApiConfig:
     github_dir: Path = Path(constants.GITHUB_DIR)
     agent_status_dir: Path = Path(constants.AGENT_STATUS_DIR)
     agents_dir: Path = Path(constants.AGENTS_DIR)
+    update_dir: Path = Path(constants.UPDATE_DIR)
+    runtime_marker: Path = Path(constants.RUNTIME_VERSION_FILE)
     # A server with its own hostnames ("site mode"): the console's host.
     # Projects live under `domain`, which the installer sets alongside it.
     site_host: str | None = None
@@ -93,6 +98,8 @@ class ApiConfig:
             token_path=Path(env.get("EGGIE_API_TOKEN", constants.GUEST_TOKEN)),
             uploads_root=Path(env.get("EGGIE_UPLOADS_ROOT",
                                       f"{constants.GUEST_ROOT}/uploads")),
+            secrets_root=Path(env.get("EGGIE_SECRETS_ROOT",
+                                      f"{constants.GUEST_ROOT}/secrets")),
             max_upload_bytes=int(env.get("EGGIE_MAX_UPLOAD_BYTES",
                                          16 * 1024 ** 3)),
             cloud_url=env.get("EGGIE_CLOUD_URL", "https://app.eggie.io/api"),
@@ -108,6 +115,8 @@ class ApiConfig:
             github_dir=Path(env.get("EGGIE_GITHUB_DIR", constants.GITHUB_DIR)),
             agent_status_dir=Path(env.get("EGGIE_AGENT_STATUS_DIR", constants.AGENT_STATUS_DIR)),
             agents_dir=Path(env.get("EGGIE_AGENTS_DIR", constants.AGENTS_DIR)),
+            update_dir=Path(env.get("EGGIE_UPDATE_DIR", constants.UPDATE_DIR)),
+            runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
             web_url=env.get("EGGIE_WEB_URL", "https://app.eggie.io"),
             tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),

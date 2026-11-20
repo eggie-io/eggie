@@ -62,6 +62,7 @@ def seam(tmp_path):
                          projects_root=tmp_path / "projects",
                          state_db=tmp_path / "state.db",
                          token_path=tmp_path / "api.token",
+                         secrets_root=tmp_path / "secrets",
                          ready_timeout=0.0)
     runner = FakeRunner()
     # Injected: the real probe would open a socket to a Traefik that does not

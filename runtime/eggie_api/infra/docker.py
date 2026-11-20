@@ -4,6 +4,8 @@ import base64
 import json
 import os
 import re
+from collections.abc import Sequence
+from pathlib import Path
 
 # Absolute path: Docker Desktop's WSL integration puts its own docker CLI on
 # PATH, and a bare `docker` would send this VM's projects to Desktop's engine.
@@ -23,16 +25,22 @@ PROJECT_LABEL = "com.docker.compose.project"
 
 
 def _compose_argv(directory) -> list[str]:
+    # Always recreate: a plain `up -d` leaves a running container alone when
+    # its compose service is unchanged, so a `command:` that installs
+    # dependencies (e.g. `npm install && npm run dev`) never runs again after
+    # a `git pull` adds packages. `eggie up` promises a start or restart.
     return [DOCKER, "compose",
             "-f", f"{directory}/{COMPOSE_FILE}",
             "-f", f"{directory}/.eggie/overlay.yml",
-            "up", "-d"]
+            "up", "-d", "--force-recreate"]
 
 
 def _write_overlay(provider, project: Project, directory, domain: str, *,
-                   services=(), secret_names=(), declared=None):
+                   services=(), secret_names=(), declared=None,
+                   file_secrets=None):
     text = overlay_yaml(project, domain, services=services,
-                        secret_names=secret_names, declared=declared)
+                        secret_names=secret_names, declared=declared,
+                        file_secrets=file_secrets)
     encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
     return provider.exec(["bash", "-lc",
                           f"mkdir -p {directory}/.eggie && echo {encoded} | "
@@ -42,7 +50,9 @@ def _write_overlay(provider, project: Project, directory, domain: str, *,
 
 def compose_up(provider, project: Project, directory, domain: str, *,
               on_phase=None, services=(),
-              secrets: dict[str, str] | None = None, declared=None):
+              secrets: dict[str, str] | None = None, declared=None,
+              secret_files_dir: Path | None = None,
+              file_names: Sequence[str] = ()):
     """Returns (status, detail). `detail` carries the guest's own output when
     the stack did not start, so callers never have to report a bare status code
     that no one can act on. URLs are the API layer's job -- it is the only place
@@ -55,10 +65,12 @@ def compose_up(provider, project: Project, directory, domain: str, *,
 
     `secrets` reach compose only through its environment; the overlay names
     them."""
+    file_secrets = ({n: f"{secret_files_dir}/{n}" for n in file_names}
+                    if secret_files_dir else {})
     written = _write_overlay(provider, project, directory, domain,
                              services=services,
                              secret_names=list(secrets or {}),
-                             declared=declared)
+                             declared=declared, file_secrets=file_secrets)
     if not written.ok:
         # exec() never raises. Starting the stack anyway would produce a project
         # with no Traefik labels: no route, and no error naming the cause.

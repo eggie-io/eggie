@@ -82,7 +82,7 @@ class FakeRunner:
             return self.proc_net
         if "-q" in argv:
             return self.container_id
-        if argv[-2:] == ["up", "-d"]:
+        if argv[-3:] == ["up", "-d", "--force-recreate"]:
             if self.up_gate is not None:
                 assert self.up_gate.wait(5), "the up job was never released"
             return self.up
@@ -147,6 +147,7 @@ def _make_env(tmp_path, *, cloud=None, instance=None, sleep=None, clock=None,
             "token_path": token_path,
             "connect_path": tmp_path / "connect.json",
             "uploads_root": tmp_path / "uploads",
+            "secrets_root": tmp_path / "secrets",
             "agent_status_dir": tmp_path / "agent-status",
             "agents_dir": tmp_path / "agents",
             # No retry window: these tests assert on the verdict, and the window

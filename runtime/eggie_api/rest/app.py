@@ -6,10 +6,11 @@ from ..config import ApiConfig
 from ..wiring import Services, build
 from . import auth, errors
 from .routers import (account, files, github, instances, jobs, lifecycle, projects, public,
-                      push, secrets, sessions, system, transfers, uploads)
+                      push, recipes, runtime_update, secrets, sessions, system, transfers,
+                      uploads)
 
 FEATURES = (system, account, github, projects, lifecycle, files, uploads,
-            secrets, jobs, public)
+            secrets, jobs, public, recipes)
 
 
 def create_app(*, config: ApiConfig | None = None, services: Services | None = None,
@@ -40,6 +41,7 @@ def create_app(*, config: ApiConfig | None = None, services: Services | None = N
         app.include_router(router, prefix="/api")
     app.include_router(public.build_console(services), prefix="/api")
     app.include_router(instances.build_console(services), prefix="/api")
+    app.include_router(runtime_update.build_console(services), prefix="/api")
     app.include_router(push.build_console(services), prefix="/api")
     app.include_router(sessions.build(services))
     if config.site_host:

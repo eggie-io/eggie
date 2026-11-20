@@ -44,10 +44,10 @@ def load_project(compose_dict: dict, project_yml: dict | None, dir_name: str) ->
 
 
 def overlay_yaml(project: Project, domain: str, *, services=(),
-                 secret_names=(), declared=None) -> str:
+                 secret_names=(), declared=None, file_secrets=None) -> str:
     overlay = build_overlay(project.id, project.webs, domain,
                             services=services, secret_names=secret_names,
-                            declared=declared)
+                            declared=declared, file_secrets=file_secrets or {})
     return yaml.safe_dump(overlay, sort_keys=False)
 
 

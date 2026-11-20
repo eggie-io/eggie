@@ -67,7 +67,8 @@
   <section class="pad pad-home">
     <div class="home-main">
       <div class="hero">
-        <div class="pan pan-hot" aria-hidden="true"><span class="pan-white"></span></div>
+        <div class="pan pan-hot" aria-hidden="true"><span class="pan-white"></span>
+          <span class="pan-bubble"></span><span class="pan-bubble"></span><span class="pan-bubble"></span></div>
         <div class="hero-text">
           <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Running</span>
           <h1 class="display">The kitchen is open</h1>
@@ -81,8 +82,8 @@
         <button class="btn-update" data-action="app-update">Update now</button>
       </div>
       <div class="row">
-        <button class="btn-secondary" data-action="stop-vm"><span class="ic ic-stop" aria-hidden="true"></span>Stop the kitchen</button>
         <button class="btn-primary" data-action="enter-console">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary" data-action="stop-vm"><span class="ic ic-stop" aria-hidden="true"></span>Stop the kitchen</button>
       </div>
     </div>
     <footer class="odds">
@@ -351,6 +352,31 @@
     <p class="hint" data-when="unavailable">Only an installed Eggie can open when you sign in.</p>
     <p class="hint" data-field="error"></p>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
+  </section>
+</template>
+
+<template data-screen="agent-connect">
+  <section class="pad centered">
+    <span class="spinner" aria-hidden="true"></span>
+    <div data-when="claude-code">
+      <h2 class="title">Adding Eggie to Claude Code…</h2>
+      <p class="lede">You'll be back in the guide in a moment.</p>
+    </div>
+    <div data-when="codex">
+      <h2 class="title">Making eggie-vm your default WSL distro…</h2>
+      <p class="lede">You'll be back in the guide in a moment.</p>
+    </div>
+  </section>
+</template>
+
+<template data-screen="agent-connect:failed">
+  <section class="pad centered">
+    <h2 class="title">Couldn't add the connection</h2>
+    <p class="lede" data-field="message"></p>
+    <div class="row">
+      <button class="btn-primary" data-action="connect-agent">Try again</button>
+      <button class="btn-secondary" data-action="connect-back">Back to the guide</button>
+    </div>
   </section>
 </template>
 

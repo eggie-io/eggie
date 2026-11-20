@@ -1,62 +1,61 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button, Card, Notice, TextField, cx } from "@eggie/ui";
+import { FilePicker } from "../../components/FilePicker";
 import { actionError } from "../../projects/copy";
-import { useDeleteSecret, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
+import { useDeleteSecret, useDismissSecretRequest, useLifecycle, useProject, useSecrets, useSetSecret } from "../../projects/queries";
 import { nameProblem, splitSecrets } from "../../projects/secrets";
+import { trimValue, useSecretSave, type SecretKind } from "../../projects/useSecretSave";
 import { TitleRow } from "../project/TitleRow";
 import s from "./SecretsPage.module.css";
 
-// Pasted keys often carry a stray space or tab at the ends; newlines belong to PEM bodies.
-const trimValue = (v: string) => v.replace(/^[ \t]+|[ \t]+$/g, "");
-
-function RequestedRow({ id, name, hint }: { id: string; name: string; hint: string }) {
-  const save = useSetSecret(id);
-  const dismiss = useDeleteSecret(id);
-  const [value, setValue] = useState("");
+function RequestedRow({ id, name, hint, kind }: { id: string; name: string; hint: string; kind: SecretKind }) {
+  const save = useSecretSave(id, name, kind, () => {});
+  const dismiss = useDismissSecretRequest(id);
   return (
     <li className={cx(s.row, s.requested)}>
       <div className={s.who}>
         <span className={s.name}>{name}</span>
         <p className={s.hint}>{hint}</p>
       </div>
-      <TextField label="Value" secret value={value} onChange={setValue} />
+      {kind === "file" ? <FilePicker label="Key file" onPick={save.setPicked} /> : <TextField label="Value" secret value={save.value} onChange={save.setValue} />}
       <div className={s.actions}>
-        <Button disabled={trimValue(value) === "" || save.isPending} onClick={() => save.mutate({ name, value: trimValue(value) }, { onSuccess: () => setValue("") })}>Save</Button>
+        <Button disabled={!save.ready || save.pending} onClick={() => void save.submit()}>Save</Button>
         <Button variant="ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate(name)}>Dismiss</Button>
       </div>
-      {(save.error || dismiss.error) && <Notice tone="danger" className={s.wide}>{actionError(save.error ?? dismiss.error)}</Notice>}
+      {(save.problem || dismiss.error) && <Notice tone="danger" className={s.wide}>{save.problem ?? actionError(dismiss.error)}</Notice>}
     </li>
   );
 }
 
-function StoredRow({ id, name }: { id: string; name: string }) {
-  const save = useSetSecret(id);
-  const remove = useDeleteSecret(id);
+function StoredRow({ id, name, kind, filename }: { id: string; name: string; kind: SecretKind; filename: string | null }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState("");
-  const close = () => { setValue(""); setEditing(false); };
+  const save = useSecretSave(id, name, kind, () => setEditing(false));
+  const remove = useDeleteSecret(id);
+  const close = () => { save.reset(); setEditing(false); };
   return (
     <li className={s.row}>
       <span className={s.name}>{name}</span>
       {editing ? (
         <>
-          <TextField label="New value" secret autoFocus value={value} onChange={setValue} />
+          {kind === "file"
+            ? <FilePicker label="New key file" onPick={save.setPicked} />
+            : <TextField label="New value" secret autoFocus value={save.value} onChange={save.setValue} />}
           <div className={s.actions}>
-            <Button disabled={trimValue(value) === "" || save.isPending} onClick={() => save.mutate({ name, value: trimValue(value) }, { onSuccess: close })}>Save</Button>
+            <Button disabled={!save.ready || save.pending} onClick={() => void save.submit()}>Save</Button>
             <Button variant="ghost" onClick={close}>Cancel</Button>
           </div>
         </>
       ) : (
         <>
-          <span className={s.masked}>••••••••</span>
+          <span className={s.masked}>{kind === "file" ? filename : "••••••••"}</span>
           <div className={s.actions}>
             <Button onClick={() => setEditing(true)}>Replace</Button>
             <Button variant="ghost" className={s.quietDanger} disabled={remove.isPending} onClick={() => remove.mutate(name)}>Delete</Button>
           </div>
         </>
       )}
-      {(save.error || remove.error) && <Notice tone="danger" className={s.wide}>{actionError(save.error ?? remove.error)}</Notice>}
+      {(save.problem || remove.error) && <Notice tone="danger" className={s.wide}>{save.problem ?? actionError(remove.error)}</Notice>}
     </li>
   );
 }
@@ -131,21 +130,21 @@ export function SecretsPage() {
       {data.requested.length > 0 && (
         <Section title="Requested">
           <ul className={s.rows}>
-            {data.requested.map((r) => <RequestedRow key={r.name} id={id} name={r.name} hint={r.hint} />)}
+            {data.requested.map((r) => <RequestedRow key={r.name} id={id} name={r.name} hint={r.hint} kind={r.kind} />)}
           </ul>
         </Section>
       )}
       {used.length > 0 && (
         <Section title="Your secrets">
           <ul className={s.rows}>
-            {used.map((x) => <StoredRow key={x.name} id={id} name={x.name} />)}
+            {used.map((x) => <StoredRow key={x.name} id={id} name={x.name} kind={x.kind} filename={x.filename} />)}
           </ul>
         </Section>
       )}
       {unused.length > 0 && (
         <Section title="Not used by the latest push">
           <ul className={s.rows}>
-            {unused.map((x) => <StoredRow key={x.name} id={id} name={x.name} />)}
+            {unused.map((x) => <StoredRow key={x.name} id={id} name={x.name} kind={x.kind} filename={x.filename} />)}
           </ul>
         </Section>
       )}

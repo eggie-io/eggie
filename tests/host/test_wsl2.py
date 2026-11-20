@@ -399,3 +399,56 @@ def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
     runner = HungPoll({})
     _stopper(runner, [0, 1]).stop()
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
+
+
+# --- Connecting Codex: it runs only in the default WSL distro ---------------
+
+def _listing(*rows: str) -> bytes:
+    header = "  NAME            STATE           VERSION"
+    return "\r\n".join((header, *rows)).encode("utf-16-le")
+
+
+def test_connecting_codex_makes_this_distro_the_default():
+    r = FakeRunner()
+    message = make(r).connect_agent("codex")
+    assert r.calls == [["wsl.exe", "--set-default", "eggie-vm"]]
+    assert "eggie-vm" in message
+
+
+def test_connecting_codex_reports_a_failed_set_default():
+    import pytest
+    r = FakeRunner(stderr="There is no distribution with the supplied name.".encode("utf-16-le"),
+                   returncode=1)
+    with pytest.raises(RuntimeError, match="default WSL distro.*no distribution"):
+        make(r).connect_agent("codex")
+
+
+def test_connecting_any_other_agent_runs_nothing():
+    import pytest
+    r = FakeRunner()
+    with pytest.raises(ValueError):
+        make(r).connect_agent("claude-code")
+    assert r.calls == []
+
+
+def test_codex_is_connected_when_this_distro_is_the_default():
+    r = FakeRunner(stdout=_listing("  Ubuntu          Stopped         2",
+                                   "* eggie-vm        Running         2"))
+    assert make(r).agent_connected("codex") is True
+    assert r.calls == [["wsl.exe", "-l", "-v"]]
+
+
+def test_codex_is_not_connected_when_another_distro_is_the_default():
+    r = FakeRunner(stdout=_listing("* Ubuntu          Stopped         2",
+                                   "  eggie-vm        Running         2"))
+    assert make(r).agent_connected("codex") is False
+
+
+def test_codex_is_not_connected_when_wsl_cannot_list():
+    assert make(FakeRunner(returncode=1)).agent_connected("codex") is False
+
+
+def test_only_codex_is_ever_connected_here():
+    r = FakeRunner(stdout=_listing("* eggie-vm        Running         2"))
+    assert make(r).agent_connected("claude-code") is False
+    assert r.calls == []

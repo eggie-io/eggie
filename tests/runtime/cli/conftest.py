@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from eggie_api.rest.app import create_app
 from eggie_api.config import ApiConfig
 from tests.runtime.api.conftest import FakeProbe, FakeRunner
+from tests.runtime.api.fake_cloud import FakeCloud
 from tests.runtime.cli.loader import load
 from tests.host.test_client_seam import TOKEN, AppOpener
 
@@ -54,15 +55,29 @@ class Guest:
         return code, out.getvalue(), err.getvalue()
 
 
-@pytest.fixture
-def guest(tmp_path):
+def _guest(tmp_path, **overrides):
     (tmp_path / "api.token").write_text(TOKEN)
     root = tmp_path / "projects"
     root.mkdir()
     config = ApiConfig(domain="test.local", edge_port=41080,
                          projects_root=root, state_db=tmp_path / "state.db",
-                         token_path=tmp_path / "api.token", ready_timeout=0.0)
+                         token_path=tmp_path / "api.token", ready_timeout=0.0,
+                         secrets_root=tmp_path / "secrets")
     runner = FakeRunner()
-    app = create_app(config=config, runner=runner, http_probe=FakeProbe())
+    app = create_app(config=config, runner=runner, http_probe=FakeProbe(), **overrides)
     with TestClient(app) as client:
         yield Guest(root, client, runner)
+
+
+@pytest.fixture
+def guest(tmp_path):
+    yield from _guest(tmp_path)
+
+
+@pytest.fixture
+def recipe_guest(tmp_path):
+    # Replies are scripted per test: recipe_guest.cloud.replies["recipe"] = [...]
+    cloud = FakeCloud()
+    for g in _guest(tmp_path, cloud=cloud):
+        g.cloud = cloud
+        yield g

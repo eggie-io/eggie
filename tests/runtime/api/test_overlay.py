@@ -77,3 +77,27 @@ def test_a_project_and_service_name_cannot_collide_across_projects():
     a = build_overlay("blog-api", [WebSpec("web", 80)], "d.io")["services"]["web"]["labels"]
     b = build_overlay("blog", [WebSpec("api-web", 80)], "d.io")["services"]["api-web"]["labels"]
     assert not (set(a) & set(b)) - {"traefik.enable"}
+
+
+def test_file_secret_mounts_in_every_service():
+    path = "/opt/eggie/secrets/shop/ASC_API_KEY"
+    ov = build_overlay("shop", [WebSpec("web", 80)], "d.io",
+                       services=["web", "mobile"], secret_names=["ASC_API_KEY"],
+                       file_secrets={"ASC_API_KEY": path})
+    assert ov["secrets"] == {"ASC_API_KEY": {"file": path}}
+    for service in ("web", "mobile"):
+        assert ov["services"][service]["secrets"] == ["ASC_API_KEY"]
+        assert ov["services"][service]["environment"] == ["ASC_API_KEY"]
+
+
+def test_no_file_secrets_no_secrets_key():
+    ov = build_overlay("p", [WebSpec("web", 80)], "d.io", services=["web", "db"],
+                       secret_names=["TOKEN"])
+    assert "secrets" not in ov
+    assert all("secrets" not in s for s in ov["services"].values())
+
+
+def test_declared_literal_keeps_its_own_env_but_still_mounts():
+    ov = build_overlay("p", [], "d.io", services=["db"], secret_names=["KEY"],
+                       declared={"db": {"KEY"}}, file_secrets={"KEY": "/x/KEY"})
+    assert ov["services"]["db"] == {"secrets": ["KEY"]}

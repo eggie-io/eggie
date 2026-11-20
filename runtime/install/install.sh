@@ -5,6 +5,9 @@ set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_DIR="$(dirname "$INSTALL_DIR")"
+# WSL execs start us in /root, and `runuser` keeps the cwd: a command run as an
+# account there fails on a directory it cannot enter (npx: `spawn sh EACCES`).
+cd /
 
 REF="${1:?usage: install.sh <runtime ref> [--repair]}"
 REPAIR=0
@@ -109,6 +112,13 @@ chmod 2770 /opt/eggie/github
 [[ -e /opt/eggie/github/token ]] && chmod 600 /opt/eggie/github/token
 [[ -e /opt/eggie/github/desired.json ]] && chmod 640 /opt/eggie/github/desired.json
 
+# File secrets get the same treatment: the sweep opened them to the group,
+# the API puts 0700/0444 back at each start. 00700 also drops the setgid bit.
+if [[ -d /opt/eggie/secrets ]]; then
+  find /opt/eggie/secrets -mindepth 1 -type d -exec chmod 00700 {} +
+  find /opt/eggie/secrets -type f -exec chmod 0444 {} +
+fi
+
 # 5. this VM's real docker GID, for stack.yml's group_add.
 # The chgrp above used whatever GID this VM's docker group has, while the API
 # image bakes in 999 -- where those differ the API can write neither
@@ -190,20 +200,26 @@ fi
 # answered perfectly sends them to inspect the one part that is working; on
 # Apple Silicon, where an amd64-only image is the common case, that is the first
 # thing they hit.
-PULL_LOG="$(mktemp)"
-if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
-  if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
-    echo "could not pull the Eggie images: one of them is not published for" >&2
-    echo "this machine's architecture ($(uname -m)). The registry answered" >&2
-    echo "fine -- that image needs a build for this architecture." >&2
-  else
-    echo "could not pull the Eggie images: the registry was unreachable." >&2
-    echo "Check the network connection or proxy and run setup again." >&2
+# EGGIE_SKIP_PULL=1 is scripts/dev.sh's: it built the images in this VM, under
+# a tag ghcr does not have. `up -d` below still fetches any image that is missing.
+if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then
+  echo "EGGIE_SKIP_PULL=1: using the Eggie images already in this VM"
+else
+  PULL_LOG="$(mktemp)"
+  if ! /usr/bin/docker compose -f /opt/eggie/stack.yml $SITE_STACK --profile tunnel pull 2>&1 | tee "$PULL_LOG"; then
+    if grep -qiE 'no matching manifest|no match for platform' "$PULL_LOG"; then
+      echo "could not pull the Eggie images: one of them is not published for" >&2
+      echo "this machine's architecture ($(uname -m)). The registry answered" >&2
+      echo "fine -- that image needs a build for this architecture." >&2
+    else
+      echo "could not pull the Eggie images: the registry was unreachable." >&2
+      echo "Check the network connection or proxy and run setup again." >&2
+    fi
+    rm -f "$PULL_LOG"
+    exit 1
   fi
   rm -f "$PULL_LOG"
-  exit 1
 fi
-rm -f "$PULL_LOG"
 # The API reads its token once, at startup, and `up -d` leaves an unchanged
 # container running, so a new token or a repair recreates it. That must be
 # its only start: on a site it rotates its account seed at once, and a restart
@@ -365,6 +381,18 @@ install -m 644 "$INSTALL_DIR/systemd/eggie-update.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable eggie-update.service
 
+# 11b-2. the update check and the root-side runner the API pokes by bumping
+# `request`. Never started here: that would run an update inside this install.
+install -d -m 2770 -o root -g docker /opt/eggie/update
+chmod 2770 /opt/eggie/update
+install -m 644 "$INSTALL_DIR/systemd/eggie-update-check.service" \
+  "$INSTALL_DIR/systemd/eggie-update-check.timer" \
+  "$INSTALL_DIR/systemd/eggie-update-now.path" \
+  "$INSTALL_DIR/systemd/eggie-update-now.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now eggie-update-now.path
+systemctl enable --now eggie-update-check.timer
+
 # 11c. coding agents: the root-side runner the API pokes to detect connected
 # agents and run their setup. The API writes counters here, never into a home.
 install -d -m 2770 -o root -g docker /opt/eggie/agent-status /opt/eggie/agent-status/setup
@@ -374,7 +402,24 @@ install -m 644 "$INSTALL_DIR/systemd/eggie-agents.path" \
 systemctl daemon-reload
 systemctl enable --now eggie-agents.path
 # Not fatal: the console only loses its "connected" line until the next poll.
-systemctl start eggie-agents.service || echo "could not check this machine's coding agents" >&2
+# --no-block: a requested setup runs in this unit for up to 10 minutes, and the
+# install would wait on it while holding update.lock.
+systemctl start --no-block eggie-agents.service || echo "could not check this machine's coding agents" >&2
+
+# 11d. stop Claude Code Desktop sessions idle for hours: Desktop keeps one
+# process per session alive for 30 days. Settings live in an env file a run
+# never overwrites; commented out so a new release's defaults still apply.
+if [[ ! -f /opt/eggie/claude-reaper.env ]]; then
+  cat > /opt/eggie/claude-reaper.env <<'EOF'
+# Read by eggie-claude-reaper.service on each run; no restart needed.
+# EGGIE_REAPER_IDLE_MIN=120
+# EGGIE_REAPER_DRY=1
+EOF
+fi
+install -m 644 "$INSTALL_DIR/systemd/eggie-claude-reaper.service" \
+  "$INSTALL_DIR/systemd/eggie-claude-reaper.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now eggie-claude-reaper.timer
 
 # 12. what the console's "Connect an agent" guide needs to know.
 # sed, not head: head exiting early would SIGPIPE the pipeline under pipefail.

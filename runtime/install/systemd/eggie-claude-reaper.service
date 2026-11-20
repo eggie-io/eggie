@@ -1,0 +1,8 @@
+[Unit]
+Description=Stop Claude Code Desktop sessions idle for over two hours
+
+[Service]
+Type=oneshot
+# Optional: absent means the script's defaults.
+EnvironmentFile=-/opt/eggie/claude-reaper.env
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/claude-reaper.sh

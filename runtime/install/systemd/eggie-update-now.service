@@ -1,0 +1,9 @@
+[Unit]
+Description=Update the Eggie runtime to the newest release this machine accepts
+After=docker.service
+Wants=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/update-now.sh

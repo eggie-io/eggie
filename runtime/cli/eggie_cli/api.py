@@ -13,6 +13,8 @@ from .errors import ApiError, EggieError, JobFailed
 
 REQUEST_TIMEOUT = 30.0
 LOGS_TIMEOUT = 120.0
+# The API downloads and unpacks the bundle inside this one request.
+RECIPE_TIMEOUT = 300.0
 # `up` pulls or builds images, which is minutes, not seconds.
 JOB_TIMEOUT = 1800.0
 JOB_POLL_INTERVAL = 1.0
@@ -167,9 +169,23 @@ class ApiClient:
         self._call("DELETE", f"/projects/{project_id}/secrets/"
                              f"{urllib.parse.quote(name, safe='')}")
 
-    def request_secret(self, project_id: str, name: str, hint: str) -> None:
+    def dismiss_secret_request(self, project_id: str, name: str) -> None:
+        self._call("DELETE", f"/projects/{project_id}/secret-requests/"
+                             f"{urllib.parse.quote(name, safe='')}")
+
+    def request_secret(self, project_id: str, name: str, hint: str,
+                       kind: str = "text") -> None:
         self._call("PUT", f"/projects/{project_id}/secret-requests/"
-                          f"{urllib.parse.quote(name, safe='')}", {"hint": hint})
+                          f"{urllib.parse.quote(name, safe='')}",
+                   {"hint": hint, "kind": kind})
+
+    def recipes(self) -> list[dict]:
+        return self._call("GET", "/recipes").get("recipes", [])
+
+    def get_recipe(self, slug: str) -> dict:
+        body = self._open("POST", f"/recipes/{urllib.parse.quote(slug, safe='')}/get",
+                          timeout=RECIPE_TIMEOUT)
+        return json.loads(body)
 
 
 def default_client() -> ApiClient:

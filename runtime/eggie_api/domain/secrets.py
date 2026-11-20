@@ -1,6 +1,8 @@
 """Project secrets: what a name, value and request hint may be, and which names a compose service sets itself. No storage, no FastAPI."""
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 
 from ..errors import BadRequest
@@ -14,6 +16,9 @@ MAX_VALUE_BYTES = 64 * 1024
 MAX_PROJECT_BYTES = 512 * 1024
 
 MAX_HINT_CHARS = 500
+MAX_FILENAME_CHARS = 200
+KINDS = ("text", "file")
+MOUNT_DIR = "/run/secrets"
 
 
 class SecretError(BadRequest):
@@ -52,9 +57,49 @@ def check_value(value: str) -> None:
                           f"a secret's value can be at most {MAX_VALUE_BYTES // 1024} KB")
 
 
-def check_total(values: dict[str, str]) -> None:
-    total = sum(len(n.encode("utf-8")) + len(v.encode("utf-8")) + 2
-                for n, v in values.items())
+def check_kind(kind: str) -> None:
+    if kind not in KINDS:
+        raise SecretError("secret_kind_invalid",
+                          "a secret's kind is either text or file")
+
+
+def decode_file(value: str) -> bytes:
+    try:
+        data = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        raise SecretError("secret_invalid_value",
+                          "a file secret must be base64") from None
+    if not data:
+        raise SecretError("secret_invalid_value", "a file can't be empty")
+    if len(data) > MAX_VALUE_BYTES:
+        raise SecretError("secret_too_large",
+                          f"a file can be at most {MAX_VALUE_BYTES // 1024} KB")
+    return data
+
+
+def check_filename(name: str) -> None:
+    ok = (0 < len(name) <= MAX_FILENAME_CHARS
+          and "/" not in name and "\\" not in name
+          and not any(c < " " or c == "\x7f" for c in name))
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError:
+        ok = False
+    if not ok:
+        raise SecretError("secret_filename_invalid",
+                          f"a file name is one line of plain text, 1 to "
+                          f"{MAX_FILENAME_CHARS} characters, without / or \\")
+
+
+def stored_size(value: str, kind: str) -> int:
+    if kind == "file":
+        return len(base64.b64decode(value))
+    return len(value.encode("utf-8"))
+
+
+def check_total(entries: dict[str, tuple[str, str]]) -> None:
+    total = sum(len(n.encode("utf-8")) + stored_size(v, k) + 2
+                for n, (v, k) in entries.items())
     if total > MAX_PROJECT_BYTES:
         raise SecretError("secrets_too_large",
                           f"a project's secrets can add up to at most "

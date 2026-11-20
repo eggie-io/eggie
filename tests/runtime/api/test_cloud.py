@@ -13,8 +13,11 @@ class _Response:
         self.status = status
         self._body = body
 
-    def read(self):
-        return self._body
+    def read(self, size=-1):
+        if size is None or size < 0:
+            size = len(self._body)
+        piece, self._body = self._body[:size], self._body[size:]
+        return piece
 
     def __enter__(self):
         return self
@@ -176,6 +179,27 @@ def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():
     assert request.get_header("Authorization") == "Bearer at-1"
 
 
+def test_the_project_list_replaces_the_kitchens_copy_with_one_put():
+    projects = [{"ref": "shop", "name": "shop", "public_url": None}]
+    opener = Opener((204, b""))
+    assert Cloud("https://svc/api", opener=opener).report_instance_projects(
+        "at-1", projects) is None
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == ("PUT", "https://svc/api/v1/instances/me/projects")
+    assert json.loads(request.data) == {"projects": projects}
+    assert request.get_header("Authorization") == "Bearer at-1"
+
+
+def test_every_service_call_names_eggie_as_the_client():
+    opener = Opener((200, b"{}"), (200, b"{}"))
+    agents = iter(["Eggie/1.2.3 (Linux)", "Eggie/1.2.3 (Windows)"])
+    cloud = Cloud("https://svc/api", opener=opener, user_agent=lambda: next(agents))
+    cloud.device_code("Eggie")
+    cloud.me("at-1")
+    assert [r.get_header("User-agent") for r in opener.requests] == [
+        "Eggie/1.2.3 (Linux)", "Eggie/1.2.3 (Windows)"]
+
+
 def test_rate_limit_error_carries_retry_after():
     opener = Opener((429, _error("transfer_rate_limited"), {"Retry-After": "120"}))
     with pytest.raises(CloudError) as raised:
@@ -223,3 +247,40 @@ def test_targets_are_listed_with_the_token():
     Cloud("https://svc/api", opener=opener).transfer_targets("at-1")
     (request,) = opener.requests
     assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/transfers/targets")
+
+
+def test_recipe_bundle_streams_the_zip_to_the_file(tmp_path):
+    body = b"PK" + b"x" * 3_000_000
+    opener = Opener((200, body))
+    dest = tmp_path / "bundle.zip"
+    Cloud("https://svc/api", opener=opener).recipe_bundle(
+        None, "blog", 3, dest, max_bytes=10_000_000)
+    assert dest.read_bytes() == body
+    assert opener.requests[0].full_url == "https://svc/api/v1/recipes/blog/bundle/3"
+
+
+def test_recipe_calls_send_the_token_only_when_given():
+    opener = Opener((200, b"{}"), (200, b"{}"))
+    cloud = Cloud("https://svc/api", opener=opener)
+    cloud.recipe(None, "blog")
+    cloud.recipe("at-1", "blog")
+    assert opener.requests[0].get_header("Authorization") is None
+    assert opener.requests[1].get_header("Authorization") == "Bearer at-1"
+
+
+def test_a_bundle_over_the_cap_is_cut_off_and_removed(tmp_path):
+    dest = tmp_path / "bundle.zip"
+    cloud = Cloud("https://svc/api", opener=Opener((200, b"x" * 2000)))
+    with pytest.raises(CloudError) as raised:
+        cloud.recipe_bundle(None, "blog", 3, dest, max_bytes=1000)
+    assert raised.value.code == "bundle_too_large"
+    assert not dest.exists()
+
+
+def test_a_missing_bundle_is_a_cloud_error_with_the_service_code(tmp_path):
+    dest = tmp_path / "bundle.zip"
+    cloud = Cloud("https://svc/api", opener=Opener((404, _error("recipe_bundle_not_found"))))
+    with pytest.raises(CloudError) as raised:
+        cloud.recipe_bundle(None, "blog", 3, dest, max_bytes=1000)
+    assert raised.value.code == "recipe_bundle_not_found"
+    assert not dest.exists()

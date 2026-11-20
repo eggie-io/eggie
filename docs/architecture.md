@@ -110,6 +110,8 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
    reach containers as environment variables through the compose process environment and win over
    the project's own `.env`; a non-empty literal a service sets in the compose file wins over them; the
    overlay lists names only.
+   File secrets (up to 64 KB) are written to `/opt/eggie/secrets/<project>/` at each start and mounted
+   read-only at `/run/secrets/NAME` through the overlay's `secrets:`; the variable holds that path.
 4. `*.local.eggie.space` resolves to `127.0.0.1`, so the host's browser reaches Traefik through
    the forwarded edge port. No hosts-file edits.
 5. After a VM reboot, `LifecycleService.resume_all()` restarts the projects that were running.
@@ -117,7 +119,7 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
 ### Site mode
 
 The runtime also runs on a server the Eggie service provisions. Nothing in the host changes: the
-service creates the droplet from a snapshot, its DNS rows and its certificate, seeds the account
+service creates the server from a snapshot, its DNS rows and its certificate, seeds the account
 token through cloud-init, and runs `get.sh` with `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN`. Inside the
 VM, `stack.site.yml` puts Traefik on 443 with the certificate from `/opt/eggie/tls`
 (`services/certificate.py` keeps it current), `rest/auth.py` admits the site host, and
@@ -126,8 +128,8 @@ gets `<service>--<id>.<site domain>`. A console without a session sends the pers
 `/kitchens/open`, which signs them in there and returns with a handoff code; the top bar's switcher
 lists the account's kitchens from `GET /api/instances` and opens one through the same page (in the
 system browser when the console runs in the desktop window). The console's Push sends a project to a
-kitchen through `/api/transfers`. The full picture, including the contract with the
-service, is `site-mode.md`.
+kitchen through `/api/transfers`. What the runtime does in site mode
+is in `site-mode.md`.
 
 ### Root-side helpers
 
@@ -161,6 +163,8 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 - **Runtime.** At every VM boot, `eggie-update.service` runs `get.sh` in update mode. It moves to the
   newest tag whose `api` is in `host.json`, pulls images before touching anything, and rolls back
   if `install.sh` fails. A host that sees an API it can't speak triggers the update at once.
+  A running VM also checks every 6 h (`eggie-update-check.timer`, writes `/opt/eggie/update/available.json`);
+  the console offers **Update now**, which bumps `/opt/eggie/update/request` and `eggie-update-now.path` runs the same flow.
 - **Desktop app.** On launch it checks `app-vX.Y.Z` GitHub releases and offers **Update**.
 - **Two version numbers.** The release number lives only in the tag. `API_VERSION` is the
   wire protocol; bump it only for an incompatible change to a route the host calls, and ship a
@@ -173,7 +177,7 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 | VM | WSL2 distro `eggie-vm`, imported from an Ubuntu 24.04 rootfs | Lima VM `eggie-vm` (`host/providers/eggie.yaml`) |
 | Port forwarding | WSL `localhostForwarding` | Lima `portForwards`, loopback |
 | Agent access | WSL distro (Codex needs `eggie-vm` as the default distro) | SSH on `39022` |
-| Status | Primary, tested | Mostly unverified, see [macos-status.md](macos-status.md) |
+| Status | Primary, tested | Mostly unverified |
 
 ## Trust boundary
 
@@ -201,5 +205,4 @@ runtime/cli/       the in-VM `eggie` command
 runtime/agents/    one manifest per coding agent
 runtime/instructions/  what coding agents read
 tests/             all Python tests, mirroring host/ and runtime/
-docs/superpowers/  dated design specs and plans (history, not current state)
 ```

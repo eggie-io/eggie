@@ -23,6 +23,7 @@ export const SCENARIOS = [
   "account-needed",
   "account-pending",
   "account-denied",
+  "account-revoked",
   "account-unreachable",
   "public-on",
   "public-expiring",
@@ -56,6 +57,10 @@ export const SCENARIOS = [
   "handoff-new",
   "handoff-github",
   "handoff-folder",
+  "update-available",
+  "update-failed",
+  "updating",
+  "docs",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -124,9 +129,13 @@ export function handlersFor(scenario: Scenario) {
   let account: Record<string, unknown> = scenario.startsWith("account-") || scenario === "fresh"
     ? scenario === "account-pending"
       ? pendingAccount()
-      : { state: "signed_out", error: null }
+      : { state: "signed_out", error: scenario === "account-revoked" ? "revoked" : null }
     : { state: "signed_in", email: "ada@example.com", sync: { last_ok_at: nowSec(), last_error: null } };
   let approveAt = 0;
+  // The sign-in screen asks for a code as soon as it shows, so the stand-in
+  // for "approved in the browser" counts from a click, not from the code.
+  let pressed = false;
+  if (typeof document !== "undefined") document.addEventListener("click", () => { pressed = true; });
   let agentsConnectAt = 0;
   const GH_CODE = "C0DE-F00D";
   const ghConnected = (setup: string, setup_error: string | null = null) =>
@@ -143,22 +152,24 @@ export function handlersFor(scenario: Scenario) {
   const linkedRepos = new Map<string, string>([["ada/recipe-box", "recipe-box"]]);
   const discovered: Discovered[] = [];
   const jobs = new Map<string, Job>();
-  const secrets = new Map<string, { names: Map<string, number>; requested: Map<string, string>; unused: Set<string> }>();
+  const secrets = new Map<string, { names: Map<string, number>; files: Map<string, string>; requested: Map<string, string>; fileRequests: Set<string>; unused: Set<string> }>();
   const secretsOf = (id: string) => {
     let entry = secrets.get(id);
     if (!entry) {
       entry = scenario === "secrets" && id === "recipe-box"
-        ? { names: new Map([["STRIPE_KEY", nowSec()]]), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"]]), unused: new Set<string>() }
+        ? { names: new Map([["STRIPE_KEY", nowSec()]]), files: new Map<string, string>(), requested: new Map([["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"], ["APPLE_AUTH_KEY", "Apple → Users and Access → Keys → download the .p8"]]), fileRequests: new Set(["APPLE_AUTH_KEY"]), unused: new Set<string>() }
         : scenario === "instance-waiting-secrets" && id === "weekend-shop"
         ? {
+            files: new Map<string, string>(),
             names: new Map([["MAIL_PASSWORD", nowSec() - 3600], ["OLD_SENTRY_DSN", nowSec() - 86_400]]),
             requested: new Map([
               ["STRIPE_KEY", "Set on your computer. Enter its value for the kitchen."],
               ["OPENAI_API_KEY", "OpenAI → API keys → Create new secret key"],
             ]),
+            fileRequests: new Set<string>(),
             unused: new Set(["OLD_SENTRY_DSN"]),
           }
-        : { names: new Map(), requested: new Map(), unused: new Set<string>() };
+        : { names: new Map(), files: new Map<string, string>(), requested: new Map(), fileRequests: new Set<string>(), unused: new Set<string>() };
       secrets.set(id, entry);
     }
     return entry;
@@ -324,6 +335,62 @@ export function handlersFor(scenario: Scenario) {
     for (const name of ["orders.csv", "users.csv", "notes.txt"]) seedFile("recipe-box", `data/${name}`, 40 * 1024, hoursAgo(26));
     for (let i = 1; i <= 48; i += 1) seedFile("recipe-box", `public/img-${i}.png`, 90 * 1024, hoursAgo(2));
     for (let i = 1; i <= 112; i += 1) seedFile("recipe-box", `src/module-${i}.ts`, 3 * 1024, nowSec() - 11 * 60);
+  }
+  const contents = new Map<string, { body: string; type: string }>();
+  const seedText = (id: string, path: string, body: string, type = "text/markdown") => {
+    seedFile(id, path, body.length, nowSec() - 5 * 60);
+    contents.set(`${id}/${path}`, { body, type });
+  };
+  if (scenario === "docs" && projects.has("recipe-box")) {
+    seedText("recipe-box", ".eggie/docs/index.md", [
+      "# Try it on your phone",
+      "",
+      "Open **Expo Go** and scan this code. Your phone must be on the same Wi-Fi.",
+      "",
+      "```qr",
+      "exp://192.168.1.5:8081",
+      "```",
+      "",
+      "![The app's home screen](home.svg)",
+      "",
+      "When you're happy with it, follow [Publish to the stores](stores.md).",
+      "",
+      "<script>alert('this shows as text')</script>",
+      "",
+      "| Account | Login |",
+      "|:--|:--|",
+      "| Admin | `admin@example.com` |",
+    ].join("\n"));
+    seedText("recipe-box", ".eggie/docs/stores.md", [
+      "# Publish to the stores",
+      "",
+      "1. Create an [Apple developer account](https://developer.apple.com/programs/).",
+      "2. Ask me to run the store build — it takes about 20 minutes.",
+      "",
+      "- [x] App icon",
+      "- [ ] Screenshots",
+      "",
+      "> Google Play asks for a privacy policy link.",
+      "",
+      "Paste your Stripe key:",
+      "",
+      "```secret",
+      "name: STRIPE_KEY",
+      "```",
+      "",
+      "Upload your App Store Connect key file:",
+      "",
+      "```secret",
+      "name: ASC_API_KEY",
+      "file: true",
+      "```",
+    ].join("\n"));
+    for (const title of ["Get the LinkedIn video", "Login page egg", "Logo candidates", "Particle hero", "QR test", "Take a lab result live", "Weekly report"]) {
+      seedText("recipe-box", `.eggie/docs/${title.toLowerCase().replaceAll(" ", "-")}.md`, `# ${title}\n\nNotes for ${title.toLowerCase()}.`);
+    }
+    seedText("recipe-box", ".eggie/docs/home.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" rx="12" fill="#f3e9d2"/><text x="120" y="66" font-size="16" text-anchor="middle" font-family="sans-serif">Recipe Box</text></svg>',
+      "image/svg+xml");
   }
   for (const p of projects.values()) {
     if (p.id === "recipe-box" || p.empty) continue;
@@ -499,7 +566,25 @@ export function handlersFor(scenario: Scenario) {
       return HttpResponse.json({ job_id: startJob(target, action).job_id }, { status: 202 });
     });
 
+  const offered = scenario === "update-available" || scenario === "update-failed" || scenario === "updating";
+  let runtimeUpdate = {
+    installed: "0.2.0",
+    available: offered ? "0.3.0" : (null as string | null),
+    state: scenario === "updating" ? "running" : scenario === "update-failed" ? "failed" : "idle",
+    error: scenario === "update-failed" ? "could not pull the new images" : (null as string | null),
+  };
+
   return [
+    http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
+    http.post("/api/runtime/update", () => {
+      if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);
+      if (runtimeUpdate.available === null) return refuse("update_not_available", "there is nothing newer to install", 409);
+      runtimeUpdate = { ...runtimeUpdate, state: "running", error: null };
+      setTimeout(() => {
+        runtimeUpdate = { installed: "0.3.0", available: null, state: "idle", error: null };
+      }, 8000);
+      return HttpResponse.json(runtimeUpdate);
+    }),
     http.get("/api/health", () => {
       if (scenario === "down") return HttpResponse.error();
       if (scenario === "wrong-host") return refuse("forbidden_host", "this address isn't allowed", 403);
@@ -548,8 +633,9 @@ export function handlersFor(scenario: Scenario) {
       return HttpResponse.json({ signed_in: false });
     }),
     http.get("/api/account", () => {
-      if (account.state === "pending" && approveAt === 0) approveAt = Date.now() + 6000;
-      if (account.state === "pending" && Date.now() >= approveAt) {
+      if (account.state === "pending" && pressed && approveAt === 0) approveAt = Date.now() + 6000;
+      if (account.state === "pending" && approveAt !== 0 && Date.now() >= approveAt) {
+        pressed = false;
         account =
           scenario === "account-denied"
             ? { state: "signed_out", error: "access_denied" }
@@ -676,8 +762,10 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       return HttpResponse.json({
-        secrets: [...entry.names].sort().map(([name, updated_at]) => ({ name, updated_at, unused: entry.unused.has(name) })),
-        requested: [...entry.requested].map(([name, hint]) => ({ name, hint })),
+        secrets: [...entry.names].sort().map(([name, updated_at]) => ({
+          name, kind: entry.files.has(name) ? "file" : "text", filename: entry.files.get(name) ?? null, updated_at, unused: entry.unused.has(name),
+        })),
+        requested: [...entry.requested].map(([name, hint]) => ({ name, hint, kind: entry.fileRequests.has(name) ? "file" : "text" })),
         restart_needed: target.restart_needed,
       });
     }),
@@ -687,12 +775,19 @@ export function handlersFor(scenario: Scenario) {
       const name = String(params.name);
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse("secret_name_invalid", `'${name}' can't be a secret name`, 400);
       if (RESERVED.test(name)) return refuse("secret_name_reserved", `'${name}' is reserved`, 400);
-      const body = (await request.json().catch(() => ({}))) as { value?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { value?: unknown; kind?: string; filename?: string };
       if (body.value === "") return refuse("secret_invalid_value", "a secret needs a value", 400);
       const entry = secretsOf(target.id);
       entry.names.set(name, nowSec());
+      if (body.kind === "file" && body.filename) entry.files.set(name, body.filename);
+      else entry.files.delete(name);
       entry.unused.delete(name);
-      const hadRequest = entry.requested.delete(name);
+      const savedKind = body.kind === "file" ? "file" : "text";
+      const hadRequest = entry.requested.has(name) && entry.fileRequests.has(name) === (savedKind === "file");
+      if (hadRequest) {
+        entry.requested.delete(name);
+        entry.fileRequests.delete(name);
+      }
       target.secrets_requested = entry.requested.size;
       touched(target);
       if (hadRequest && entry.requested.size === 0 && target.start_when_ready && !target.job) {
@@ -706,12 +801,21 @@ export function handlersFor(scenario: Scenario) {
       if (!target) return notFound(String(params.id));
       const entry = secretsOf(target.id);
       const name = String(params.name);
+      entry.files.delete(name);
       const hadValue = entry.names.delete(name);
       entry.unused.delete(name);
-      const hadRequest = entry.requested.delete(name);
-      if (!hadValue && !hadRequest) return refuse("secret_not_found", "no such secret", 404);
+      if (!hadValue) return refuse("secret_not_found", "no such secret", 404);
+      touched(target);
+      return new HttpResponse(null, { status: 204 });
+    }),
+    http.delete("/api/projects/:id/secret-requests/:name", ({ params }) => {
+      const target = projects.get(String(params.id));
+      if (!target) return notFound(String(params.id));
+      const entry = secretsOf(target.id);
+      const name = String(params.name);
+      if (!entry.requested.delete(name)) return refuse("secret_request_not_found", "no such request", 404);
+      entry.fileRequests.delete(name);
       target.secrets_requested = entry.requested.size;
-      if (hadValue) touched(target);
       return new HttpResponse(null, { status: 204 });
     }),
     http.post("/api/projects/:id/adopt", ({ params }) => {
@@ -882,6 +986,8 @@ export function handlersFor(scenario: Scenario) {
       if (!find(id)) return notFound(id);
       const path = decodeURIComponent(new URL(request.url).pathname.split("/files/")[1] ?? "");
       if (tree(id).get(path)?.kind !== "file") return refuse("file_not_found", `no file '${path}' in project '${id}'`, 404);
+      const seeded = contents.get(`${id}/${path}`);
+      if (seeded) return new HttpResponse(seeded.body, { headers: { "Content-Type": seeded.type } });
       return new HttpResponse(`mock contents of ${path}\n`, {
         headers: { "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="${baseName(path)}"` },
       });

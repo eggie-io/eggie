@@ -38,14 +38,27 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
+Connecting a coding agent is a round trip through that link. `enter_console` adds
+`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for)
+and `&added=<ids>` (those whose `agent_connected` is true, so the guide opens past the button);
+the console's guide then sends the window to `<local>#connect=<id>&back=<guide path>`. The local
+`agent-connect` screen is only a spinner: it calls `connect_agent` at once and `enter_console(back)`
+reopens the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/<id>`), so the user
+clicks once, in the guide. `agent-connect:failed` (Try again / Back to the guide) shows only on an
+error. Both values come from a VM-served page and are checked in `view.py`. There is no local
+confirmation, so a page could send the window there unasked: that is accepted only because the
+write is fixed (the agent's entry for this VM, or for Codex on WSL making this VM the default distro;
+allowlisted agents only). A connect step that could
+write anything a page chose would need a local confirmation again. A new connectable agent needs a
+`data-when="<id>"` section in the `agent-connect` template.
+
 ## Things that will bite you
 
 - **The title bar is recoloured by `DesktopPlatform.style_title_bar` on `events.before_show`.** DWM
   caption/text/border colours need Windows 11; Windows 10 keeps its default bar (the dark-mode
-  buttons flag still applies). Colours are read once per launch, and `title_bar_win.COLORS` is held
-  equal to `app.css` by a test: change both together. pywebview itself flips the dark-mode
-  flag when the OS theme changes, but our colours are not re-applied, so after an OS theme switch
-  the bar is mixed until relaunch.
+  buttons flag still applies). `title_bar_win.COLORS` is held equal to `app.css` by a test: change
+  both together. The app often starts hidden at login, so the colours are re-applied whenever the
+  Windows theme changes (`theme_win.ThemeWatch`, which also swaps the tray icon).
 - **`min_size` and the window size are outer sizes** on Windows (title bar and borders included),
   so at the 800×560 minimum the page is about 784×521. Nothing in `app.css` may demand more;
   `#screen` scrolls instead. Check layouts at the page size, not the window size.

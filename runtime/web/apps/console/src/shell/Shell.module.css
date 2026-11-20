@@ -55,6 +55,23 @@
   background: var(--gold); color: var(--on-gold); font-size: 12px; font-weight: 700;
 }
 
+.updatePill {
+  cursor: pointer; height: 28px; display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2);
+  border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper); color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.updatePill:hover { background: var(--hover); }
+.updatePanel {
+  position: absolute; right: 0; top: calc(100% + var(--space-1)); width: min(300px, calc(100vw - 24px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-3);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); z-index: var(--z-dropdown);
+}
+.updatePanel[hidden] { display: none; }
+.updateTitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 650; color: var(--ink); }
+.updateLine { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.updatePanel .menuError { padding: 0; }
+
 .menu, .switcherMenu {
   position: absolute; top: calc(100% + var(--space-1)); display: flex; flex-direction: column; gap: 1px;
   padding: var(--space-1); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md);
@@ -115,5 +132,5 @@ button.switcherButton { min-width: 0; max-width: 100%; padding: 0 var(--space-2)
   /* Menus hang from the bar's edges so they can use the whole phone width. */
   .switcher, .account { position: static; }
   .switcherMenu { left: var(--space-3); }
-  .menu { right: var(--space-3); }
+  .menu, .updatePanel { right: var(--space-3); }
 }

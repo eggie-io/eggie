@@ -1,0 +1,8 @@
+[Unit]
+Description=Update the Eggie runtime when the API asks
+
+[Path]
+PathChanged=/opt/eggie/update/request
+
+[Install]
+WantedBy=multi-user.target

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import ApiConfig
 from .errors import EggieError
-from .infra import disk
+from .infra import connect, disk
 from .infra.cloud import Cloud
 from .infra.db import Database
 from .infra.github import GitHub
@@ -23,6 +23,7 @@ from .services.certificate import Certificate
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
+from .services.instance_projects import InstanceProjects
 from .services.instances import Instances
 from .services.jobs import JobRegistry
 from .services.lifecycle import LifecycleService
@@ -30,6 +31,8 @@ from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
 from .services.projects import ProjectService
 from .services.public import Public
+from .services.recipes import RecipeService
+from .services.runtime_update import RuntimeUpdate
 from .services.push import PushService
 from .services.secrets import SecretService
 from .services.sessions import Sessions
@@ -68,12 +71,14 @@ class Services:
     account: Account
     public: Public
     push: PushService
+    recipes: RecipeService
     transfers: Transfers
     github_link: GitHubLink
     sessions: Sessions
     site: SiteSignIn
     instances: Instances
     agents: AgentStatus
+    runtime_update: RuntimeUpdate
     certificate: Certificate | None
     sync: SyncLoop
     system: SystemService
@@ -98,7 +103,9 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     store.sweep()
     uploads = UploadService(store, loader, locks)
     secrets = SecretService(repos.secrets, loader)
-    cloud = cloud or Cloud(config.cloud_url)
+    # Read per call: install.sh records the VM kind after the api first starts.
+    cloud = cloud or Cloud(config.cloud_url, user_agent=lambda: (
+        f"Eggie/{config.version} ({connect.host_os(config.connect_path)})"))
     account = account or Account(repos.account, repos.cloud_projects, cloud,
                                  managed=config.site_host is not None)
     public = public or Public(
@@ -122,6 +129,8 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
     if certificate is not None:
         passes.append(certificate.refresh)
+    if config.site_host:
+        passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
     sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
@@ -132,6 +141,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     lifecycle = LifecycleService(config, runner, loader, repos.projects, secrets,
                                  jobs, locks, http_probe)
     secrets.on_all_set = lambda pid: _start_quietly(lifecycle, pid)
+    lifecycle.on_status = sync.wake
     push = PushService(
         config, runner, loader, repos.projects, secrets, lifecycle, locks, account, cloud,
         instance or InstanceClient(ca_file=config.instance_ca_file), repos.cloud_projects,
@@ -156,8 +166,10 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                            github_link, lifecycle, sync.wake),
         files=FileService(loader, locks), uploads=uploads, secrets=secrets,
         account=account, public=public, push=push, transfers=transfers,
+        recipes=RecipeService(config, account, cloud),
         github_link=github_link,
         sessions=sessions, site=site,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
+        runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
         certificate=certificate, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

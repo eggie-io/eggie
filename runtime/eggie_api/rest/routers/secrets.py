@@ -20,12 +20,17 @@ def build(s: Services) -> APIRouter:
 
     @router.put("/projects/{project_id}/secrets/{name}", status_code=204)
     def put_secret(project_id: str, name: str, body: SecretValue) -> Response:
-        s.secrets.put(project_id, name, body.value)
+        s.secrets.put(project_id, name, body.value, body.kind, body.filename)
         return Response(status_code=204)
 
     @router.put("/projects/{project_id}/secret-requests/{name}", status_code=204)
     def request_secret(project_id: str, name: str, body: SecretHint) -> Response:
-        s.secrets.request(project_id, name, body.hint)
+        s.secrets.request(project_id, name, body.hint, body.kind)
+        return Response(status_code=204)
+
+    @router.delete("/projects/{project_id}/secret-requests/{name}", status_code=204)
+    def dismiss_secret_request(project_id: str, name: str) -> Response:
+        s.secrets.dismiss_request(project_id, name)
         return Response(status_code=204)
 
     @router.delete("/projects/{project_id}/secrets/{name}", status_code=204)

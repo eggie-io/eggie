@@ -31,7 +31,7 @@ def test_compose_argv_uses_both_files_in_order():
     assert argv.count("-f") == 2
     assert f"{d}/docker-compose.yml" in argv
     assert f"{d}/.eggie/overlay.yml" in argv
-    assert argv[-2:] == ["up", "-d"]
+    assert argv[-3:] == ["up", "-d", "--force-recreate"]
 
 
 def test_compose_up_runs_against_the_directory_it_is_given(tmp_path):
@@ -44,7 +44,7 @@ def test_compose_up_runs_against_the_directory_it_is_given(tmp_path):
     # overlay was written into the guest, compose up ran with both -f files,
     # all of them under the directory the caller passed.
     assert any("overlay.yml" in " ".join(a) for a in p.execs)
-    assert any(a[-2:] == ["up", "-d"] for a in p.execs)
+    assert any(a[-3:] == ["up", "-d", "--force-recreate"] for a in p.execs)
     for argv in p.execs:
         for word in argv:
             if "docker-compose.yml" in word or "overlay.yml" in word:
@@ -60,7 +60,7 @@ def test_compose_up_carries_the_guest_error_when_the_stack_fails():
     class FailingProvider(FakeProvider):
         def exec(self, argv, *, root=False, env=None):
             self.execs.append(argv)
-            if argv[-2:] == ["up", "-d"]:
+            if argv[-3:] == ["up", "-d", "--force-recreate"]:
                 return Completed(1, "", "network edge declared as external, but could not be found")
             return Completed(0, "[]", "")
 
@@ -90,7 +90,7 @@ def test_compose_up_reports_a_failed_overlay_write_instead_of_starting_the_stack
 
     assert status == FAILED_TO_START
     assert "Permission denied" in detail
-    assert not any(a[-2:] == ["up", "-d"] for a in p.execs), \
+    assert not any(a[-3:] == ["up", "-d", "--force-recreate"] for a in p.execs), \
         "compose must not start a stack whose overlay was never written"
 
 
@@ -174,7 +174,7 @@ def test_values_reach_compose_through_env_only(tmp_path):
     value = 'multi\nline "quoted" $dollar'
     compose_up(p, proj, tmp_path, "d.io", services=["web", "db"],
                secrets={"TOKEN": value})
-    assert len([a for a in p.execs if a[-2:] == ["up", "-d"]]) == 1
+    assert len([a for a in p.execs if a[-3:] == ["up", "-d", "--force-recreate"]]) == 1
     for argv, env in zip(p.execs, p.envs):
         assert all(value not in word and "dollar" not in word for word in argv)
         assert env == ({"TOKEN": value} if argv[1:2] == ["compose"] else None)

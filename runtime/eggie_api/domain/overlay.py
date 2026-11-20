@@ -19,7 +19,8 @@ def host_for(project_id: str, web: WebSpec, domain: str) -> str:
 def build_overlay(project_id: str, webs: list[WebSpec], domain: str, *,
                   services: Sequence[str] = (),
                   secret_names: Iterable[str] = (),
-                  declared: Mapping[str, set[str]] | None = None) -> dict:
+                  declared: Mapping[str, set[str]] | None = None,
+                  file_secrets: Mapping[str, str] | None = None) -> dict:
     overlay_services: dict = {}
     for web in webs:
         router = f"{project_id}--{web.service}"
@@ -43,7 +44,13 @@ def build_overlay(project_id: str, webs: list[WebSpec], domain: str, *,
             own = [n for n in names if n not in declared.get(service, set())]
             if own:
                 overlay_services.setdefault(service, {})["environment"] = own
-    return {
+    overlay: dict = {
         "services": overlay_services,
         "networks": {constants.EDGE_NETWORK: {"external": True}},
     }
+    if file_secrets:
+        mounted = sorted(file_secrets)
+        for service in dict.fromkeys([*services, *overlay_services]):
+            overlay_services.setdefault(service, {})["secrets"] = mounted
+        overlay["secrets"] = {n: {"file": file_secrets[n]} for n in mounted}
+    return overlay

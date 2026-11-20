@@ -25,6 +25,22 @@ export function webAppInstances(webApp: string | null | undefined): string | nul
   return origin === null ? null : `${origin}/kitchens`;
 }
 
+// The list stands in until the console knows which instance it is.
+export function instancePage(webApp: string | null | undefined, instanceId: string | null | undefined): string | null {
+  const list = webAppInstances(webApp);
+  return list === null || !instanceId ? list : `${list}/${encodeURIComponent(instanceId)}`;
+}
+
+export function webAppNewInstance(webApp: string | null | undefined): string | null {
+  const origin = webAppOrigin(webApp);
+  return origin === null ? null : `${origin}/kitchens/new`;
+}
+
+export function webAppAccount(webApp: string | null | undefined): string | null {
+  const origin = webAppOrigin(webApp);
+  return origin === null ? null : `${origin}/account`;
+}
+
 // A refused code means the web app already sent us back once; redirecting
 // again would loop.
 export function siteSignedOutAction(reason: SignedOutReason): "redirect" | "button" {

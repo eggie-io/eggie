@@ -12,9 +12,11 @@ const fourFields: Guide = {
   tagline: "",
   warning: null,
   steps: [],
+  auto: null,
+  autoCard: null,
 };
-const userAtHost: Guide = { card: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [] };
-const wsl: Guide = { card: null, tagline: "", warning: null, steps: [] };
+const userAtHost: Guide = { card: [{ label: "SSH Host", value: "{user}@{host}" }, { label: "SSH Port", value: "{port}" }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
+const wsl: Guide = { card: null, tagline: "", warning: null, steps: [], auto: null, autoCard: null };
 const lima = { vm: "lima" as const, ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/k" } };
 
 describe("cardRows", () => {
@@ -56,9 +58,14 @@ describe("cardRows", () => {
   });
 
   it("offers no copy for a row of plain guidance, and keeps its hint", () => {
-    const guide: Guide = { card: [{ label: "SSH key", value: "The key you downloaded", hint: "Saved earlier." }], tagline: "", warning: null, steps: [] };
+    const guide: Guide = { card: [{ label: "SSH key", value: "The key you downloaded", hint: "Saved earlier." }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
     const site = { vm: "site" as const, ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } };
     expect(cardRows(guide, site)).toEqual([{ label: "SSH key", value: "The key you downloaded", copy: false, hint: "Saved earlier." }]);
+  });
+
+  it("offers a copy for a fixed value the manifest marks as one", () => {
+    const guide: Guide = { card: [{ label: "Projects folder", value: "\\\\wsl.localhost\\eggie-vm", copy: true }], tagline: "", warning: null, steps: [], auto: null, autoCard: null };
+    expect(cardRows(guide, { vm: "wsl", ssh: null })).toEqual([{ label: "Projects folder", value: "\\\\wsl.localhost\\eggie-vm", copy: true }]);
   });
 
   it("shows no card on a server that could not say its SSH facts, rather than the local VM's", () => {

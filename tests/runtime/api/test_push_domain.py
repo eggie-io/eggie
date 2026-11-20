@@ -1,7 +1,7 @@
 import pytest
 
 from eggie_api.domain.push import (
-    DEFAULT_HINT, DataPlan, Floating, Manifest, build_manifest, check_replace, data_plan,
+    DEFAULT_HINT, DataPlan, PushedSecret, Floating, Manifest, build_manifest, check_replace, data_plan,
     docker_volume_name, floating, is_excluded, is_floating, instance_project_id,
     merge_secret_names, parse_manifest, safe_return_path)
 from eggie_api.errors import Invalid
@@ -53,9 +53,25 @@ def test_only_an_unannounced_replace_is_refused():
 
 
 def test_secret_merge_table():
-    m = merge_secret_names({"A": "", "B": "from local", "C": ""}, stored={"A", "OLD"}, requested={"C", "GONE"})
+    pushed = {"A": PushedSecret("", "text"), "B": PushedSecret("from local", "text"),
+              "C": PushedSecret("", "text")}
+    m = merge_secret_names(pushed, stored={"A": "text", "OLD": "text"}, requested={"C", "GONE"})
     assert m.keep == ("A",) and m.unused == ("OLD",) and m.drop_requests == ("GONE",)
-    assert m.request == {"B": "from local", "C": DEFAULT_HINT}
+    assert m.request == {"B": PushedSecret("from local", "text"),
+                         "C": PushedSecret(DEFAULT_HINT, "text")}
+
+
+def test_kind_mismatch_requests_the_pushed_kind():
+    m = merge_secret_names({"ASC_API_KEY": PushedSecret("", "file")},
+                           stored={"ASC_API_KEY": "text"}, requested=set())
+    assert m.request == {"ASC_API_KEY": PushedSecret(DEFAULT_HINT, "file")}
+    assert m.keep == () and m.unused == ()
+
+
+def test_request_of_the_other_kind_is_dropped_once_the_stored_kind_is_pushed():
+    m = merge_secret_names({"K": PushedSecret("", "text")},
+                           stored={"K": "text"}, requested={"K"})
+    assert m.keep == ("K",) and m.drop_requests == ("K",) and m.request == {}
 
 
 def test_instance_project_id_suffixes_taken_ids():
@@ -75,9 +91,15 @@ def test_safe_return_path_keeps_a_query():
 def test_manifest_round_trip_and_refusals():
     compose = {"services": {"db": {"image": "postgres:16", "volumes": ["./pgdata:/d", "dbv:/x"]}},
                "volumes": {"dbv": {}}}
-    raw = build_manifest(volumes={"dbv": "shop_dbv"}, secrets={"API_KEY": "hint"})
-    assert parse_manifest(raw, compose) == Manifest(("dbv",), {"API_KEY": "hint"})
-    for broken in ({**raw, "format": 2}, {**raw, "volumes": ["nope"]}, {**raw, "volumes": "dbv"},
-                   {**raw, "secrets": [{"name": "PATH", "hint": ""}]}):
+    raw = build_manifest(volumes={"dbv": "shop_dbv"}, secrets={"API_KEY": PushedSecret("hint", "file")})
+    assert parse_manifest(raw, compose) == Manifest(("dbv",), {"API_KEY": PushedSecret("hint", "file")})
+    for broken in ({**raw, "format": 1}, {**raw, "volumes": ["nope"]}, {**raw, "volumes": "dbv"},
+                   {**raw, "secrets": [{"name": "PATH", "hint": "", "kind": "text"}]}):
         with pytest.raises(Invalid):
             parse_manifest(broken, compose)
+
+
+@pytest.mark.parametrize("entry", [{"name": "K", "hint": ""}, {"name": "K", "hint": "", "kind": "blob"}])
+def test_manifest_without_a_known_kind_is_bad(entry):
+    with pytest.raises(Invalid):
+        parse_manifest({"format": 2, "volumes": [], "secrets": [entry]}, {})

@@ -139,7 +139,8 @@ export function useSecrets(id: string) {
 export function useSetSecret(id: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, value }: { name: string; value: string }) => api.put<void>(secretPath(id, name), { value }),
+    mutationFn: ({ name, value, kind, filename }: { name: string; value: string; kind?: "text" | "file"; filename?: string }) =>
+      api.put<void>(secretPath(id, name), { value, kind, filename }),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }
@@ -148,6 +149,14 @@ export function useDeleteSecret(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => api.del<void>(secretPath(id, name)),
+    onSettled: () => client.invalidateQueries({ queryKey: ALL }),
+  });
+}
+
+export function useDismissSecretRequest(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.del<void>(`${projectPath(id)}/secret-requests/${encodeURIComponent(name)}`),
     onSettled: () => client.invalidateQueries({ queryKey: ALL }),
   });
 }

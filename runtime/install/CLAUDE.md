@@ -2,7 +2,7 @@
 
 Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test_get_sh.py`,
 `test_install_shell.py`, `test_swap.py`, `test_install_agents.py`, `test_install_skills.py`, `test_agents_manifests.py`, `test_login_users.py`, `test_wsl_user.py`, `test_github_apply.py`, `test_agents_run.py`,
-`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`.
+`tests/runtime/test_boot_update.py`, `test_image_version.py`, `test_metadata_guard.py`, `test_snapshot_prep.py`, `test_claude_reaper.py`.
 
 ## `get.sh` is a live contract for every shipped host
 
@@ -50,16 +50,26 @@ Site mode only (step 7b): a oneshot unit ordered before `docker.service` that ad
 `DROP` for `169.254.169.254` to the `DOCKER-USER` chain, so containers cannot read the droplet's
 user data (which seeded `account.json`).
 
+### `lib/claude-reaper.sh` + `systemd/eggie-claude-reaper.{service,timer}`
+
+Every install, both modes (step 11d): every 30 minutes, `SIGTERM` to Claude Code Desktop processes
+(`~/.claude/remote/ccd-cli/*`) whose `--session-id`/`--resume` transcript under
+`~/.claude/projects/*/` is older than `EGGIE_REAPER_IDLE_MIN`. Settings in
+`/opt/eggie/claude-reaper.env`, written commented-out only when absent. It depends on Desktop's
+binary path, cmdline and transcript layout, which any Desktop release may change: it then
+stops nothing (a new binary path even silently), and the fix ships as a runtime release. Never kill on anything but a
+matched transcript (`docs/security.md`).
+
 ## `install.sh` — numbered steps, order matters
 
 a 4 GiB `/swapfile` when the VM has no swap (`lib/swap.sh`; Lima and cloud images ship none, WSL
-has its own; not fatal) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
+has its own; not fatal; existing swap or `/swapfile` of any size is never touched — a droplet's 1 GB one comes from the snapshot) → Docker (from Docker's repo, guarded on the package) → `edge` network → `/opt/eggie` permissions →
 docker GID and the image version (`lib/image-version.sh`: a `runtime-vX.Y.Z` ref runs `X.Y.Z`;
 any other ref runs `EGGIE_IMAGE_VERSION` when set, else the images ghcr holds under the ref's own
 name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=dev` runs the `dev`
 images `build.sh --push --tag dev` pushed — else the newest release's; a private package reads as
 absent, and ghcr not answering at all is a failure, not a silent release) into `.env` for `stack.yml` → token (only if absent) → the compose stack
-(always pulls; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 24 from NodeSource →
+(always pulls, except under `EGGIE_SKIP_PULL=1`, which only `scripts/dev.sh --full` sets after building the images in the VM; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 24 from NodeSource →
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root; then `lib/wsl-conf.py` enforces `[automount] enabled=false` and `[interop] appendWindowsPath=false` (no Windows drives, no Windows `PATH`), rewriting those keys every run and leaving every other line alone → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
@@ -82,6 +92,15 @@ above the one it last handled, into `status.json`. systemd drops triggers that a
 so the runner re-reads `check` and passes again (at most 5); a 10-minute setup holds detection up
 meanwhile.
 
+`lib/update-check.sh` + `lib/update-now.sh` (step 11b-2) work in `/opt/eggie/update/` (`2770 root:docker`).
+`eggie-update-check.timer` (10 min after boot, then every 6 h) runs the check: `resolve_ref` from
+`get.sh` with the host's accepted API, written to `available.json` only when the result sorts strictly
+above the installed tag. A branch pin writes `null` without calling git; any failure exits non-zero
+and keeps the last answer. `eggie-update-now.path` fires when the API bumps `request`;
+`update-now.sh` runs `boot-update.sh` if `request` is above `status.json`'s, records
+`running`/`done`/`failed` (with the last stderr line), then re-runs the check. Never `start`
+`eggie-update-now.service` from `install.sh`. `snapshot-prep.sh` strips the directory.
+
 ## Site mode
 
 `get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
@@ -96,27 +115,21 @@ imaged (`tests/runtime/test_snapshot_prep.py`).
 
 `bash -n` plus text assertions over `install.sh`; `resolve_ref` sourced from `get.sh` with a fake
 `git` on `PATH`; `install-agents.sh`/`login-users.sh` run against temporary homes;
-`install-skills.sh` against a fake `runuser` on `PATH`. Nothing touches
-the network — apt, NodeSource, npm and ghcr are covered only by the live-VM acceptance run.
+`install-skills.sh` against a fake `runuser` on `PATH`; `update-check.sh` with fake `git`/`curl` and
+`update-now.sh` with fake sibling scripts in a temp `lib/` (`tests/runtime/test_update_*.py`). Nothing touches
+the network. apt, NodeSource and npm are covered by CI's `runtime` job
+(`scripts/ci/runtime_acceptance.py`): it installs this checkout on a GitHub Ubuntu 24.04 runner
+through the host's own `bootstrap()`, as root from `/root` like WSL, with an `eggie` account made by
+`wsl-user.sh`, then runs setup's connect and verify, checks every account, repairs and checks again.
+It uses images built from the checkout, so ghcr pulls, WSL, Lima and the Docker install itself
+(the runner already has docker-ce) are still covered only by the live-VM acceptance run.
 
 ## Things that will bite you
 
-- Step 4 runs `chmod -R g+rwX /opt/eggie` on every install, which widens
-  `/opt/eggie/github/token`. The modes are reasserted right after the sweep; keep that order. Same
-  for the API token: it must be written after the sweep.
-- Login accounts are never the API's uid 1000: WSL2's `eggie` is created from 1001 up, and Lima's
-  user carries the macOS uid. The WSL default user, drive mounts and `PATH` are read at boot. Host setup restarts a VM it
-  has just created right after the first install; an existing VM keeps the old behaviour until it
-  next starts. Never turn interop off, in wsl.conf or live (`/proc/sys/fs/binfmt_misc/WSLInterop`): every WSL
-  distro shares that kernel registration, so it breaks the user's other distros. These settings
-  only guard against accidents: root in the VM can mount a drive or edit wsl.conf. The API writes into projects through the docker group; `/etc/gitconfig` trusts
-  `safe.directory '*'`. Group membership alone is not enough for the accounts: Lima multiplexes
-  every session over the ssh control master opened at boot, before step 10's `usermod`, so those
-  sessions never get the docker group. Step 11 therefore also grants each account access by uid
-  (ACLs on `/opt/eggie/projects` and `api.token`, default ACLs on `/opt/eggie/transfers`), and
-  step 4's default ACL makes new project and transfer entries group-writable whatever the creator's umask (the API's is 022).
-- Every console status poll starts `eggie-agents.service`, so journald shows a Started/Finished
-  pair every 3 s while an agents screen is open; and `systemctl start eggie-agents.service` in
-  `install.sh` step 11c blocks while a requested setup runs.
-- Use `/usr/bin/docker` by absolute path: Docker Desktop's WSL integration can put its own `docker`
-  on `PATH`, which talks to Desktop's engine instead of this VM's.
+Only what no test or script comment already holds; the permission, ACL and WSL guards are
+explained where they run.
+
+- uid 1000 is the API container's (`runtime/eggie_api/Dockerfile`), so no login account may take
+  it: WSL2's `eggie` is created from 1001 up (`lib/wsl-user.sh`).
+- While the console's agents screen is open, journald shows an `eggie-agents.service`
+  Started/Finished pair every 3 s: each status poll triggers a detection pass.

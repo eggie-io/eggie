@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ..errors import Invalid
 from .project import _slug
-from .secrets import SecretError, check_name
+from .secrets import KINDS, SecretError, check_name
 
 EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "__pycache__"})
 EXCLUDED_FILES = frozenset({".eggie/overlay.yml", ".DS_Store"})
@@ -16,7 +16,7 @@ REPLACE_ALL = "all"
 
 DEFAULT_HINT = "Set on your computer. Enter its value for the kitchen."
 
-MANIFEST_FORMAT = 1
+MANIFEST_FORMAT = 2
 MAX_RETURN_PATH = 1024
 
 
@@ -109,20 +109,31 @@ def check_replace(exists: bool, replace: str) -> str | None:
 
 
 @dataclass(frozen=True)
+class PushedSecret:
+    hint: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class SecretMerge:
-    request: dict[str, str]
+    request: dict[str, PushedSecret]
     keep: tuple[str, ...]
     unused: tuple[str, ...]
     drop_requests: tuple[str, ...]
 
 
-def merge_secret_names(pushed: dict[str, str], stored: set[str], requested: set[str]) -> SecretMerge:
+def merge_secret_names(pushed: dict[str, PushedSecret], stored: dict[str, str],
+                       requested: set[str]) -> SecretMerge:
+    """`stored` maps name -> kind. A stored value of another kind than the pushed
+    one is kept but asked for again in the pushed kind."""
     names = set(pushed)
+    same = {n for n in names if stored.get(n) == pushed[n].kind}
     return SecretMerge(
-        request={n: pushed[n] or DEFAULT_HINT for n in sorted(names - stored)},
-        keep=tuple(sorted(names & stored)),
-        unused=tuple(sorted(stored - names)),
-        drop_requests=tuple(sorted(requested - names)))
+        request={n: PushedSecret(pushed[n].hint or DEFAULT_HINT, pushed[n].kind)
+                 for n in sorted(names - same)},
+        keep=tuple(sorted(same)),
+        unused=tuple(sorted(set(stored) - names)),
+        drop_requests=tuple(sorted((requested - names) | (requested & same))))
 
 
 def pinned_project_yml(project_yml: dict, project_id: str) -> dict | None:
@@ -153,18 +164,18 @@ def safe_return_path(path: object) -> str | None:
     return path
 
 
-def build_manifest(*, volumes, secrets: dict[str, str]) -> dict:
+def build_manifest(*, volumes, secrets: dict[str, PushedSecret]) -> dict:
     return {
         "format": MANIFEST_FORMAT,
         "volumes": sorted(volumes),
-        "secrets": [{"name": n, "hint": secrets[n]} for n in sorted(secrets)],
+        "secrets": [{"name": n, "hint": secrets[n].hint, "kind": secrets[n].kind} for n in sorted(secrets)],
     }
 
 
 @dataclass(frozen=True)
 class Manifest:
     volumes: tuple[str, ...]
-    secrets: dict[str, str]
+    secrets: dict[str, PushedSecret]
 
 
 def _bad(message: str) -> Invalid:
@@ -187,16 +198,16 @@ def parse_manifest(raw: object, compose: dict) -> Manifest:
     entries = raw.get("secrets")
     if not isinstance(entries, list):
         raise _bad("manifest secrets must be a list")
-    secrets: dict[str, str] = {}
+    secrets: dict[str, PushedSecret] = {}
     for entry in entries:
         if not (isinstance(entry, dict) and isinstance(entry.get("name"), str)
-                and isinstance(entry.get("hint"), str)):
-            raise _bad("each manifest secret needs a name and a hint")
+                and isinstance(entry.get("hint"), str) and entry.get("kind") in KINDS):
+            raise _bad("each manifest secret needs a name, a hint and a kind of text or file")
         try:
             check_name(entry["name"])
         except SecretError as e:
             raise _bad(e.message) from e
         if entry["name"] in secrets:
             raise _bad(f"secret {entry['name']} listed twice")
-        secrets[entry["name"]] = entry["hint"]
+        secrets[entry["name"]] = PushedSecret(entry["hint"], entry["kind"])
     return Manifest(tuple(volumes), secrets)

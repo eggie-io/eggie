@@ -53,11 +53,22 @@ def test_install_guards_on_the_package_not_the_docker_binary():
 _BARE_DOCKER = re.compile(r"(?:^|[|&;(!]|\b(?:then|else|do)\s)\s*docker\b")
 
 
-def test_install_invokes_docker_by_absolute_path():
+def test_install_scripts_invoke_docker_by_absolute_path():
     # A bare `docker` would reach Docker Desktop's CLI when its WSL integration
     # is on, sending this VM's containers to Desktop's engine instead.
-    for line in _commands():
-        assert not _BARE_DOCKER.search(line), f"bare docker invocation: {line}"
+    scripts = sorted(INSTALL.parent.rglob("*.sh"))
+    assert INSTALL in scripts and len(scripts) > 5
+    for script in scripts:
+        for line in script.read_text().splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            assert not _BARE_DOCKER.search(line.strip()), \
+                f"bare docker invocation in {script.name}: {line.strip()}"
+
+
+def test_install_leaves_root_home_before_running_as_an_account():
+    commands = _commands()
+    assert commands.index("cd /") < _index_of("lib/install-skills.sh")
 
 
 def _commands() -> list[str]:
@@ -112,6 +123,15 @@ def test_install_always_pulls_before_bringing_the_stack_up():
     # Always pulling is the delivery decision: it is how an API update reaches
     # an already-bootstrapped VM. `up -d` alone would keep running a stale image.
     assert _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull") < _index_of(" up -d")
+
+
+def test_only_an_explicit_switch_skips_the_pull():
+    # scripts/dev.sh builds the images in the VM under a tag ghcr lacks, so its
+    # install must not pull; every other install still must.
+    commands = _commands()
+    switch = _index_of('if [[ "${EGGIE_SKIP_PULL:-}" == 1 ]]; then')
+    assert "else" in commands[switch + 2]
+    assert switch < _index_of(f"compose -f {STACK} $SITE_STACK --profile tunnel pull")
 
 
 def test_the_stack_comes_up_without_the_tunnel_profile():
@@ -398,7 +418,7 @@ def test_install_enables_the_boot_update_without_running_it_now():
     # Starting it here would run an update inside every install.
     text = INSTALL.read_text()
     assert "systemctl enable eggie-update.service" in text
-    assert "enable --now eggie-update" not in text
+    assert "enable --now eggie-update.service" not in text
     assert "start eggie-update" not in text
 
 
@@ -430,11 +450,13 @@ def test_install_keeps_ssh_host_keys_across_reboots():
     assert "/mnt/lima-cidata" in guard
 
 
-def test_install_enables_the_agent_runner_and_runs_it_before_the_marker():
+def test_install_enables_the_agent_runner_and_queues_it_before_the_marker():
     text = INSTALL.read_text()
     assert "systemctl enable --now eggie-agents.path" in text
     assert "install -d -m 2770 -o root -g docker /opt/eggie/agent-status" in text
-    assert text.index("systemctl start eggie-agents.service") < text.index(f"> {constants.RUNTIME_MARKER}")
+    # --no-block: waiting would hold update.lock for as long as a requested setup runs.
+    start = "systemctl start --no-block eggie-agents.service"
+    assert text.index(start) < text.index(f"> {constants.RUNTIME_MARKER}")
 
 
 def test_the_agent_instructions_check_for_the_vm_by_the_projects_folder():
@@ -535,7 +557,32 @@ def test_only_a_site_install_enables_the_metadata_guard():
     assert text.count("eggie-metadata-guard") == block.count("eggie-metadata-guard")
 
 
+def test_every_install_enables_the_reaper_and_keeps_its_settings():
+    # Local VMs pile up Desktop sessions too, so it is not a site-only step; a
+    # rewritten env file would undo IDLE_MIN/DRY set by hand on a machine.
+    text = INSTALL.read_text()
+    (block,) = re.findall(r"# 11d\..*?enable --now eggie-claude-reaper\.timer\n", text, re.S)
+    assert "SITE" not in block
+    assert "if [[ ! -f /opt/eggie/claude-reaper.env ]]" in block
+
+
 def test_the_wsl_account_exists_before_accounts_are_provisioned():
     # Created after step 10, the account would miss the docker group, its
     # ACLs and the skills until the next install.
     assert _index_of("lib/wsl-user.sh") < _index_of("done < <(accounts)")
+
+
+def test_install_enables_the_update_units_but_never_starts_the_updater():
+    text = INSTALL.read_text()
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/update" in text
+    marker = text.index(f"> {constants.RUNTIME_MARKER}")
+    for unit in ("eggie-update-now.path", "eggie-update-check.timer"):
+        assert text.index(f"systemctl enable --now {unit}") < marker
+    # Starting it here would run an update inside this install.
+    assert "start eggie-update-now" not in text
+
+
+def test_the_update_scripts_are_valid_bash():
+    for name in ("update-check.sh", "update-now.sh"):
+        script = INSTALL.parent / "lib" / name
+        assert subprocess.run(["bash", "-n", str(script)]).returncode == 0, name

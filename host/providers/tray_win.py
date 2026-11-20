@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -45,8 +44,9 @@ def let_session_end_close(on_session_end) -> None:
 
 
 class WinTray:
-    def __init__(self, *, icon: Path, on_open, on_settings, on_quit):
-        self._paths = icon
+    def __init__(self, *, icons, theme, on_open, on_settings, on_quit):
+        self._icons = icons
+        self._theme = theme
         self._callbacks = (on_open, on_settings, on_quit)
         self._icon = None
         self._visible = threading.Event()
@@ -63,15 +63,17 @@ class WinTray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit Eggie", _guarded(on_quit)),
         )
-        image = Image.open(self._paths)
-        # Pillow opens an ICO at its largest frame; the tray needs the 32px one,
-        # drawn with a heavier stroke than the big art scaled down.
-        image.size = (32, 32)
-        self._icon = pystray.Icon("Eggie", image, "Eggie", menu)
+        self._icon = pystray.Icon("Eggie", self._image(Image), "Eggie", menu)
+        self._theme.subscribe(lambda: setattr(self._icon, "icon", self._image(Image)))
         # The Win32 backend runs its own message loop, so it can live off the
         # main thread that webview.start() owns.
         threading.Thread(target=self._icon.run, kwargs={"setup": self._setup},
                          daemon=True, name="eggie-tray").start()
+
+    def _image(self, Image):
+        from .theme_win import taskbar_is_light
+        icons = self._icons
+        return Image.open(icons.on_light if taskbar_is_light() else icons.on_dark)
 
     def _setup(self, icon) -> None:
         icon.visible = True

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
-import { browserLink, desktopHome, takeDesktopHome } from "./desktop";
+import { browserLink, desktopConnectUrl, desktopHome, takeDesktopAdded, takeDesktopConnect, takeDesktopHome } from "./desktop";
 
 const HOME = "http://127.0.0.1:53817/index.html";
 
@@ -80,5 +80,55 @@ describe("browserLink", () => {
       },
     } as never;
     expect(await browserLink(api, ORIGIN)).toBe(ORIGIN);
+  });
+});
+
+
+describe("takeDesktopConnect", () => {
+  const link = (connect: string) => ({ hash: `#handoff=abc&home=x&connect=${connect}` });
+
+  it("takes the agents the window can connect", () => {
+    expect(takeDesktopConnect(link("claude-code,codex"), store())).toEqual(["claude-code", "codex"]);
+  });
+
+  it("remembers them across a reload", () => {
+    const s = store();
+    takeDesktopConnect(link("claude-code"), s);
+    expect(takeDesktopConnect({ hash: "" }, s)).toEqual(["claude-code"]);
+  });
+
+  it("is empty when the link names none", () => {
+    expect(takeDesktopConnect({ hash: "#handoff=abc" }, store())).toEqual([]);
+  });
+
+  it("refuses an id that is not an agent id", () => {
+    expect(takeDesktopConnect(link(encodeURIComponent("claude-code,../x")), store())).toEqual([]);
+    expect(desktopHome(store())).toBeNull();
+  });
+});
+
+describe("takeDesktopAdded", () => {
+  it("takes the agents that have the connection, apart from those it can connect", () => {
+    const s = store();
+    const link = { hash: "#handoff=abc&connect=claude-code,codex&added=claude-code" };
+    expect(takeDesktopConnect(link, s)).toEqual(["claude-code", "codex"]);
+    expect(takeDesktopAdded(link, s)).toEqual(["claude-code"]);
+  });
+
+  it("takes a fresh link's word over what it remembered", () => {
+    const s = store();
+    takeDesktopAdded({ hash: "#added=claude-code" }, s);
+    expect(takeDesktopAdded({ hash: "#added=" }, s)).toEqual([]);
+    expect(takeDesktopAdded({ hash: "" }, s)).toEqual([]);
+  });
+});
+
+describe("desktopConnectUrl", () => {
+  it("names the agent and the guide to come back to", () => {
+    const url = new URL(desktopConnectUrl(HOME, "claude-code", "/agents/claude-code"));
+    expect(url.origin + url.pathname).toBe(HOME);
+    const params = new URLSearchParams(url.hash.slice(1));
+    expect(params.get("connect")).toBe("claude-code");
+    expect(params.get("back")).toBe("/agents/claude-code");
   });
 });

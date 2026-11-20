@@ -6,6 +6,7 @@ import { boot, type BootResult } from "./boot/boot";
 import { AgentGuide } from "./screens/agents/AgentGuide";
 import { AgentPicker } from "./screens/agents/AgentPicker";
 import { Kit } from "./screens/Kit";
+import { DocsPage } from "./screens/docs/DocsPage";
 import { FilesPage } from "./screens/files/FilesPage";
 import { SecretsPage } from "./screens/secrets/SecretsPage";
 import { NeedsUpdate } from "./screens/NeedsUpdate";
@@ -17,18 +18,33 @@ import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
 import { SignedOut } from "./screens/SignedOut";
 import { WrongHost } from "./screens/WrongHost";
-import { DesktopHome } from "./desktop/DesktopContext";
+import { DesktopAdded, DesktopConnect, DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
+import { UpdateButton } from "./shell/UpdateButton";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboarding/Onboarding";
 import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
-export function App({ handoff, home = null }: { handoff: string | null; home?: string | null }) {
+export function App({
+  handoff,
+  home = null,
+  connect = [],
+  added = [],
+}: {
+  handoff: string | null;
+  home?: string | null;
+  connect?: readonly string[];
+  added?: readonly string[];
+}) {
   return (
     <DesktopHome.Provider value={home}>
-      <Screens handoff={handoff} />
+      <DesktopConnect.Provider value={home ? connect : []}>
+        <DesktopAdded.Provider value={home ? added : []}>
+          <Screens handoff={handoff} />
+        </DesktopAdded.Provider>
+      </DesktopConnect.Provider>
     </DesktopHome.Provider>
   );
 }
@@ -123,6 +139,7 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
       nav={welcome ? <Progress /> : <Tabs />}
       trailing={
         <>
+          <UpdateButton />
           <AccountMenu onSignedOut={onSignedOut} />
         </>
       }
@@ -141,6 +158,8 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
             <Route path="analyze" element={<AnalyzePage />} />
             <Route path="files/*" element={<FilesPage />} />
             <Route path="secrets" element={<SecretsPage />} />
+            <Route path="docs" element={<DocsPage />} />
+            <Route path="docs/:page" element={<DocsPage />} />
           </Route>
           <Route path="/agents" element={<AgentPicker base="/agents" />} />
           <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />

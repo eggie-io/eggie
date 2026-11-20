@@ -1,0 +1,30 @@
+name: PR title
+
+# The PR title becomes the release-notes line (cliff.toml), so it must be a
+# Conventional Commit. Branch commits are not checked.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            chore
+            refactor
+            test
+            docs
+            ci
+            build
+            revert

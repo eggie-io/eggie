@@ -3,8 +3,8 @@
 Both installers use PyInstaller to freeze the host in one-dir mode. Before packaging, the build
 runs the frozen binary (`eggie version`, then `eggie selfcheck`), so a missing bundled asset
 fails the build instead of turning up during a user's setup. The version comes from
-`pyproject.toml`. Before a build ships, run the manual checks in
-[release-testing.md](release-testing.md).
+`pyproject.toml`. Before a build ships, test it by hand
+on real machines.
 
 ## Windows installer
 
@@ -41,9 +41,6 @@ sudo installer -pkg dist/EggieSetup-<version>-<arch>.pkg -target /
 
 - **Native architecture only.** An Apple Silicon build refuses to install on Intel; an Intel Mac
   needs its own build.
-- **Unsigned unless** `EGGIE_CODESIGN_ID` and `EGGIE_INSTALLER_ID` are set. A *downloaded*
-  unsigned copy needs right-click → Open; a locally built one installs normally. Notarization
-  isn't set up.
 - The package installs `Eggie.app` into `/Applications` and links `eggie` into your PATH, and
   does nothing else. Open the app, or run `eggie setup --headless`, to build the VM. The
   package's scripts run as root, but Lima keeps VMs per user, so the installer can't build the

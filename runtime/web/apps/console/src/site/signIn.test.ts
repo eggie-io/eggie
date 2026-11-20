@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openInstanceUrl, webAppInstances, siteSignedOutAction } from "./signIn";
+import { instancePage, openInstanceUrl, webAppInstances, siteSignedOutAction } from "./signIn";
 
 describe("openInstanceUrl", () => {
   it("builds the web app page link with the host", () =>
@@ -27,4 +27,14 @@ describe("webAppInstances", () => {
     expect(webAppInstances("http://app.eggie.io")).toBeNull();
     expect(webAppInstances(null)).toBeNull();
   });
+});
+
+describe("instancePage", () => {
+  it("links this instance's page in the web app", () =>
+    expect(instancePage("https://app.eggie.io/", "01a1-77")).toBe("https://app.eggie.io/kitchens/01a1-77"));
+  it("falls back to the instances list while the id is unknown", () =>
+    expect(instancePage("https://app.eggie.io", null)).toBe("https://app.eggie.io/kitchens"));
+  it("keeps an odd id inside its path segment", () =>
+    expect(instancePage("https://app.eggie.io", "a/../b")).toBe("https://app.eggie.io/kitchens/a%2F..%2Fb"));
+  it("links nothing for an unusable web app", () => expect(instancePage("http://app.eggie.io", "x")).toBeNull());
 });

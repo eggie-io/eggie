@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "runtime" / "install" / "lib" / "swap.sh"
 
@@ -61,6 +63,19 @@ def test_existing_swap_such_as_wsls_is_left_alone(tmp_path):
     env, swapfile, fstab = _setup(tmp_path, active="/swap/file 4G\n")
     assert _run(env, swapfile, fstab).returncode == 0
     assert not swapfile.exists() and not fstab.exists()
+
+
+@pytest.mark.parametrize("active", [True, False])
+def test_a_droplets_own_swapfile_and_fstab_are_never_touched(tmp_path, active):
+    # The droplet snapshot makes a 1 GB /swapfile before get.sh runs; install,
+    # update and repair all reach this script through install.sh step 0.
+    env, swapfile, fstab = _setup(tmp_path, active=f"{tmp_path / 'swapfile'} 1G\n" if active else None)
+    swapfile.write_bytes(b"snapshot 1G swap")
+    fstab.write_text(f"LABEL=root / ext4 defaults 0 1\n{swapfile} none swap sw 0 0\n")
+    before = fstab.read_text()
+    assert _run(env, swapfile, fstab).returncode == 0
+    assert swapfile.read_bytes() == b"snapshot 1G swap"
+    assert fstab.read_text() == before
 
 
 def test_a_nearly_full_disk_gets_no_swap(tmp_path):

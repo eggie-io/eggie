@@ -1,0 +1,70 @@
+.page { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.muted { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
+
+/* One line held to the card's width; more pages scroll sideways instead of wrapping. */
+.tabs {
+  position: relative; display: flex; gap: var(--space-2); max-width: 760px; min-width: 0;
+  overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--space-1);
+}
+.tab {
+  flex: none; white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--control-sm); padding: 0 var(--space-3);
+  border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper);
+  font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink-2); text-decoration: none;
+}
+/* The scrolling row clips anything drawn outside it, so the focus ring sits inside the link. */
+.tab:focus-visible { outline-offset: -2px; }
+.tab:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
+.tabCurrent, .tabCurrent:hover { background: var(--selected); border-color: var(--line-strong); color: var(--ink); }
+
+.doc {
+  max-width: 760px; min-width: 0; padding: var(--space-6); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); background: var(--paper);
+  font-size: 15px; line-height: 24px; color: var(--ink); overflow-wrap: anywhere;
+}
+.doc > :first-child { margin-top: 0; }
+.doc > :last-child { margin-bottom: 0; }
+.doc h1, .doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { margin: var(--space-6) 0 var(--space-2); font-weight: 600; color: var(--ink); }
+.doc h1 { font-size: 22px; line-height: 30px; }
+.doc h2 { font-size: 18px; line-height: 26px; }
+.doc h3, .doc h4, .doc h5, .doc h6 { font-size: 15px; line-height: 22px; }
+.doc p, .doc ul, .doc ol, .doc blockquote, .doc figure { margin: 0 0 var(--space-3); }
+.doc ul, .doc ol { padding-left: var(--space-6); }
+.doc li > p { margin: 0; }
+.doc li + li { margin-top: var(--space-1); }
+.doc a { color: var(--accent); }
+.doc blockquote { padding-left: var(--space-4); border-left: 3px solid var(--line-strong); color: var(--ink-2); }
+.doc hr { margin: var(--space-5) 0; border: 0; border-top: 1px solid var(--line); }
+
+.code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--code-bg); color: var(--code-ink); font: 450 13px/20px var(--font-mono); }
+.pre {
+  margin: 0 0 var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: var(--code-bg); color: var(--code-ink); font: 450 13px/20px var(--font-mono);
+  overflow-x: auto; white-space: pre;
+}
+
+.image { display: block; max-width: 100%; height: auto; border-radius: var(--radius-sm); }
+.qr { display: inline-block; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); line-height: 0; }
+
+.tableWrap { margin: 0 0 var(--space-3); overflow-x: auto; }
+.tableWrap table { border-collapse: collapse; font-size: 14px; line-height: 20px; }
+.tableWrap th, .tableWrap td { padding: var(--space-2) var(--space-3); border: 1px solid var(--line); text-align: left; }
+.tableWrap th { font-weight: 600; background: var(--raised); }
+
+@media (max-width: 640px) {
+  .doc { padding: var(--space-4); }
+}
+
+.secret {
+  display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr) auto; align-items: end; column-gap: var(--space-4);
+  row-gap: var(--space-2); margin: 0 0 var(--space-3); padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised);
+}
+.secretName { min-height: var(--control-md); display: flex; align-items: center; font: 500 13px/20px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.secretSaved { min-height: var(--control-md); display: flex; align-items: center; font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere; }
+.secretInput { min-width: 0; }
+.secretActions { display: flex; gap: var(--space-2); min-height: var(--control-md); align-items: center; }
+.secretError { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .secret { grid-template-columns: minmax(0, 1fr) auto; }
+  .secretName { grid-column: 1 / -1; min-height: 0; }
+}

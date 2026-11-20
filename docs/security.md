@@ -14,7 +14,8 @@ user's machine can reach in, so read this before adding any way in.
 | SSH, port `39022` (Lima) | A login account in the VM | Host loopback only |
 | Public URL (optional) | One project, through the Eggie service's Cloudflare tunnel | Outbound from the `tunnel` container |
 | Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
-| Site, port `80` | A redirect to 443 | The internet (site mode only) |
+| Site, port `80` | A redirect to 443, and `/.well-known/acme-challenge/<token>`, the certificate authority's check for a custom domain (rate-limited; 404 unless the service has that challenge open) | The internet (site mode only) |
+| Site, a custom domain | One project's web service; never the console, `/api` or another project | The internet (site mode only) |
 | Site, port `22` | The login account | Whoever holds the login account's SSH key (site mode only) |
 | Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use push ticket (site mode only) |
 
@@ -126,7 +127,7 @@ the user disconnects, which kills the task they meant to leave running.
 On a server the Eggie service provisions, the runtime exposes 443, 80 and 22 behind a firewall
 the service manages; everything above about the inside of the boundary still holds. The console
 and `/api` need a session the service issues, and projects are public with whatever auth they
-have themselves.
+have themselves. The challenge path is open without a session and answers on custom hosts too.
 
 ## Before adding a way in
 

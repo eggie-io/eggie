@@ -593,7 +593,7 @@ export function handlersFor(scenario: Scenario) {
         warning: {
           code: "renewal_failing",
           message: "We couldn't renew the certificate for www.example.com. The current one works until 3 January.",
-          next_step: "Nothing to do yet: we keep trying by ourselves.",
+          next_step: "We keep trying by ourselves. Check that the record below is still where you bought the domain.",
         },
       }),
     ],

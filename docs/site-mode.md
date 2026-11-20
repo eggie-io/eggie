@@ -78,8 +78,8 @@ Until a certificate lands, Traefik serves its own self-signed certificate.
 
 ### The certificates
 
-`services/certificates.py` asks the service for its list of certificates on start when it holds
-none, whenever a custom domain names one it lacks, once a day, and on the next pass after a
+`services/certificates.py` asks the service for its list of certificates on every start,
+whenever an active custom domain names one it lacks, once a day, and on the next pass after a
 domain is removed. Each pair is stored under `/opt/eggie/edge/certs/<id>/` (`cert.pem`, `key.pem`
 `0600`), staged and moved in with one rename. A renewal is a new id: the pair already held for
 that name keeps serving until the new id is installed, then `edge.yml` names only the new one and

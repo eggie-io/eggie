@@ -104,9 +104,12 @@ and a host release. Prefer additive changes.
   `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
   Routes (`rest/routers/addresses.py`, site only): `GET /projects/{id}/addresses` on both mounts;
   add / remove / primary / check at `/api` only. `GET /.well-known/acme-challenge/{token}` is the
-  one open path on a site (`rest/auth.py`, any Host). `Domains.challenge` checks the token shape
-  `[A-Za-z0-9_-]{20,200}`, 20 a minute per client address (`ratelimit.client_address`) and 300 in
-  all, else 404 without calling the service. The payload's `domains` comes from the
+  one path open on a custom host (`rest/auth.py`, any Host; containers on the edge network reach
+  it too). `Domains.challenge` answers a token the service answered in the last 10 min from a
+  64-entry cache; any other token needs the shape `[A-Za-z0-9_-]{20,200}`, 20 a minute per client
+  address (`ratelimit.client_address`) and 300 in all, else 404 without calling the service. A
+  queued delete is claimed under the lock, and `add` takes a queued name off the queue before
+  letting go of it on the service (`domain_busy` while the sync thread is deleting it). The payload's `domains` comes from the
   mirror; `loader.primary_url` puts the serving primary domain in `urls[0]` (probe keeps `host_for`).
   `DELETE /projects/{id}` forgets the project's domains unless `keep_domains=true` (replace import).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside

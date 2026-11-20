@@ -7,13 +7,17 @@ from eggie_api.infra.cloud import CloudError, CloudUnavailable
 from eggie_api.infra.db import Database
 from eggie_api.infra.repos import Repos
 from eggie_api.services.account import Account
-from eggie_api.services.domains import (CHALLENGE_WINDOW, PAGE_FRESH, SYNC_IDLE,
-                                      SYNC_PENDING, Domains)
+from eggie_api.services.domains import (CHALLENGE_CACHE, CHALLENGE_WINDOW, PAGE_FRESH,
+                                      SYNC_IDLE, SYNC_PENDING, Domains)
 from eggie_api.services.loader import ProjectLoader
 from tests.runtime.api.fake_cloud import FakeCloud
 
 TOKEN = "at"
 CHALLENGE = "a" * 43
+
+
+def tok(n):
+    return f"{n:043d}"
 WEB = "services:\n  web:\n    image: nginx\n    ports: ['8080:80']\n"
 DNS = [{"type": "A", "name": "@", "value": "198.51.100.7"}]
 PROBLEM = {"code": "dns_elsewhere", "message": "example.com points to another server.",
@@ -411,9 +415,9 @@ def test_a_project_without_a_web_service_has_no_primary_url(tmp_path):
     assert domains.primary_url("shop") is None
 
 
-def refused(domains, **client):
+def refused(domains, token=CHALLENGE, **client):
     with pytest.raises(NotFound) as e:
-        domains.challenge(CHALLENGE, **client)
+        domains.challenge(token, **client)
     return e.value.code == "challenge_not_found"
 
 
@@ -429,30 +433,83 @@ def test_a_malformed_challenge_token_never_reaches_the_service(tmp_path):
 def test_one_address_gets_twenty_challenges_a_minute_and_others_still_get_theirs(tmp_path):
     cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 21)
     domains, _, _, _ = make(tmp_path, cloud)
-    for _ in range(20):
-        assert domains.challenge(CHALLENGE, forwarded_for="203.0.113.9, 10.0.0.2") == "k.t"
-    assert refused(domains, forwarded_for="203.0.113.9")
-    assert domains.challenge(CHALLENGE, peer="198.51.100.1") == "k.t"
+    for n in range(20):
+        assert domains.challenge(tok(n), forwarded_for="203.0.113.9, 10.0.0.2") == "k.t"
+    assert refused(domains, tok(20), forwarded_for="203.0.113.9")
+    assert domains.challenge(tok(21), peer="198.51.100.1") == "k.t"
     assert cloud.names().count("acme_challenge") == 21
 
 
 def test_a_refused_address_is_answered_again_once_its_minute_has_passed(tmp_path):
     cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 21)
     domains, _, _, clock = make(tmp_path, cloud)
-    for _ in range(20):
-        domains.challenge(CHALLENGE, peer="203.0.113.9")
-    assert refused(domains, peer="203.0.113.9")
+    for n in range(20):
+        domains.challenge(tok(n), peer="203.0.113.9")
+    assert refused(domains, tok(20), peer="203.0.113.9")
     clock.now += CHALLENGE_WINDOW
-    assert domains.challenge(CHALLENGE, peer="203.0.113.9") == "k.t"
+    assert domains.challenge(tok(20), peer="203.0.113.9") == "k.t"
 
 
 def test_the_three_hundred_and_first_challenge_in_a_minute_is_refused(tmp_path):
     cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 300)
     domains, _, _, _ = make(tmp_path, cloud)
     for n in range(300):
-        domains.challenge(CHALLENGE, forwarded_for=f"203.0.113.{n % 20}")
-    assert refused(domains, forwarded_for="198.51.100.1")
+        domains.challenge(tok(n), forwarded_for=f"203.0.113.{n % 20}")
+    assert refused(domains, tok(300), forwarded_for="198.51.100.1")
     assert cloud.names().count("acme_challenge") == 300
+
+
+def lookups(cloud, token):
+    return sum(1 for c in cloud.calls if c == ("acme_challenge", TOKEN, token))
+
+
+def test_a_challenge_answered_once_is_answered_again_while_both_windows_are_full(tmp_path):
+    unknown = CloudError("challenge_not_found", "no", 404)
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] + [unknown] * 299)
+    domains, _, _, _ = make(tmp_path, cloud)
+    assert domains.challenge(CHALLENGE, peer="203.0.113.9") == "k.t"
+    for n in range(19):
+        refused(domains, tok(n), peer="203.0.113.9")
+    for n in range(280):
+        refused(domains, tok(100 + n), forwarded_for=f"198.51.100.{n % 15}")
+    assert refused(domains, tok(999), peer="192.0.2.1"), "the overall window is full"
+    assert refused(domains, tok(998), peer="203.0.113.9"), "and so is this client's"
+    assert domains.challenge(CHALLENGE, peer="203.0.113.9") == "k.t"
+    assert lookups(cloud, CHALLENGE) == 1
+
+
+def test_a_cached_challenge_is_looked_up_again_after_the_cache_time(tmp_path):
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 2)
+    domains, _, _, clock = make(tmp_path, cloud)
+    domains.challenge(CHALLENGE, peer="203.0.113.9")
+    clock.now += CHALLENGE_CACHE - 1
+    domains.challenge(CHALLENGE, peer="203.0.113.9")
+    assert lookups(cloud, CHALLENGE) == 1
+    clock.now += 1
+    domains.challenge(CHALLENGE, peer="203.0.113.9")
+    assert lookups(cloud, CHALLENGE) == 2
+
+
+def test_an_unknown_challenge_is_never_cached(tmp_path):
+    cloud = FakeCloud(acme_challenge=[CloudError("challenge_not_found", "no", 404),
+                                      CloudUnavailable("down"), {"key_authorization": "k.t"}])
+    domains, _, _, _ = make(tmp_path, cloud)
+    assert refused(domains, peer="203.0.113.9")
+    assert refused(domains, peer="203.0.113.9")
+    assert domains.challenge(CHALLENGE, peer="203.0.113.9") == "k.t"
+    assert lookups(cloud, CHALLENGE) == 3
+
+
+def test_the_challenge_cache_keeps_the_sixty_four_newest(tmp_path):
+    cloud = FakeCloud(acme_challenge=[{"key_authorization": "k.t"}] * 66)
+    domains, _, _, _ = make(tmp_path, cloud)
+    for n in range(65):
+        domains.challenge(tok(n), forwarded_for=f"203.0.113.{n % 10}")
+    for n in range(1, 65):
+        domains.challenge(tok(n), peer="198.51.100.1")
+    assert cloud.names().count("acme_challenge") == 65
+    domains.challenge(tok(0), peer="198.51.100.1")
+    assert lookups(cloud, tok(0)) == 2
 
 
 def test_the_summary_of_a_project_with_no_row_is_empty_not_an_error(tmp_path):

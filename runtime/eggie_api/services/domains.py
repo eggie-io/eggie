@@ -27,6 +27,8 @@ CHALLENGE_TOKEN = re.compile(r"[A-Za-z0-9_-]{20,200}")
 CHALLENGES_PER_CLIENT = 20
 CHALLENGES_ALL = 300
 CHALLENGE_WINDOW = 60.0
+CHALLENGE_CACHE = 600.0
+CHALLENGES_CACHED = 64
 
 _BY_STATUS = {404: NotFound, 409: Conflict, 422: Invalid, 429: TooMany}
 # What the edge file and the payloads use; the check times alone change neither.
@@ -95,6 +97,10 @@ class Domains:
             CHALLENGES_PER_CLIENT, CHALLENGE_WINDOW, clock, what="certificate checks")
         self._challenges = Window(CHALLENGES_ALL, CHALLENGE_WINDOW, clock,
                                   what="certificate checks")
+        # The service fetches a challenge before the CA does, so a cached answer keeps
+        # the CA's checks working while junk tokens fill the windows.
+        self._answers: dict[str, tuple[float, str]] = {}
+        self._answers_lock = threading.Lock()
 
     def sync(self) -> None:
         if not self._account.signed_in:
@@ -309,8 +315,11 @@ class Domains:
         self._removed()
 
     def challenge(self, token: str, *, forwarded_for: str = "", peer: str = "") -> str:
-        """Open to anyone on the internet: only a well-formed token, within both
-        windows, costs a call to the service."""
+        """Open to anyone on the internet: a cached answer costs nothing; otherwise
+        only a well-formed token, within both windows, costs a call to the service."""
+        cached = self._cached(token)
+        if cached is not None:
+            return cached
         if not (CHALLENGE_TOKEN.fullmatch(token)
                 and self._challenges_per_client.take(client_address(forwarded_for, peer))
                 and self._challenges.take()):
@@ -322,4 +331,20 @@ class Domains:
             raise NotFound("challenge_not_found", "no such challenge") from None
         if not isinstance(value, str) or not value:
             raise NotFound("challenge_not_found", "no such challenge")
+        self._remember(token, value)
         return value
+
+    def _cached(self, token: str) -> str | None:
+        with self._answers_lock:
+            hit = self._answers.get(token)
+            return hit[1] if hit and hit[0] > self._clock() else None
+
+    def _remember(self, token: str, value: str) -> None:
+        now = self._clock()
+        with self._answers_lock:
+            for old in [t for t, (until, _) in self._answers.items() if until <= now]:
+                del self._answers[old]
+            self._answers.pop(token, None)
+            while len(self._answers) >= CHALLENGES_CACHED:
+                del self._answers[next(iter(self._answers))]
+            self._answers[token] = (now + CHALLENGE_CACHE, value)

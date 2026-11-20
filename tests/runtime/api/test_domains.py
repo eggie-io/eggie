@@ -273,3 +273,68 @@ def test_a_failing_domain_sync_still_refreshes_certificates_in_the_same_pass(tmp
         env.app.state.services.sync.run_once()
     assert cloud.names().index("instance_domains") < cloud.names().index(
         "instance_certificates")
+
+
+class RacingCloud(FakeCloud):
+    """Runs `during_list` once, after the list was fetched and before it is returned."""
+
+    during_list = None
+
+    def instance_domains(self, token):
+        out = super().instance_domains(token)
+        hook, self.during_list = self.during_list, None
+        if hook:
+            hook()
+        return out
+
+
+def test_a_refresh_fetched_before_a_remove_does_not_bring_the_domain_back(tmp_path):
+    listed = {"domains": [wire(status="active", certificate_id="c1")]}
+    cloud = RacingCloud(instance_domains=[listed, listed], delete_instance_domain=[None])
+    domains, _, _, clock = make(tmp_path, cloud)
+    domains.sync()
+    cloud.during_list = lambda: domains.remove("shop", "example.com")
+    clock.now += SYNC_IDLE
+    domains.sync()
+    assert domains.rows() == []
+
+
+def test_removing_the_primary_lists_again_on_the_next_pass(tmp_path):
+    cloud = FakeCloud(instance_domains=[
+        {"domains": [wire(status="active", certificate_id="c1"),
+                     wire("www.example.com", primary=False, status="active",
+                          certificate_id="c2")]},
+        {"domains": [wire("www.example.com", status="active", certificate_id="c2")]}],
+        delete_instance_domain=[None])
+    domains, _, _, clock = make(tmp_path, cloud)
+    domains.sync()
+    domains.remove("shop", "example.com")
+    clock.now += 1
+    domains.sync()
+    assert cloud.names().count("instance_domains") == 2
+    assert [(s["hostname"], s["primary"]) for s in domains.summary("shop")] == [
+        ("www.example.com", True)]
+
+
+def test_a_domain_the_service_does_not_know_lists_again_on_the_next_pass(tmp_path):
+    cloud = FakeCloud(instance_domains=[{"domains": [wire(status="active",
+                                                          certificate_id="c1")]},
+                                        {"domains": []}],
+                      check_instance_domain=[CloudError("domain_not_found", "gone", 404)])
+    domains, _, _, clock = make(tmp_path, cloud)
+    domains.sync()
+    with pytest.raises(NotFound):
+        domains.check("shop", "example.com")
+    clock.now += 1
+    domains.sync()
+    assert domains.rows() == []
+
+
+def test_a_project_without_a_web_service_has_no_primary_url(tmp_path):
+    cloud = FakeCloud(instance_domains=[{"domains": [
+        wire(status="active", certificate_id="c1")]}])
+    domains, installed, _, _ = make(tmp_path, cloud)
+    installed.add("c1")
+    domains.sync()
+    (tmp_path / "projects" / "shop" / "docker-compose.yml").write_text("services: {}\n")
+    assert domains.primary_url("shop") is None

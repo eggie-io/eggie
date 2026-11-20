@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, createApi } from "../api/client";
 import { projectPath } from "../projects/queries";
 import { pollMs, type AddressList } from "./domains";
 
@@ -18,6 +18,10 @@ export function useAddresses(id: string, enabled = true) {
   });
 }
 
+// The service may take 10 s to check a domain and the API waits 20 s for it; the shared
+// client's 10 s would show a check that went through as a failure.
+const actions = createApi((input, init) => fetch(input, init), { timeoutMs: 30_000 });
+
 function useAddressAction<T>(id: string, send: (arg: T) => Promise<AddressList>) {
   const client = useQueryClient();
   return useMutation({
@@ -28,13 +32,13 @@ function useAddressAction<T>(id: string, send: (arg: T) => Promise<AddressList>)
 }
 
 export const useAddDomain = (id: string) =>
-  useAddressAction(id, (hostname: string) => api.post<AddressList>(addressesPath(id), { hostname }));
+  useAddressAction(id, (hostname: string) => actions.post<AddressList>(addressesPath(id), { hostname }));
 
 export const useRemoveDomain = (id: string) =>
-  useAddressAction(id, (hostname: string) => api.del<AddressList>(addressPath(id, hostname)));
+  useAddressAction(id, (hostname: string) => actions.del<AddressList>(addressPath(id, hostname)));
 
 export const useMakePrimary = (id: string) =>
-  useAddressAction(id, (hostname: string) => api.post<AddressList>(`${addressPath(id, hostname)}/primary`));
+  useAddressAction(id, (hostname: string) => actions.post<AddressList>(`${addressPath(id, hostname)}/primary`));
 
 export const useCheckDomain = (id: string) =>
-  useAddressAction(id, (hostname: string) => api.post<AddressList>(`${addressPath(id, hostname)}/check`));
+  useAddressAction(id, (hostname: string) => actions.post<AddressList>(`${addressPath(id, hostname)}/check`));

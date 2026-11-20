@@ -96,6 +96,12 @@ and a host release. Prefer additive changes.
   10 min) and relays add / remove / primary / check. A listed domain is never deleted because its
   project is missing; only hostnames queued by `forget_project` are. The site's edge pass is
   `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
+  Routes (`rest/routers/addresses.py`, site only): `GET /projects/{id}/addresses` on both mounts;
+  add / remove / primary / check at `/api` only. `GET /.well-known/acme-challenge/{token}` is the
+  one open path on a site (`rest/auth.py`, any Host): token shape `[A-Za-z0-9_-]{20,200}` and 60 a
+  minute in all, else 404 without calling the service. The payload's `domains` comes from the
+  mirror; `loader.primary_url` puts the serving primary domain in `urls[0]` (probe keeps `host_for`).
+  `DELETE /projects/{id}` forgets the project's domains unless `keep_domains=true` (replace import).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service

@@ -163,6 +163,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                           changed=domains_changed)
         edge = Edge(config.edge_dir, certificates, domains.rows,
                     _project_edges(loader, repos.projects))
+        loader.primary_url = domains.primary_url
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
     if edge is not None:
         def edge_pass() -> None:
@@ -202,12 +203,15 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
             Path(config.transfers_root))["free_bytes"]),
         sleep=sleep or time.sleep, timer=timer)
     transfers.sweep()
+    domain_hooks = {} if domains is None else {
+        "domains_for": domains.summary, "forget_domains": domains.forget_project}
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,
         projects=ProjectService(config, runner, loader, repos.projects, secrets,
                                 jobs, locks, uploads, public, http_probe,
-                                sync.wake, push.summary, repos.pushed_projects),
+                                sync.wake, push.summary, repos.pushed_projects,
+                                **domain_hooks),
         lifecycle=lifecycle,
         clone=CloneService(config, runner, loader, repos.projects, locks,
                            github_link, lifecycle, sync.wake),

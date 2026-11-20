@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import yaml
 
@@ -20,6 +21,8 @@ class ProjectLoader:
     def __init__(self, config: ApiConfig, projects: ProjectRepo):
         self._config = config
         self._projects = projects
+        # Set on a site after Domains exists: it reads through this loader.
+        self.primary_url: Callable[[str], str | None] | None = None
 
     def dir(self, project_id: str) -> Path:
         return Path(self._config.projects_root) / project_id
@@ -64,8 +67,10 @@ class ProjectLoader:
                           f"the project definition cannot be read: {e}") from e
 
     def urls_for(self, project: Project, domain: str) -> list[str]:
-        return [self._config.public_url(host_for(project.id, web, domain))
+        urls = [self._config.public_url(host_for(project.id, web, domain))
                 for web in project.webs]
+        primary = self.primary_url(project.id) if urls and self.primary_url else None
+        return [primary, *urls[1:]] if primary else urls
 
     def public_hosts(self, project_id: str) -> list[dict]:
         row = self._projects.get(project_id)

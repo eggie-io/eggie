@@ -26,6 +26,7 @@ export type Address =
       status: string;
       serving: "direct" | "redirects" | "none";
       problem: DomainProblem | null;
+      warning: DomainProblem | null;
       dns: DnsRecord[];
       checked_at: string | null;
       next_check_at: string | null;
@@ -57,7 +58,7 @@ export function badgeTone(status: string): "ok" | "busy" | "warning" {
 }
 
 export function showsDns(a: Address): boolean {
-  return a.kind === "custom" && (a.status === "waiting_dns" || a.status === "problem");
+  return a.kind === "custom" && (a.status === "waiting_dns" || a.status === "problem" || a.warning !== null);
 }
 
 // A domain that redirects isn't the project's address, so the app must not be told to use it.
@@ -77,8 +78,9 @@ export function eggieNote(list: AddressList): string {
 const FAST_MS = 5000;
 const SLOW_MS = 60_000;
 
+// An active domain whose certificate this server hasn't installed yet serves nothing so far.
 export function pollMs(list: AddressList | undefined): number {
-  return list && customRows(list).some((a) => a.status !== "active") ? FAST_MS : SLOW_MS;
+  return list && customRows(list).some((a) => a.status !== "active" || a.serving === "none") ? FAST_MS : SLOW_MS;
 }
 
 type Store = Pick<Storage, "getItem" | "setItem">;

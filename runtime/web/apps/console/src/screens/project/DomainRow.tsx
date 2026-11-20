@@ -156,6 +156,7 @@ export function DomainRow({ id, address, onRemove }: { id: string; address: Cust
       </div>
       {primary.error && <Notice tone="danger">{actionError(primary.error)}</Notice>}
       {address.problem && <ProblemNotice problem={address.problem} />}
+      {address.warning && <ProblemNotice problem={address.warning} />}
       {showsDns(address) && <DnsBox id={id} address={address} />}
       {showsHint(address) && <ActiveHint id={id} hostname={address.hostname} />}
     </li>

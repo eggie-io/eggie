@@ -3,7 +3,7 @@ from __future__ import annotations
 from ..db import Database
 
 _COLUMNS = ("hostname", "display", "project_id", "is_primary", "status", "problem_json",
-            "dns_json", "certificate_id", "checked_at", "next_check_at")
+            "warning_json", "dns_json", "certificate_id", "checked_at", "next_check_at")
 _INSERT = (f"INSERT INTO domains({', '.join(_COLUMNS)}) "
            f"VALUES ({', '.join('?' * len(_COLUMNS))})")
 # rowid keeps the service's order within a project.

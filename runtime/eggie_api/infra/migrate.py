@@ -166,6 +166,7 @@ def _v10_domains(conn: sqlite3.Connection) -> None:
             is_primary INTEGER NOT NULL DEFAULT 0,
             status TEXT NOT NULL,
             problem_json TEXT,
+            warning_json TEXT,
             dns_json TEXT NOT NULL DEFAULT '[]',
             certificate_id TEXT,
             checked_at TEXT,

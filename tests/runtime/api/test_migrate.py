@@ -172,4 +172,5 @@ def test_a_v9_database_gains_the_domain_mirror_and_its_delete_queue(tmp_path):
     assert migrate.migrate(conn) == migrate.SCHEMA_VERSION
     assert {"domains", "domain_deletes"} <= tables(conn)
     assert {"hostname", "display", "project_id", "is_primary", "status", "problem_json",
-            "dns_json", "certificate_id", "checked_at", "next_check_at"} <= columns(conn, "domains")
+            "warning_json", "dns_json", "certificate_id", "checked_at",
+            "next_check_at"} <= columns(conn, "domains")

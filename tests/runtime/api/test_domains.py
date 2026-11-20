@@ -29,12 +29,17 @@ class Clock:
         return self.now
 
 
+WARNING = {"code": "renewal_failing",
+           "message": "We can't renew the certificate for example.com; it expires on 3 January.",
+           "next_step": "Nothing to do yet: we keep trying."}
+
+
 def wire(hostname="example.com", project="shop", *, primary=True, status="waiting_dns",
-         problem=None, certificate_id=None):
+         problem=None, warning=None, certificate_id=None):
     return {"hostname": hostname, "display": hostname, "project": project,
-            "primary": primary, "status": status, "problem": problem, "dns": DNS,
-            "certificate_id": certificate_id, "checked_at": "2026-11-20T10:00:00Z",
-            "next_check_at": None}
+            "primary": primary, "status": status, "problem": problem, "warning": warning,
+            "dns": DNS, "certificate_id": certificate_id,
+            "checked_at": "2026-11-20T10:00:00Z", "next_check_at": None}
 
 
 def make(tmp_path, cloud, projects=("shop",)):
@@ -122,6 +127,20 @@ def test_addresses_serves_directly_when_the_primary_has_a_problem(tmp_path):
     assert served(out) == {"example.com": "none", "www.example.com": "direct",
                            "shop.foo.eggie.space": "direct"}
     assert out["addresses"][0]["problem"] == PROBLEM
+
+
+def test_a_domain_with_a_warning_keeps_it_and_is_still_serving(tmp_path):
+    older = wire("www.example.com", primary=False, status="active", certificate_id="c2")
+    del older["warning"]
+    cloud = FakeCloud(instance_domains=[{"domains": [
+        wire(status="active", certificate_id="c1", warning=WARNING), older]}])
+    domains, covered, _, _ = make(tmp_path, cloud)
+    covered.update({"example.com", "www.example.com"})
+    domains.sync()
+    out = domains.addresses("shop")
+    assert [a.get("warning") for a in out["addresses"][:2]] == [WARNING, None]
+    assert served(out)["example.com"] == "direct"
+    assert domains.primary_url("shop") == "https://example.com"
 
 
 def test_an_open_page_refreshes_a_pending_mirror_at_most_every_ten_seconds(tmp_path):

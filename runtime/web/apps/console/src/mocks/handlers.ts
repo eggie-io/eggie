@@ -559,7 +559,7 @@ export function handlersFor(scenario: Scenario) {
     if (scenario === "push-running") startPush(box, instances[0], true);
   }
 
-  // Custom domains, a site only: shop has none, some waiting, all active, or one per problem code.
+  // Custom domains, a site only: shop has none, some waiting, all active, or one per problem and warning code.
   const SITE_DOMAIN = "foo.eggie.space";
   const SITE_IP = "198.51.100.7";
   const eggieHost = (id: string) => `${id}.${SITE_DOMAIN}`;
@@ -572,7 +572,7 @@ export function handlersFor(scenario: Scenario) {
   };
   const isoIn = (seconds: number) => new Date((nowSec() + seconds) * 1000).toISOString();
   const mockDomain = (id: string, hostname: string, over: Partial<MockDomain> = {}): MockDomain => ({
-    hostname, display: hostname, primary: false, status: "waiting_dns", problem: null,
+    hostname, display: hostname, primary: false, status: "waiting_dns", problem: null, warning: null,
     dns: recordFor(id, hostname), checked_at: isoIn(-40), next_check_at: isoIn(60), ...over,
   });
   const problemDomain = (hostname: string, problem: DomainProblem, over: Partial<MockDomain> = {}) =>
@@ -583,11 +583,20 @@ export function handlersFor(scenario: Scenario) {
     if (!rows) domains.set(id, (rows = []));
     return rows;
   };
-  const activeDomain = (hostname: string, primary = false) =>
-    mockDomain("shop", hostname, { primary, status: "active", next_check_at: null });
+  const activeDomain = (hostname: string, primary = false, over: Partial<MockDomain> = {}) =>
+    mockDomain("shop", hostname, { primary, status: "active", next_check_at: null, ...over });
   const seeded: Partial<Record<Scenario, MockDomain[]>> = {
     "domains-waiting": [mockDomain("shop", "example.com", { primary: true }), mockDomain("shop", "www.example.com")],
-    "domains-active": [activeDomain("example.com", true), activeDomain("www.example.com")],
+    "domains-active": [
+      activeDomain("example.com", true),
+      activeDomain("www.example.com", false, {
+        warning: {
+          code: "renewal_failing",
+          message: "We couldn't renew the certificate for www.example.com. The current one works until 3 January.",
+          next_step: "Nothing to do yet: we keep trying by ourselves.",
+        },
+      }),
+    ],
     "domains-problem": [
       problemDomain("example.com", {
         code: "dns_elsewhere",
@@ -616,6 +625,15 @@ export function handlersFor(scenario: Scenario) {
         message: "We couldn't get a certificate for bücher.example.",
         next_step: "Nothing to do yet: we try again by ourselves within the hour.",
       }, { display: "bücher.example", next_check_at: isoIn(3600) }),
+      activeDomain("example.net", false, {
+        warning: {
+          code: "dns_moved",
+          message: "example.net no longer points here. It still opens this project for now.",
+          next_step: "Change its A record back to the value below where you bought the domain.",
+          seen: ["203.0.113.40"],
+          expected: [SITE_IP],
+        },
+      }),
     ],
   };
   const reflect = (id: string) => {

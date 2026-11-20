@@ -35,15 +35,16 @@ def _row(d: dict) -> dict:
     """A domain object from the service as a mirror row; raises on a shape
     that is not the contract's."""
     hostname, project, status = d["hostname"], d["project"], d["status"]
-    certificate_id = d.get("certificate_id")
+    certificate_id, problem, warning = d.get("certificate_id"), d.get("problem"), d.get("warning")
     if not all(isinstance(v, str) and v for v in (hostname, project, status)) or not (
-            certificate_id is None or isinstance(certificate_id, str)):
+            certificate_id is None or isinstance(certificate_id, str)) or not all(
+            v is None or isinstance(v, dict) for v in (problem, warning)):
         raise TypeError(f"the domain {hostname!r} is not understood")
-    problem = d.get("problem")
     return {"hostname": hostname, "display": str(d.get("display") or hostname),
             "project_id": project, "is_primary": 1 if d.get("primary") else 0,
             "status": status,
             "problem_json": None if problem is None else json.dumps(problem),
+            "warning_json": None if warning is None else json.dumps(warning),
             "dns_json": json.dumps(d.get("dns") or []), "certificate_id": certificate_id,
             "checked_at": d.get("checked_at"), "next_check_at": d.get("next_check_at")}
 
@@ -202,6 +203,7 @@ class Domains:
                       "primary": bool(r["is_primary"]), "status": r["status"],
                       "serving": how(r["hostname"]),
                       "problem": json.loads(r["problem_json"]) if r["problem_json"] else None,
+                      "warning": json.loads(r["warning_json"]) if r["warning_json"] else None,
                       "dns": json.loads(r["dns_json"]),
                       "checked_at": r["checked_at"], "next_check_at": r["next_check_at"]}
                      for r in rows]

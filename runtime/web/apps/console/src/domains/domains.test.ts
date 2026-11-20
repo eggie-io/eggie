@@ -6,7 +6,7 @@ const eggie = (serving: "direct" | "redirects"): Address => ({
 });
 
 const custom = (hostname: string, status: string, over: Partial<Extract<Address, { kind: "custom" }>> = {}): Address => ({
-  kind: "custom", hostname, display: hostname, primary: false, status, serving: "none", problem: null,
+  kind: "custom", hostname, display: hostname, primary: false, status, serving: "none", problem: null, warning: null,
   dns: [{ type: "CNAME", name: "www", value: "shop.foo.eggie.space" }], checked_at: null, next_check_at: null, ...over,
 });
 
@@ -44,6 +44,11 @@ describe("showsDns", () => {
       .toEqual([true, true, false, false]);
     expect(showsDns(eggie("direct"))).toBe(false);
   });
+
+  it("shows them for an active domain with a warning, since the record is what to fix", () => {
+    const warning = { code: "dns_moved", message: "example.com no longer points here." };
+    expect(showsDns(custom("example.com", "active", { serving: "direct", warning }))).toBe(true);
+  });
 });
 
 describe("showsHint", () => {
@@ -61,6 +66,10 @@ describe("pollMs", () => {
     expect(pollMs(listWithServingPrimary)).toBe(60_000);
     expect(pollMs({ addresses: [eggie("direct")] })).toBe(60_000);
     expect(pollMs(undefined)).toBe(60_000);
+  });
+
+  it("keeps polling fast while an active domain's certificate is not installed here yet", () => {
+    expect(pollMs({ addresses: [custom("example.com", "active", { primary: true }), eggie("direct")] })).toBe(5000);
   });
 });
 

@@ -302,6 +302,15 @@ def test_primary_url_is_none_until_the_primary_serves(tmp_path):
     assert domains.primary_url("shop") == "https://example.com"
 
 
+def test_only_active_domains_ask_for_their_certificate(tmp_path):
+    cloud = FakeCloud(instance_domains=[{"domains": [
+        wire(status="problem", problem=PROBLEM, certificate_id="expired"),
+        wire("www.example.com", primary=False, status="active", certificate_id="c2")]}])
+    domains, _, _, _ = make(tmp_path, cloud)
+    domains.sync()
+    assert domains.certificate_ids() == {"c2"}
+
+
 def test_a_renewed_id_not_installed_yet_leaves_the_held_pair_serving(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [
         wire(status="active", certificate_id="renewed")]}])

@@ -201,8 +201,10 @@ class Domains:
         return [_domain(r) for r in self._repo.list()]
 
     def certificate_ids(self) -> set[str]:
-        """What the service says to fetch; serving goes by the names a pair covers."""
-        return {r["certificate_id"] for r in self._repo.list() if r["certificate_id"]}
+        """What the service says to fetch; serving goes by the names a pair covers.
+        A domain that is not active may name an id the list will never hold."""
+        return {r["certificate_id"] for r in self._repo.list()
+                if r["certificate_id"] and r["status"] == ACTIVE}
 
     def addresses(self, project_id: str) -> dict:
         project = self._loader.require(project_id)
@@ -287,8 +289,8 @@ class Domains:
         hostname = tidy(raw)
         target = self._eggie_host(project_id, project)
         if target is None:
-            raise Invalid("no_web_service", "This project has no web address yet. "
-                                            "Start it first, then add a domain.")
+            raise Invalid("no_web_service", "This project has no web address, so there is "
+                                            "nothing for a domain to open.")
         with self._lock:
             if hostname in self._releasing:
                 raise Conflict("domain_busy", "That domain is still being removed from its "

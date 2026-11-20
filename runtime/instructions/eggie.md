@@ -56,6 +56,14 @@ At every level the rules below hold, and always give them the project's URL.
   requested. Run one-off commands with `docker exec <container> …` (find it with `docker ps`); a
   `docker compose run` you start gets none of Eggie's values.
 - Something broken? `eggie logs`.
+- A `domain  example.com  …` line under a project in `eggie status` is the user's own domain for
+  it (cloud kitchen only). Only they add or remove one, on the project's **Custom domain** page
+  in Eggie; there is no command for it. Never set up certificates, a reverse proxy or DNS: Eggie
+  does the first two, and the DNS record is theirs to create where they bought the domain, as
+  that page shows. `waiting for DNS` or `problem`: tell them what it says and point them to that
+  page. `active`: give that address as the project's URL and, when they ask or sign-in breaks
+  after the switch, update the app's own address settings (login callback URLs, allowed hosts,
+  links it sends).
 - An idea for an app, or a change to a project: start with the `eggie-brainstorm` skill.
 - Something to set up, import or run — a repo URL, an archive, a folder: the `eggie-setup`
   skill (no skills? run `eggie --help`).

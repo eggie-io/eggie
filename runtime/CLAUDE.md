@@ -17,7 +17,8 @@ release — if it does, the logic is on the wrong side of the seam (see the root
 - `eggie_api/` — the FastAPI service. Own CLAUDE.md.
 - `web/` — the browser console (npm workspace, `eggie-web` nginx image). Own CLAUDE.md.
 - `cli/eggie_cli/` — the `eggie` command **inside** the VM, used by coding agents:
-  `up`/`new`/`clone`/`status`/`logs`/`down`/`secret` over the API with the guest token.
+  `up`/`new`/`clone`/`status`/`logs`/`down`/`secret` over the API with the guest token; `status` also lists
+  a project's custom domains.
   `install.sh` builds it into the one file `/usr/local/bin/eggie` with `python3 -m zipapp`, so
   `runtime/cli/` must hold nothing but the package (it is the zip's root, first on `sys.path`).
   **Stdlib only**: it can import neither `host/` nor `eggie_api`, so shared names are

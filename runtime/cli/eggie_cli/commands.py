@@ -40,12 +40,19 @@ def start(env: Env, folder: Path, project_id: str) -> None:
         print(problem["message"], file=env.out)
 
 
+DOMAIN_LABELS = {"waiting_dns": "waiting for DNS", "issuing": "getting certificate"}
+
+
 def print_project(env: Env, project: dict) -> None:
     urls = project.get("urls") or []
     print(f"{project['id']:<20} {project['status']:<16} "
           f"{urls[0] if urls else ''}".rstrip(), file=env.out)
     for url in urls[1:]:
         print(f"    {url}", file=env.out)
+    for domain in project.get("domains") or []:
+        label = DOMAIN_LABELS.get(domain["status"], domain["status"])
+        primary = " (primary)" if domain.get("primary") else ""
+        print(f"    domain  {domain['hostname']}  {label}{primary}", file=env.out)
     if project.get("problem"):
         message = project["problem"]["message"].replace("\n", "\n    ")
         print(f"    problem: {message}", file=env.out)

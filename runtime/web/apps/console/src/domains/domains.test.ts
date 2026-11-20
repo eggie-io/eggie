@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customRows, eggieNote, menuNote, pollMs, showsDns, showsHint, statusLabel, type Address, type AddressList } from "./domains";
+import { customRows, eggieNote, menuNote, overviewRows, pollMs, showsDns, showsHint, statusLabel, type Address, type AddressList } from "./domains";
 
 const eggie = (serving: "direct" | "redirects"): Address => ({
   kind: "eggie", hostname: "shop.foo.eggie.space", url: "https://shop.foo.eggie.space", serving,
@@ -72,5 +72,14 @@ describe("menuNote", () => {
     ])).toBe("bücher.example");
     expect(menuNote([])).toBeNull();
     expect(menuNote(undefined)).toBeNull();
+  });
+});
+
+describe("overviewRows", () => {
+  it("lists each domain with its label for Overview, primary first", () => {
+    expect(overviewRows([{ hostname: "www.example.com", display: "www.example.com", status: "waiting_dns", primary: false },
+                         { hostname: "example.com", display: "example.com", status: "active", primary: true }]))
+      .toEqual([{ host: "example.com", label: "Active" }, { host: "www.example.com", label: "Waiting for DNS" }]);
+    expect(overviewRows(undefined)).toEqual([]);
   });
 });

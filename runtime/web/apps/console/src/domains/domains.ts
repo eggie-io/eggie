@@ -113,3 +113,11 @@ export function dismissHint(id: string, hostname: string, store = localStore()):
 export function menuNote(domains: ProjectDomain[] | undefined): string | null {
   return domains?.find((d) => d.primary)?.display ?? null;
 }
+
+export const primaryFirst = (domains: ProjectDomain[] | undefined): ProjectDomain[] => {
+  const all = domains ?? [];
+  return [...all.filter((d) => d.primary), ...all.filter((d) => !d.primary)];
+};
+
+export const overviewRows = (domains: ProjectDomain[] | undefined): { host: string; label: string }[] =>
+  primaryFirst(domains).map((d) => ({ host: d.display, label: statusLabel(d.status) }));

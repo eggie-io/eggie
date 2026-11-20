@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, IconButton, Notice, StatusDot, useCopy, type DotStatus } from "@eggie/ui";
+import { Badge, Button, IconButton, Notice, useCopy } from "@eggie/ui";
 import { CopyButton } from "../../components/CopyButton";
-import { badgeTone, dismissHint, hintDismissed, showsDns, showsHint, statusLabel, type CustomAddress, type DomainProblem } from "../../domains/domains";
+import { dismissHint, hintDismissed, showsDns, showsHint, type CustomAddress, type DomainProblem } from "../../domains/domains";
 import { useCheckDomain, useMakePrimary } from "../../domains/queries";
 import { actionError } from "../../projects/copy";
 import { domainPrompt } from "../../projects/prompts";
+import { DomainStatus } from "./DomainStatus";
 import s from "./DomainPage.module.css";
-
-const DOT: Record<ReturnType<typeof badgeTone>, DotStatus> = { ok: "running", busy: "starting", warning: "degraded" };
 
 function RowMenu({ address, onPrimary, onRemove, busy }: {
   address: CustomAddress;
@@ -151,7 +150,7 @@ export function DomainRow({ id, address, onRemove }: { id: string; address: Cust
         <span className={s.host}>{address.display}</span>
         {address.primary && <Badge tone="accent">Primary</Badge>}
         <span className={s.status}>
-          <StatusDot status={DOT[badgeTone(address.status)]} label={statusLabel(address.status)} />
+          <DomainStatus status={address.status} />
         </span>
         <RowMenu address={address} busy={primary.isPending} onPrimary={() => primary.mutate(address.hostname)} onRemove={onRemove} />
       </div>

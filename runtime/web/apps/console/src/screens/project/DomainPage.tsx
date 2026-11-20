@@ -100,8 +100,13 @@ function AddForm({ id, list }: { id: string; list: AddressList }) {
   );
 }
 
+// Keyed by project so the form, offer and hint state never carry over to another project.
 export function DomainPage() {
   const { id = "" } = useParams();
+  return <DomainContent key={id} id={id} />;
+}
+
+function DomainContent({ id }: { id: string }) {
   const site = useSite();
   const query = useAddresses(id, typeof site === "string");
   const [removing, setRemoving] = useState<CustomAddress | null>(null);

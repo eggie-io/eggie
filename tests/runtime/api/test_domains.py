@@ -374,6 +374,85 @@ def test_a_refresh_fetched_before_a_remove_does_not_bring_the_domain_back(tmp_pa
     assert domains.rows() == []
 
 
+class DeletingCloud(FakeCloud):
+    """Runs `during_delete` once, inside the first delete call it sees for `of`."""
+
+    during_delete = None
+    of = None
+
+    def delete_instance_domain(self, token, hostname):
+        if hostname == self.of and self.during_delete:
+            hook, self.during_delete = self.during_delete, None
+            hook()
+        return super().delete_instance_domain(token, hostname)
+
+
+def queued_from_blog(tmp_path, cloud, *hostnames):
+    cloud.replies["instance_domains"] = [{"domains": [
+        wire(h, project="blog", primary=i == 0) for i, h in enumerate(hostnames)]}]
+    domains, covered, changes, clock = make(tmp_path, cloud, projects=("shop", "blog"))
+    domains.sync()
+    domains.forget_project("blog")
+    return domains
+
+
+def deletes(cloud):
+    return [c[2] for c in cloud.calls if c[0] == "delete_instance_domain"]
+
+
+def test_adding_a_hostname_a_deleted_project_left_queued_lets_go_of_it_then_attaches_it(
+        tmp_path):
+    cloud = FakeCloud(delete_instance_domain=[None],
+                      add_instance_domain=[{"domain": wire(), "suggested": None}])
+    domains = queued_from_blog(tmp_path, cloud, "example.com")
+    domains.add("shop", "example.com")
+    assert deletes(cloud) == ["example.com"]
+    assert cloud.names()[-2:] == ["delete_instance_domain", "add_instance_domain"]
+    assert domains._repo.queued() == []
+    assert [(d.hostname, d.project_id) for d in domains.rows()] == [("example.com", "shop")]
+
+
+def test_a_queue_pass_never_deletes_a_hostname_an_add_took_meanwhile(tmp_path):
+    cloud = DeletingCloud(delete_instance_domain=[None, None],
+                          add_instance_domain=[{"domain": wire("www.example.com"),
+                                                "suggested": None}],
+                          instance_domains=[{"domains": [wire("www.example.com")]}])
+    domains = queued_from_blog(tmp_path, cloud, "example.com", "www.example.com")
+    cloud.of = "example.com"
+    cloud.during_delete = lambda: domains.add("shop", "www.example.com")
+    domains.sync()
+    assert deletes(cloud) == ["www.example.com", "example.com"], "add's own delete only"
+    assert [d.hostname for d in domains.rows()] == ["www.example.com"]
+    assert domains._repo.queued() == []
+
+
+def test_an_add_while_the_queue_pass_is_deleting_that_name_is_refused(tmp_path):
+    cloud = DeletingCloud(delete_instance_domain=[None])
+    domains = queued_from_blog(tmp_path, cloud, "example.com")
+    refusals = []
+
+    def add():
+        with pytest.raises(Conflict) as e:
+            domains.add("shop", "example.com")
+        refusals.append(e.value.code)
+
+    cloud.of, cloud.during_delete = "example.com", add
+    domains.sync()
+    assert refusals == ["domain_busy"]
+    assert "add_instance_domain" not in cloud.names()
+    assert domains._repo.queued() == []
+
+
+def test_an_add_whose_letting_go_fails_queues_the_hostname_again(tmp_path):
+    cloud = FakeCloud(delete_instance_domain=[CloudUnavailable("down")])
+    domains = queued_from_blog(tmp_path, cloud, "example.com")
+    with pytest.raises(Unavailable) as e:
+        domains.add("shop", "example.com")
+    assert e.value.code == "cloud_unavailable"
+    assert domains._repo.queued() == ["example.com"]
+    assert "add_instance_domain" not in cloud.names()
+
+
 def test_removing_the_primary_lists_again_on_the_next_pass(tmp_path):
     cloud = FakeCloud(instance_domains=[
         {"domains": [wire(status="active", certificate_id="c1"),

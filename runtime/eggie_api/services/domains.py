@@ -93,6 +93,8 @@ class Domains:
         # refresh whose list predates a store is dropped instead of undoing it.
         self._lock = threading.Lock()
         self._generation = 0
+        # Queued hostnames the sync thread is deleting on the service right now.
+        self._releasing: set[str] = set()
         self._challenges_per_client = KeyedWindow(
             CHALLENGES_PER_CLIENT, CHALLENGE_WINDOW, clock, what="certificate checks")
         self._challenges = Window(CHALLENGES_ALL, CHALLENGE_WINDOW, clock,
@@ -116,18 +118,32 @@ class Domains:
         if self._synced_at is None or self._clock() - self._synced_at >= every:
             self._refresh()
 
+    def _let_go(self, token: str, hostname: str) -> None:
+        try:
+            self._cloud.delete_instance_domain(token, hostname)
+        except CloudError as e:
+            if e.status != 404:
+                raise
+
     def _delete_queued(self) -> None:
         deleted = False
         for hostname in self._repo.queued():
-            try:
-                self._account.authed(
-                    lambda t, h=hostname: self._cloud.delete_instance_domain(t, h))
-            except CloudError as e:
-                if e.status != 404:
-                    log.warning("could not delete the domain %s: %s", hostname, e)
+            # Claimed under the lock: an add may have taken the name since the list was read.
+            with self._lock:
+                if hostname in self._releasing or hostname not in self._repo.queued():
                     continue
-            self._repo.unqueue(hostname)
-            deleted = True
+                self._releasing.add(hostname)
+            done = False
+            try:
+                self._account.authed(lambda t, h=hostname: self._let_go(t, h))
+                done = deleted = True
+            except CloudError as e:
+                log.warning("could not delete the domain %s: %s", hostname, e)
+            finally:
+                with self._lock:
+                    self._releasing.discard(hostname)
+                    if done:
+                        self._repo.unqueue(hostname)
         if deleted:
             self._removed()
 
@@ -273,10 +289,21 @@ class Domains:
         if target is None:
             raise Invalid("no_web_service", "This project has no web address yet. "
                                             "Start it first, then add a domain.")
-        if hostname in self._repo.queued():
+        with self._lock:
+            if hostname in self._releasing:
+                raise Conflict("domain_busy", "That domain is still being removed from its "
+                                              "old project. Try again in a minute.")
+            queued = hostname in self._repo.queued()
+            if queued:
+                self._repo.unqueue(hostname)
+        if queued:
             # Still attached to a deleted project on the service: let go of it first.
-            self._call(lambda t: self._cloud.delete_instance_domain(t, hostname))
-            self._repo.unqueue(hostname)
+            try:
+                self._call(lambda t: self._let_go(t, hostname))
+            except EggieError:
+                with self._lock:
+                    self._repo.queue(hostname)
+                raise
         out = self._call(lambda t: self._cloud.add_instance_domain(
             t, hostname, project_id, target))
         row, suggested = _answer(lambda: (_row(out["domain"]), out.get("suggested")))

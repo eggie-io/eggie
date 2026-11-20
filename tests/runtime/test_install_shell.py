@@ -515,16 +515,10 @@ def test_the_site_override_is_the_one_shipped_next_to_stack_yml():
     assert (STACK_YML.parent / "stack.site.yml").is_file()
 
 
-def test_install_ships_traefik_a_default_certificate_config_in_site_mode():
-    match = re.search(r'install -m 644 "\$INSTALL_DIR/(\S+)" /opt/eggie/tls/tls\.yml',
-                      INSTALL.read_text())
-    assert match, "install.sh does not install /opt/eggie/tls/tls.yml"
-    doc = yaml.safe_load((INSTALL.parent / match.group(1)).read_text())
-    cert = doc["tls"]["stores"]["default"]["defaultCertificate"]
-    assert cert == {"certFile": "/opt/eggie/tls/current/site.crt",
-                    "keyFile": "/opt/eggie/tls/current/site.key"}
-    # The API (docker group) writes the files; Traefik reads the directory.
-    assert "install -d -m 2770 -o root -g docker /opt/eggie/tls" in INSTALL.read_text()
+def test_install_creates_the_edge_directory_the_api_writes_and_traefik_reads():
+    text = INSTALL.read_text()
+    assert "install -d -m 2770 -o root -g docker /opt/eggie/edge" in text
+    assert "tls.yml" not in text
 
 
 def test_install_records_a_site_as_its_own_vm_kind():
@@ -543,9 +537,9 @@ def test_install_lets_the_api_read_the_seeded_account_file_before_the_stack_star
     assert _index_of("chmod 640 /opt/eggie/account.json") < _index_of(" up -d")
 
 
-def test_install_puts_the_certificate_key_back_to_0600_after_the_sweep():
+def test_install_puts_the_certificate_keys_back_to_0600_after_the_sweep():
     # The sweep's g+rwX widens a key the API wrote on an earlier boot.
-    assert _index_of("find /opt/eggie/tls -name site.key -type f -exec chmod 600 {} +") > _index_of("g+rwX")
+    assert _index_of("find /opt/eggie/edge -name key.pem -type f -exec chmod 600 {} +") > _index_of("g+rwX")
 
 
 def test_only_a_site_install_enables_the_metadata_guard():

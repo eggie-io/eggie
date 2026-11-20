@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "runtime" / "install" / "snapshot-prep.sh"
 
 PER_INSTANCE = ["api.token", "state.db", "state.db-wal", "state.db-shm", "connect.json", "site.env",
-                "account.json", "tls/1799661600/site.crt", "tls/1799661600/site.key", "tls/tls.yml",
+                "account.json", "edge/certs/i1/key.pem", "edge/edge.yml",
                 "tunnel/token", "uploads/partial", "github/token", "github/desired.json",
                 "github/applied.json", "projects/blog/docker-compose.yml",
                 "agent-status/status.json", "update/status.json",

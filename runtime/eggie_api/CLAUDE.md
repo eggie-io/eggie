@@ -79,7 +79,9 @@ and a host release. Prefer additive changes.
   certificates by id and each pair is stored in `<edge_dir>/certs/<id>/` (`cert.pem`, `key.pem`,
   `meta.json`, staged as `<id>.tmp` and moved with one rename). A renewal has a new id; an id the
   list drops stops counting at once and leaves disk on the next pass. Listed daily, or at once
-  when a wanted id is missing. `Account.seed_from` imports `/opt/eggie/account.json`
+  when a wanted id is missing. The site sync pass then runs `services/edge.py`'s `Edge.write`, which
+  renders `build_edge` to `<edge_dir>/edge.yml` (the only file Traefik parses; `edge.yml.new` + rename, only
+  when the text changed). `Account.seed_from` imports `/opt/eggie/account.json`
   once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;

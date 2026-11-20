@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import ApiConfig
+from .domain.edge import ProjectEdge
+from .domain.overlay import host_for
 from .errors import EggieError
 from .infra import connect, disk
 from .infra.cloud import Cloud
@@ -21,6 +24,7 @@ from .services.account import Account
 from .services.agents import AgentStatus
 from .services.certificates import Certificates
 from .services.clone import CloneService
+from .services.edge import Edge
 from .services.files import FileService
 from .services.github_link import GitHubLink
 from .services.instance_projects import InstanceProjects
@@ -44,6 +48,24 @@ from .services.uploads import UploadService
 
 
 log = logging.getLogger("eggie.api")
+
+
+def _project_edges(loader: ProjectLoader, projects) -> Callable[[Collection[str]], dict]:
+    def edges(ids: Collection[str]) -> dict[str, ProjectEdge]:
+        out = {}
+        for pid in ids:
+            row = projects.get(pid)
+            if row is None:
+                continue
+            try:
+                webs = loader.load(pid).webs
+            except EggieError:
+                continue
+            if webs:
+                out[pid] = ProjectEdge(host_for(pid, webs[0], row["domain"]),
+                                       f"{pid}--{webs[0].service}")
+        return out
+    return edges
 
 
 def _start_quietly(lifecycle: LifecycleService, project_id: str) -> None:
@@ -80,6 +102,7 @@ class Services:
     agents: AgentStatus
     runtime_update: RuntimeUpdate
     certificates: Certificates | None
+    edge: Edge | None
     sync: SyncLoop
     system: SystemService
 
@@ -121,12 +144,17 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    certificates = None
+    certificates = edge = None
     if config.site_host:
         certificates = Certificates(config.edge_dir, account, cloud)
+        edge = Edge(config.edge_dir, certificates, lambda: [],
+                    _project_edges(loader, repos.projects))
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
-    if certificates is not None:
-        passes.append(certificates.refresh)
+    if edge is not None:
+        def edge_pass() -> None:
+            certificates.refresh()
+            edge.write()
+        passes.append(edge_pass)
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
     sync = SyncLoop(passes)
@@ -170,4 +198,4 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificates=certificates, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))
+        certificates=certificates, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

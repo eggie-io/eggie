@@ -85,7 +85,8 @@ def build_edge(pairs: Sequence[Pair], domains: Sequence[Domain],
         if project is None:
             continue
         got = plan(project.eggie_host, mine, installed)
-        for host in got.direct:
+        own = () if got.address == project.eggie_host else (got.address,)
+        for host in own + got.direct:
             routers[f"custom-{_digest(host)}"] = {
                 "rule": f"Host(`{host}`)",
                 "entryPoints": ["web"],

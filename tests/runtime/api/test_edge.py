@@ -21,6 +21,11 @@ def _router_for(edge, rule):
     return next(r for r in edge["http"]["routers"].values() if r["rule"] == rule)
 
 
+def _routers_for(edge, host):
+    return [r for name, r in edge["http"]["routers"].items()
+            if name != "acme-challenge" and r["rule"] == f"Host(`{host}`)"]
+
+
 def test_a_serving_primary_takes_the_address_and_everything_else_redirects():
     got = plan(EGGIE, [d("example.com", primary=True), d("www.example.com", cert="c2")], {"c1", "c2"})
     assert got == Plan("example.com", (), ("www.example.com", EGGIE))
@@ -59,6 +64,29 @@ def test_a_direct_domain_routes_to_the_projects_docker_service_on_web_only():
     assert router["service"] == "shop--web@docker" and router["entryPoints"] == ["web"]
 
 
+def test_a_serving_primary_routes_to_the_project_itself():
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
+    assert _routers_for(edge, "example.com") == [{
+        "rule": "Host(`example.com`)", "entryPoints": ["web"], "service": "shop--web@docker"}]
+
+
+def test_beside_a_serving_primary_another_serving_domain_only_redirects():
+    edge = build_edge(PAIRS, [d("example.com", primary=True), d("www.example.com", cert="c2")],
+                      PROJECTS)
+    [router] = _routers_for(edge, "www.example.com")
+    assert router["priority"] == 50000 and router["service"] == "noop@internal"
+    assert router["middlewares"][0] == "redirect-cache"
+    assert "redirectRegex" in edge["http"]["middlewares"][router["middlewares"][1]]
+
+
+def test_a_domain_that_is_not_serving_gets_neither_a_route_nor_a_redirect():
+    edge = build_edge(PAIRS, [d("example.com", primary=True),
+                              d("www.example.com", status="issuing", cert=None),
+                              d("shop.example.com", cert="c9")], PROJECTS)
+    assert _routers_for(edge, "www.example.com") == []
+    assert _routers_for(edge, "shop.example.com") == []
+
+
 def test_the_eggie_host_redirects_on_web_only_with_the_cache_header():
     edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
     router = _router_for(edge, f"Host(`{EGGIE}`)")
@@ -80,11 +108,12 @@ def test_the_challenge_router_covers_every_mirrored_domain_whatever_its_status()
 
 
 def test_a_name_that_is_not_a_hostname_never_reaches_a_rule():
-    edge = build_edge(PAIRS, [d("exa`mple.com"), d("ok.example.com", cert="c2")], PROJECTS)
+    edge = build_edge(PAIRS, [d("exa`mple.com"), d("ok.example.com", primary=True, cert="c2")],
+                      PROJECTS)
     assert "`mple" not in yaml.safe_dump(edge)
+    assert _router_for(edge, "Host(`ok.example.com`)")["service"] == "shop--web@docker"
 
 
 def test_a_domain_whose_project_is_not_here_gets_no_route():
     edge = build_edge(PAIRS, [d("example.com", project="gone")], PROJECTS)
-    assert all("example.com" not in r["rule"] or name == "acme-challenge"
-               for name, r in edge["http"]["routers"].items())
+    assert set(edge["http"]["routers"]) == {"acme-challenge"}

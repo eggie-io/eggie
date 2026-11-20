@@ -77,9 +77,12 @@ and a host release. Prefer additive changes.
   `EGGIE_SITE_HOST`) switches it on. `SiteSignIn.redeem` tries local handoff codes first, then
   `POST /v1/instances/handoff/redeem` with the account token. `Certificates.refresh` is a sync pass: the service lists
   certificates by id and each pair is stored in `<edge_dir>/certs/<id>/` (`cert.pem`, `key.pem`,
-  `meta.json`, staged as `<id>.tmp` and moved with one rename). A renewal has a new id; an id the
-  list drops stops counting at once and leaves disk on the next pass. Listed daily, or at once
-  when a wanted id is missing. The site sync pass then runs `services/edge.py`'s `Edge.write`, which
+  `meta.json` with its `names`, staged as `<id>.tmp` and moved with one rename; an id outside
+  `[A-Za-z0-9_-]+` is skipped). A renewal has a new id; a dropped pair keeps counting while a listed
+  pair sharing one of its names is not installed yet, else stops at once, and leaves disk on the
+  next pass. A domain serves by the names installed `domain` pairs cover (`covered_hosts`), not by
+  its `certificate_id`, which only says what to fetch. Listed daily, at once when a wanted id is
+  missing, and after `recheck()` (Domains calls it on a remove, `forget_project` or queued delete). The site sync pass then runs `services/edge.py`'s `Edge.write`, which
   renders `build_edge` to `<edge_dir>/edge.yml` (the only file Traefik parses; `edge.yml.new` + rename, only
   when the text changed). `Account.seed_from` imports `/opt/eggie/account.json`
   once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
@@ -94,7 +97,10 @@ and a host release. Prefer additive changes.
   site only (`Services.domains` is `None` on a local VM). The service decides every status; the API
   mirrors `GET /v1/instances/me/domains` (every pass while a domain is not `active`, else every
   10 min) and relays add / remove / primary / check. A listed domain is never deleted because its
-  project is missing; only hostnames queued by `forget_project` are. The site's edge pass is
+  project is missing; only hostnames queued by `forget_project` are. Rows naming no plain hostname,
+  or this site's own names (`routable`), are dropped; a repeated name keeps its last entry; `changed`
+  fires only when a field other than the check times moved. `warning` (`warning_json`) is carried
+  to the custom rows of `addresses()` and never changes serving. The site's edge pass is
   `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
   Routes (`rest/routers/addresses.py`, site only): `GET /projects/{id}/addresses` on both mounts;
   add / remove / primary / check at `/api` only. `GET /.well-known/acme-challenge/{token}` is the

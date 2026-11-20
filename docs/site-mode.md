@@ -79,22 +79,25 @@ Until a certificate lands, Traefik serves its own self-signed certificate.
 ### The certificates
 
 `services/certificates.py` asks the service for its list of certificates on start when it holds
-none, whenever a custom domain names one it lacks, and once a day. Each pair is stored under
-`/opt/eggie/edge/certs/<id>/` (`cert.pem`, `key.pem` `0600`), staged and moved in with one rename.
-A renewal is a new id: `edge.yml` then names both pairs until the old id leaves the service's
-list, and a dropped id leaves disk on the next pass. Traefik reloads `edge.yml` as one file, so
-it never sees a key without its certificate. A renewed certificate is picked up within a day.
+none, whenever a custom domain names one it lacks, once a day, and on the next pass after a
+domain is removed. Each pair is stored under `/opt/eggie/edge/certs/<id>/` (`cert.pem`, `key.pem`
+`0600`), staged and moved in with one rename. A renewal is a new id: the pair already held for
+that name keeps serving until the new id is installed, then `edge.yml` names only the new one and
+the old pair leaves disk on the next pass. A pair whose domain was removed stops serving at once.
+Traefik reloads `edge.yml` as one file, so it never sees a key without its certificate. A renewed
+certificate is picked up within a day.
 
 ## Custom domains
 
-On a site, a project can also open on the owner's own domain, set up in the console's project
-settings. The service decides everything about a domain: whether the name is allowed, whether DNS
+On a site, a project can also open on the owner's own domain, set up on the project's **Custom
+domain** page in the console. The service decides everything about a domain: whether the name is allowed, whether DNS
 (and a proxy or CAA record) lets a certificate be issued, the certificate and its renewal, the
 status and the plain-language reason. The runtime mirrors the domain list, installs the
 certificates the service lists and generates `edge.yml`.
 
-- The address rule: a domain serves its project only while it is `Active` and its certificate is
-  installed. While the primary domain serves, the project's Eggie address redirects to it
+- The address rule: a domain serves its project only while it is `Active` and a certificate for
+  its name is installed; a `warning` on an active domain (DNS moved, renewal failing) shows in the
+  console and never stops it serving. While the primary domain serves, the project's Eggie address redirects to it
   (permanent, cached ten minutes) along with the other domains. When the domain is removed or
   has a problem, the Eggie address serves the project again.
 - The project's first address (console, `eggie up`, push result) is the primary custom domain

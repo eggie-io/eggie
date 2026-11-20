@@ -66,14 +66,14 @@ class Domains:
     routing survives a reboot or an outage. The service decides every status."""
 
     def __init__(self, repo: DomainRepo, loader: ProjectLoader, account, cloud,
-                 config: ApiConfig, *, installed: Callable[[], Collection[str]],
+                 config: ApiConfig, *, covered: Callable[[], Collection[str]],
                  changed: Callable[[], None], clock=time.time):
         self._repo = repo
         self._loader = loader
         self._account = account
         self._cloud = cloud
         self._config = config
-        self._installed = installed
+        self._covered = covered
         self._changed = changed
         self._clock = clock
         self._synced_at: float | None = None
@@ -151,6 +151,7 @@ class Domains:
         return [_domain(r) for r in self._repo.list()]
 
     def certificate_ids(self) -> set[str]:
+        """What the service says to fetch; serving goes by the names a pair covers."""
         return {r["certificate_id"] for r in self._repo.list() if r["certificate_id"]}
 
     def addresses(self, project_id: str) -> dict:
@@ -170,10 +171,10 @@ class Domains:
         rows = self._repo.for_project(project_id)
         if not rows or self._eggie_host(project_id, self._loader.require(project_id)) is None:
             return None
-        installed = set(self._installed())
+        covered = set(self._covered())
         for row in rows:
             domain = _domain(row)
-            if domain.primary and serving(domain, installed):
+            if domain.primary and serving(domain, covered):
                 return f"https://{domain.hostname}"
         return None
 
@@ -190,7 +191,7 @@ class Domains:
         rows = self._repo.for_project(project_id)
         eggie = self._eggie_host(project_id, project)
         # Without a web service the edge routes none of the project's domains.
-        got = plan(eggie, [_domain(r) for r in rows], set(self._installed())) if eggie else None
+        got = plan(eggie, [_domain(r) for r in rows], set(self._covered())) if eggie else None
 
         def how(hostname: str) -> str:
             if got and (hostname == got.address or hostname in got.direct):

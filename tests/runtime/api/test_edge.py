@@ -5,11 +5,16 @@ import yaml
 from eggie_api.domain.edge import Domain, Pair, Plan, ProjectEdge, build_edge, plan, serving
 
 EGGIE = "shop.foo.eggie.space"
+INSTANCE = Pair("i", "instance", "/e/certs/i/cert.pem", "/e/certs/i/key.pem",
+                ("foo.eggie.io", "*.foo.eggie.space"))
 PAIRS = [
-    Pair("i", "instance", "/e/certs/i/cert.pem", "/e/certs/i/key.pem"),
-    Pair("c1", "domain", "/e/certs/c1/cert.pem", "/e/certs/c1/key.pem"),
-    Pair("c2", "domain", "/e/certs/c2/cert.pem", "/e/certs/c2/key.pem"),
+    INSTANCE,
+    Pair("c1", "domain", "/e/certs/c1/cert.pem", "/e/certs/c1/key.pem",
+         ("example.com", "ok.example.com")),
+    Pair("c2", "domain", "/e/certs/c2/cert.pem", "/e/certs/c2/key.pem",
+         ("www.example.com",)),
 ]
+BOTH = {"example.com", "www.example.com"}
 PROJECTS = {"shop": ProjectEdge(EGGIE, "shop--web")}
 
 
@@ -27,13 +32,13 @@ def _routers_for(edge, host):
 
 
 def test_a_serving_primary_takes_the_address_and_everything_else_redirects():
-    got = plan(EGGIE, [d("example.com", primary=True), d("www.example.com", cert="c2")], {"c1", "c2"})
+    got = plan(EGGIE, [d("example.com", primary=True), d("www.example.com", cert="c2")], BOTH)
     assert got == Plan("example.com", (), ("www.example.com", EGGIE))
 
 
 def test_a_primary_that_is_not_serving_leaves_the_eggie_address_and_others_direct():
     got = plan(EGGIE, [d("example.com", primary=True, status="problem"),
-                       d("www.example.com", cert="c2")], {"c1", "c2"})
+                       d("www.example.com", cert="c2")], BOTH)
     assert got == Plan(EGGIE, ("www.example.com",), ())
 
 
@@ -42,11 +47,22 @@ def test_active_without_its_certificate_installed_is_not_serving():
 
 
 def test_an_unknown_status_is_not_serving():
-    assert not serving(d("example.com", status="paused"), {"c1"})
+    assert not serving(d("example.com", status="paused"), {"example.com"})
+
+
+def test_a_domain_is_served_by_the_pair_that_covers_its_name_whatever_id_it_names():
+    assert serving(d("example.com", cert="c9"), {"example.com"})
+    edge = build_edge(PAIRS, [d("example.com", primary=True, cert="c9")], PROJECTS)
+    assert _router_for(edge, "Host(`example.com`)")["service"] == "shop--web@docker"
+
+
+def test_the_instance_certificate_covers_no_custom_domain():
+    edge = build_edge([INSTANCE], [d("foo.eggie.io", primary=True)], PROJECTS)
+    assert _routers_for(edge, "foo.eggie.io") == []
 
 
 def test_no_domains_writes_only_certificates():
-    edge = build_edge([Pair("i", "instance", "/e/certs/i/cert.pem", "/e/certs/i/key.pem")], [], {})
+    edge = build_edge([INSTANCE], [], {})
     assert edge == {"tls": {
         "certificates": [{"certFile": "/e/certs/i/cert.pem", "keyFile": "/e/certs/i/key.pem"}],
         "stores": {"default": {"defaultCertificate": {
@@ -82,7 +98,7 @@ def test_beside_a_serving_primary_another_serving_domain_only_redirects():
 def test_a_domain_that_is_not_serving_gets_neither_a_route_nor_a_redirect():
     edge = build_edge(PAIRS, [d("example.com", primary=True),
                               d("www.example.com", status="issuing", cert=None),
-                              d("shop.example.com", cert="c9")], PROJECTS)
+                              d("shop.example.com")], PROJECTS)
     assert _routers_for(edge, "www.example.com") == []
     assert _routers_for(edge, "shop.example.com") == []
 
@@ -108,8 +124,7 @@ def test_the_challenge_router_covers_every_mirrored_domain_whatever_its_status()
 
 
 def test_a_name_that_is_not_a_hostname_never_reaches_a_rule():
-    edge = build_edge(PAIRS, [d("exa`mple.com"), d("ok.example.com", primary=True, cert="c2")],
-                      PROJECTS)
+    edge = build_edge(PAIRS, [d("exa`mple.com"), d("ok.example.com", primary=True)], PROJECTS)
     assert "`mple" not in yaml.safe_dump(edge)
     assert _router_for(edge, "Host(`ok.example.com`)")["service"] == "shop--web@docker"
 

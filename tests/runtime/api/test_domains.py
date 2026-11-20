@@ -49,13 +49,13 @@ def make(tmp_path, cloud, projects=("shop",)):
     repos.account.update(access_token=TOKEN, refresh_token="rt",
                          access_expires_at=10**12, org_id="org-1")
     account = Account(repos.account, repos.cloud_projects, cloud, spawn=lambda fn: None)
-    installed: set[str] = set()
+    covered: set[str] = set()
     changes: list[int] = []
     clock = Clock()
     domains = Domains(repos.domains, ProjectLoader(config, repos.projects), account, cloud,
-                      config, installed=lambda: installed,
+                      config, covered=lambda: covered,
                       changed=lambda: changes.append(1), clock=clock)
-    return domains, installed, changes, clock
+    return domains, covered, changes, clock
 
 
 def served(out):
@@ -98,8 +98,8 @@ def test_addresses_marks_the_eggie_row_redirecting_while_the_primary_serves(tmp_
     cloud = FakeCloud(instance_domains=[{"domains": [
         wire("www.example.com", primary=False, status="active", certificate_id="c2"),
         wire("example.com", status="active", certificate_id="c1")]}])
-    domains, installed, _, _ = make(tmp_path, cloud)
-    installed.update({"c1", "c2"})
+    domains, covered, _, _ = make(tmp_path, cloud)
+    covered.update({"example.com", "www.example.com"})
     domains.sync()
     out = domains.addresses("shop")
     assert [a["hostname"] for a in out["addresses"]] == [
@@ -115,8 +115,8 @@ def test_addresses_serves_directly_when_the_primary_has_a_problem(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [
         wire("example.com", status="problem", problem=PROBLEM),
         wire("www.example.com", primary=False, status="active", certificate_id="c2")]}])
-    domains, installed, _, _ = make(tmp_path, cloud)
-    installed.add("c2")
+    domains, covered, _, _ = make(tmp_path, cloud)
+    covered.add("www.example.com")
     domains.sync()
     out = domains.addresses("shop")
     assert served(out) == {"example.com": "none", "www.example.com": "direct",
@@ -232,11 +232,21 @@ def test_make_primary_stores_the_projects_list_from_the_service(tmp_path):
 def test_primary_url_is_none_until_the_primary_serves(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [
         wire(status="active", certificate_id="c1")]}])
-    domains, installed, _, _ = make(tmp_path, cloud)
+    domains, covered, _, _ = make(tmp_path, cloud)
     domains.sync()
     assert domains.primary_url("shop") is None
-    installed.add("c1")
+    covered.add("example.com")
     assert domains.primary_url("shop") == "https://example.com"
+
+
+def test_a_renewed_id_not_installed_yet_leaves_the_held_pair_serving(tmp_path):
+    cloud = FakeCloud(instance_domains=[{"domains": [
+        wire(status="active", certificate_id="renewed")]}])
+    domains, covered, _, _ = make(tmp_path, cloud)
+    covered.add("example.com")
+    domains.sync()
+    assert domains.primary_url("shop") == "https://example.com"
+    assert domains.certificate_ids() == {"renewed"}
 
 
 def test_an_unreachable_service_leaves_the_mirror_and_reports_cloud_unavailable(tmp_path):
@@ -335,8 +345,8 @@ def test_a_domain_the_service_does_not_know_lists_again_on_the_next_pass(tmp_pat
 def test_a_project_without_a_web_service_has_no_primary_url(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [
         wire(status="active", certificate_id="c1")]}])
-    domains, installed, _, _ = make(tmp_path, cloud)
-    installed.add("c1")
+    domains, covered, _, _ = make(tmp_path, cloud)
+    covered.add("example.com")
     domains.sync()
     (tmp_path / "projects" / "shop" / "docker-compose.yml").write_text("services: {}\n")
     assert domains.primary_url("shop") is None
@@ -403,5 +413,5 @@ def test_primary_url_of_a_project_without_domains_loads_nothing(tmp_path):
     repos = Repos.open(Database(tmp_path / "state.db"))
     repos.projects.add("shop", str(tmp_path / "projects" / "shop"), config.domain)
     domains = Domains(repos.domains, NoLoad(config, repos.projects), None, FakeCloud(),
-                      config, installed=lambda: set(), changed=lambda: None)
+                      config, covered=lambda: set(), changed=lambda: None)
     assert domains.primary_url("shop") is None

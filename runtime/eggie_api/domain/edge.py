@@ -23,6 +23,7 @@ class Pair:
     kind: str
     cert_file: str
     key_file: str
+    names: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -51,13 +52,17 @@ def is_hostname(value: str) -> bool:
     return bool(_HOSTNAME.match(value))
 
 
-def serving(domain: Domain, installed: Collection[str]) -> bool:
-    return domain.status == ACTIVE and domain.certificate_id in installed
+def covered_hosts(pairs: Sequence[Pair]) -> frozenset[str]:
+    return frozenset(n for p in pairs if p.kind == "domain" for n in p.names)
+
+
+def serving(domain: Domain, covered: Collection[str]) -> bool:
+    return domain.status == ACTIVE and domain.hostname in covered
 
 
 def plan(eggie_host: str, domains: Sequence[Domain],
-         installed: Collection[str]) -> Plan:
-    live = [d for d in domains if serving(d, installed)]
+         covered: Collection[str]) -> Plan:
+    live = [d for d in domains if serving(d, covered)]
     primary = next((d for d in live if d.primary), None)
     if primary is None:
         return Plan(eggie_host, tuple(d.hostname for d in live), ())
@@ -72,7 +77,7 @@ def _digest(value: str) -> str:
 def build_edge(pairs: Sequence[Pair], domains: Sequence[Domain],
                projects: Mapping[str, ProjectEdge]) -> dict:
     domains = [d for d in domains if is_hostname(d.hostname)]
-    installed = {p.id for p in pairs}
+    covered = covered_hosts(pairs)
     routers: dict = {}
     middlewares: dict = {}
 
@@ -84,7 +89,7 @@ def build_edge(pairs: Sequence[Pair], domains: Sequence[Domain],
         project = projects.get(project_id)
         if project is None:
             continue
-        got = plan(project.eggie_host, mine, installed)
+        got = plan(project.eggie_host, mine, covered)
         own = () if got.address == project.eggie_host else (got.address,)
         for host in own + got.direct:
             routers[f"custom-{_digest(host)}"] = {

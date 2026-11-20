@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import ApiConfig
-from .domain.edge import ProjectEdge
+from .domain.edge import ProjectEdge, covered_hosts
 from .domain.overlay import host_for
 from .errors import EggieError
 from .infra import connect, disk
@@ -159,7 +159,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
             sync.wake()
 
         domains = Domains(repos.domains, loader, account, cloud, config,
-                          installed=lambda: {p.id for p in certificates.installed()},
+                          covered=lambda: covered_hosts(certificates.installed()),
                           changed=domains_changed)
         edge = Edge(config.edge_dir, certificates, domains.rows,
                     _project_edges(loader, repos.projects))

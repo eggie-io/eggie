@@ -12,13 +12,14 @@ from eggie_api.services.certificates import CHECK_EVERY, Certificates
 from tests.runtime.api.fake_cloud import FakeCloud
 
 
-def entry(cid, kind):
-    return {"id": cid, "kind": kind, "names": [f"{cid}.example.com"],
+def entry(cid, kind, names=None):
+    return {"id": cid, "kind": kind, "names": names or [f"{cid}.example.com"],
             "not_after": "2027-01-11T10:00:00Z"}
 
 
-def pair(cid, kind):
-    return {**entry(cid, kind), "certificate": f"CERT-{cid}", "private_key": f"KEY-{cid}"}
+def pair(cid, kind, names=None):
+    return {**entry(cid, kind, names), "certificate": f"CERT-{cid}",
+            "private_key": f"KEY-{cid}"}
 
 
 BOTH = {"certificates": [entry("i1", "instance"), entry("d1", "domain")]}
@@ -77,7 +78,7 @@ def test_first_pass_installs_every_listed_certificate(certs, cloud, certs_dir):
     assert meta == entry("d1", "domain")
     assert not list(certs_dir.glob("*.tmp"))
     assert certs.installed()[0] == Pair("d1", "domain", str(certs_dir / "d1" / "cert.pem"),
-                                        str(certs_dir / "d1" / "key.pem"))
+                                        str(certs_dir / "d1" / "key.pem"), ("d1.example.com",))
 
 
 def test_a_second_pass_within_a_day_asks_nothing(certs, cloud, clock):
@@ -103,7 +104,67 @@ def test_a_list_is_asked_again_after_a_day(certs, cloud, clock):
     assert cloud.names().count("instance_certificates") == 2
 
 
-def test_an_id_no_longer_listed_stops_being_installed_now_and_leaves_disk_next_pass(
+INSTANCE_NAMES = ["foo.eggie.io", "*.foo.eggie.space"]
+FIRST = {"certificates": [entry("i1", "instance", INSTANCE_NAMES),
+                          entry("d1", "domain", ["example.com"])]}
+RENEWED = {"certificates": [entry("i2", "instance", INSTANCE_NAMES),
+                            entry("d2", "domain", ["example.com"])]}
+
+
+def renewal(tmp_path, account, clock, *, later):
+    """i1 and d1 installed, then renewed as i2 and d2 whose next two passes of
+    downloads fail."""
+    down = CloudUnavailable("down")
+    cloud = FakeCloud(instance_certificates=[FIRST, RENEWED],
+                      instance_certificate=[pair("i1", "instance", INSTANCE_NAMES),
+                                            pair("d1", "domain", ["example.com"]),
+                                            down, down, down, down, *later])
+    certs = make(tmp_path, account, cloud, clock)
+    certs.refresh()
+    clock.now += CHECK_EVERY
+    certs.refresh()
+    return certs
+
+
+def test_a_renewed_pair_that_cannot_be_fetched_leaves_the_held_pair_serving(
+        tmp_path, account, clock, certs_dir):
+    certs = renewal(tmp_path, account, clock, later=[])
+    assert [p.id for p in certs.installed()] == ["d1", "i1"]
+    certs.refresh()
+    assert (certs_dir / "i1").is_dir() and (certs_dir / "d1").is_dir()
+    assert [p.id for p in certs.installed()] == ["d1", "i1"]
+
+
+def test_once_the_renewed_pair_is_installed_the_held_one_stops_at_once_and_goes_next_pass(
+        tmp_path, account, clock, certs_dir):
+    certs = renewal(tmp_path, account, clock, later=[
+        pair("i2", "instance", INSTANCE_NAMES), pair("d2", "domain", ["example.com"])])
+    certs.refresh()
+    assert [p.id for p in certs.installed()] == ["d1", "i1"]
+    certs.refresh()
+    assert [p.id for p in certs.installed()] == ["d2", "i2"]
+    assert (certs_dir / "d1").is_dir()
+    certs.refresh()
+    assert sorted(e.name for e in certs_dir.iterdir()) == ["d2", "i2"]
+
+
+def test_only_the_renewed_pair_covers_its_name_once_installed(tmp_path, account, clock):
+    certs = renewal(tmp_path, account, clock, later=[
+        CloudUnavailable("down"), pair("d2", "domain", ["example.com"])])
+    certs.refresh()
+    certs.refresh()
+    assert [(p.id, p.names) for p in certs.installed()] == [
+        ("d2", ("example.com",)), ("i1", tuple(INSTANCE_NAMES))]
+
+
+def test_a_wanted_id_held_on_disk_does_not_list_every_pass(tmp_path, account, clock):
+    certs = renewal(tmp_path, account, clock, later=[CloudUnavailable("down")] * 4)
+    for _ in range(2):
+        certs.refresh({"d1"})
+    assert certs._cloud.names().count("instance_certificates") == 2
+
+
+def test_a_pair_no_listed_certificate_shares_a_name_with_stops_now_and_leaves_disk_next_pass(
         certs, cloud, clock, certs_dir):
     certs.refresh()
     clock.now += CHECK_EVERY

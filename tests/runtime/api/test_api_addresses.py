@@ -53,12 +53,13 @@ def mirror(k, *domains):
     k.services.domains.sync()
 
 
-def install_certificate(k, cid):
+def install_certificate(k, cid, names=("example.com",)):
     folder = k.config.edge_dir / "certs" / cid
     folder.mkdir(parents=True)
     (folder / "cert.pem").write_text("CERT")
     (folder / "key.pem").write_text("KEY")
-    (folder / "meta.json").write_text(json.dumps({"id": cid, "kind": "domain"}))
+    (folder / "meta.json").write_text(json.dumps({"id": cid, "kind": "domain",
+                                                  "names": list(names)}))
 
 
 def serve(k):

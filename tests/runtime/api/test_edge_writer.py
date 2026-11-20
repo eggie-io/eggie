@@ -14,7 +14,7 @@ class _Certs:
         return self.pairs
 
 
-PAIR = Pair("i1", "instance", "/e/certs/i1/cert.pem", "/e/certs/i1/key.pem")
+PAIR = Pair("i1", "instance", "/e/certs/i1/cert.pem", "/e/certs/i1/key.pem", ("cloud.test",))
 DOMAIN = Domain("shop.example.com", "blog", True, "active", None)
 PROJECT = ProjectEdge("blog.cloud.test", "blog--web")
 

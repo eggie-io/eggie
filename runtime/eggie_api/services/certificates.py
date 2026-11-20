@@ -29,10 +29,18 @@ def _text(out: dict, key: str) -> str:
     return value
 
 
+def _names(value) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(n, str) for n in value):
+        raise TypeError("names is not a list of names")
+    return tuple(value)
+
+
 class Certificates:
     """The certificates the service holds for this server, kept on disk as
     `<dir>/certs/<id>/{cert.pem,key.pem,meta.json}`. A renewal arrives under
-    a new id and the old id leaves the list, so a pair is never rewritten."""
+    a new id and the old id leaves the list, so a pair is never rewritten.
+    A pair the list dropped keeps serving its names until every listed pair
+    that shares one of them is installed."""
 
     def __init__(self, directory: Path, account, cloud, *, clock=time.time):
         self._certs = Path(directory) / "certs"
@@ -40,37 +48,46 @@ class Certificates:
         self._cloud = cloud
         self._clock = clock
         self._checked_at: float | None = None
-        self._listed: list[str] | None = None
+        self._listed: dict[str, tuple[str, ...]] | None = None
 
-    def installed(self) -> list[Pair]:
+    def _on_disk(self) -> list[Pair]:
         pairs = []
         if not self._certs.is_dir():
             return pairs
         for entry in sorted(self._certs.iterdir()):
-            if entry.name.endswith(".tmp") or (
-                    self._listed is not None and entry.name not in self._listed):
+            if entry.name.endswith(".tmp"):
                 continue
             try:
-                kind = json.loads((entry / "meta.json").read_text())["kind"]
+                meta = json.loads((entry / "meta.json").read_text())
+                kind, names = meta["kind"], _names(meta.get("names", []))
             except (OSError, ValueError, KeyError, TypeError):
                 continue
             cert, key = entry / "cert.pem", entry / "key.pem"
             if cert.is_file() and key.is_file():
-                pairs.append(Pair(entry.name, kind, str(cert), str(key)))
+                pairs.append(Pair(entry.name, kind, str(cert), str(key), names))
         return pairs
+
+    def installed(self) -> list[Pair]:
+        pairs = self._on_disk()
+        # Before the first list everything on disk counts.
+        if self._listed is None:
+            return pairs
+        have = {p.id for p in pairs}
+        awaited = {n for cid, names in self._listed.items() if cid not in have for n in names}
+        return [p for p in pairs if p.id in self._listed or awaited.intersection(p.names)]
 
     def refresh(self, wanted: Collection[str] = ()) -> None:
         if not self._account.signed_in:
             return
         self._remove_unlisted()
-        have = {p.id for p in self.installed()}
+        have = {p.id for p in self._on_disk()}
         now = self._clock()
         due = (not have or not set(wanted) <= have or self._checked_at is None
                or now - self._checked_at >= CHECK_EVERY)
         if due:
             try:
                 out = self._account.authed(self._cloud.instance_certificates)
-                ids = [_text(c, "id") for c in out["certificates"]]
+                listed = {_text(c, "id"): _names(c["names"]) for c in out["certificates"]}
             except NotSignedIn:
                 return
             except (CloudError, CloudUnavailable) as e:
@@ -79,9 +96,9 @@ class Certificates:
             except (KeyError, TypeError) as e:
                 log.warning("the certificate list was not understood: %s", e)
                 return
-            self._listed = ids
+            self._listed = listed
             self._checked_at = now
-        for cid in self._listed or []:
+        for cid in self._listed or {}:
             if cid not in have and not self._fetch(cid):
                 return
 
@@ -89,8 +106,9 @@ class Certificates:
         # Only after a list: from disk alone nothing is known to be stale.
         if self._listed is None or not self._certs.is_dir():
             return
+        keep = set(self._listed) | {p.id for p in self.installed()}
         for entry in self._certs.iterdir():
-            if entry.name not in self._listed and entry.is_dir():
+            if entry.name not in keep and entry.is_dir():
                 shutil.rmtree(entry, ignore_errors=True)
 
     def _fetch(self, cid: str) -> bool:
@@ -113,7 +131,7 @@ class Certificates:
         if out.get("id") != cid or cid.startswith(".") or "/" in cid or "\0" in cid:
             raise ValueError("the id does not match")
         certificate, private_key = _text(out, "certificate"), _text(out, "private_key")
-        meta = {"id": cid, "kind": _text(out, "kind"), "names": list(out["names"]),
+        meta = {"id": cid, "kind": _text(out, "kind"), "names": list(_names(out["names"])),
                 "not_after": _text(out, "not_after")}
         staging = self._certs / f"{cid}.tmp"
         shutil.rmtree(staging, ignore_errors=True)

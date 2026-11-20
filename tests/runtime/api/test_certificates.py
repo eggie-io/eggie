@@ -97,6 +97,13 @@ def test_a_wanted_id_not_on_disk_lists_again_at_once(certs, cloud):
     assert cloud.names().count("instance_certificates") == 2
 
 
+def test_a_recheck_lists_again_on_the_next_pass(certs, cloud):
+    certs.refresh()
+    certs.recheck()
+    certs.refresh()
+    assert cloud.names().count("instance_certificates") == 2
+
+
 def test_a_list_is_asked_again_after_a_day(certs, cloud, clock):
     certs.refresh()
     clock.now += CHECK_EVERY
@@ -206,14 +213,17 @@ def test_an_incomplete_pair_is_not_installed(tmp_path, account, clock, certs_dir
     assert not list(certs_dir.glob("*.tmp"))
 
 
-def test_an_id_that_would_leave_the_certs_directory_is_refused(tmp_path, account, clock, certs_dir):
-    evil = {"certificates": [entry("../x", "domain")]}
+def test_an_id_that_is_not_a_plain_name_is_skipped_and_the_rest_installed(
+        tmp_path, account, clock, certs_dir):
+    evil = {"certificates": [entry("../x", "domain"), entry("a.b", "domain"),
+                             entry("d1", "domain")]}
     cloud = FakeCloud(instance_certificates=[evil],
-                      instance_certificate=[pair("../x", "domain")])
+                      instance_certificate=[pair("d1", "domain")])
     certs = make(tmp_path, account, cloud, clock)
     certs.refresh()
     assert not (tmp_path / "edge" / "x").exists()
-    assert certs.installed() == []
+    assert [p.id for p in certs.installed()] == ["d1"]
+    assert cloud.names() == ["instance_certificates", "instance_certificate"]
 
 
 def test_a_directory_without_meta_json_is_not_installed(certs, certs_dir):

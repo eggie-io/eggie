@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import time
 from collections.abc import Collection
@@ -14,6 +15,8 @@ from .account import NotSignedIn
 
 log = logging.getLogger("eggie.certificates")
 CHECK_EVERY = 24 * 3600
+# An id names a directory and lands in Traefik's file.
+_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _write(path: Path, text: str, mode: int) -> None:
@@ -88,6 +91,9 @@ class Certificates:
             try:
                 out = self._account.authed(self._cloud.instance_certificates)
                 listed = {_text(c, "id"): _names(c["names"]) for c in out["certificates"]}
+                for cid in [cid for cid in listed if not _ID.fullmatch(cid)]:
+                    log.warning("skipping certificate %r: not a plain id", cid)
+                    del listed[cid]
             except NotSignedIn:
                 return
             except (CloudError, CloudUnavailable) as e:
@@ -101,6 +107,10 @@ class Certificates:
         for cid in self._listed or {}:
             if cid not in have and not self._fetch(cid):
                 return
+
+    def recheck(self) -> None:
+        """The next refresh lists again, so a removed domain's pair goes promptly."""
+        self._checked_at = None
 
     def _remove_unlisted(self) -> None:
         # Only after a list: from disk alone nothing is known to be stale.
@@ -127,8 +137,7 @@ class Certificates:
         return True
 
     def _install(self, cid: str, out: dict) -> None:
-        # The id names a directory, so it must not carry a path.
-        if out.get("id") != cid or cid.startswith(".") or "/" in cid or "\0" in cid:
+        if out.get("id") != cid or not _ID.fullmatch(cid):
             raise ValueError("the id does not match")
         certificate, private_key = _text(out, "certificate"), _text(out, "private_key")
         meta = {"id": cid, "kind": _text(out, "kind"), "names": list(_names(out["names"])),

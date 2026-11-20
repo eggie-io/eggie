@@ -24,6 +24,7 @@ from .services.account import Account
 from .services.agents import AgentStatus
 from .services.certificates import Certificates
 from .services.clone import CloneService
+from .services.domains import Domains
 from .services.edge import Edge
 from .services.files import FileService
 from .services.github_link import GitHubLink
@@ -102,6 +103,7 @@ class Services:
     agents: AgentStatus
     runtime_update: RuntimeUpdate
     certificates: Certificates | None
+    domains: Domains | None
     edge: Edge | None
     sync: SyncLoop
     system: SystemService
@@ -144,16 +146,35 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    certificates = edge = None
+    certificates = edge = domains = None
     if config.site_host:
         certificates = Certificates(config.edge_dir, account, cloud)
-        edge = Edge(config.edge_dir, certificates, lambda: [],
+
+        def domains_changed() -> None:
+            # `edge` and `sync` are bound below, before anything can call this.
+            try:
+                edge.write()
+            except Exception:
+                log.exception("writing the edge file failed")
+            sync.wake()
+
+        domains = Domains(repos.domains, loader, account, cloud, config,
+                          installed=lambda: {p.id for p in certificates.installed()},
+                          changed=domains_changed)
+        edge = Edge(config.edge_dir, certificates, domains.rows,
                     _project_edges(loader, repos.projects))
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
     if edge is not None:
         def edge_pass() -> None:
-            certificates.refresh()
-            edge.write()
+            # Each step on its own: certificates and the file still follow a failed domain sync.
+            for step in (domains.sync,
+                         lambda: certificates.refresh(domains.certificate_ids()),
+                         edge.write):
+                try:
+                    step()
+                except Exception:
+                    log.exception("edge pass step %s failed",
+                                  getattr(step, "__qualname__", step))
         passes.append(edge_pass)
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
@@ -198,4 +219,4 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificates=certificates, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))
+        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

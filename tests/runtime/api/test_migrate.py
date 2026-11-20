@@ -147,7 +147,7 @@ def test_v6_adds_the_secrets_table_and_change_stamp(tmp_path):
     assert "secrets_changed_at" in columns(conn, "projects")
 
 
-def test_a_v7_database_migrates_to_v9_with_start_when_ready_off(tmp_path):
+def test_a_v7_database_migrates_with_start_when_ready_off(tmp_path):
     conn = connect(tmp_path)
     conn.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
     for step in migrate.MIGRATIONS[:7]:
@@ -155,8 +155,21 @@ def test_a_v7_database_migrates_to_v9_with_start_when_ready_off(tmp_path):
     conn.execute("INSERT INTO schema_version(version) VALUES (7)")
     conn.execute("INSERT INTO projects(id, guest_path, domain) VALUES ('p','/g','d')")
     conn.commit()
-    assert migrate.migrate(conn) == 9
+    assert migrate.migrate(conn) == migrate.SCHEMA_VERSION
     assert {"instance_pushes", "pushed_projects"} <= tables(conn)
     assert {"unused_at", "kind", "filename"} <= columns(conn, "secrets")
     assert "kind" in columns(conn, "secret_requests")
     assert conn.execute("SELECT start_when_ready FROM projects").fetchone()[0] == 0
+
+
+def test_a_v9_database_gains_the_domain_mirror_and_its_delete_queue(tmp_path):
+    conn = connect(tmp_path)
+    conn.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+    for step in migrate.MIGRATIONS[:9]:
+        step(conn)
+    conn.execute("INSERT INTO schema_version(version) VALUES (9)")
+    conn.commit()
+    assert migrate.migrate(conn) == migrate.SCHEMA_VERSION
+    assert {"domains", "domain_deletes"} <= tables(conn)
+    assert {"hostname", "display", "project_id", "is_primary", "status", "problem_json",
+            "dns_json", "certificate_id", "checked_at", "next_check_at"} <= columns(conn, "domains")

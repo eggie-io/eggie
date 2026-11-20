@@ -153,6 +153,31 @@ class Cloud:
         quoted = urllib.parse.quote(certificate_id, safe="")
         return self.call("GET", f"/v1/instances/me/certificates/{quoted}", token=token)
 
+    def _domain_path(self, hostname: str, action: str = "") -> str:
+        return f"/v1/instances/me/domains/{urllib.parse.quote(hostname, safe='')}{action}"
+
+    def instance_domains(self, token: str):
+        """Every custom domain of this server, all projects."""
+        return self.call("GET", "/v1/instances/me/domains", token=token)
+
+    def add_instance_domain(self, token: str, hostname: str, project: str, target: str):
+        return self.call("POST", "/v1/instances/me/domains", token=token,
+                         body={"hostname": hostname, "project": project, "target": target})
+
+    def delete_instance_domain(self, token: str, hostname: str) -> None:
+        self.call("DELETE", self._domain_path(hostname), token=token)
+
+    def primary_instance_domain(self, token: str, hostname: str):
+        """The project's domains after the change."""
+        return self.call("POST", self._domain_path(hostname, "/primary"), token=token)
+
+    def check_instance_domain(self, token: str, hostname: str):
+        return self.call("POST", self._domain_path(hostname, "/check"), token=token)
+
+    def acme_challenge(self, token: str, challenge: str):
+        quoted = urllib.parse.quote(challenge, safe="")
+        return self.call("GET", f"/v1/instances/me/acme-challenges/{quoted}", token=token)
+
     def redeem_instance_handoff(self, token: str, code: str):
         """Whether a sign-in code the web app minted belongs to this
         instance's owner; the service consumes it either way."""

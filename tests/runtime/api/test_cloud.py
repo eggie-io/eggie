@@ -176,6 +176,27 @@ def test_a_certificate_id_is_percent_quoted_in_the_path():
     assert opener.requests[0].full_url == "https://svc/api/v1/instances/me/certificates/a%2Fb"
 
 
+def test_a_domain_is_deleted_by_its_ascii_hostname_in_the_path():
+    opener = Opener((204, b""))
+    assert Cloud("https://svc/api", opener=opener).delete_instance_domain(
+        "at-1", "xn--mnchen-3ya.de") is None
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == (
+        "DELETE", "https://svc/api/v1/instances/me/domains/xn--mnchen-3ya.de")
+    assert request.get_header("Authorization") == "Bearer at-1"
+
+
+def test_adding_a_domain_posts_the_hostname_project_and_target():
+    opener = Opener((201, b'{"domain": {}, "suggested": null}'))
+    Cloud("https://svc/api", opener=opener).add_instance_domain(
+        "at-1", "example.com", "shop", "shop.foo.eggie.space")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == (
+        "POST", "https://svc/api/v1/instances/me/domains")
+    assert json.loads(request.data) == {"hostname": "example.com", "project": "shop",
+                                        "target": "shop.foo.eggie.space"}
+
+
 def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():
     opener = Opener((200, b'{"ok": true}'))
     Cloud("https://svc/api", opener=opener).redeem_instance_handoff("at-1", "k3x9")

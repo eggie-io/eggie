@@ -90,6 +90,12 @@ and a host release. Prefer additive changes.
   (`services/instance_projects.py`) is a site-only sync pass: it `PUT`s the full project list to
   `/v1/instances/me/projects` on change and every 10 minutes; `public_url` only while
   `started_ok`. Lifecycle status writes wake the loop (`on_status`).
+- **Domains** (`domain/hostname.py`, `services/domains.py`, tables `domains` + `domain_deletes`, v10) —
+  site only (`Services.domains` is `None` on a local VM). The service decides every status; the API
+  mirrors `GET /v1/instances/me/domains` (every pass while a domain is not `active`, else every
+  10 min) and relays add / remove / primary / check. A listed domain is never deleted because its
+  project is missing; only hostnames queued by `forget_project` are. The site's edge pass is
+  `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service

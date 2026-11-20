@@ -63,6 +63,24 @@ class FakeCloud:
     def instance_certificate(self, token, certificate_id):
         return self._next("instance_certificate", token, certificate_id)
 
+    def instance_domains(self, token):
+        return self._next("instance_domains", token)
+
+    def add_instance_domain(self, token, hostname, project, target):
+        return self._next("add_instance_domain", token, hostname, project, target)
+
+    def delete_instance_domain(self, token, hostname):
+        return self._next("delete_instance_domain", token, hostname)
+
+    def primary_instance_domain(self, token, hostname):
+        return self._next("primary_instance_domain", token, hostname)
+
+    def check_instance_domain(self, token, hostname):
+        return self._next("check_instance_domain", token, hostname)
+
+    def acme_challenge(self, token, challenge):
+        return self._next("acme_challenge", token, challenge)
+
     def redeem_instance_handoff(self, token, code):
         return self._next("redeem_instance_handoff", token, code)
 

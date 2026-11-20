@@ -60,7 +60,7 @@ def _project_edges(loader: ProjectLoader, projects) -> Callable[[Collection[str]
                 continue
             try:
                 webs = loader.load(pid).webs
-            except EggieError:
+            except (EggieError, OSError, UnicodeError):
                 continue
             if webs:
                 out[pid] = ProjectEdge(host_for(pid, webs[0], row["domain"]),

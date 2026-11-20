@@ -69,19 +69,26 @@ def test_projects_are_asked_only_for_those_with_domains(tmp_path):
     assert asked == [{"blog"}]
 
 
-def test_a_project_without_a_row_a_web_or_a_readable_definition_is_skipped():
+def test_a_project_without_a_row_a_web_or_a_readable_definition_is_skipped(tmp_path):
     from eggie_api.domain.detect import WebSpec
     from eggie_api.errors import Invalid
     from eggie_api.wiring import _project_edges
+
+    latin1 = tmp_path / "docker-compose.yml"
+    latin1.write_bytes("services:\n  web:\n    image: caf\u00e9\n".encode("latin-1"))
 
     class Loader:
         def load(self, pid):
             if pid == "broken":
                 raise Invalid("invalid_project", "bad")
+            if pid == "latin1":
+                latin1.read_text(encoding="utf-8")
+            if pid == "unreadable":
+                raise PermissionError(13, "Permission denied")
             webs = [] if pid == "static" else [WebSpec("web", 80)]
             return type("P", (), {"webs": webs})()
 
-    rows = {"blog": {"domain": "c.test"}, "broken": {"domain": "c.test"},
-            "static": {"domain": "c.test"}}
-    got = _project_edges(Loader(), rows)({"blog", "broken", "static", "gone"})
+    ids = {"blog", "broken", "static", "latin1", "unreadable"}
+    rows = {pid: {"domain": "c.test"} for pid in ids}
+    got = _project_edges(Loader(), rows)(ids | {"gone"})
     assert got == {"blog": ProjectEdge("blog.c.test", "blog--web")}

@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import yaml
 
+from eggie_api.domain.detect import WebSpec
 from eggie_api.domain.edge import Domain, Pair, Plan, ProjectEdge, build_edge, plan, serving
+from eggie_api.domain.overlay import build_overlay
+
+STACK_SITE = Path(__file__).resolve().parents[3] / "runtime" / "stack.site.yml"
 
 EGGIE = "shop.foo.eggie.space"
 INSTANCE = Pair("i", "instance", "/e/certs/i/cert.pem", "/e/certs/i/key.pem",
@@ -132,3 +139,27 @@ def test_a_name_that_is_not_a_hostname_never_reaches_a_rule():
 def test_a_domain_whose_project_is_not_here_gets_no_route():
     edge = build_edge(PAIRS, [d("example.com", project="gone")], PROJECTS)
     assert set(edge["http"]["routers"]) == {"acme-challenge"}
+
+
+def test_the_challenge_outranks_the_http_redirect_and_the_domain_redirects_do_not():
+    command = yaml.safe_load(STACK_SITE.read_text())["services"]["traefik"]["command"]
+    [flag] = [c for c in command if "redirections.entryPoint.priority=" in c]
+    https_redirect = int(flag.rsplit("=", 1)[1])
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
+    routers = edge["http"]["routers"]
+    assert routers["acme-challenge"]["priority"] > https_redirect
+    redirects = [r["priority"] for n, r in routers.items() if n.startswith("redirect-")]
+    assert redirects and all(p < https_redirect for p in redirects)
+
+
+def test_a_custom_domain_routes_to_the_service_the_projects_overlay_declares():
+    from eggie_api.wiring import _project_edges
+
+    webs = [WebSpec("app", 3000)]
+    loader = type("L", (), {"load": lambda self, pid: type("P", (), {"webs": webs})()})()
+    edges = _project_edges(loader, {"shop": {"domain": "foo.eggie.space"}})({"shop"})
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], edges)
+    labels = build_overlay("shop", webs, "foo.eggie.space")["services"]["app"]["labels"]
+    [declared] = [m.group(1) for key in labels
+                  if (m := re.fullmatch(r"traefik\.http\.services\.(.+)\.loadbalancer\.server\.port", key))]
+    assert _router_for(edge, "Host(`example.com`)")["service"] == f"{declared}@docker"

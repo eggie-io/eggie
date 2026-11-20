@@ -45,9 +45,10 @@ describe("showsDns", () => {
     expect(showsDns(eggie("direct"))).toBe(false);
   });
 
-  it("shows them for an active domain with a warning, since the record is what to fix", () => {
-    const warning = { code: "dns_moved", message: "example.com no longer points here." };
-    expect(showsDns(custom("example.com", "active", { serving: "direct", warning }))).toBe(true);
+  it("shows them for an active domain only when its warning says DNS moved", () => {
+    const warned = (code: string) => custom("example.com", "active", { serving: "direct", warning: { code, message: "m" } });
+    expect(["dns_moved", "renewal_failing", "something_new"].map((code) => showsDns(warned(code))))
+      .toEqual([true, false, false]);
   });
 });
 

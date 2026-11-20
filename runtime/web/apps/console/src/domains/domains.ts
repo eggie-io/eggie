@@ -58,7 +58,7 @@ export function badgeTone(status: string): "ok" | "busy" | "warning" {
 }
 
 export function showsDns(a: Address): boolean {
-  return a.kind === "custom" && (a.status === "waiting_dns" || a.status === "problem" || a.warning !== null);
+  return a.kind === "custom" && (a.status === "waiting_dns" || a.status === "problem" || a.warning?.code === "dns_moved");
 }
 
 // A domain that redirects isn't the project's address, so the app must not be told to use it.

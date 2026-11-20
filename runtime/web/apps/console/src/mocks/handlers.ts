@@ -1,6 +1,7 @@
 import { delay, http, HttpResponse } from "msw";
 import { RESERVED } from "../projects/secrets";
 import { slugify } from "../projects/slugify";
+import type { AddressList, CustomAddress, DnsRecord, DomainProblem } from "../domains/domains";
 import type { Discovered, Job, JobKind, Project } from "../projects/types";
 import type { PushRecord, TargetInstance } from "../push/push";
 import { baseName, joinPath, parentOf } from "../uploads/paths";
@@ -61,6 +62,11 @@ export const SCENARIOS = [
   "update-failed",
   "updating",
   "docs",
+  "domains-none",
+  "domains-waiting",
+  "domains-active",
+  "domains-problem",
+  "domains-unavailable",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
@@ -96,6 +102,7 @@ function project(id: string, over: Partial<Project> = {}): Project {
     secrets_requested: 0,
     push: { blocked: null, last: null },
     start_when_ready: false,
+    domains: [],
     ...over,
   };
 }
@@ -118,6 +125,7 @@ const notFound = (id: string) => refuse("project_not_found", `no project called 
 const busy = () => refuse("project_busy", "this project is busy with another job", 409);
 
 export function handlersFor(scenario: Scenario) {
+  const onSite = scenario.startsWith("site") || scenario.startsWith("domains-");
   let signedIn = !["expired", "handoff-spent", "site-signed-out", "down", "wrong-host"].includes(scenario);
   const MOCK_CODE = "WDJB-MJHT";
   const pendingAccount = () => ({
@@ -551,6 +559,137 @@ export function handlersFor(scenario: Scenario) {
     if (scenario === "push-running") startPush(box, instances[0], true);
   }
 
+  // Custom domains, a site only: shop has none, some waiting, all active, or one per problem and warning code.
+  const SITE_DOMAIN = "foo.eggie.space";
+  const SITE_IP = "198.51.100.7";
+  const eggieHost = (id: string) => `${id}.${SITE_DOMAIN}`;
+  type MockDomain = Omit<CustomAddress, "kind" | "serving">;
+  const recordFor = (id: string, hostname: string): DnsRecord[] => {
+    const labels = hostname.split(".");
+    return labels.length <= 2
+      ? [{ type: "A", name: "@", value: SITE_IP }]
+      : [{ type: "CNAME", name: labels.slice(0, -2).join("."), value: eggieHost(id) }];
+  };
+  const isoIn = (seconds: number) => new Date((nowSec() + seconds) * 1000).toISOString();
+  const mockDomain = (id: string, hostname: string, over: Partial<MockDomain> = {}): MockDomain => ({
+    hostname, display: hostname, primary: false, status: "waiting_dns", problem: null, warning: null,
+    dns: recordFor(id, hostname), checked_at: isoIn(-40), next_check_at: isoIn(60), ...over,
+  });
+  const problemDomain = (hostname: string, problem: DomainProblem, over: Partial<MockDomain> = {}) =>
+    mockDomain("shop", hostname, { status: "problem", problem, ...over });
+  const domains = new Map<string, MockDomain[]>();
+  const domainsOf = (id: string) => {
+    let rows = domains.get(id);
+    if (!rows) domains.set(id, (rows = []));
+    return rows;
+  };
+  const activeDomain = (hostname: string, primary = false, over: Partial<MockDomain> = {}) =>
+    mockDomain("shop", hostname, { primary, status: "active", next_check_at: null, ...over });
+  const seeded: Partial<Record<Scenario, MockDomain[]>> = {
+    "domains-waiting": [mockDomain("shop", "example.com", { primary: true }), mockDomain("shop", "www.example.com")],
+    "domains-active": [
+      activeDomain("example.com", true),
+      activeDomain("www.example.com", false, {
+        warning: {
+          code: "renewal_failing",
+          message: "We couldn't renew the certificate for www.example.com. The current one works until 3 January.",
+          next_step: "Nothing to do yet: we keep trying by ourselves.",
+        },
+      }),
+    ],
+    "domains-problem": [
+      problemDomain("example.com", {
+        code: "dns_elsewhere",
+        message: "example.com points to another server.",
+        next_step: "Change its A record to the value below, and delete any other A or AAAA record for @.",
+        seen: ["203.0.113.9", "2001:db8::1"],
+        expected: [SITE_IP],
+      }, { primary: true }),
+      problemDomain("www.example.com", {
+        code: "proxied",
+        message: "Cloudflare's proxy is on for www.example.com, so we can't see your server through it.",
+        next_step: "In Cloudflare, switch this record to DNS only (the grey cloud).",
+      }),
+      problemDomain("shop.example.org", {
+        code: "caa_forbids",
+        message: "A CAA record on example.org doesn't allow the certificate authority we use.",
+        next_step: "Add a CAA record that allows letsencrypt.org, or delete the CAA records you don't need.",
+      }),
+      problemDomain("store.example.net", {
+        code: "dns_stopped",
+        message: "store.example.net stopped pointing here, so it doesn't open this project any more.",
+        next_step: "Create the record below again where you bought the domain.",
+      }),
+      problemDomain("xn--bcher-kva.example", {
+        code: "certificate_failed",
+        message: "We couldn't get a certificate for bücher.example.",
+        next_step: "Nothing to do yet: we try again by ourselves within the hour.",
+      }, { display: "bücher.example", next_check_at: isoIn(3600) }),
+      activeDomain("example.net", false, {
+        warning: {
+          code: "dns_moved",
+          message: "example.net no longer points here. It still opens this project for now.",
+          next_step: "Change its A record back to the value below where you bought the domain.",
+          seen: ["203.0.113.40"],
+          expected: [SITE_IP],
+        },
+      }),
+    ],
+  };
+  const reflect = (id: string) => {
+    const target = projects.get(id);
+    if (!target) return;
+    const rows = domainsOf(id);
+    target.domains = rows.map(({ hostname, display, status, primary }) => ({ hostname, display, status, primary }));
+    const serving = rows.find((r) => r.primary && r.status === "active");
+    const url = `https://${serving ? serving.hostname : eggieHost(id)}`;
+    target.urls = [url];
+    target.web = [{ url, service: "web", primary: true }];
+  };
+  if (scenario.startsWith("domains-")) {
+    projects.set("shop", project("shop", { status: "started_ok", domain: SITE_DOMAIN }));
+    domains.set("shop", seeded[scenario] ?? []);
+    reflect("shop");
+  }
+  const addressList = (id: string): AddressList => {
+    const rows = [...domainsOf(id)].sort((a, b) => Number(b.primary) - Number(a.primary));
+    const redirect = rows.some((r) => r.primary && r.status === "active");
+    return {
+      addresses: [
+        ...rows.map((r): CustomAddress => ({
+          ...r, kind: "custom", serving: r.status !== "active" ? "none" : redirect && !r.primary ? "redirects" : "direct",
+        })),
+        { kind: "eggie", hostname: eggieHost(id), url: `https://${eggieHost(id)}`, serving: redirect ? "redirects" : "direct" },
+      ],
+    };
+  };
+  // Check now moves a waiting domain on; the certificate then arrives by itself a few seconds later.
+  const advance = (id: string, row: MockDomain) => {
+    row.checked_at = isoIn(0);
+    if (row.status !== "waiting_dns") return;
+    row.status = "issuing";
+    window.setTimeout(() => {
+      row.status = "active";
+      row.next_check_at = null;
+      reflect(id);
+    }, 6000);
+  };
+  const checks = new Map<string, number>();
+  const domainRoute = (handler: (id: string, hostname: string, request: Request) => Response | Promise<Response>) =>
+    async ({ params, request }: { params: Record<string, string | readonly string[] | undefined>; request: Request }) => {
+      const denied = guard();
+      if (denied) return denied;
+      if (!onSite) return refuse("not_found", "Not Found", 404);
+      const id = String(params.id);
+      if (!find(id)) return notFound(id);
+      if (scenario === "domains-unavailable") {
+        return refuse("domains_unavailable", "Custom domains are not available on this kitchen yet.", 503);
+      }
+      return handler(id, decodeURIComponent(String(params.hostname ?? "")), request);
+    };
+  const ownRow = (id: string, hostname: string) => domainsOf(id).find((r) => r.hostname === hostname) ?? null;
+  const notAttached = () => refuse("domain_not_found", "That domain is not attached to this project.", 404);
+
   const guard = () => (signedIn ? null : notSignedIn());
   const find = (id: string) => projects.get(id) ?? null;
 
@@ -592,7 +731,7 @@ export function handlersFor(scenario: Scenario) {
         status: "ok",
         version: "0.2.0",
         api: scenario === "old-api" ? 2 : 1,
-        site: scenario.startsWith("site") ? "foo.eggie.io" : null,
+        site: onSite ? "foo.eggie.io" : null,
         web_app: "https://app.eggie.io",
         docker: { reachable: true, version: "29.0.0", detail: "" },
       });
@@ -608,7 +747,7 @@ export function handlersFor(scenario: Scenario) {
       });
       return HttpResponse.json({
         instances: [
-          row("foo", "Foo", { current: scenario === "site" }),
+          row("foo", "Foo", { current: onSite && scenario !== "site-signed-out" }),
           row("bar", "Bar"),
           row("team", "Team box", { is_owner: false }),
           row("new", "Fresh one", { status: "provisioning" }),
@@ -757,6 +896,51 @@ export function handlersFor(scenario: Scenario) {
       const target = find(String(params.id));
       return target ? HttpResponse.json(target) : notFound(String(params.id));
     }),
+    http.get("/api/projects/:id/addresses", domainRoute((id) => HttpResponse.json(addressList(id)))),
+    http.post("/api/projects/:id/addresses", domainRoute(async (id, _hostname, request) => {
+      const raw = String(((await request.json().catch(() => ({}))) as { hostname?: unknown }).hostname ?? "");
+      const hostname = raw.trim().replace(/^[a-z]+:\/\//i, "").split(/[/?#:]/)[0].replace(/\.$/, "").toLowerCase();
+      if (!/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(hostname)) {
+        return refuse("invalid_domain", "That doesn't look like a domain name. Use something like example.com.", 422);
+      }
+      if (hostname.endsWith(".eggie.space") || hostname.endsWith(".eggie.io")) {
+        return refuse("eggie_domain", "That is an Eggie address already. Add a domain you bought yourself.", 422);
+      }
+      if ([...domains.values()].some((rows) => rows.some((r) => r.hostname === hostname))) {
+        return refuse("domain_taken", `${hostname} is already attached to a project.`, 409);
+      }
+      const rows = domainsOf(id);
+      if (rows.length >= 5) return refuse("too_many_domains", "A project can have up to 5 domains. Remove one first.", 409);
+      rows.push(mockDomain(id, hostname, { primary: rows.length === 0 }));
+      reflect(id);
+      const www = `www.${hostname}`;
+      const suggested = hostname.split(".").length === 2 && !rows.some((r) => r.hostname === www) ? www : null;
+      return HttpResponse.json({ ...addressList(id), suggested }, { status: 201 });
+    })),
+    http.delete("/api/projects/:id/addresses/:hostname", domainRoute((id, hostname) => {
+      const rows = domainsOf(id);
+      const index = rows.findIndex((r) => r.hostname === hostname);
+      if (index === -1) return notAttached();
+      const [gone] = rows.splice(index, 1);
+      if (gone.primary && rows.length > 0) rows[0].primary = true;
+      reflect(id);
+      return HttpResponse.json(addressList(id));
+    })),
+    http.post("/api/projects/:id/addresses/:hostname/primary", domainRoute((id, hostname) => {
+      if (!ownRow(id, hostname)) return notAttached();
+      for (const r of domainsOf(id)) r.primary = r.hostname === hostname;
+      reflect(id);
+      return HttpResponse.json(addressList(id));
+    })),
+    http.post("/api/projects/:id/addresses/:hostname/check", domainRoute((id, hostname) => {
+      const row = ownRow(id, hostname);
+      if (!row) return notAttached();
+      const count = (checks.get(hostname) ?? 0) + 1;
+      checks.set(hostname, count);
+      if (count > 3) return refuse("too_many_checks", "That's a lot of checks in a row. Wait a few minutes; we keep checking by ourselves.", 429);
+      advance(id, row);
+      return HttpResponse.json(addressList(id));
+    })),
     http.get("/api/projects/:id/secrets", ({ params }) => {
       const target = projects.get(String(params.id));
       if (!target) return notFound(String(params.id));
@@ -947,7 +1131,7 @@ export function handlersFor(scenario: Scenario) {
       const denied = guard();
       if (denied) return denied;
       if (scenario === "windows") return HttpResponse.json({ vm: "wsl", ssh: null });
-      if (scenario.startsWith("site")) return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
+      if (onSite) return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
       return HttpResponse.json({ vm: "lima", ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/.lima/_config/user" } });
     }),
     http.get("/api/disk", () => {

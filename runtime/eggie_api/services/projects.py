@@ -34,7 +34,9 @@ class ProjectService:
                  projects: ProjectRepo, secrets: SecretService, jobs: JobRegistry,
                  locks: ProjectLocks, uploads: UploadService, public: Public,
                  http_probe, wake: Callable[[], None],
-                 push_summary: Callable[[str], dict], pushed_projects: PushedProjectRepo):
+                 push_summary: Callable[[str], dict], pushed_projects: PushedProjectRepo,
+                 *, domains_for: Callable[[str], list[dict]] = lambda _id: [],
+                 forget_domains: Callable[[str], None] = lambda _id: None):
         self._config = config
         self._runner = runner
         self._loader = loader
@@ -48,6 +50,8 @@ class ProjectService:
         self._wake = wake
         self._push_summary = push_summary
         self._pushed_projects = pushed_projects
+        self._domains_for = domains_for
+        self._forget_domains = forget_domains
 
     def payload(self, row: dict, *, recheck: bool = False) -> dict:
         # A project with broken or missing files still has a status, and one
@@ -101,6 +105,7 @@ class ProjectService:
                 "empty": folder.is_dir() and not (folder / constants.COMPOSE_FILE).exists(),
                 "web": web,
                 "public": public_status,
+                "domains": self._domains_for(row["id"]),
                 "push": self._push_summary(row["id"]),
                 "origin": row["origin"],
                 "ran_ok": row["ran_ok_at"] is not None,
@@ -178,7 +183,7 @@ class ProjectService:
                 **docker.project_resources(
                     self._runner, self._compose_name(project_id, row))}
 
-    def delete(self, project_id: str, *, purge: bool) -> dict:
+    def delete(self, project_id: str, *, purge: bool, keep_domains: bool = False) -> dict:
         row = self._loader.require(project_id)
         folder = self._loader.dir(project_id)
         # Synchronous: the host CLI, install verification and the desktop's
@@ -198,6 +203,8 @@ class ProjectService:
                     removed = docker.remove_tree_as_root(self._runner, folder)
                     if not removed.ok and result.ok:
                         result = removed
+            if not keep_domains:
+                self._forget_domains(project_id)
             self._projects.remove(project_id)
             self._pushed_projects.remove(project_id)
             self._wake()

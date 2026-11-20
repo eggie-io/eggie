@@ -38,6 +38,13 @@ export interface PushSummary {
   last: { instance_id: string; console_hostname: string; pushed_at: number } | null;
 }
 
+export interface ProjectDomain {
+  hostname: string;
+  display: string;
+  status: string;
+  primary: boolean;
+}
+
 export interface Project {
   id: string;
   status: Status;
@@ -57,6 +64,7 @@ export interface Project {
   secrets_requested: number;
   push: PushSummary;
   start_when_ready: boolean;
+  domains?: ProjectDomain[];
 }
 
 export interface SecretsView {

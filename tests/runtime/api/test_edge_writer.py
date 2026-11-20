@@ -53,6 +53,14 @@ def test_the_file_is_the_built_mapping_and_follows_a_changed_input(tmp_path):
     assert written == build_edge([PAIR], [DOMAIN], {"blog": PROJECT})
 
 
+def test_a_file_that_is_not_text_is_written_over(tmp_path):
+    edge, _ = _edge(tmp_path)
+    (tmp_path / "edge").mkdir()
+    (tmp_path / "edge" / "edge.yml").write_bytes(b"\xff\xfe")
+    assert edge.write() is True
+    assert yaml.safe_load((tmp_path / "edge" / "edge.yml").read_text()) == build_edge([PAIR], [], {})
+
+
 def test_an_empty_mapping_is_still_a_file_for_traefik(tmp_path):
     edge, _ = _edge(tmp_path, pairs=())
     assert edge.write() is True

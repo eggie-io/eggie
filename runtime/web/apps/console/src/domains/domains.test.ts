@@ -59,6 +59,10 @@ describe("showsHint", () => {
     expect(showsHint(redirecting)).toBe(false);
     expect(showsHint(custom("example.com", "issuing"))).toBe(false);
   });
+
+  it("skips a secondary that serves only while the primary has a problem", () => {
+    expect(showsHint(custom("www.example.com", "active", { serving: "direct" }))).toBe(false);
+  });
 });
 
 describe("pollMs", () => {

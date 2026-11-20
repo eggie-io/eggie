@@ -61,9 +61,10 @@ export function showsDns(a: Address): boolean {
   return a.kind === "custom" && (a.status === "waiting_dns" || a.status === "problem" || a.warning?.code === "dns_moved");
 }
 
-// A domain that redirects isn't the project's address, so the app must not be told to use it.
+// Only the serving primary is the project's address: a secondary serving while the primary
+// has a problem redirects again once it recovers.
 export function showsHint(a: Address): boolean {
-  return a.kind === "custom" && a.status === "active" && a.serving === "direct";
+  return a.kind === "custom" && a.status === "active" && a.primary && a.serving === "direct";
 }
 
 export const customRows =(list: AddressList): CustomAddress[] =>

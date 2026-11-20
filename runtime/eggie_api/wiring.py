@@ -19,7 +19,7 @@ from .infra.tunnel import TunnelClient
 from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
-from .services.certificate import Certificate
+from .services.certificates import Certificates
 from .services.clone import CloneService
 from .services.files import FileService
 from .services.github_link import GitHubLink
@@ -79,7 +79,7 @@ class Services:
     instances: Instances
     agents: AgentStatus
     runtime_update: RuntimeUpdate
-    certificate: Certificate | None
+    certificates: Certificates | None
     sync: SyncLoop
     system: SystemService
 
@@ -121,14 +121,12 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    certificate = None
+    certificates = None
     if config.site_host:
-        certificate = Certificate(
-            config.tls_dir, account, cloud,
-            names=(config.site_host, config.domain, f"*.{config.domain}"))
+        certificates = Certificates(config.edge_dir, account, cloud)
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
-    if certificate is not None:
-        passes.append(certificate.refresh)
+    if certificates is not None:
+        passes.append(certificates.refresh)
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
     sync = SyncLoop(passes)
@@ -172,4 +170,4 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificate=certificate, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))
+        certificates=certificates, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))

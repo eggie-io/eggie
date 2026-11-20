@@ -73,14 +73,13 @@ and a host release. Prefer additive changes.
   kitchens from `GET /v1/instances`, trimmed to what the switcher shows; `current` is the row whose
   `console_hostname` equals `site_host`. Health names the web app (`ApiConfig.web_url`, env
   `EGGIE_WEB_URL`) so the console knows where to send the user.
-- **Site** (`services/site.py`, `services/certificate.py`) — `ApiConfig.site_host` (from
+- **Site** (`services/site.py`, `services/certificates.py`) — `ApiConfig.site_host` (from
   `EGGIE_SITE_HOST`) switches it on. `SiteSignIn.redeem` tries local handoff codes first, then
-  `POST /v1/instances/handoff/redeem` with the account token. `Certificate.refresh` is a sync pass:
-  fetch when `/opt/eggie/tls/current` (a symlink) is missing, else daily; replace only on a later
-  `not_after`. Each pair is written into `/opt/eggie/tls/<not_after>/` and goes live by swapping
-  `current` in one rename: Traefik watches the directory, and renaming key and certificate
-  separately would have it load a mismatched pair. Older pairs are removed at the start of the
-  next check, never right after the swap. `Account.seed_from` imports `/opt/eggie/account.json`
+  `POST /v1/instances/handoff/redeem` with the account token. `Certificates.refresh` is a sync pass: the service lists
+  certificates by id and each pair is stored in `<edge_dir>/certs/<id>/` (`cert.pem`, `key.pem`,
+  `meta.json`, staged as `<id>.tmp` and moved with one rename). A renewal has a new id; an id the
+  list drops stops counting at once and leaves disk on the next pass. Listed daily, or at once
+  when a wanted id is missing. `Account.seed_from` imports `/opt/eggie/account.json`
   once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;

@@ -144,9 +144,14 @@ class Cloud:
         self.call("PUT", "/v1/instances/me/projects", token=token,
                   body={"projects": projects})
 
-    def instance_certificate(self, token: str):
-        """The site's certificate, issued and renewed by the service."""
-        return self.call("GET", "/v1/instances/me/certificate", token=token)
+    def instance_certificates(self, token: str):
+        """The certificates this server may hold: ids, names and expiry."""
+        return self.call("GET", "/v1/instances/me/certificates", token=token)
+
+    def instance_certificate(self, token: str, certificate_id: str):
+        """One certificate with its private key."""
+        quoted = urllib.parse.quote(certificate_id, safe="")
+        return self.call("GET", f"/v1/instances/me/certificates/{quoted}", token=token)
 
     def redeem_instance_handoff(self, token: str, code: str):
         """Whether a sign-in code the web app minted belongs to this

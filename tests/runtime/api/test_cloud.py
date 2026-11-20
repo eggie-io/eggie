@@ -161,13 +161,19 @@ def test_releasing_a_public_url_accepts_an_empty_204():
     assert opener.requests[0].get_method() == "DELETE"
 
 
-def test_the_certificate_is_fetched_from_the_instance_route_with_the_token():
-    opener = Opener((200, b'{"names": [], "certificate": "c", "private_key": "k", "not_after": "x"}'))
-    out = Cloud("https://svc/api", opener=opener).instance_certificate("at-1")
+def test_the_certificate_list_is_fetched_from_the_instance_route_with_the_token():
+    opener = Opener((200, b'{"certificates": []}'))
+    out = Cloud("https://svc/api", opener=opener).instance_certificates("at-1")
     (request,) = opener.requests
-    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/instances/me/certificate")
+    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/instances/me/certificates")
     assert request.get_header("Authorization") == "Bearer at-1"
-    assert out["private_key"] == "k"
+    assert out == {"certificates": []}
+
+
+def test_a_certificate_id_is_percent_quoted_in_the_path():
+    opener = Opener((200, b'{}'))
+    Cloud("https://svc/api", opener=opener).instance_certificate("at-1", "a/b")
+    assert opener.requests[0].full_url == "https://svc/api/v1/instances/me/certificates/a%2Fb"
 
 
 def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():

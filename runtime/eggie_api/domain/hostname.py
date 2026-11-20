@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 
 from ..errors import Invalid
 from .edge import is_hostname
@@ -32,3 +33,10 @@ def tidy(raw: str) -> str:
     if not is_hostname(value):
         raise Invalid("invalid_domain", _BAD)
     return value
+
+
+def routable(hostname: str, own: Iterable[str | None]) -> bool:
+    """False for a name no custom route may claim: not a hostname, or one of
+    this server's own names or a name under it."""
+    return is_hostname(hostname) and not any(
+        name and (hostname == name or hostname.endswith("." + name)) for name in own)

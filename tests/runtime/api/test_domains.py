@@ -59,7 +59,8 @@ def make(tmp_path, cloud, projects=("shop",)):
     clock = Clock()
     domains = Domains(repos.domains, ProjectLoader(config, repos.projects), account, cloud,
                       config, covered=lambda: covered,
-                      changed=lambda: changes.append(1), clock=clock)
+                      changed=lambda: changes.append(1),
+                      removed=lambda: changes.append("removed"), clock=clock)
     return domains, covered, changes, clock
 
 
@@ -143,6 +144,43 @@ def test_a_domain_with_a_warning_keeps_it_and_is_still_serving(tmp_path):
     assert domains.primary_url("shop") == "https://example.com"
 
 
+def test_names_that_are_not_hostnames_or_are_this_servers_own_are_never_stored(
+        tmp_path, caplog):
+    own = ["foo.eggie.io", "shop.foo.eggie.space", "foo.eggie.space", "a.foo.eggie.io",
+           "exa`mple.com"]
+    cloud = FakeCloud(instance_domains=[{"domains": [wire(h) for h in own] + [
+        wire("example.com"), wire("notfoo.eggie.io", primary=False)]}],
+        check_instance_domain=[{"domain": wire("foo.eggie.io")}])
+    domains, _, _, _ = make(tmp_path, cloud)
+    with caplog.at_level("WARNING", logger="eggie.domains"):
+        domains.sync()
+    assert [d.hostname for d in domains.rows()] == ["example.com", "notfoo.eggie.io"]
+    assert len(caplog.records) == 1
+    domains.check("shop", "example.com")
+    assert [d.hostname for d in domains.rows()] == ["example.com", "notfoo.eggie.io"]
+
+
+def test_a_list_naming_one_hostname_twice_keeps_the_last(tmp_path):
+    cloud = FakeCloud(instance_domains=[{"domains": [
+        wire(), wire(status="active", certificate_id="c1")]}])
+    domains, _, changes, _ = make(tmp_path, cloud)
+    domains.sync()
+    assert domains.rows() == [Domain("example.com", "shop", True, "active", "c1")]
+    assert changes == [1]
+
+
+def test_a_relist_that_only_moves_the_check_times_stores_them_quietly(tmp_path):
+    later = {**wire(), "checked_at": "2026-11-20T10:01:00Z",
+             "next_check_at": "2026-11-20T10:02:00Z"}
+    cloud = FakeCloud(instance_domains=[{"domains": [wire()]}, {"domains": [later]}])
+    domains, _, changes, clock = make(tmp_path, cloud)
+    domains.sync()
+    clock.now += SYNC_PENDING
+    domains.sync()
+    assert changes == [1]
+    assert domains.addresses("shop")["addresses"][0]["next_check_at"] == "2026-11-20T10:02:00Z"
+
+
 def test_an_open_page_refreshes_a_pending_mirror_at_most_every_ten_seconds(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [wire()]},
                                         {"domains": [wire(status="issuing")]}])
@@ -170,12 +208,13 @@ def test_forgetting_a_project_drops_rows_now_and_deletes_on_the_service_later(tm
     domains, _, changes, clock = make(tmp_path, cloud)
     domains.sync()
     domains.forget_project("shop")
-    assert domains.rows() == [] and changes == [1, 1]
+    assert domains.rows() == [] and changes == [1, 1, "removed"]
     for _ in range(3):
         clock.now += SYNC_IDLE
         domains.sync()
     assert [c for c in cloud.calls if c[0] == "delete_instance_domain"] == [
         ("delete_instance_domain", TOKEN, "example.com")] * 2, "retried once, then done"
+    assert changes.count("removed") == 2, "and the certificates are listed again"
 
 
 def test_a_queued_domain_the_service_still_lists_stays_out_of_the_mirror(tmp_path):
@@ -226,13 +265,14 @@ def test_remove_of_another_projects_domain_is_not_found(tmp_path):
 def test_remove_deletes_on_the_service_then_drops_the_row(tmp_path):
     cloud = FakeCloud(instance_domains=[{"domains": [wire()]}],
                       delete_instance_domain=[CloudUnavailable("down"), None])
-    domains, _, _, _ = make(tmp_path, cloud)
+    domains, _, changes, _ = make(tmp_path, cloud)
     domains.sync()
     with pytest.raises(Unavailable):
         domains.remove("shop", "example.com")
     assert [d.hostname for d in domains.rows()] == ["example.com"]
+    assert "removed" not in changes
     out = domains.remove("shop", "example.com")
-    assert domains.rows() == []
+    assert domains.rows() == [] and changes[-1] == "removed"
     assert [a["kind"] for a in out["addresses"]] == ["eggie"]
 
 
@@ -432,5 +472,6 @@ def test_primary_url_of_a_project_without_domains_loads_nothing(tmp_path):
     repos = Repos.open(Database(tmp_path / "state.db"))
     repos.projects.add("shop", str(tmp_path / "projects" / "shop"), config.domain)
     domains = Domains(repos.domains, NoLoad(config, repos.projects), None, FakeCloud(),
-                      config, covered=lambda: set(), changed=lambda: None)
+                      config, covered=lambda: set(), changed=lambda: None,
+                      removed=lambda: None)
     assert domains.primary_url("shop") is None

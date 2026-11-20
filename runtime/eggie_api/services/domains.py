@@ -9,7 +9,7 @@ from collections.abc import Callable, Collection
 
 from ..config import ApiConfig
 from ..domain.edge import ACTIVE, Domain, plan, serving
-from ..domain.hostname import tidy
+from ..domain.hostname import routable, tidy
 from ..domain.overlay import host_for
 from ..errors import Conflict, EggieError, Invalid, NotFound, TooMany, Unavailable, Upstream
 from ..infra.cloud import CloudError, CloudUnavailable
@@ -29,6 +29,9 @@ CHALLENGES_ALL = 300
 CHALLENGE_WINDOW = 60.0
 
 _BY_STATUS = {404: NotFound, 409: Conflict, 422: Invalid, 429: TooMany}
+# What the edge file and the payloads use; the check times alone change neither.
+_WATCHED = ("hostname", "display", "project_id", "is_primary", "status", "problem_json",
+            "warning_json", "dns_json", "certificate_id")
 
 
 def _row(d: dict) -> dict:
@@ -54,6 +57,10 @@ def _domain(row: dict) -> Domain:
                   row["status"], row["certificate_id"])
 
 
+def _watched(rows: list[dict]) -> list[tuple]:
+    return [tuple(r[c] for c in _WATCHED) for r in rows]
+
+
 def _answer(read: Callable[[], object]):
     try:
         return read()
@@ -68,7 +75,7 @@ class Domains:
 
     def __init__(self, repo: DomainRepo, loader: ProjectLoader, account, cloud,
                  config: ApiConfig, *, covered: Callable[[], Collection[str]],
-                 changed: Callable[[], None], clock=time.time):
+                 changed: Callable[[], None], removed: Callable[[], None], clock=time.time):
         self._repo = repo
         self._loader = loader
         self._account = account
@@ -76,6 +83,7 @@ class Domains:
         self._config = config
         self._covered = covered
         self._changed = changed
+        self._removed = removed
         self._clock = clock
         self._synced_at: float | None = None
         self._tried_at: float | None = None
@@ -103,6 +111,7 @@ class Domains:
             self._refresh()
 
     def _delete_queued(self) -> None:
+        deleted = False
         for hostname in self._repo.queued():
             try:
                 self._account.authed(
@@ -112,6 +121,19 @@ class Domains:
                     log.warning("could not delete the domain %s: %s", hostname, e)
                     continue
             self._repo.unqueue(hostname)
+            deleted = True
+        if deleted:
+            self._removed()
+
+    def _kept(self, rows: list[dict]) -> list[dict]:
+        own = (self._config.site_host, self._config.domain)
+        dropped = [r["hostname"] for r in rows if not routable(r["hostname"], own)]
+        if dropped:
+            log.warning("ignoring names no custom domain may take: %s",
+                        ", ".join(map(repr, dropped)))
+        # A name listed twice keeps its last entry.
+        return list({r["hostname"]: r for r in rows
+                     if routable(r["hostname"], own)}.values())
 
     def _refresh(self) -> None:
         """Replaces the mirror with the service's list; any failure keeps it."""
@@ -119,7 +141,7 @@ class Domains:
         seen = self._generation
         try:
             out = self._account.authed(self._cloud.instance_domains)
-            rows = [_row(d) for d in out["domains"]]
+            listed = [_row(d) for d in out["domains"]]
         except NotSignedIn:
             return
         except (CloudError, CloudUnavailable) as e:
@@ -128,15 +150,16 @@ class Domains:
         except (KeyError, TypeError) as e:
             log.warning("the domain list was not understood: %s", e)
             return
+        rows = self._kept(listed)
         with self._lock:
             if self._generation != seen:
                 return
             queued = set(self._repo.queued())
-            before = self._repo.list()
+            before = _watched(self._repo.list())
             self._repo.replace_all([r for r in rows if r["hostname"] not in queued])
             self._generation += 1
             self._synced_at = self._clock()
-            moved = self._repo.list() != before
+            moved = _watched(self._repo.list()) != before
         if moved:
             self._changed()
 
@@ -147,6 +170,10 @@ class Domains:
             if relist:
                 self._synced_at = None
         self._changed()
+
+    def _upsert(self, row: dict) -> None:
+        for kept in self._kept([row]):
+            self._store(lambda: self._repo.upsert(kept))
 
     def rows(self) -> list[Domain]:
         return [_domain(r) for r in self._repo.list()]
@@ -247,7 +274,7 @@ class Domains:
         out = self._call(lambda t: self._cloud.add_instance_domain(
             t, hostname, project_id, target))
         row, suggested = _answer(lambda: (_row(out["domain"]), out.get("suggested")))
-        self._store(lambda: self._repo.upsert(row))
+        self._upsert(row)
         return {**self._addresses(project_id, project), "suggested": suggested}
 
     def remove(self, project_id: str, hostname: str) -> dict:
@@ -256,13 +283,14 @@ class Domains:
         self._call(lambda t: self._cloud.delete_instance_domain(t, hostname))
         # The service may have moved the primary to another of the project's domains.
         self._store(lambda: self._repo.remove(hostname), relist=True)
+        self._removed()
         return self._addresses(project_id, project)
 
     def make_primary(self, project_id: str, hostname: str) -> dict:
         project = self._loader.require(project_id)
         self._own(project_id, hostname)
         out = self._call(lambda t: self._cloud.primary_instance_domain(t, hostname))
-        rows = _answer(lambda: [_row(d) for d in out["domains"]])
+        rows = self._kept(_answer(lambda: [_row(d) for d in out["domains"]]))
         self._store(lambda: self._repo.replace_project(
             project_id, [r for r in rows if r["project_id"] == project_id]))
         return self._addresses(project_id, project)
@@ -271,14 +299,14 @@ class Domains:
         project = self._loader.require(project_id)
         self._own(project_id, hostname)
         out = self._call(lambda t: self._cloud.check_instance_domain(t, hostname))
-        row = _answer(lambda: _row(out["domain"]))
-        self._store(lambda: self._repo.upsert(row))
+        self._upsert(_answer(lambda: _row(out["domain"])))
         return self._addresses(project_id, project)
 
     def forget_project(self, project_id: str) -> None:
         if not self._repo.for_project(project_id):
             return
         self._store(lambda: self._repo.forget_project(project_id))
+        self._removed()
 
     def challenge(self, token: str, *, forwarded_for: str = "", peer: str = "") -> str:
         """Open to anyone on the internet: only a well-formed token, within both

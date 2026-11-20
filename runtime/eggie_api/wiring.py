@@ -160,7 +160,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
 
         domains = Domains(repos.domains, loader, account, cloud, config,
                           covered=lambda: covered_hosts(certificates.installed()),
-                          changed=domains_changed)
+                          changed=domains_changed, removed=certificates.recheck)
         edge = Edge(config.edge_dir, certificates, domains.rows,
                     _project_edges(loader, repos.projects))
         loader.primary_url = domains.primary_url

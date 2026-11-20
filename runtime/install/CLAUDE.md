@@ -107,7 +107,7 @@ and keeps the last answer. `eggie-update-now.path` fires when the API bumps `req
 bare lowercase hostnames); a run without them keeps the file. `install.sh` sources it: appends
 `EGGIE_SITE_HOST`, `EGGIE_DOMAIN`, `EGGIE_API_BIND=127.0.0.1` and `EGGIE_EDGE_BIND=127.0.0.1` to `.env`, adds
 `-f $RUNTIME_DIR/stack.site.yml` (`$SITE_STACK`, unquoted on purpose) to the stack's compose
-commands, installs `site/tls.yml` into `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik
+commands, creates `/opt/eggie/edge` (`2770 root:docker`: the API writes `edge.yml` and the certificates, Traefik
 reads), enables the metadata guard unit (step 7b) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
 imaged (`tests/runtime/test_snapshot_prep.py`).
 

@@ -32,9 +32,11 @@ class Opener:
     def __init__(self, *replies):
         self.replies = list(replies)
         self.requests = []
+        self.timeouts = []
 
     def __call__(self, request, timeout):
         self.requests.append(request)
+        self.timeouts.append(timeout)
         reply = self.replies.pop(0)
         if isinstance(reply, BaseException):
             raise reply
@@ -195,6 +197,15 @@ def test_adding_a_domain_posts_the_hostname_project_and_target():
         "POST", "https://svc/api/v1/instances/me/domains")
     assert json.loads(request.data) == {"hostname": "example.com", "project": "shop",
                                         "target": "shop.foo.eggie.space"}
+
+
+def test_a_domain_check_waits_longer_and_a_challenge_lookup_shorter_than_other_calls():
+    opener = Opener((200, b'{"domain": {}}'), (200, b'{}'), (200, b'{}'))
+    cloud = Cloud("https://svc/api", opener=opener)
+    cloud.check_instance_domain("at-1", "example.com")
+    cloud.acme_challenge("at-1", "t" * 43)
+    cloud.instance_domains("at-1")
+    assert opener.timeouts == [20.0, 3.0, 10.0]
 
 
 def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():

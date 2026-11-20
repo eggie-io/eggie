@@ -101,8 +101,8 @@ certificates the service lists and generates `edge.yml`.
   while it serves.
 - `http://` on a custom host redirects to `https://`, except the CA's check at
   `/.well-known/acme-challenge/<token>`, which is answered on both ports without a redirect.
-- A custom host reaches only the project's web service. The console, `/api` and other projects
-  do not answer on it, and the challenge path is the only API route it can reach.
+- Every path on a custom host goes to that project's web service. Eggie's console and API never
+  answer on it, nor does another project; the CA's check path is the only exception.
 - Deleting a project forgets its domains on the service; replacing its files from a folder or
   pushing again keeps them. The Cloud deletes on the service only the domains of projects it
   deleted itself. A snapshot carries no domains or certificates.
@@ -169,13 +169,13 @@ Boundary rows for a site (the full table is in `security.md`):
 | Way in | What it reaches | Who may use it |
 |---|---|---|
 | 443 | Traefik: console on the site host, `/api`, every project host under the site domain | Anyone; console and `/api` need a session from a service-minted code; projects have only their own auth |
-| 80 | Redirect to 443, and the CA's certificate check at `/.well-known/acme-challenge/<token>` | Anyone; the check is rate-limited (20 a minute per client address, 300 in all) and is the only unauthenticated API path besides the existing ones |
+| 80 | Redirect to 443, and the CA's certificate check at `/.well-known/acme-challenge/<token>` | Anyone; the check is rate-limited (20 a minute per client address, 300 in all) and is unauthenticated |
 | 22 | The login account | Holders of the SSH key the service installed |
 
 - The service's cloud firewall allows 22, 80 and 443 only. Project `ports:` published by compose
   stay published on the server and rely on that firewall.
-- A custom host reaches only its project's web service, never the console, `/api` or another
-  project; the only API path open on it is the certificate check.
+- Every path on a custom host goes to its project's web service, never to Eggie's console or API
+  or another project; the certificate check is the only exception.
 - The bearer API and the plain-HTTP probe port bind to loopback.
 - `eggie-metadata-guard.service` runs before dockerd and inserts a `DROP` for `169.254.169.254`
   into Docker's `DOCKER-USER` chain, so no bridged container can read the user data that seeded

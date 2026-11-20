@@ -452,7 +452,7 @@ def test_an_add_while_the_queue_pass_is_deleting_that_name_is_refused(tmp_path):
     assert domains._repo.queued() == []
 
 
-def test_an_add_whose_letting_go_fails_queues_the_hostname_again(tmp_path):
+def test_an_add_whose_letting_go_fails_leaves_the_hostname_queued(tmp_path):
     cloud = FakeCloud(delete_instance_domain=[CloudUnavailable("down")])
     domains = queued_from_blog(tmp_path, cloud, "example.com")
     with pytest.raises(Unavailable) as e:
@@ -460,6 +460,17 @@ def test_an_add_whose_letting_go_fails_queues_the_hostname_again(tmp_path):
     assert e.value.code == "cloud_unavailable"
     assert domains._repo.queued() == ["example.com"]
     assert "add_instance_domain" not in cloud.names()
+
+
+def test_an_add_that_breaks_while_letting_go_leaves_the_name_for_the_next_pass(tmp_path):
+    cloud = FakeCloud(delete_instance_domain=[RuntimeError("boom"), None])
+    domains = queued_from_blog(tmp_path, cloud, "example.com")
+    with pytest.raises(RuntimeError):
+        domains.add("shop", "example.com")
+    assert domains._repo.queued() == ["example.com"]
+    domains.sync()
+    assert deletes(cloud) == ["example.com"] * 2
+    assert domains._repo.queued() == []
 
 
 def test_removing_the_primary_lists_again_on_the_next_pass(tmp_path):

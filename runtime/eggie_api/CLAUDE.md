@@ -108,8 +108,9 @@ and a host release. Prefer additive changes.
   it too). `Domains.challenge` answers a token the service answered in the last 10 min from a
   64-entry cache; any other token needs the shape `[A-Za-z0-9_-]{20,200}`, 20 a minute per client
   address (`ratelimit.client_address`) and 300 in all, else 404 without calling the service. A
-  queued delete is claimed under the lock, and `add` takes a queued name off the queue before
-  letting go of it on the service (`domain_busy` while the sync thread is deleting it). The payload's `domains` comes from the
+  queued name is let go of by one helper (`_let_go`) for the sync pass and `add`: claimed under the
+  lock, deleted on the service outside it, unqueued only after the service let go; a second caller
+  skips it (sync) or gets `domain_busy` (`add`). The payload's `domains` comes from the
   mirror; `loader.primary_url` puts the serving primary domain in `urls[0]` (probe keeps `host_for`).
   `DELETE /projects/{id}` forgets the project's domains unless `keep_domains=true` (replace import).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside

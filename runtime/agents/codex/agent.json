@@ -9,6 +9,7 @@
   "setup": {"run": "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"},
   "platforms": {
     "mac": {
+      "warning": "<p>Make sure <b>two-factor authentication</b> in your ChatGPT account is enabled before you start.</p>",
       "tagline": "SSH connection",
       "card": [
         {"label": "Hostname", "value": "{host}"},
@@ -24,7 +25,7 @@
       ]
     },
     "cloud": {
-      "warning": "<p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
+      "warning": "<p>Make sure <b>two-factor authentication</b> in your ChatGPT account is enabled before you start.</p><p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
       "tagline": "SSH connection",
       "card": [
         {"label": "Hostname", "value": "{user}@{host}"},

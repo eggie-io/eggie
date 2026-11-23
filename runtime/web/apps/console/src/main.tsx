@@ -5,6 +5,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { takeHandoff } from "./boot/boot";
+import { setEventContext, takeDesktopEvents } from "./desktop/events";
 import { takeDesktopAdded, takeDesktopConnect, takeDesktopHome } from "./desktop/desktop";
 
 function sessionStore(): Storage | null {
@@ -20,6 +21,7 @@ function sessionStore(): Storage | null {
 const home = takeDesktopHome(window.location, sessionStore());
 const connect = home ? takeDesktopConnect(window.location, sessionStore()) : [];
 const added = home ? takeDesktopAdded(window.location, sessionStore()) : [];
+setEventContext(takeDesktopEvents(window.location));
 const handoff = takeHandoff(window.location, window.history);
 
 async function start() {

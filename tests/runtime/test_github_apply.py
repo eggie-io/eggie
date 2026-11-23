@@ -50,7 +50,8 @@ def setup(tmp_path, desired=None, applied=None):
     path = f"{bin_dir}:/usr/bin:/bin"
     env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path,
            "EGGIE_ROOT_HOME": str(tmp_path / "root"),
-           "EGGIE_SHELLS_FILE": str(shells), "LOG": str(log),
+           "EGGIE_SHELLS_FILE": str(shells), "EGGIE_HOME_ROOT": str(tmp_path),
+           "LOG": str(log),
            "ADA_HOME": str(tmp_path / "ada"),
            "TOKEN_FILE": str(gh_dir / "token")}
     return env, gh_dir, log

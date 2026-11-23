@@ -39,7 +39,8 @@ Each of these is root-equivalent in the VM:
   ACLs on `/opt/eggie/projects` and read access to `api.token`. `sudo` needs no password. On WSL2
   `wsl -d eggie-vm` opens as the non-root `eggie` account, but `eggie` is in the `docker` group and
   has passwordless `sudo`, and `wsl -d eggie-vm -u root` from Windows needs nothing at all. Whoever
-  holds an SSH key into the VM holds the VM.
+  holds an SSH key into the VM holds the VM. A login account is one with a home under `/home`, a
+  real shell and a uid from 500; a service account such as `postgres` gets none of this.
 - **Coding agents.** They run as a login account, so they have everything above.
 
 ## The user's own computer

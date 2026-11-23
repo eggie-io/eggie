@@ -357,15 +357,19 @@ def test_reinstalling_a_host_is_byte_identical(tmp_path):
     assert config.read_text() == once
 
 
-def test_alias_with_space_or_newline_is_refused(tmp_path):
+def test_a_bad_alias_keyword_or_value_is_refused_and_nothing_written(tmp_path):
+    # One bad line makes OpenSSH reject the whole file, breaking every host in it.
     import pytest
     config = tmp_path / "config"
     config.write_text(USER_CONFIG)
-    with pytest.raises(ValueError):
-        ssh_alias.install_host(config, "eggie foo", CLOUD)
-    with pytest.raises(ValueError):
-        ssh_alias.install_host(config, "eggie-foo",
-                               [("HostName", "a\nProxyCommand x")])
+    for alias in ("eggie foo", "eggie-foo\n"):
+        with pytest.raises(ValueError):
+            ssh_alias.install_host(config, alias, CLOUD)
+    for option in (("HostName", "a\nProxyCommand x"), ("HostName", 'a" b'),
+                   ("HostName", "a\tb"), ("HostName", "a\x00b"), ("HostName", "a\x7fb"),
+                   ("Proxy Command", "x"), ("Host\nName", "x"), ("", "x")):
+        with pytest.raises(ValueError):
+            ssh_alias.install_host(config, "eggie-foo", [option])
     assert config.read_text() == USER_CONFIG
 
 

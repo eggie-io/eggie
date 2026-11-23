@@ -27,6 +27,9 @@ ALIAS = "eggie"
 _BEGIN_PREFIX = "# >>> Eggie: the '"
 _END = "# <<< Eggie <<<"
 _ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+_KEYWORD_RE = re.compile(r"[A-Za-z]+")
+# A quote can't be escaped inside a quoted ssh_config value.
+_BAD_VALUE_RE = re.compile(r'["\x00-\x1f\x7f-\x9f]')
 
 # Labels as parse_ssh_config() returns them, to the ssh_config keyword.
 _FIELDS = (("Host", "HostName"), ("Port", "Port"), ("User", "User"),
@@ -46,8 +49,10 @@ def _render_host(alias: str, options: list[tuple[str, str]]) -> str:
         raise ValueError(f"'{alias}' is not a usable ssh host name")
     lines = [_begin(alias), f"Host {alias}"]
     for keyword, value in options:
-        if "\n" in value or "\r" in value:
-            raise ValueError(f"the {keyword} value has a line break")
+        if not _KEYWORD_RE.fullmatch(keyword):
+            raise ValueError(f"'{keyword}' is not an ssh option name")
+        if _BAD_VALUE_RE.search(value):
+            raise ValueError(f"the {keyword} value has a quote or a control character")
         lines.append(f'  {keyword} "{value}"' if " " in value else f"  {keyword} {value}")
     lines.append(_END)
     return "\n".join(lines) + "\n"

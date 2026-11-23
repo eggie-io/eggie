@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import time
 import urllib.request
@@ -29,6 +30,9 @@ RESTART = "Quit and reopen Claude and Codex to see the new connections."
 APPROVAL_TIMEOUT = 600
 APPROVAL_EVERY = 2
 _DECIDED = ("approved", "denied", "expired")
+_LABEL = r"[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+_HOSTNAME_RE = re.compile(rf"{_LABEL}(\.{_LABEL})+")
+_LOGIN_RE = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 
 
 class _Failed(Exception):
@@ -164,6 +168,14 @@ class Connector:
             return [Line(target, None, not named, skipped, neutral=not named)]
         if not ssh_alias.valid_alias(alias):
             return [Line(target, None, False, f"'{alias}' can't be used as an SSH host name")]
+        if not _HOSTNAME_RE.fullmatch(row.get("console_hostname") or ""):
+            return [Line(target, None, False,
+                         f"The kitchen's address '{row.get('console_hostname')}' "
+                         "can't go in your SSH settings")]
+        if not _LOGIN_RE.fullmatch(row.get("login_name") or ""):
+            return [Line(target, None, False,
+                         f"The kitchen's login '{row.get('login_name')}' "
+                         "can't go in your SSH settings")]
 
         private, public = keys.ensure_key(self._key_dir, self._computer_name, self._run)
         existed = self._ssh_config.exists()

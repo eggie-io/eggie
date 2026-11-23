@@ -433,3 +433,23 @@ def test_request_not_for_this_key_or_not_https_is_refused_unopened(tmp_path, cha
     assert w.opened == []
     assert not any(call[0] == "poll" for call in client.calls)
     assert not w.ssh_config.exists()
+
+
+@pytest.mark.parametrize("field, value", [
+    ("console_hostname", "shop.eggie.app\nProxyCommand x"),
+    ("console_hostname", "shop"),
+    ("console_hostname", "-shop.eggie.app"),
+    ("console_hostname", "Shop.eggie.app"),
+    ("login_name", "ihor x"),
+    ("login_name", "1ihor"),
+    ("login_name", "i" * 33),
+])
+def test_a_hostname_or_login_ssh_config_cannot_hold_writes_nothing(tmp_path, field, value):
+    client = FakeClient([{**row("shop"), field: value}], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    assert len(lines) == 1 and not lines[0].ok
+    assert client.calls == []
+    assert not w.ssh_config.exists()

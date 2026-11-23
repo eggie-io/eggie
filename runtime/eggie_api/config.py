@@ -73,6 +73,8 @@ class ApiConfig:
     instance_ca_file: Path | None = None
     # Where bundles are staged before a push or after an incoming one.
     transfers_root: Path = Path(f"{constants.GUEST_ROOT}/transfers")
+    # Where the API leaves the SSH keys the service approved for this server.
+    ssh_keys_dir: Path = Path(f"{constants.GUEST_ROOT}/ssh-keys")
     version: str = __version__
 
     def public_url(self, host: str) -> str:
@@ -119,6 +121,7 @@ class ApiConfig:
             update_dir=Path(env.get("EGGIE_UPDATE_DIR", constants.UPDATE_DIR)),
             runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
+            ssh_keys_dir=Path(env.get("EGGIE_SSH_KEYS_DIR", f"{constants.GUEST_ROOT}/ssh-keys")),
             web_url=env.get("EGGIE_WEB_URL") or "https://app.eggie.io",
             edge_dir=Path(env.get("EGGIE_EDGE_DIR", f"{constants.GUEST_ROOT}/edge")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",

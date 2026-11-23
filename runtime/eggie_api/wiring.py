@@ -33,6 +33,7 @@ from .services.instance_projects import InstanceProjects
 from .services.instance_keys import InstanceKeys
 from .services.instances import Instances
 from .services.jobs import JobRegistry
+from .services.kitchen_keys import InstanceKeySync
 from .services.lifecycle import LifecycleService
 from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
@@ -103,6 +104,7 @@ class Services:
     site: SiteSignIn
     instances: Instances
     instance_keys: InstanceKeys
+    instance_key_sync: InstanceKeySync | None
     agents: AgentStatus
     runtime_update: RuntimeUpdate
     certificates: Certificates | None
@@ -182,8 +184,11 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                     log.exception("edge pass step %s failed",
                                   getattr(step, "__qualname__", step))
         passes.append(edge_pass)
+    key_sync = None
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
+        key_sync = InstanceKeySync(account, cloud, config.ssh_keys_dir)
+        passes.append(key_sync.run_pass)
     sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
@@ -226,6 +231,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         github_link=github_link,
         sessions=sessions, site=site,
         instances=instances, instance_keys=InstanceKeys(account, cloud),
+        instance_key_sync=key_sync,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
         certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),

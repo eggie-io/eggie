@@ -11,6 +11,7 @@ from pathlib import Path
 
 AUTOSTART_SET_ONCE = "autostart_set_once"
 TRAY_NOTICE_SHOWN = "tray_notice_shown"
+FIRST_LAUNCH_SENT = "first_launch_sent"
 
 
 class Settings:

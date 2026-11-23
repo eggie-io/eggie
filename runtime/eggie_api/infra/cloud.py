@@ -98,6 +98,9 @@ class Cloud:
                              "the Eggie service sent something that is not JSON",
                              status) from None
 
+    def desktop_event(self, body: dict) -> None:
+        self.call("POST", "/v1/desktop-events", body=body)
+
     def device_code(self, client_name: str):
         return self.call("POST", "/v1/auth/device/code",
                          body={"client_name": client_name})

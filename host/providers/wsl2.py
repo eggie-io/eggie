@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 
 from ..core.images import WSL_IMAGES
-from ..core.provider import Access, AccessField, Completed, Diagnosis, VmUnresponsive
+from ..core.provider import (Access, AccessField, Completed, Diagnosis, ProviderError,
+                             VmUnresponsive)
 from . import registry
 from .wsl_encoding import decode_wsl
 from .wsl_checks import diagnose_wsl2, preflight_checks
@@ -159,6 +160,10 @@ def _default_arch() -> str:
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
 
 
+class RootfsMissing(FileNotFoundError):
+    code = "rootfs_missing"
+
+
 class Wsl2Provider:
     def __init__(self, distro="eggie-vm", install_dir: Path | None = None,
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
@@ -197,7 +202,7 @@ class Wsl2Provider:
         return result
 
     @staticmethod
-    def _require(result: Completed, what: str) -> Completed:
+    def _require(result: Completed, what: str, code: str) -> Completed:
         """`exec()` and `_meta()` return a `Completed` and never raise, so a
         dropped result is a silent success: `eggie vm start` printed "VM
         started." for a distro that does not exist, and an unchecked wsl.conf
@@ -206,8 +211,8 @@ class Wsl2Provider:
         if result.ok:
             return result
         detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError(f"{what} (exit {result.returncode})"
-                           + (f": {detail}" if detail else "."))
+        raise ProviderError(code, f"{what} (exit {result.returncode})"
+                            + (f": {detail}" if detail else "."))
 
     def is_supported(self) -> Diagnosis:
         return diagnose_wsl2(self._run, self.wsl)
@@ -226,12 +231,13 @@ class Wsl2Provider:
         if self.install_dir is None or self.rootfs is None:
             raise ValueError("install_dir and rootfs are required to create the VM")
         if not self.rootfs.exists():
-            raise FileNotFoundError(f"rootfs not found: {self.rootfs}")
+            raise RootfsMissing(f"rootfs not found: {self.rootfs}")
         self.install_dir.mkdir(parents=True, exist_ok=True)
         self._require(
             self._meta(["--import", self.distro, str(self.install_dir),
                         str(self.rootfs), "--version", "2"]),
-            f"the virtual machine '{self.distro}' could not be created")
+            f"the virtual machine '{self.distro}' could not be created",
+            "vm_import_failed")
         # systemd is off by default in WSL; docker.service needs it. Checked:
         # a failed write here means systemd stays off, and the only symptom is
         # bootstrap dying minutes later at `systemctl enable --now docker`.
@@ -242,18 +248,21 @@ class Wsl2Provider:
             self.exec(["bash", "-lc",
                        "printf '[boot]\\nsystemd=true\\n' > /etc/wsl.conf"],
                       root=True),
-            f"systemd could not be turned on inside '{self.distro}'")
+            f"systemd could not be turned on inside '{self.distro}'",
+            "vm_configure_failed")
         # Not stop(): systemd is not running yet, so its poweroff path would
         # only wait out the poll. --terminate makes wsl.conf apply on next boot.
         self._require(self._meta(["--terminate", self.distro]),
-                      f"the virtual machine '{self.distro}' could not be restarted")
+                      f"the virtual machine '{self.distro}' could not be restarted",
+                      "vm_start_failed")
         self.start()  # like Lima's create: the VM is left running
 
     def start(self) -> None:
         # Running any command boots the distro, but only keeps it up while it
         # runs -- the hold is what keeps it running afterwards.
         self._require(self.exec(["true"]),
-                      f"the virtual machine '{self.distro}' could not be started")
+                      f"the virtual machine '{self.distro}' could not be started",
+                      "vm_start_failed")
         if not self.exec(["pgrep", "-f", f"^{HOLD_NAME}"], root=True).ok:
             self._spawn([self.wsl, "-d", self.distro, "-u", "root", "--cd", "~", "--",
                          "bash", "-c", f"exec -a {HOLD_NAME} sleep infinity"])
@@ -279,11 +288,13 @@ class Wsl2Provider:
             except VmUnresponsive:
                 pass
         self._require(self._meta(["--terminate", self.distro]),
-                      f"the virtual machine '{self.distro}' could not be stopped")
+                      f"the virtual machine '{self.distro}' could not be stopped",
+                      "vm_stop_failed")
 
     def destroy(self) -> None:
         self._require(self._meta(["--unregister", self.distro]),
-                      f"the virtual machine '{self.distro}' could not be removed")
+                      f"the virtual machine '{self.distro}' could not be removed",
+                      "vm_remove_failed")
 
     def exec(self, argv: list[str], *, root: bool = False) -> Completed:
         base = [self.wsl, "-d", self.distro]
@@ -303,7 +314,8 @@ class Wsl2Provider:
         # --terminate touches only this distro; a hang in the utility VM that
         # every distro shares clears only with --shutdown.
         if everything:
-            self._require(self._meta(["--shutdown"]), "WSL could not be restarted")
+            self._require(self._meta(["--shutdown"]), "WSL could not be restarted",
+                          "wsl_restart_failed")
         else:
             self.stop()
         self.start()
@@ -355,11 +367,11 @@ class Wsl2Provider:
         code = self._netsh(self._delete_rule(host_port),
                            self._add_rule(guest_port, host_port))
         if code == ELEVATION_DECLINED:
-            raise RuntimeError(
+            raise ProviderError("elevation_declined",
                 f"forwarding port {host_port} to {guest_port} in the VM needs "
                 "administrator approval (the permission prompt was dismissed).")
         if code != 0:
-            raise RuntimeError(
+            raise ProviderError("port_forward_failed",
                 f"port {host_port} could not be forwarded to {guest_port} in "
                 f"the VM (code {code}). Another program may already be "
                 f"listening on {host_port}.")
@@ -417,12 +429,14 @@ class Wsl2Provider:
                 else ["--update"])
         code = self._elevate(self.wsl, args)
         if code == ELEVATION_DECLINED:
-            raise RuntimeError(
+            raise ProviderError("elevation_declined",
                 f"`wsl {' '.join(args)}` needs administrator approval "
                 "(the permission prompt was dismissed). Re-run setup and "
                 "choose Yes when Windows asks.")
         if code != 0:
-            raise RuntimeError(
+            raise ProviderError(
+                "wsl_features_failed" if remedy == "enable_wsl_features"
+                else "wsl_update_failed",
                 f"`wsl {' '.join(args)}` could not be completed (code {code}). "
                 "Windows Update may be busy, or company policy may block WSL. "
                 "Restart the computer and run setup again.")
@@ -469,7 +483,8 @@ class Wsl2Provider:
         if agent_id not in self.agent_connections:
             raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
         self._require(self._meta(["--set-default", self.distro]),
-                      f"'{self.distro}' could not be made the default WSL distro")
+                      f"'{self.distro}' could not be made the default WSL distro",
+                      "vm_configure_failed")
         return f"{self.distro} is now your default WSL distro."
 
     def agent_connected(self, agent_id: str) -> bool:

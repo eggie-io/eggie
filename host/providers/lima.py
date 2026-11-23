@@ -22,7 +22,8 @@ import subprocess
 from pathlib import Path
 
 from . import claude_ssh, lima_install, ssh_alias
-from ..core.provider import Access, AccessField, Completed, Diagnosis, CheckResult, Runtime
+from ..core.provider import (Access, AccessField, Completed, Diagnosis, CheckResult,
+                             ProviderError, Runtime, SshSetupError)
 
 LOOPBACK = "127.0.0.1"
 
@@ -217,7 +218,7 @@ class LimaProvider:
         return self._spawn([self.limactl, *args])
 
     @staticmethod
-    def _require(result: Completed, what: str) -> Completed:
+    def _require(result: Completed, what: str, code: str) -> Completed:
         """Same contract as the WSL2 provider's: `_cmd()` returns a `Completed`
         and never raises, so a dropped result reports success for a VM that was
         never created. A caller must not be able to tell which platform it is
@@ -225,8 +226,8 @@ class LimaProvider:
         if result.ok:
             return result
         detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError(f"{what} (exit {result.returncode})"
-                           + (f": {detail}" if detail else "."))
+        raise ProviderError(code, f"{what} (exit {result.returncode})"
+                            + (f": {detail}" if detail else "."))
 
     def is_supported(self) -> Diagnosis:
         """What `eggie doctor` prints: the whole truth about this machine.
@@ -285,7 +286,8 @@ class LimaProvider:
         yield CheckResult(
             f"macOS 13 or newer (found {release or 'unknown'})", ok,
             None if ok else
-            "Eggie needs macOS 13 or newer; this Mac cannot run it")
+            "Eggie needs macOS 13 or newer; this Mac cannot run it",
+            code=None if ok else "macos_too_old")
 
     def exists(self) -> bool:
         out = self._cmd(["list", "--quiet"]).stdout
@@ -302,7 +304,8 @@ class LimaProvider:
         self._require(
             self._cmd(["start", f"--name={self.name}", "--tty=false",
                        f"--cpus={cpus}", f"--memory={memory}", str(self.config)]),
-            f"the virtual machine '{self.name}' could not be created")
+            f"the virtual machine '{self.name}' could not be created",
+            "vm_create_failed")
 
     def _host_size(self) -> tuple[int | None, int | None]:
         out = self._spawn(["sysctl", "-n", "hw.memsize", "hw.ncpu"])
@@ -313,7 +316,8 @@ class LimaProvider:
 
     def start(self) -> None:
         self._require(self._cmd(["start", self.name]),
-                      f"the virtual machine '{self.name}' could not be started")
+                      f"the virtual machine '{self.name}' could not be started",
+                      "vm_start_failed")
         # A runtime from before `ssh_deletekeys: false` still re-keys on every
         # boot; this keeps known_hosts in step until it updates.
         try:
@@ -323,7 +327,8 @@ class LimaProvider:
 
     def stop(self) -> None:
         self._require(self._cmd(["stop", self.name]),
-                      f"the virtual machine '{self.name}' could not be stopped")
+                      f"the virtual machine '{self.name}' could not be stopped",
+                      "vm_stop_failed")
 
     def destroy(self) -> None:
         # Read first: `limactl delete` removes the ssh.config it is in.
@@ -332,7 +337,8 @@ class LimaProvider:
         except (OSError, ValueError):
             address = None
         self._require(self._cmd(["delete", self.name]),
-                      f"the virtual machine '{self.name}' could not be removed")
+                      f"the virtual machine '{self.name}' could not be removed",
+                      "vm_remove_failed")
         try:
             ssh_alias.remove(self.ssh_dir / "config")
             if address:
@@ -348,7 +354,8 @@ class LimaProvider:
         # Nothing outside this instance to restart, so `everything` is the same
         # forced restart. Nothing on this side raises VmUnresponsive yet.
         self._require(self._cmd(["stop", "--force", self.name]),
-                      f"the virtual machine '{self.name}' could not be stopped")
+                      f"the virtual machine '{self.name}' could not be stopped",
+                      "vm_stop_failed")
         self.start()
 
     recover_warning = "This forces the virtual machine to stop first. Nothing is deleted."
@@ -374,7 +381,7 @@ class LimaProvider:
     @staticmethod
     def _known_hosts_name(found: dict[str, str]) -> str:
         if "Port" not in found:
-            raise ValueError("Lima has not written the SSH port")
+            raise SshSetupError("Lima has not written the SSH port")
         return ssh_alias.known_hosts_name(found.get("Host", LOOPBACK), found["Port"])
 
     def _trust_host_keys(self) -> None:
@@ -385,7 +392,8 @@ class LimaProvider:
         defend against another local process already holding the port."""
         name = self._known_hosts_name(self._lima_ssh())
         keys = self._require(self.exec(["sh", "-c", "cat /etc/ssh/ssh_host_*_key.pub"]),
-                             "the virtual machine's SSH host keys could not be read")
+                             "the virtual machine's SSH host keys could not be read",
+                             "ssh_setup_failed")
         ssh_alias.trust(self.ssh_dir / "known_hosts", name, keys.stdout, self._spawn)
 
     def ssh_shortcut(self):
@@ -441,7 +449,8 @@ class LimaProvider:
         self._control("cancel", guest_port, host_port)
         self._require(
             self._control("forward", guest_port, host_port),
-            f"port {host_port} could not be forwarded to {guest_port} in the VM")
+            f"port {host_port} could not be forwarded to {guest_port} in the VM",
+            "port_forward_failed")
 
     def unforward(self, guest_port: int, host_port: int) -> None:
         if guest_port == host_port:

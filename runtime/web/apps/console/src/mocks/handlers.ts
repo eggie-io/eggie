@@ -714,6 +714,7 @@ export function handlersFor(scenario: Scenario) {
   };
 
   return [
+    http.post("/api/desktop-events", () => HttpResponse.json({}, { status: 202 })),
     http.get("/api/runtime/update", () => HttpResponse.json(runtimeUpdate)),
     http.post("/api/runtime/update", () => {
       if (runtimeUpdate.state === "running") return refuse("update_running", "an update is already running", 409);

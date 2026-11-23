@@ -257,3 +257,18 @@ def test_doctor_names_the_log_file(tmp_path):
                      push=lambda e: None, probe_fn=lambda p: Readiness(),
                      log_path=tmp_path / "eggie.log")
     assert str(tmp_path / "eggie.log") in api.doctor()["text"]
+
+
+def test_a_failed_job_is_reported_under_its_kind(tmp_path, events):
+    from host.core.provider import ProviderError
+
+    class Failing(FakeProvider):
+        def start(self):
+            raise ProviderError("vm_start_failed", "limactl start failed")
+
+    api = DesktopApi(Failing(), InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: Readiness(), events=events.sender)
+    api.start_vm()
+    api.jobs.join(timeout=5)
+    assert events.sent() == [("app_error", {"error_code": "vm/vm_start_failed",
+                                            "message": "ProviderError: limactl start failed"})]

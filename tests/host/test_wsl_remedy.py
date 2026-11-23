@@ -77,3 +77,15 @@ def test_default_install_dir_is_importable_without_circular_import():
     from host.providers import default_install_dir
     from host.providers.wsl2 import _default_facts
     assert callable(default_install_dir) and callable(_default_facts)
+
+
+def test_elevation_and_remedy_failures_carry_catalogued_codes():
+    declined = make(elevator=lambda exe, args: ELEVATION_DECLINED)
+    with pytest.raises(RuntimeError) as e:
+        declined.apply_remedy("enable_wsl_features")
+    assert e.value.code == "elevation_declined"
+    for remedy, code in (("enable_wsl_features", "wsl_features_failed"),
+                         ("update_wsl", "wsl_update_failed")):
+        with pytest.raises(RuntimeError) as e:
+            make(elevator=lambda exe, args: 1).apply_remedy(remedy)
+        assert e.value.code == code

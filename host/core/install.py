@@ -165,13 +165,18 @@ def _emitter(name: str, report: Callable[[Progress], None]):
 class DeadEnd(RuntimeError):
     """A blocking check no code can fix — the user must act."""
 
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
+
 
 def preflight_step(provider) -> None:
     diagnosis = provider.preflight()
     dead = diagnosis.dead_ends
     if dead:
         raise DeadEnd("\n".join(
-            f"{c.label}: {c.fix}" if c.fix else c.label for c in dead))
+            f"{c.label}: {c.fix}" if c.fix else c.label for c in dead),
+            next((c.code for c in dead if c.code), None))
 
 
 def remediate_step(provider) -> None:
@@ -188,6 +193,8 @@ class ApiNotAccepted(RuntimeError):
     """The API is serving, but refuses every authenticated call and a
     re-provision did not change that."""
 
+    code = "api_not_accepted"
+
 
 # The API answers one of these when it has no usable token of its own, or
 # when the one this host is holding is not the one it started with. Neither
@@ -197,6 +204,8 @@ _TOKEN_CODES = frozenset({API_UNCONFIGURED, "unauthorized"})
 
 class ApiIncompatible(RuntimeError):
     """The API serves an API number this host does not speak."""
+
+    code = "api_incompatible"
 
 
 # `docker compose up -d` returns before the API container is serving, so the
@@ -260,13 +269,13 @@ def connect_step(provider, *, client=None, reconnect=None, update=None,
     try:
         client.version()
     except ApiError as e:
-        if e.code not in _TOKEN_CODES or reconnect is None:
+        if e.api_code not in _TOKEN_CODES or reconnect is None:
             raise
         client = reconnect() or client
         try:
             _once_serving(client.version, sleep, API_RESTART_TIMEOUT)
         except ApiError as again:
-            if again.code not in _TOKEN_CODES:
+            if again.api_code not in _TOKEN_CODES:
                 raise
             raise ApiNotAccepted(
                 "The Eggie service inside the virtual machine did not accept "
@@ -281,6 +290,10 @@ def connect_step(provider, *, client=None, reconnect=None, update=None,
 
 class VerificationFailed(RuntimeError):
     """The smoke-test project did not serve a successful response."""
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
 
 
 def _default_http_get(url: str) -> int:
@@ -310,10 +323,12 @@ def _await_http_ok(url: str, http_get, timeout: float, sleep) -> None:
             if error is not None:
                 raise VerificationFailed(
                     f"The test project did not answer at {url}.\n"
-                    f"{type(error).__name__}: {error}") from error
+                    f"{type(error).__name__}: {error}",
+                    "verify_no_answer") from error
             raise VerificationFailed(
                 f"The test project answered with an error at {url}.\n"
-                f"The address returned HTTP {code} instead of 200.")
+                f"The address returned HTTP {code} instead of 200.",
+                "verify_http_error")
         sleep(0.5)
 
 
@@ -339,18 +354,20 @@ def verify_step(provider, template_dir: Path, domain: str, *, client=None,
             status = e.result.get("status", "failed")
             raise VerificationFailed(
                 "The test project's containers did not stay running.\n"
-                f"status: {status}" + (f"\n{e}" if str(e) else "")) from e
+                f"status: {status}" + (f"\n{e}" if str(e) else ""),
+                "verify_not_running") from e
         problem = result.get("problem")
         if problem:
             # The containers started, but the API already probed the URL
             # through Traefik and knows why it will not answer. Waiting out
             # the readiness window to report "did not respond" would replace
             # that explanation with a symptom.
-            raise VerificationFailed(problem["message"])
+            raise VerificationFailed(problem["message"], "verify_not_running")
         urls = result.get("urls") or []
         if not urls:
             raise VerificationFailed(
-                "the smoke-test project exposed no HTTP address")
+                "the smoke-test project exposed no HTTP address",
+                "verify_no_address")
         _await_http_ok(urls[0], http_get, ready_timeout, sleep)
     finally:
         _teardown(client)
@@ -375,7 +392,7 @@ def _teardown(client) -> None:
             raise VerificationFailed(
                 "The test project worked, but it could not be removed from "
                 "the virtual machine afterwards. Its containers may still be "
-                f"running.\n{e}") from e
+                f"running.\n{e}", "verify_cleanup_failed") from e
 
 
 def finish_step(location, terminal: str) -> str:

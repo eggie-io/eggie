@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.provider import SshSetupError
+
 ALIAS = "eggie"
 _BEGIN = "# >>> Eggie: the 'eggie' host, rewritten by Eggie setup >>>"
 _END = "# <<< Eggie <<<"
@@ -32,7 +34,7 @@ _FIELDS = (("Host", "HostName"), ("Port", "Port"), ("User", "User"),
 def render(found: dict[str, str]) -> str:
     missing = [label for label, _ in _FIELDS if label not in found]
     if missing:
-        raise ValueError("Lima has not written " + ", ".join(missing))
+        raise SshSetupError("Lima has not written " + ", ".join(missing))
     lines = [_BEGIN, f"Host {ALIAS}"]
     for label, keyword in _FIELDS:
         value = found[label]
@@ -154,7 +156,7 @@ def forget(known_hosts: Path, name: str, run) -> None:
 def trust(known_hosts: Path, name: str, pubkeys: str, run) -> None:
     lines = host_key_lines(name, pubkeys)
     if not lines:
-        raise ValueError("the virtual machine reported no SSH host keys")
+        raise SshSetupError("the virtual machine reported no SSH host keys")
     forget(known_hosts, name, run)
     target = known_hosts.resolve()
     existing = target.read_text() if target.exists() else ""

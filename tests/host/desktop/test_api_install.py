@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import threading
 
-from host.core.install import InstallError, InstallState, Step
+from host.core.install import DeadEnd, InstallError, InstallState, RebootRequired, Step
+from host.core.provider import ProviderError
 from host.core.status import Readiness
 from host.desktop.api import DesktopApi
 
@@ -89,3 +90,46 @@ def test_resume_is_registered_before_the_machine_goes_down(tmp_path):
     api.reboot_now()
 
     assert order == ["register", "reboot"]
+
+
+def _reporting(tmp_path, steps, events, clock=None):
+    kwargs = {"clock": clock} if clock else {}
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"),
+                     push=lambda e: None, probe_fn=lambda p: Readiness(),
+                     steps_factory=lambda: steps, events=events.sender, **kwargs)
+    api.start_install()
+    _drain(api)
+    return events.sent()
+
+
+def _raises(exc):
+    def run():
+        raise exc
+    return run
+
+
+def test_failed_step_reports_its_name_and_code(tmp_path, events):
+    steps = [Step("preflight", lambda: None),
+             Step("create_vm", _raises(ProviderError("vm_import_failed", "import failed")))]
+    sent = _reporting(tmp_path, steps, events)
+    assert [name for name, _ in sent] == ["env_setup_started", "env_setup_step_failed"]
+    assert sent[1][1] == {"step": "create_vm", "error_code": "vm_import_failed"}
+
+
+def test_a_dead_end_reports_as_preflight_with_its_checks_code(tmp_path, events):
+    steps = [Step("preflight", _raises(DeadEnd("Turn on virtualization", "cpu_virtualization_off")))]
+    sent = _reporting(tmp_path, steps, events)
+    assert sent[-1] == ("env_setup_step_failed",
+                        {"step": "preflight", "error_code": "cpu_virtualization_off"})
+
+
+def test_reboot_reports_neither_failure_nor_success(tmp_path, events):
+    steps = [Step("preflight", lambda: None), Step("reboot_gate", _raises(RebootRequired()))]
+    assert _reporting(tmp_path, steps, events) == [("env_setup_started", {})]
+
+
+def test_success_reports_whole_seconds(tmp_path, events):
+    times = iter([100.0, 142.7])
+    sent = _reporting(tmp_path, [Step("preflight", lambda: None)], events,
+                      clock=lambda: next(times))
+    assert sent == [("env_setup_started", {}), ("env_setup_succeeded", {"duration_sec": 42})]

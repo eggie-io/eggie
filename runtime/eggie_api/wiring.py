@@ -23,6 +23,7 @@ from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
 from .services.certificates import Certificates
+from .services.desktop_events import DesktopEvents
 from .services.clone import CloneService
 from .services.domains import Domains
 from .services.edge import Edge
@@ -107,12 +108,14 @@ class Services:
     edge: Edge | None
     sync: SyncLoop
     system: SystemService
+    desktop_events: DesktopEvents
 
 
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, instance=None,
-          sleep=None, clock=None, free_bytes=None, timer=None) -> Services:
+          sleep=None, clock=None, free_bytes=None, timer=None,
+          desktop_events=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -223,4 +226,5 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))
+        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),
+        desktop_events=desktop_events or DesktopEvents(cloud))

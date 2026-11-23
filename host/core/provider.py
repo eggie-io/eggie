@@ -21,6 +21,23 @@ class VmUnresponsive(RuntimeError):
     fails the same way. Raised by `exec()` too: the guest never ran anything,
     and a Completed would read as that command failing inside the VM."""
 
+    code = "vm_unresponsive"
+
+
+class ProviderError(RuntimeError):
+    """A VM operation failed; `code` is the catalogued reason."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class SshSetupError(ValueError):
+    """The SSH shortcut could not be written. A ValueError so existing
+    cleanup that tolerates a stale shortcut keeps catching it."""
+
+    code = "ssh_setup_failed"
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -28,6 +45,7 @@ class CheckResult:
     ok: bool
     fix: str | None = None
     remedy: str | None = None
+    code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +127,11 @@ class DesktopPlatform(Protocol):
     def let_session_end_close(self, on_session_end: Callable[[], None]) -> None: ...
     # Called once the native window exists, before it first shows.
     def style_title_bar(self, window) -> None: ...
+    # {"os": "windows" | "macos", "os_version", "arch"} for anonymous events.
+    def system_info(self) -> dict[str, str]: ...
+    # True where a login launch is known only once the loop runs (macOS), so
+    # the launch event has to wait for watch_login_launch's callback.
+    login_launch_reported_late: bool
 
 
 @runtime_checkable

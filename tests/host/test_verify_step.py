@@ -207,3 +207,18 @@ def test_smoke_test_template_publishes_no_host_port():
     compose = yaml.safe_load((VERIFY_TEMPLATE / "docker-compose.yml").read_text())
     for name, svc in compose["services"].items():
         assert not svc.get("ports"), f"{name} publishes a host port"
+
+
+def test_verify_failures_carry_catalogued_codes(api, template):
+    client, _runner, _probe = api
+    with pytest.raises(VerificationFailed) as e:
+        verify_step(None, template, DEFAULT_DOMAIN, client=client,
+                    http_get=lambda url: 502, ready_timeout=0)
+    assert e.value.code == "verify_http_error"
+
+    def refused(url):
+        raise ConnectionRefusedError("refused")
+    with pytest.raises(VerificationFailed) as e:
+        verify_step(None, template, DEFAULT_DOMAIN, client=client,
+                    http_get=refused, ready_timeout=0)
+    assert e.value.code == "verify_no_answer"

@@ -171,6 +171,7 @@ and a host release. Prefer additive changes.
   the root runner's `status.json` (`runtime/install/lib/agents.py`), one poll behind. Setup is only
   requested when the agent isn't connected and its setup isn't `installing`/`ready`, so Retry after
   `failed` is the same call. Manifests are read from `/opt/eggie/runtime/agents`.
+- **Desktop events** (`domain/desktop_events.py`, `services/desktop_events.py`) — `POST /desktop-events` relays the console's `signup_screen_shown` / `signup_started` to the service's `/v1/desktop-events` on a daemon thread and answers 202 `{}`. Any other event, key or pattern is a 400; failures are only logged.
 - **Runtime update** (`services/runtime_update.py`) — `GET|POST /api/runtime/update` (console only). Holds
   no state: `available.json` (written by `install/lib/update-check.sh`) and `status.json` (by
   `update-now.sh`) are read on every call, since the update recreates this container. POST bumps

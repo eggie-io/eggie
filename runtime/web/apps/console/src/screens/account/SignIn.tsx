@@ -7,6 +7,7 @@ import {
 import { createApi, type SessionLoss, isSessionLost } from "../../api/client";
 import { Qr } from "../../components/Qr";
 import { openExternal } from "../../desktop/desktop";
+import { reportEvent } from "../../desktop/events";
 import { useNow } from "../../projects/useNow";
 import { Shell } from "../../shell/Shell";
 import { webAppInstances } from "../../site/signIn";
@@ -52,6 +53,7 @@ export function SignIn({
   // instead of putting back the account it saw before the code existed.
   const asked = useRef(0);
   const polled = useRef(false);
+  const shownSent = useRef(false);
 
   const ask = useCallback(() => {
     if (asking.current === null) {
@@ -98,7 +100,15 @@ export function SignIn({
     return () => clearInterval(timer);
   }, [refresh]);
 
+  const choosing = !managed && signInView(view.account, view.intent).kind === "choose";
+  useEffect(() => {
+    if (!choosing || shownSent.current) return;
+    shownSent.current = true;
+    reportEvent("signup_screen_shown");
+  }, [choosing]);
+
   const choose = async (intent: Intent) => {
+    reportEvent("signup_started", { method: intent });
     const { next, open } = afterPress(latest.current, intent);
     if (open !== null) {
       openExternal(open);

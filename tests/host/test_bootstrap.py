@@ -183,3 +183,15 @@ def test_the_stub_hands_get_sh_the_url_it_came_from(tmp_path):
     env = _fake_curl(tmp_path, "echo 'echo \"from=$EGGIE_RUNTIME_URL\"'\n")
     result = _run_stub(tmp_path, env)
     assert result.stdout.strip() == "from=https://example.invalid/get.sh"
+
+
+def test_bootstrap_failures_carry_catalogued_codes():
+    codes = {}
+    for name, call in (
+            ("bootstrap_failed", lambda: bootstrap(FakeProvider(fail=True))),
+            ("bootstrap_incomplete", lambda: bootstrap(FakeProvider(writes_marker=False))),
+            ("bootstrap_bad_source", lambda: bootstrap(FakeProvider(), source="a b"))):
+        with pytest.raises(BootstrapError) as e:
+            call()
+        codes[name] = e.value.code
+    assert all(k == v for k, v in codes.items())

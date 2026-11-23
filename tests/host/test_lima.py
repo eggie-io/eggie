@@ -311,3 +311,16 @@ def test_the_mac_installer_is_the_package_for_this_architecture():
     assert provider.installer_asset("0.2.0") == "EggieSetup-0.2.0-arm64.pkg"
     provider.launch_installer(Path("/cache/EggieSetup-0.2.0-arm64.pkg"))
     assert ran == [["open", "/cache/EggieSetup-0.2.0-arm64.pkg"]]
+
+
+def test_vm_failures_and_the_macos_check_carry_catalogued_codes():
+    import pytest
+    for call, code in ((lambda p: p.create(), "vm_create_failed"),
+                       (lambda p: p.start(), "vm_start_failed"),
+                       (lambda p: p.stop(), "vm_stop_failed"),
+                       (lambda p: p.destroy(), "vm_remove_failed")):
+        with pytest.raises(RuntimeError) as e:
+            call(make(FakeRunner(returncode=1)))
+        assert e.value.code == code
+    old = make(FakeRunner(), mac_ver=lambda: ("12.7", ("", "", ""), "arm64"))
+    assert [c.code for c in old.preflight().dead_ends] == ["macos_too_old"]

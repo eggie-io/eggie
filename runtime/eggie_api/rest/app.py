@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from ..config import ApiConfig
 from ..wiring import Services, build
 from . import auth, errors
-from .routers import (account, addresses, files, github, instances, jobs, lifecycle,
-                      projects, public, push, recipes, runtime_update, secrets, sessions,
-                      system, transfers, uploads)
+from .routers import (account, addresses, desktop_events, files, github, instances, jobs,
+                      lifecycle, projects, public, push, recipes, runtime_update, secrets,
+                      sessions, system, transfers, uploads)
 
 FEATURES = (system, account, github, projects, lifecycle, files, uploads,
-            secrets, jobs, public, recipes)
+            secrets, jobs, public, recipes, desktop_events)
 
 
 def create_app(*, config: ApiConfig | None = None, services: Services | None = None,

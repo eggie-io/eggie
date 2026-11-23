@@ -57,3 +57,6 @@ SUPPORTED_API = frozenset({1})
 # Declared on both sides so a rename on one side without the other fails
 # test_constants_agree instead of silently breaking connect_step's repair path.
 API_UNCONFIGURED = "api_unconfigured"
+
+# Base of the Eggie service API that receives anonymous onboarding events.
+SERVICE_API_URL = "https://app.eggie.io/api"

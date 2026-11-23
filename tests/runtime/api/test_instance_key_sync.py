@@ -94,8 +94,27 @@ def test_ping_is_open_on_the_site_host_only(site):
     assert other.json()["error"]["code"] == "forbidden_host"
 
 
-def test_seventh_ping_in_a_minute_is_429(site):
+def test_seventh_ping_in_a_minute_is_accepted_and_owed_but_does_not_wake_the_loop(site):
     bare = TestClient(site.app)
+    services = site.app.state.services
+    woken = []
+    services.sync.wake = lambda: woken.append(1)
+    services.instance_key_sync._owed.clear()
     codes = [bare.post("/api/ssh-keys/sync", headers={"Host": "foo.eggie.io"}).status_code
              for _ in range(7)]
-    assert codes == [202] * 6 + [429]
+    assert codes == [202] * 7
+    assert len(woken) == 6
+    assert services.instance_key_sync._owed.is_set()
+
+
+def test_failed_sync_after_a_wake_is_retried_on_the_next_pass(tmp_path):
+    clock = Clock()
+    cloud = FakeCloud(own_ssh_keys=[listing(), CloudUnavailable("blip"), listing()])
+    sync = InstanceKeySync(SignedIn(), cloud, tmp_path, clock=clock)
+    sync.run_pass()
+    sync.wake()
+    clock.now = 60
+    sync.run_pass()
+    clock.now = 120
+    sync.run_pass()
+    assert len(cloud.calls) == 3

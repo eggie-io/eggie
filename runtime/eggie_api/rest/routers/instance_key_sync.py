@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
 
-from ...errors import TooMany
 from ...services import ratelimit
 
 if TYPE_CHECKING:
@@ -19,11 +18,11 @@ def build(s: Services) -> APIRouter:
 
     @router.post("/api/ssh-keys/sync", status_code=202)
     def ping() -> dict:
-        if not window.take():
-            raise TooMany("ssh_key_sync_rate_limited",
-                          "Too many key sync requests; try again in a minute.")
+        # Always owed, so strangers cannot starve a real ping; the limit
+        # only stops pings from waking the loop ahead of its own interval.
         s.instance_key_sync.wake()
-        s.sync.wake()
+        if window.take():
+            s.sync.wake()
         return {}
 
     return router

@@ -49,7 +49,7 @@ class InstanceKeySync:
             self.sync()
 
     def sync(self) -> None:
-        # Cleared first: a ping that lands during the sync owes another one.
+        # Cleared first: a ping during the sync owes another; a failure re-owes it.
         self._owed.clear()
         try:
             out = self._account.authed(self._cloud.own_ssh_keys)
@@ -59,14 +59,17 @@ class InstanceKeySync:
             return
         except (CloudError, CloudUnavailable) as e:
             log.warning("could not fetch the SSH keys: %s", e)
+            self._owed.set()
             return
         except (KeyError, TypeError, AttributeError) as e:
             log.warning("the SSH key list was not understood: %s", e)
+            self._owed.set()
             return
         try:
             self._write(text)
         except OSError as e:
             log.warning("could not write the SSH keys: %s", e)
+            self._owed.set()
             return
         self._synced_at = self._clock()
 

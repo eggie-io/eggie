@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -492,6 +493,9 @@ class Wsl2Provider:
     def agent_connected(self, agent_id: str) -> bool:
         """Whether this distro is the default, so the guide can skip the button."""
         return agent_id == "codex" and self._default_distro() == self.distro
+
+    def computer_name(self) -> str:
+        return socket.gethostname()
 
     def _default_distro(self) -> str | None:
         # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",

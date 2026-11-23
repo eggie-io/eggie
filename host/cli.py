@@ -33,13 +33,12 @@ def _client():
 
 def _default_connector(say):
     import os
-    import socket
     from pathlib import Path
 
     from host.core.connect.flow import Connector
-    name = socket.gethostname().removesuffix(".local")
-    return Connector(_client, _provider(), home=Path.home(), env=os.environ,
-                     computer_name=name, say=say)
+    provider = _provider()
+    return Connector(_client, provider, home=Path.home(), env=os.environ,
+                     computer_name=provider.computer_name(), say=say)
 
 
 _connector_factory = _default_connector  # tests override this

@@ -44,7 +44,7 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
 # guide (`DesktopApi.connect_agent`). Apart from the install list: it runs
 # whenever the user asks, long after setup.
 AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected",
-                 "local_ssh_alias"}
+                 "local_ssh_alias", "computer_name"}
 
 
 def test_every_provider_says_which_agents_it_can_connect():

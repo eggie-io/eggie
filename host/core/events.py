@@ -48,12 +48,25 @@ def error_code(exc: BaseException) -> str:
     return f"{code}:{hresult.group(0).lower()}" if hresult else code
 
 
+def _home_variants(home: str) -> set[str]:
+    if not home:
+        return set()
+    back = home.replace("/", "\\")
+    fwd = home.replace("\\", "/")
+    out = {home, back, fwd, back.replace("\\", "\\\\")}
+    drive = re.match(r"([A-Za-z]):/(.*)", fwd)
+    if drive:
+        out.add(f"/mnt/{drive.group(1)}/{drive.group(2)}")
+    return out
+
+
 def sanitize(text: str, *, home: str, user: str) -> str:
     # A home with a space ("Ana Maria") must go as a whole, before the
     # username and the generic path rule can split it.
-    for variant in {home, home.replace("\\", "/"), home.replace("/", "\\")}:
-        if variant:
-            text = re.sub(re.escape(variant), "~", text, flags=re.I)
+    # Covers repr-escaped argv (doubled backslashes) and the WSL /mnt/<drive> form;
+    # longest first so a shorter variant never leaves a tail behind.
+    for variant in sorted(_home_variants(home), key=len, reverse=True):
+        text = re.sub(re.escape(variant), "~", text, flags=re.I)
     text = _EMAIL.sub("<email>", text)
     if user:
         text = re.sub(rf"(?<!\w){re.escape(user)}(?!\w)", "<user>", text, flags=re.I)

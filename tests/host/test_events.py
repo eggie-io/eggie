@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -25,6 +26,14 @@ def test_sanitize_strips_a_windows_user_folder_with_a_space():
     out = sanitize(text, home=r"C:\Users\Ana Maria", user="Ana Maria")
     assert "Ana" not in out and "Maria" not in out and "ana@x.io" not in out
     assert out.startswith("cannot open ~")
+
+
+def test_sanitize_hides_a_home_folder_in_escaped_and_wsl_forms_when_user_differs():
+    home, user = r"C:\Users\Ana Maria", "amaria"
+    err = subprocess.CalledProcessError(1, [r"C:\Users\Ana Maria\AppData\Local\Eggie\vm"])
+    for text in (str(err), "failed /mnt/c/Users/Ana Maria/x"):
+        out = sanitize(text, home=home, user=user)
+        assert "Ana" not in out and "Maria" not in out, out
 
 
 def test_sanitize_hides_other_absolute_paths_and_caps_length():

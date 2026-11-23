@@ -41,6 +41,8 @@ class Line:
     agent: str | None
     ok: bool
     text: str
+    # Nothing done and nothing wrong: an instance skipped when all were asked for.
+    neutral: bool = False
 
 
 def ping(console_hostname: str) -> None:
@@ -99,8 +101,10 @@ class Connector:
         if instances != []:
             api, rows, failed = self._rows(instances)
             lines += failed
+            named = instances is not None
             for r in rows:
-                lines += self._guarded(_title(r), lambda r=r: self._connect_instance(api, r, agents))
+                lines += self._guarded(
+                    _title(r), lambda r=r: self._connect_instance(api, r, agents, named))
         if local:
             lines += self._guarded(LOCAL, lambda: self._connect_local(agents))
         if any(line.ok and line.agent for line in lines):
@@ -148,15 +152,16 @@ class Connector:
             log.info("connect step for %s failed", target, exc_info=True)
             return [Line(target, None, False, str(e) or type(e).__name__)]
 
-    def _connect_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
+    def _connect_instance(self, api, row: dict, agents: set[str], named: bool) -> list[Line]:
         target, alias = _title(row), _alias(row)
+        skipped = None
         if row.get("status") != "running":
-            return [Line(target, None, False,
-                         f"Skipped: the kitchen is {row.get('status') or 'not running'}; "
-                         "start it in the web app first")]
-        if not row.get("is_owner"):
-            return [Line(target, None, False,
-                         "Skipped: only the kitchen's owner can connect this computer")]
+            skipped = (f"Skipped: the kitchen is {row.get('status') or 'not running'}; "
+                       "start it in the web app first")
+        elif not row.get("is_owner"):
+            skipped = "Skipped: only the kitchen's owner can connect this computer"
+        if skipped:
+            return [Line(target, None, not named, skipped, neutral=not named)]
         if not ssh_alias.valid_alias(alias):
             return [Line(target, None, False, f"'{alias}' can't be used as an SSH host name")]
 
@@ -221,15 +226,27 @@ class Connector:
                                      monotonic=self._monotonic)
         if reached.ok:
             return reached
-        return ssh.Probe(False, f"The kitchen did not let this computer in: {reached.reason}")
+        return ssh.Probe(False, f"The kitchen did not let this computer in: "
+                                f"{reached.reason.rstrip('.')}. "
+                                "Run eggie connect again in a minute.")
 
     def _await_decision(self, api, instance_id: str, request_id: str) -> str:
         deadline = self._monotonic() + APPROVAL_TIMEOUT
+        last_error = None
         while self._monotonic() < deadline:
             self._sleep(APPROVAL_EVERY)
-            status = api.instance_key_request(instance_id, request_id).get("status")
+            try:
+                status = api.instance_key_request(instance_id, request_id).get("status")
+            except (ApiUnavailableError, ApiError) as e:
+                if isinstance(e, ApiError) and e.status < 500:
+                    raise
+                last_error = e
+                continue
+            last_error = None
             if status in _DECIDED:
                 return status
+        if last_error is not None:
+            raise last_error
         return "expired"
 
     def _remove_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
@@ -241,21 +258,23 @@ class Connector:
             lines += self._agent(target, CODEX, lambda: self._uncodex(alias))
         if any(not line.ok for line in lines) or self._agent_left(alias):
             return lines
-        ssh_alias.remove_host(self._ssh_config, alias)
+        # The ssh block goes last: it is what makes a re-run of --remove retry the service.
         fingerprint = self._fingerprint()
         if fingerprint is None:
-            lines.append(Line(target, None, True, "This computer has no Eggie key to remove"))
-            return lines
-        try:
-            api.remove_instance_key(row["id"], fingerprint)
-        except ApiError as e:
-            if e.api_code != "ssh_key_not_found":
-                lines.append(Line(target, None, False, e.message))
-                return lines
-            lines.append(Line(target, None, True, "This computer's key was not on the kitchen"))
-            return lines
-        self._ping(row["console_hostname"])
-        lines.append(Line(target, None, True, "This computer's key was removed from the kitchen"))
+            text = "This computer has no Eggie key to remove"
+        else:
+            try:
+                api.remove_instance_key(row["id"], fingerprint)
+            except ApiError as e:
+                if e.api_code != "ssh_key_not_found":
+                    lines.append(Line(target, None, False, e.message))
+                    return lines
+                text = "This computer's key was not on the kitchen"
+            else:
+                self._ping(row["console_hostname"])
+                text = "This computer's key was removed from the kitchen"
+        ssh_alias.remove_host(self._ssh_config, alias)
+        lines.append(Line(target, None, True, text))
         return lines
 
     def _has_traces(self, alias: str) -> bool:
@@ -326,7 +345,16 @@ class Connector:
         return f"listed as “{entry['name']}”"
 
     def _codex(self, alias: str, label: str) -> str:
+        had = codex_app.has(self._codex_home, alias)
         codex_app.add(self._codex_home, alias, REMOTE_PATH, label)
+        try:
+            return self._codex_ready(alias, label)
+        except Exception:
+            if not had:
+                codex_app.remove(self._codex_home, alias)
+            raise
+
+    def _codex_ready(self, alias: str, label: str) -> str:
         installed = codex_remote.ensure_installed(self._run, alias)
         if not installed.ok:
             raise _Failed(f"Codex could not be installed there: {installed.reason}")

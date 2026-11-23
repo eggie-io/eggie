@@ -47,3 +47,10 @@ def test_selectors_reach_the_connector(monkeypatch, argv, call):
     result = run(monkeypatch, fake, argv)
     assert result.exit_code == 0, result.output
     assert fake.calls == [call]
+
+
+def test_a_skipped_kitchen_is_neither_tick_nor_cross(monkeypatch):
+    fake = FakeConnector([Line("Cold", None, True, "Skipped: stopped", neutral=True)])
+    result = run(monkeypatch, fake, [])
+    assert result.exit_code == 0
+    assert "\u2013 Cold: Skipped: stopped" in result.output

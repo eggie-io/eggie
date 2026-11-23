@@ -21,6 +21,7 @@ class FakeClient:
         self.rows = rows
         self.polls = polls or {}
         self.request_error = request_error or {}
+        self.remove_error = None
         self.calls = []
 
     def instances(self):
@@ -35,10 +36,15 @@ class FakeClient:
 
     def instance_key_request(self, instance_id, request_id):
         self.calls.append(("poll", instance_id, request_id))
-        return {"status": self.polls[instance_id].pop(0)}
+        answer = self.polls[instance_id].pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return {"status": answer}
 
     def remove_instance_key(self, instance_id, fingerprint):
         self.calls.append(("remove", instance_id, fingerprint))
+        if self.remove_error:
+            raise self.remove_error
 
 
 class FakeSsh:
@@ -131,6 +137,8 @@ class World:
         self.said = []
         self.factory_calls = 0
         self.now = 0.0
+        self.port_free = True
+        self.ping_lets_in = True
 
     def factory(self):
         self.factory_calls += 1
@@ -140,7 +148,8 @@ class World:
 
     def ping(self, host):
         self.pinged.append(host)
-        self.ssh.authorized.add("eggie-" + host.split(".")[0])
+        if self.ping_lets_in:
+            self.ssh.authorized.add("eggie-" + host.split(".")[0])
 
     def sleep(self, seconds):
         self.now += seconds
@@ -148,7 +157,7 @@ class World:
     def connector(self):
         return flow.Connector(
             self.factory, self.provider, run=self.ssh, popen=self.login,
-            open_url=self.opened.append, port_free=lambda port: True, ping=self.ping,
+            open_url=self.opened.append, port_free=lambda port: self.port_free, ping=self.ping,
             sleep=self.sleep, monotonic=lambda: self.now, home=self.home, env={},
             computer_name="Ihor's Mac", say=self.said.append)
 
@@ -223,13 +232,17 @@ def test_second_run_changes_nothing(tmp_path):
     assert w.files() == before
 
 
-def test_stopped_or_not_owned_instance_is_skipped_with_a_reason(tmp_path):
+@pytest.mark.parametrize("named", [None, ["cold", "theirs"]])
+def test_stopped_or_not_owned_instance_is_skipped_with_a_reason(tmp_path, named):
     client = FakeClient([row("cold", status="stopped"), row("theirs", is_owner=False)])
     w = World(tmp_path, client)
 
-    lines = w.connector().connect(BOTH, None, local=False)
+    lines = w.connector().connect(BOTH, named, local=False)
 
-    assert [(line.target, line.ok) for line in lines] == [("Cold", False), ("Theirs", False)]
+    # Asked for by name it is a failure; swept up with every instance it is not.
+    ok = named is None
+    assert [(line.target, line.ok, line.neutral) for line in lines] == [
+        ("Cold", ok, ok), ("Theirs", ok, ok)]
     assert "stopped" in lines[0].text
     assert "owner" in lines[1].text
     assert client.calls == []
@@ -342,3 +355,61 @@ def test_without_the_api_this_computer_still_connects(tmp_path, error):
     assert not lines[0].ok
     assert lines[0].text.startswith("Start Eggie and sign in to connect your kitchens: ")
     assert w.provider.connected == ["codex"]
+
+
+def test_codex_connection_is_taken_back_when_its_sign_in_cannot_start(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    w.port_free = False
+
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    codex = [line for line in lines if line.agent == "Codex"]
+    assert len(codex) == 1 and not codex[0].ok and "1455" in codex[0].text
+    assert not codex_app.has(w.codex, "eggie-shop")
+    assert claude_ssh.entry_installed(w.claude, "eggie-shop")
+
+
+def test_failed_key_removal_keeps_the_host_so_remove_retries(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    w.connector().connect(BOTH, None, local=False)
+    client.remove_error = ApiUnavailableError("could not reach the Eggie API")
+
+    lines = w.connector().remove(BOTH, None, local=False)
+
+    assert not all(line.ok for line in lines)
+    assert ssh_alias.host_installed(w.ssh_config, "eggie-shop")
+
+    client.remove_error = None
+    client.calls.clear()
+    lines = w.connector().remove(BOTH, None, local=False)
+
+    assert all(line.ok for line in lines), lines
+    assert client.calls == [("remove", "id-shop", "SHA256:abc+/=")]
+    assert not ssh_alias.host_installed(w.ssh_config, "eggie-shop")
+
+
+def test_approval_poll_rides_out_a_transient_error(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": [
+        ApiUnavailableError("could not reach the Eggie API"),
+        ApiError("upstream_error", "the service failed", 502),
+        "approved"]})
+    w = World(tmp_path, client)
+
+    lines = w.connector().connect({"claude"}, ["shop"], local=False)
+
+    assert all(line.ok for line in lines), lines
+    assert claude_ssh.entry_installed(w.claude, "eggie-shop")
+
+
+def test_approved_but_unreachable_says_to_try_again(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    w.ping_lets_in = False
+
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    assert len(lines) == 1 and not lines[0].ok
+    assert lines[0].text.endswith("Run eggie connect again in a minute.")
+    assert not w.ssh_config.exists()

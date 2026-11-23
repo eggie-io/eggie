@@ -300,7 +300,7 @@ def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Cod
         if not line.target:
             typer.echo(line.text)
             continue
-        mark = "\u2713" if line.ok else "\u2717"
+        mark = "\u2013" if line.neutral else "\u2713" if line.ok else "\u2717"
         where = f"{line.target} \u00b7 {line.agent}" if line.agent else line.target
         typer.echo(f"{mark} {where}: {line.text}")
     raise typer.Exit(code=0 if all(line.ok for line in lines) else 1)

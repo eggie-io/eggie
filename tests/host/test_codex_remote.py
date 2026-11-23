@@ -41,6 +41,9 @@ class FakeProc:
         self.returncode = self._final
         return self.returncode
 
+    def poll(self):
+        return self.returncode
+
     def kill(self):
         self.killed = True
         self.returncode = -9
@@ -104,3 +107,34 @@ def test_setup_command_matches_the_runtime_manifest():
     manifest = Path(__file__).resolve().parents[2] / "runtime/agents/codex/agent.json"
     run = json.loads(manifest.read_text(encoding="utf-8"))["setup"]["run"]
     assert codex_remote.SETUP_COMMAND == run
+
+
+def test_open_url_failure_still_kills_the_tunnel():
+    proc = FakeProc(["https://a.example/x\n"], hang=True)
+
+    def boom(url):
+        raise RuntimeError("no browser")
+
+    try:
+        codex_remote.sign_in("eggie-x", popen=lambda a: proc, open_url=boom,
+                             port_free=lambda p: True)
+    except RuntimeError:
+        pass
+    assert proc.killed
+
+
+def test_url_inside_ansi_colour_codes_is_clean():
+    proc = FakeProc(["\x1b[1mOpen \x1b[36mhttps://auth.openai.com/a?b=1\x1b[0m\n", None])
+    opened = []
+    codex_remote.sign_in("eggie-x", popen=lambda a: proc, open_url=opened.append,
+                         port_free=lambda p: True)
+    assert opened == ["https://auth.openai.com/a?b=1"]
+
+
+def test_missing_ssh_binary_is_reported():
+    def popen(argv):
+        raise FileNotFoundError("ssh not found")
+
+    probe = codex_remote.sign_in("eggie-x", popen=popen, open_url=lambda u: None,
+                                 port_free=lambda p: True)
+    assert not probe.ok and "ssh not found" in probe.reason

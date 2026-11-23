@@ -17,6 +17,7 @@ CALLBACK_PORT = 1455
 SETUP_COMMAND = "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
 
 _URL = re.compile(r"https://\S+")
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def ensure_installed(run, alias: str, setup_command: str = SETUP_COMMAND) -> Probe:
@@ -56,9 +57,24 @@ def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
         return Probe(False, f"Port {CALLBACK_PORT} on this computer is in use; "
                             "close what uses it (often another Codex sign-in) "
                             "and run this again.")
-    proc = popen(["ssh", "-T", "-o", "ExitOnForwardFailure=yes",
-                  "-L", f"{CALLBACK_PORT}:127.0.0.1:{CALLBACK_PORT}",
-                  alias, "bash -lc 'codex login'"])
+    try:
+        proc = popen(["ssh", "-T", "-o", "ExitOnForwardFailure=yes",
+                      "-L", f"{CALLBACK_PORT}:127.0.0.1:{CALLBACK_PORT}",
+                      alias, "bash -lc 'codex login'"])
+    except OSError as e:
+        return Probe(False, str(e))
+    try:
+        return _await_login(proc, open_url, timeout, url_timeout)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+
+def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
     lines: queue.Queue = queue.Queue()
 
     def pump():
@@ -69,33 +85,34 @@ def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
     threading.Thread(target=pump, daemon=True).start()
 
     start = time.monotonic()
+
+    def remaining() -> float:
+        return max(timeout - (time.monotonic() - start), 1)
+
     last = ""
     url = None
     while url is None:
         left = url_timeout - (time.monotonic() - start)
         try:
-            line = lines.get(timeout=max(left, 0.01)) if left > 0 else None
             if left <= 0:
                 raise queue.Empty
+            line = lines.get(timeout=left)
         except queue.Empty:
-            proc.kill()
             return Probe(False, last or "No sign-in link appeared")
         if line is None:
             break
-        line = line.strip()
+        line = _ANSI.sub("", line).strip()
         if line:
             last = line
         found = _URL.search(line)
         if found:
             url = found.group(0).rstrip(".,)")
-    if url is None:
-        code = proc.wait()
-        return Probe(False, last or f"codex login exited {code}")
-
-    open_url(url)
     try:
-        code = proc.wait(timeout=max(timeout - (time.monotonic() - start), 1))
+        if url is None:
+            code = proc.wait(timeout=remaining())
+            return Probe(False, last or f"codex login exited {code}")
+        open_url(url)
+        code = proc.wait(timeout=remaining())
     except subprocess.TimeoutExpired:
-        proc.kill()
         return Probe(False, "Sign-in was not finished in time")
     return Probe(True, "") if code == 0 else Probe(False, last or f"codex login exited {code}")

@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from eggie_api.infra.cloud import CloudUnavailable
-from eggie_api.services.kitchen_keys import InstanceKeySync
+from eggie_api.services.instance_key_sync import InstanceKeySync
 from tests.runtime.api.conftest import _make_env
 from tests.runtime.api.fake_cloud import FakeCloud
 

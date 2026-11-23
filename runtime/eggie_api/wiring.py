@@ -33,7 +33,7 @@ from .services.instance_projects import InstanceProjects
 from .services.instance_keys import InstanceKeys
 from .services.instances import Instances
 from .services.jobs import JobRegistry
-from .services.kitchen_keys import InstanceKeySync
+from .services.instance_key_sync import InstanceKeySync
 from .services.lifecycle import LifecycleService
 from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks

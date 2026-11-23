@@ -141,6 +141,12 @@ def _api_error(exc: urllib.error.HTTPError) -> ApiError:
                           exc.code)
 
 
+_API_TOO_OLD = ApiError(
+    "api_too_old",
+    "Update Eggie in the virtual machine (Settings \u2192 Update) and try again.",
+    404)
+
+
 # Never uploaded: a repository's object store, dependency trees and caches are
 # megabytes to gigabytes the VM has no use for, re-sent on every `up`, and
 # `.git/config` would carry credentials into the guest as a side effect.
@@ -251,6 +257,18 @@ class ApiClient:
                     raise
             self._sleep(BUSY_RETRY_INTERVAL)
 
+    def _instance_call(self, method: str, path: str,
+                       payload: dict | None = None) -> dict:
+        """A 404 without Eggie's error body is FastAPI's missing route: the VM's
+        API predates these calls."""
+        try:
+            return self._call(method, path, payload)
+        except ApiError as e:
+            if e.status == 404 and e.api_code == "http_error":
+                raise ApiError(_API_TOO_OLD.api_code, _API_TOO_OLD.message,
+                               404) from None
+            raise
+
     # -- routes ------------------------------------------------------------
 
     def health(self) -> dict:
@@ -261,6 +279,26 @@ class ApiClient:
 
     def handoff_code(self) -> str:
         return str(self._call("POST", "/sessions/handoff")["code"])
+
+    def instances(self) -> list[dict]:
+        return self._instance_call("GET", "/instances").get("instances", [])
+
+    def request_instance_key(self, instance_id: str, public_key: str,
+                             computer_name: str) -> dict:
+        quoted = urllib.parse.quote(instance_id, safe="")
+        return self._instance_call(
+            "POST", f"/instances/{quoted}/ssh-key-requests",
+            {"public_key": public_key, "computer_name": computer_name})
+
+    def instance_key_request(self, instance_id: str, request_id: str) -> dict:
+        return self._instance_call(
+            "GET", f"/instances/{urllib.parse.quote(instance_id, safe='')}"
+                   f"/ssh-key-requests/{urllib.parse.quote(request_id, safe='')}")
+
+    def remove_instance_key(self, instance_id: str, fingerprint: str) -> None:
+        self._instance_call(
+            "DELETE", f"/instances/{urllib.parse.quote(instance_id, safe='')}"
+                      f"/ssh-keys?fingerprint={urllib.parse.quote(fingerprint, safe='')}")
 
     def create_project(self, project_id: str, *, web: list[dict] | None = None,
                        domain: str | None = None) -> dict:

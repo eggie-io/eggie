@@ -30,6 +30,7 @@ from .services.edge import Edge
 from .services.files import FileService
 from .services.github_link import GitHubLink
 from .services.instance_projects import InstanceProjects
+from .services.instance_keys import InstanceKeys
 from .services.instances import Instances
 from .services.jobs import JobRegistry
 from .services.lifecycle import LifecycleService
@@ -101,6 +102,7 @@ class Services:
     sessions: Sessions
     site: SiteSignIn
     instances: Instances
+    instance_keys: InstanceKeys
     agents: AgentStatus
     runtime_update: RuntimeUpdate
     certificates: Certificates | None
@@ -223,7 +225,7 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         recipes=RecipeService(config, account, cloud),
         github_link=github_link,
         sessions=sessions, site=site,
-        instances=instances,
+        instances=instances, instance_keys=InstanceKeys(account, cloud),
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
         certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),

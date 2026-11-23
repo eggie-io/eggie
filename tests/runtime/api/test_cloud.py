@@ -100,6 +100,16 @@ def test_create_sends_the_token_the_name_and_the_client_ref():
     assert json.loads(request.data) == {"name": "blog", "client_ref": "dev/blog"}
 
 
+def test_remove_instance_key_quotes_the_fingerprint():
+    opener = Opener((204, b""))
+
+    Cloud("https://svc/api", opener=opener).remove_instance_key("tok", "i/1", "SHA256:a/b+c")
+
+    request = opener.requests[0]
+    assert request.get_method() == "DELETE"
+    assert request.full_url == "https://svc/api/v1/instances/i%2F1/ssh-keys?fingerprint=SHA256%3Aa%2Fb%2Bc"
+
+
 def test_a_2xx_response_with_non_json_body_reports_the_actual_status():
     cloud = Cloud("https://svc/api", opener=Opener((201, b"Created")))
     with pytest.raises(CloudError) as raised:

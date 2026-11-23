@@ -13,6 +13,10 @@ from typing import Callable
 _GATEWAY = {502, 503, 504}
 CHUNK = 1024 * 1024
 BUNDLE_TIMEOUT = 120.0
+# The service may take up to 10 s to check a domain.
+CHECK_TIMEOUT = 20.0
+# The challenge path is open to anyone: a slow service must not hold API workers.
+CHALLENGE_TIMEOUT = 3.0
 
 
 class CloudError(Exception):
@@ -70,12 +74,13 @@ class Cloud:
                                       headers=headers, method=method)
 
     def call(self, method: str, path: str, *, body: dict | None = None,
-             token: str | None = None):
+             token: str | None = None, timeout: float | None = None):
         data = None if body is None else json.dumps(body).encode()
         request = self._request(method, path, data=data, token=token,
                                 accept="application/json")
+        wait = self._timeout if timeout is None else timeout
         try:
-            with self._open(request, timeout=self._timeout) as response:
+            with self._open(request, timeout=wait) as response:
                 status = response.status
                 raw = response.read()
         except urllib.error.HTTPError as e:
@@ -144,9 +149,41 @@ class Cloud:
         self.call("PUT", "/v1/instances/me/projects", token=token,
                   body={"projects": projects})
 
-    def instance_certificate(self, token: str):
-        """The site's certificate, issued and renewed by the service."""
-        return self.call("GET", "/v1/instances/me/certificate", token=token)
+    def instance_certificates(self, token: str):
+        """The certificates this server may hold: ids, names and expiry."""
+        return self.call("GET", "/v1/instances/me/certificates", token=token)
+
+    def instance_certificate(self, token: str, certificate_id: str):
+        """One certificate with its private key."""
+        quoted = urllib.parse.quote(certificate_id, safe="")
+        return self.call("GET", f"/v1/instances/me/certificates/{quoted}", token=token)
+
+    def _domain_path(self, hostname: str, action: str = "") -> str:
+        return f"/v1/instances/me/domains/{urllib.parse.quote(hostname, safe='')}{action}"
+
+    def instance_domains(self, token: str):
+        """Every custom domain of this server, all projects."""
+        return self.call("GET", "/v1/instances/me/domains", token=token)
+
+    def add_instance_domain(self, token: str, hostname: str, project: str, target: str):
+        return self.call("POST", "/v1/instances/me/domains", token=token,
+                         body={"hostname": hostname, "project": project, "target": target})
+
+    def delete_instance_domain(self, token: str, hostname: str) -> None:
+        self.call("DELETE", self._domain_path(hostname), token=token)
+
+    def primary_instance_domain(self, token: str, hostname: str):
+        """The project's domains after the change."""
+        return self.call("POST", self._domain_path(hostname, "/primary"), token=token)
+
+    def check_instance_domain(self, token: str, hostname: str):
+        return self.call("POST", self._domain_path(hostname, "/check"), token=token,
+                         timeout=CHECK_TIMEOUT)
+
+    def acme_challenge(self, token: str, challenge: str):
+        quoted = urllib.parse.quote(challenge, safe="")
+        return self.call("GET", f"/v1/instances/me/acme-challenges/{quoted}", token=token,
+                         timeout=CHALLENGE_TIMEOUT)
 
     def redeem_instance_handoff(self, token: str, code: str):
         """Whether a sign-in code the web app minted belongs to this

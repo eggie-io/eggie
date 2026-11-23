@@ -17,7 +17,7 @@ if [[ -f "$ROOT/stack.yml" ]]; then
 fi
 rm -f "$ROOT/api.token" "$ROOT/state.db" "$ROOT/state.db-wal" "$ROOT/state.db-shm" \
       "$ROOT/connect.json" "$ROOT/site.env" "$ROOT/account.json"
-rm -rf "$ROOT/tls" "$ROOT/tunnel" "$ROOT/uploads" \
+rm -rf "$ROOT/edge" "$ROOT/tunnel" "$ROOT/uploads" \
       "$ROOT/github" "$ROOT/secrets" "$ROOT/projects" "$ROOT/agent-status" "$ROOT/update"
 # The image builder's key and history must not reach every customer's server;
 # the service installs the user's key on the new droplet.

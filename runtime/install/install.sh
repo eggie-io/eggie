@@ -176,11 +176,10 @@ chmod 640 /opt/eggie/api.token
 # --profile tunnel: the first public URL must not wait on an image download.
 install -m 644 "$RUNTIME_DIR/stack.yml" /opt/eggie/stack.yml
 
-# 7a. site mode: where the API puts the certificate and Traefik reads it.
+# 7a. site mode: where the API writes Traefik's file and the certificates.
 if (( SITE )); then
-  install -d -m 2770 -o root -g docker /opt/eggie/tls
-  install -m 644 "$INSTALL_DIR/site/tls.yml" /opt/eggie/tls/tls.yml
-  find /opt/eggie/tls -name site.key -type f -exec chmod 600 {} +
+  install -d -m 2770 -o root -g docker /opt/eggie/edge
+  find /opt/eggie/edge -name key.pem -type f -exec chmod 600 {} +
 fi
 
 # 7b. site mode: project containers must not read the droplet's metadata service.

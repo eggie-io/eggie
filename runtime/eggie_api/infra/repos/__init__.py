@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ..db import Database
 from .account import AccountRepo
 from .cloud_projects import CloudProjectRepo
+from .domains import DomainRepo
 from .github import GitHubRepo
 from .instance_pushes import InstancePushRepo
 from .projects import ProjectRepo
@@ -24,9 +25,10 @@ class Repos:
     cloud_projects: CloudProjectRepo
     instance_pushes: InstancePushRepo
     pushed_projects: PushedProjectRepo
+    domains: DomainRepo
 
     @classmethod
     def open(cls, db: Database) -> "Repos":
         return cls(db, ProjectRepo(db), SecretRepo(db), SessionRepo(db),
                    AccountRepo(db), GitHubRepo(db), CloudProjectRepo(db),
-                   InstancePushRepo(db), PushedProjectRepo(db))
+                   InstancePushRepo(db), PushedProjectRepo(db), DomainRepo(db))

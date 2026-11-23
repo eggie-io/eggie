@@ -7,14 +7,15 @@
 # The `web` entrypoint keeps its name and moves to 443 with TLS, so no router
 # label in the stack or in a project overlay changes. `command` is replaced
 # wholesale by compose, hence the repeated base flags; `ports` and `volumes`
-# are appended. The certificate comes from the API (services/certificate.py)
-# into /opt/eggie/tls, which Traefik watches; tls.yml there names the files.
+# are appended. The certificates come from the API (services/certificates.py)
+# into /opt/eggie/edge, which Traefik watches; the API writes edge.yml there.
 services:
   traefik:
     command:
       - "--entryPoints.http.address=:80"
       - "--entryPoints.http.http.redirections.entryPoint.to=web"
       - "--entryPoints.http.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.http.http.redirections.entryPoint.priority=100000"
       - "--entryPoints.web.address=:443"
       - "--entryPoints.web.http.tls=true"
       - "--entryPoints.web.transport.respondingTimeouts.readTimeout=30m"
@@ -24,10 +25,10 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--providers.docker.network=edge"
-      - "--providers.file.directory=/opt/eggie/tls"
+      - "--providers.file.directory=/opt/eggie/edge"
       - "--providers.file.watch=true"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /opt/eggie/tls:/opt/eggie/tls:ro
+      - /opt/eggie/edge:/opt/eggie/edge:ro

@@ -64,8 +64,8 @@ class ApiConfig:
     # Projects live under `domain`, which the installer sets alongside it.
     site_host: str | None = None
     web_url: str = "https://app.eggie.io"
-    # Where the service-issued certificate lands; Traefik watches it.
-    tls_dir: Path = Path(f"{constants.GUEST_ROOT}/tls")
+    # Where service-issued certificates and Traefik's routing files land.
+    edge_dir: Path = Path(f"{constants.GUEST_ROOT}/edge")
     # A token pair the service leaves before first boot, imported once.
     account_seed: Path = Path(f"{constants.GUEST_ROOT}/account.json")
     # Extra trust anchor for an instance's certificate (a dev CA); the system
@@ -120,7 +120,7 @@ class ApiConfig:
             runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
             web_url=env.get("EGGIE_WEB_URL") or "https://app.eggie.io",
-            tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),
+            edge_dir=Path(env.get("EGGIE_EDGE_DIR", f"{constants.GUEST_ROOT}/edge")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",
                                       f"{constants.GUEST_ROOT}/account.json")),
             instance_ca_file=(Path(env["EGGIE_INSTANCE_CA_FILE"])

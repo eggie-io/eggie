@@ -73,14 +73,18 @@ and a host release. Prefer additive changes.
   kitchens from `GET /v1/instances`, trimmed to what the switcher shows; `current` is the row whose
   `console_hostname` equals `site_host`. Health names the web app (`ApiConfig.web_url`, env
   `EGGIE_WEB_URL`) so the console knows where to send the user.
-- **Site** (`services/site.py`, `services/certificate.py`) — `ApiConfig.site_host` (from
+- **Site** (`services/site.py`, `services/certificates.py`) — `ApiConfig.site_host` (from
   `EGGIE_SITE_HOST`) switches it on. `SiteSignIn.redeem` tries local handoff codes first, then
-  `POST /v1/instances/handoff/redeem` with the account token. `Certificate.refresh` is a sync pass:
-  fetch when `/opt/eggie/tls/current` (a symlink) is missing, else daily; replace only on a later
-  `not_after`. Each pair is written into `/opt/eggie/tls/<not_after>/` and goes live by swapping
-  `current` in one rename: Traefik watches the directory, and renaming key and certificate
-  separately would have it load a mismatched pair. Older pairs are removed at the start of the
-  next check, never right after the swap. `Account.seed_from` imports `/opt/eggie/account.json`
+  `POST /v1/instances/handoff/redeem` with the account token. `Certificates.refresh` is a sync pass: the service lists
+  certificates by id and each pair is stored in `<edge_dir>/certs/<id>/` (`cert.pem`, `key.pem`,
+  `meta.json` with its `names`, staged as `<id>.tmp` and moved with one rename; an id outside
+  `[A-Za-z0-9_-]+` is skipped). A renewal has a new id; a dropped pair keeps counting while a listed
+  pair sharing one of its names is not installed yet, else stops at once, and leaves disk on the
+  next pass. A domain serves by the names installed `domain` pairs cover (`covered_hosts`), not by
+  its `certificate_id`, which only says what to fetch. Listed daily, at once when a wanted id is
+  missing, and after `recheck()` (Domains calls it on a remove, `forget_project` or queued delete). The site sync pass then runs `services/edge.py`'s `Edge.write`, which
+  renders `build_edge` to `<edge_dir>/edge.yml` (the only file Traefik parses; `edge.yml.new` + rename, only
+  when the text changed). `Account.seed_from` imports `/opt/eggie/account.json`
   once at start (`__main__`) and rotates the pair at once (user data keeps a copy);
   `Account(managed=True)` refuses sign-in and sign-out on a site. Handoff codes minted locally
   start with `lh_` and are never forwarded to the service. `/health` carries `site`;
@@ -89,6 +93,26 @@ and a host release. Prefer additive changes.
   (`services/instance_projects.py`) is a site-only sync pass: it `PUT`s the full project list to
   `/v1/instances/me/projects` on change and every 10 minutes; `public_url` only while
   `started_ok`. Lifecycle status writes wake the loop (`on_status`).
+- **Domains** (`domain/hostname.py`, `services/domains.py`, tables `domains` + `domain_deletes`, v10) —
+  site only (`Services.domains` is `None` on a local VM). The service decides every status; the API
+  mirrors `GET /v1/instances/me/domains` (every pass while a domain is not `active`, else every
+  10 min) and relays add / remove / primary / check. A listed domain is never deleted because its
+  project is missing; only hostnames queued by `forget_project` are. Rows naming no plain hostname,
+  or this site's own names (`routable`), are dropped; a repeated name keeps its last entry; `changed`
+  fires only when a field other than the check times moved. `warning` (`warning_json`) is carried
+  to the custom rows of `addresses()` and never changes serving. The site's edge pass is
+  `domains.sync`, `certificates.refresh(domains.certificate_ids())`, `edge.write`, each step on its own.
+  Routes (`rest/routers/addresses.py`, site only): `GET /projects/{id}/addresses` on both mounts;
+  add / remove / primary / check at `/api` only. `GET /.well-known/acme-challenge/{token}` is the
+  one path open on a custom host (`rest/auth.py`, any Host; containers on the edge network reach
+  it too). `Domains.challenge` answers a token the service answered in the last 10 min from a
+  64-entry cache; any other token needs the shape `[A-Za-z0-9_-]{20,200}`, 20 a minute per client
+  address (`ratelimit.client_address`) and 300 in all, else 404 without calling the service. A
+  queued name is let go of by one helper (`_let_go`) for the sync pass and `add`: claimed under the
+  lock, deleted on the service outside it, unqueued only after the service let go; a second caller
+  skips it (sync) or gets `domain_busy` (`add`). The payload's `domains` comes from the
+  mirror; `loader.primary_url` puts the serving primary domain in `urls[0]` (probe keeps `host_for`).
+  `DELETE /projects/{id}` forgets the project's domains unless `keep_domains=true` (replace import).
 - **Secrets** (`domain/secrets.py`, `services/secrets.py`) — per-project values in `state.db` (`secrets`, v6), outside
   every project folder and never synced; requests (`secret_requests`: name + hint) ask the owner
   for one and vanish once it has a value. The project's `.env` is never read or written. A service

@@ -157,6 +157,24 @@ def _v9_secret_kind(conn: sqlite3.Connection) -> None:
     _add_column(conn, "secret_requests", "kind", "TEXT NOT NULL DEFAULT 'text'")
 
 
+def _v10_domains(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS domains (
+            hostname TEXT PRIMARY KEY,
+            display TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            is_primary INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL,
+            problem_json TEXT,
+            warning_json TEXT,
+            dns_json TEXT NOT NULL DEFAULT '[]',
+            certificate_id TEXT,
+            checked_at TEXT,
+            next_check_at TEXT
+        )""")
+    conn.execute("CREATE TABLE IF NOT EXISTS domain_deletes (hostname TEXT PRIMARY KEY)")
+
+
 # Append only. Editing an entry that has already shipped changes nothing on a
 # database that ran it -- add the next one instead.
 MIGRATIONS = [
@@ -169,6 +187,7 @@ MIGRATIONS = [
     _v7_project_origin,
     _v8_push,
     _v9_secret_kind,
+    _v10_domains,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

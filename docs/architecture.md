@@ -157,6 +157,7 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 | ghcr.io | `eggie-api` and `eggie-web` images (amd64 + arm64) | VM |
 | Eggie service (`app.eggie.io`) | Sign-in, project sync, public-URL tunnels | API |
 | GitHub OAuth (Device Flow) | Connecting the user's GitHub account | API |
+| Eggie service (`app.eggie.io`) | Anonymous onboarding events, see [desktop-events.md](desktop-events.md) | host, API |
 
 ## Updates
 

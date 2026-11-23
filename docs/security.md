@@ -79,6 +79,8 @@ What this does not stop:
 - Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and
   `\\wsl.localhost\eggie-vm` shows its files to any Windows program.
 
+Onboarding events are anonymous: no install or machine ID, nothing on disk to recognise the user, no IP or location, no usernames, emails, paths or project names, no link to the website visitor or the account, never sent to ad platforms. See [desktop-events.md](desktop-events.md).
+
 ## What each secret protects, and what it doesn't
 
 | Secret | Where | Protects against | Does not protect against |

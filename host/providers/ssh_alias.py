@@ -38,7 +38,7 @@ def valid_alias(alias: str) -> bool:
 
 
 def _begin(alias: str) -> str:
-    return f"{_BEGIN_PREFIX}{alias}' host, rewritten by Eggie >>>"
+    return f"{_BEGIN_PREFIX}{alias}' host, rewritten by Eggie setup >>>"
 
 
 def _render_host(alias: str, options: list[tuple[str, str]]) -> str:
@@ -76,6 +76,9 @@ def _split(text: str, alias: str = ALIAS) -> tuple[list[str], int | None]:
     if _END not in marks[begin:]:
         return lines, None
     end = marks.index(_END, begin) + 1
+    # END is shared: another block's BEGIN before it means ours lost its END.
+    if any(m.startswith(_BEGIN_PREFIX) for m in marks[begin + 1:end]):
+        return lines, None
     # The blank line install() put after the block.
     if end < len(lines) and not marks[end].strip():
         end += 1

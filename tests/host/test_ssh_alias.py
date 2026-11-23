@@ -367,3 +367,23 @@ def test_alias_with_space_or_newline_is_refused(tmp_path):
         ssh_alias.install_host(config, "eggie-foo",
                                [("HostName", "a\nProxyCommand x")])
     assert config.read_text() == USER_CONFIG
+
+
+def test_a_block_missing_its_end_does_not_swallow_the_next_block(tmp_path):
+    config = tmp_path / "config"
+    config.write_text(USER_CONFIG)
+    ssh_alias.install(config, FOUND)
+    ssh_alias.install_host(config, "eggie-foo", CLOUD)
+    # Drop the END of the first block (eggie-foo, placed first), keep a user line between.
+    lines = config.read_text().splitlines(keepends=True)
+    first_end = lines.index("# <<< Eggie <<<\n")
+    lines[first_end] = "# my own note\n"
+    damaged = "".join(lines)
+    config.write_text(damaged)
+    ssh_alias.remove_host(config, "eggie-foo")
+    assert config.read_text() == damaged
+    ssh_alias.install_host(config, "eggie-foo", CLOUD)
+    after = config.read_text()
+    assert "# my own note\n" in after and "Host work\n" in after
+    assert ssh_alias.host_installed(config, "eggie")
+    assert after.count("Host eggie\n") == 1

@@ -20,7 +20,7 @@
 
 .brand {
   min-width: 0; padding: 0 var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 15px; line-height: 20px; font-weight: 650; font-variation-settings: var(--font-wide); color: var(--ink);
+  font-size: 15px; line-height: 20px; font-weight: 500; font-variation-settings: var(--font-wide); color: var(--ink);
 }
 .muted .brand { color: var(--ink-2); }
 .open { display: inline-flex; flex: none; }
@@ -52,13 +52,13 @@
 .avatarButton:hover { background: var(--hover); }
 .avatar {
   width: 28px; height: 28px; flex: none; display: grid; place-content: center; border-radius: var(--radius-pill);
-  background: var(--gold); color: var(--on-gold); font-size: 12px; font-weight: 700;
+  background: var(--gold); color: var(--on-gold); font-size: 12px; font-weight: 500;
 }
 
 .updatePill {
   cursor: pointer; height: 28px; display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2);
   border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper); color: var(--ink);
-  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap;
 }
 .updatePill:hover { background: var(--hover); }
 .updatePanel {
@@ -68,7 +68,7 @@
   box-shadow: var(--shadow-md); z-index: var(--z-dropdown);
 }
 .updatePanel[hidden] { display: none; }
-.updateTitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 650; color: var(--ink); }
+.updateTitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--ink); }
 .updateLine { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
 .updatePanel .menuError { padding: 0; }
 
@@ -83,9 +83,9 @@
 
 .who { display: flex; flex-direction: column; gap: var(--space-0-5); padding: 6px var(--space-2) var(--space-2); min-width: 0; }
 .whoLabel {
-  font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
+  font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
 }
-.whoEmail { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.whoEmail { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
 .rule { height: 1px; margin: var(--space-1) calc(var(--space-1) * -1); background: var(--line); }
 
 .item {
@@ -105,7 +105,7 @@
 .line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: 6px var(--space-2); color: var(--ink); }
 .line > svg { color: var(--ink-2); }
 .lineText { flex: 1 1 120px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.lineTitle { font-size: 13px; line-height: 18px; font-weight: 600; }
+.lineTitle { font-size: 13px; line-height: 18px; font-weight: 500; }
 .lineSub { font-size: 12px; line-height: 16px; color: var(--ink-2); }
 .lineSubMono { font: 12px/16px var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; }
 .lineWarn { font-family: var(--font-sans); color: var(--danger); }

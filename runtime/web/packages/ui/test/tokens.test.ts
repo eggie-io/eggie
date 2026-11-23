@@ -49,7 +49,7 @@ describe("design tokens", () => {
     };
     const os = values("@media (prefers-color-scheme: dark)");
     const forced = values(".om-theme-dark {");
-    expect(os["--page"]).toBe("#15142a");
+    expect(os["--page"]).toBe("#141220");
     expect(forced).toEqual(os);
   });
 });

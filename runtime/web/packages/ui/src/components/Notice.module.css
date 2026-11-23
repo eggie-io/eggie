@@ -3,7 +3,7 @@
   font-size: 14px; line-height: 20px; color: var(--ink);
 }
 .body { flex: 1; min-width: 0; }
-.title { display: block; font-weight: 600; }
+.title { display: block; font-weight: 500; }
 .info { background: var(--info-soft); }
 .info .icon { color: var(--info); }
 .success { background: var(--success-soft); }

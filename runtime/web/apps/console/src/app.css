@@ -2,7 +2,7 @@
 html, body, #root { min-height: 100%; }
 body {
   margin: 0; background: var(--page); color: var(--ink);
-  font: 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased;
+  font: 350 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }

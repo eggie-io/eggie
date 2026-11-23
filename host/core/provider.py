@@ -24,12 +24,28 @@ class VmUnresponsive(RuntimeError):
     code = "vm_unresponsive"
 
 
+class ProviderError(RuntimeError):
+    """A VM operation failed; `code` is the catalogued reason."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class SshSetupError(ValueError):
+    """The SSH shortcut could not be written. A ValueError so existing
+    cleanup that tolerates a stale shortcut keeps catching it."""
+
+    code = "ssh_setup_failed"
+
+
 @dataclass(frozen=True)
 class CheckResult:
     label: str
     ok: bool
     fix: str | None = None
     remedy: str | None = None
+    code: str | None = None
 
 
 @dataclass(frozen=True)

@@ -40,6 +40,10 @@ _MACHINES = {"arm64": "arm64", "aarch64": "arm64",
 class LimaInstallError(RuntimeError):
     """Lima could not be put on disk, or what landed there does not run."""
 
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
+
 
 def _default_runner(argv):
     return subprocess.run(argv, capture_output=True)
@@ -49,7 +53,8 @@ def archive_for(machine: str) -> Image:
     key = _MACHINES.get(machine.lower())
     if key is None:
         raise LimaInstallError(
-            f"there is no Lima build for this Mac's processor ({machine})")
+            f"there is no Lima build for this Mac's processor ({machine})",
+            "lima_unsupported_cpu")
     return ARCHIVES[key]
 
 
@@ -106,7 +111,8 @@ def install(root: Path, *, fetch=_fetch, runner=_default_runner,
         staged_binary = staging / "bin" / "limactl"
         if not staged_binary.is_file():
             raise LimaInstallError(
-                "the Lima download did not contain bin/limactl")
+                "the Lima download did not contain bin/limactl",
+                "lima_archive_invalid")
         staged_binary.chmod(0o755)
         (staging / ".version").write_text(LIMA_VERSION + "\n")
         # Verified here, in staging, and not after the swap: a process killed
@@ -131,7 +137,8 @@ def _extract(archive: Path, into: Path) -> None:
             # it here is the check that is actually missing.
             if member.name.startswith("/") or Path(member.name).is_absolute():
                 raise LimaInstallError(
-                    f"the Lima download contains an absolute path: {member.name}")
+                    f"the Lima download contains an absolute path: {member.name}",
+                    "lima_archive_invalid")
         tar.extractall(into, filter="data")
 
 
@@ -143,11 +150,12 @@ def _require_version(binary: Path, runner) -> None:
     if result.returncode != 0:
         raise LimaInstallError(
             f"the downloaded limactl did not run (exit {result.returncode})"
-            + (f": {output.strip()}" if output.strip() else "."))
+            + (f": {output.strip()}" if output.strip() else "."),
+            "lima_not_runnable")
     if LIMA_VERSION not in output:
         raise LimaInstallError(
             f"the downloaded limactl reports {output.strip()!r}, "
-            f"not version {LIMA_VERSION}")
+            f"not version {LIMA_VERSION}", "lima_wrong_version")
 
 
 def _swap(staging: Path, target: Path) -> None:

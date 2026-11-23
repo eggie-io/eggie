@@ -1,3 +1,5 @@
+import pytest
+
 from pathlib import Path
 from host.providers.wsl2 import Wsl2Provider
 
@@ -452,3 +454,21 @@ def test_only_codex_is_ever_connected_here():
     r = FakeRunner(stdout=_listing("* eggie-vm        Running         2"))
     assert make(r).agent_connected("claude-code") is False
     assert r.calls == []
+
+
+def test_failures_carry_their_catalogued_code(tmp_path):
+    from host.core.provider import ProviderError
+    rootfs = tmp_path / "ubuntu.tar.gz"
+    rootfs.write_bytes(b"")
+    failing = make(FakeRunner(returncode=1), install_dir=tmp_path / "i", rootfs=rootfs)
+    for call, code in ((failing.create, "vm_import_failed"),
+                       (failing.stop, "vm_stop_failed"),
+                       (failing.destroy, "vm_remove_failed"),
+                       (failing.start, "vm_start_failed")):
+        with pytest.raises(ProviderError) as e:
+            call()
+        assert e.value.code == code
+
+    with pytest.raises(FileNotFoundError) as e:
+        make(FakeRunner(), rootfs=tmp_path / "missing").create()
+    assert e.value.code == "rootfs_missing"

@@ -57,3 +57,24 @@ def test_fetch_deletes_the_file_on_checksum_mismatch(tmp_path):
 def test_wsl_image_table_has_both_architectures():
     assert set(WSL_IMAGES) == {"amd64", "arm64"}
     assert all(len(i.sha256) == 64 for i in WSL_IMAGES.values())
+
+
+def test_network_failures_become_download_failed_but_a_full_disk_does_not(tmp_path):
+    import urllib.error
+    from host.core.download import DownloadFailed, fetch
+    from host.core.images import Image
+    image = Image("https://example.invalid/x", "0" * 64)
+
+    for error in (urllib.error.URLError("no route"), TimeoutError("slow"),
+                  ConnectionResetError("reset")):
+        def opener(url, start, error=error):
+            raise error
+        with pytest.raises(DownloadFailed) as e:
+            fetch(image, tmp_path / "x", opener=opener)
+        assert e.value.code == "download_failed"
+
+    def full_disk(url, start):
+        raise OSError(28, "No space left on device")
+    with pytest.raises(OSError) as e:
+        fetch(image, tmp_path / "y", opener=full_disk)
+    assert not isinstance(e.value, DownloadFailed)

@@ -10,6 +10,10 @@ from host.core import constants
 class BootstrapError(RuntimeError):
     """A command run inside the guest failed; carries the guest's own output."""
 
+    def __init__(self, message: str, code: str = "bootstrap_failed"):
+        super().__init__(message)
+        self.code = code
+
 
 # Downloaded in full before it runs: `curl | bash` executes whatever arrived
 # before a dropped connection. python3 covers a rootfs that ships without curl.
@@ -36,7 +40,8 @@ _TERMINAL_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x0
 def _shell_safe(value: str, name: str) -> str:
     if not _SHELL_SAFE.fullmatch(value):
         raise BootstrapError(
-            f"{name} contains characters the VM command line cannot carry: {value!r}")
+            f"{name} contains characters the VM command line cannot carry: {value!r}",
+            "bootstrap_bad_source")
     return value
 
 
@@ -86,4 +91,4 @@ def bootstrap(provider, *, source: str | None = None, repair: bool = False,
     if not _installed(provider):
         raise BootstrapError(
             "the Eggie installer reported success but left no "
-            f"{constants.RUNTIME_MARKER}")
+            f"{constants.RUNTIME_MARKER}", "bootstrap_incomplete")

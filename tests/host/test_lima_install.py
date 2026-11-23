@@ -214,3 +214,19 @@ def test_a_failed_install_leaves_the_previous_one_in_place(tmp_path):
     with pytest.raises(lima_install.LimaInstallError):
         lima_install.install(tmp_path, fetch=broken, runner=FakeRunner())
     assert (tmp_path / "lima" / "bin" / "limactl").is_file()
+
+
+def test_install_failures_carry_catalogued_codes(tmp_path):
+    cases = (
+        (dict(fetch=_fetcher(_good_tarball), runner=FakeRunner(stdout=b"limactl version 1.0.0\n")),
+         "lima_wrong_version"),
+        (dict(fetch=_fetcher(_good_tarball), runner=FakeRunner(returncode=126)),
+         "lima_not_runnable"),
+    )
+    for kwargs, code in cases:
+        with pytest.raises(lima_install.LimaInstallError) as e:
+            lima_install.install(tmp_path, **kwargs)
+        assert e.value.code == code
+    with pytest.raises(lima_install.LimaInstallError) as e:
+        lima_install.archive_for("riscv64")
+    assert e.value.code == "lima_unsupported_cpu"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import urllib.error
 from pathlib import Path
 
 from .images import Image
@@ -14,6 +15,19 @@ _TIMEOUT_SECONDS = 60
 
 class ChecksumMismatch(RuntimeError):
     """The downloaded bytes do not match the expected digest."""
+
+    code = "checksum_mismatch"
+
+
+class DownloadFailed(RuntimeError):
+    """The network dropped, timed out or refused the download."""
+
+    code = "download_failed"
+
+
+# URLError, timeouts and resets are all OSErrors, as is a full disk, which
+# must keep its own type.
+_NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError)
 
 
 def sha256_of(path: Path) -> str:
@@ -44,13 +58,16 @@ def fetch(image: Image, dest: Path, *, opener=_default_opener,
 
     part = dest.with_suffix(dest.suffix + ".part")
     start = part.stat().st_size if part.exists() else 0
-    stream, total = opener(image.url, start)
-    with open(part, "ab") as out:
-        while chunk := stream.read(_CHUNK):
-            out.write(chunk)
-            start += len(chunk)
-            if on_progress:
-                on_progress(start, total)
+    try:
+        stream, total = opener(image.url, start)
+        with open(part, "ab") as out:
+            while chunk := stream.read(_CHUNK):
+                out.write(chunk)
+                start += len(chunk)
+                if on_progress:
+                    on_progress(start, total)
+    except _NETWORK_ERRORS as e:
+        raise DownloadFailed(str(e)) from e
 
     actual_digest = sha256_of(part)
     if actual_digest != image.sha256:

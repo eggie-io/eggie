@@ -47,13 +47,18 @@ class ApiUnavailableError(RuntimeError):
     or nothing listening. Raised instead of a socket error or a bare 401 so
     the first symptom a user sees names the VM, not the transport."""
 
+    code = "api_unreachable"
+
 
 class ApiError(RuntimeError):
-    """A structured failure from the API: its own code and its own sentence."""
+    """A structured failure from the API: its own code and its own sentence.
+    The API's code is `api_code`; `code` is the catalogued one for events."""
 
-    def __init__(self, code: str, message: str, status: int):
+    code = "api_error"
+
+    def __init__(self, api_code: str, message: str, status: int):
         super().__init__(message)
-        self.code = code
+        self.api_code = api_code
         self.message = message
         self.status = status
 
@@ -64,6 +69,8 @@ class JobFailedError(RuntimeError):
     stack reached, for instance), so a caller can tell the failure modes
     apart instead of reporting "it failed"."""
 
+    code = "job_failed"
+
     def __init__(self, message: str, result: dict | None = None):
         super().__init__(message)
         self.result = result or {}
@@ -71,6 +78,8 @@ class JobFailedError(RuntimeError):
 
 class JobTimeoutError(RuntimeError):
     """A job was still running when the client's deadline passed."""
+
+    code = "job_timeout"
 
 
 def read_token(provider: VmProvider) -> str:
@@ -238,7 +247,7 @@ class ApiClient:
             try:
                 return call()
             except ApiError as e:
-                if e.code != "project_busy" or self._monotonic() >= deadline:
+                if e.api_code != "project_busy" or self._monotonic() >= deadline:
                     raise
             self._sleep(BUSY_RETRY_INTERVAL)
 
@@ -268,7 +277,7 @@ class ApiClient:
         try:
             return self.create_project(project_id, **kwargs)
         except ApiError as e:
-            if e.code != "project_exists":
+            if e.api_code != "project_exists":
                 raise
         return self.get_project(project_id_for(project_id))
 

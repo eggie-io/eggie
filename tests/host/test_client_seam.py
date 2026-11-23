@@ -99,7 +99,7 @@ def test_an_unknown_project_comes_back_as_the_apis_own_message(seam):
     client, _runner, _root = seam
     with pytest.raises(ApiError) as excinfo:
         client.get_project("nope")
-    assert excinfo.value.code == "project_not_found"
+    assert excinfo.value.api_code == "project_not_found"
     assert str(excinfo.value) == "no project with id 'nope'"
 
 
@@ -109,7 +109,7 @@ def test_a_logs_failure_reaches_the_caller_with_the_guests_stderr(seam):
     client.ensure_project("blog")
     with pytest.raises(ApiError) as excinfo:
         client.logs("blog")
-    assert excinfo.value.code == "logs_unavailable"
+    assert excinfo.value.api_code == "logs_unavailable"
     assert "no such service: web" in str(excinfo.value)
 
 

@@ -16,6 +16,7 @@ import threading
 from urllib.parse import quote
 
 from host.core import constants
+from host.core.provider import ProviderError
 from host.core.status import probe
 
 from .jobs import JobBusy, JobRegistry
@@ -358,7 +359,7 @@ class DesktopApi:
             # Lima refuses to delete a running instance, and its raw error
             # ("expected status `Stopped`, got `Running`") tells the user nothing.
             if self._provider.running():
-                raise RuntimeError("Stop the kitchen before uninstalling Eggie.")
+                raise ProviderError("vm_running", "Stop the kitchen before uninstalling Eggie.")
             self._provider.destroy()
             install_dir = self._install_dir_factory()
             remove_vm_data(install_dir.parent, install_dir)

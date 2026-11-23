@@ -81,6 +81,8 @@ body {
   overflow:hidden;
   display:flex; flex-direction:column;
 }
+/* "bolder" on a 350 body lands on 700; the design's emphasis is 500. */
+strong, b { font-weight:500; }
 #screen { flex:1; min-height:0; display:flex; flex-direction:column; overflow:auto; }
 
 :focus-visible {

@@ -91,6 +91,25 @@ bash /opt/eggie/runtime/install/install.sh "$(cat /opt/eggie/runtime.version)" -
 Ports: the API listens on `39099`, and all project and console traffic enters through Traefik on
 `39080`. Project URLs look like `http://<name>.local.eggie.space:39080`.
 
+## Connect Claude Code and Codex
+
+```bash
+eggie connect                    # both agents, every kitchen you own, and this computer's VM
+eggie connect --kitchen shop     # one kitchen (repeatable); --local for the VM only
+eggie connect --codex            # one agent; --claude for the other
+eggie connect --remove [...]     # undo, same selectors
+```
+
+For a kitchen it makes this computer's key (`~/.eggie/ssh/eggie_ed25519`, never `~/.ssh`), opens
+the web app to approve it, then writes a `Host eggie-<name>` block in `~/.ssh/config`, an
+`Eggie · <kitchen>` entry in `~/.claude/settings.json` and a connection in
+`~/.codex/codex-app/config.json` (`$CODEX_HOME` when set). Codex is installed on the kitchen if
+missing and signed in through this computer's browser (port 1455 must be free). On a Mac the VM
+gets the same through `Host eggie`; on Windows only Codex needs a step (the VM becomes the default
+WSL distro). Quit and reopen both apps afterwards. `--remove` also asks the service to drop this
+computer's key; a Codex connection already imported stays in Codex Settings → Connections until
+removed there.
+
 ## Idle Claude Code sessions
 
 Claude Code Desktop, connected over SSH, keeps one `claude` process per session alive (so a task

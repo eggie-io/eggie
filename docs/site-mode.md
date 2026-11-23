@@ -170,6 +170,16 @@ mounted on a site only.
   or deleted there. On the sending side a locally deleted pushed project is forgotten, not deleted
   on the service.
 
+## SSH keys from other computers
+
+A computer's key reaches the kitchen only after the owner approves it in the web app
+(`eggie connect`). The API pulls the approved keys from the service at start, every 6 hours and
+when pinged (`POST /api/ssh-keys/sync`, open on the site host with no session, the pull itself
+uses the kitchen's own token) and writes `/opt/eggie/ssh-keys/desired.json`.
+`eggie-ssh-keys.path` sees the change and `lib/ssh-keys-apply.sh` copies the keys to
+`/etc/ssh/eggie-keys/<login>`, which sshd reads after `~/.ssh/authorized_keys`. A key revoked in
+the web app is gone after the next pull.
+
 ## Security
 
 Boundary rows for a site (the full table is in `security.md`):
@@ -178,7 +188,7 @@ Boundary rows for a site (the full table is in `security.md`):
 |---|---|---|
 | 443 | Traefik: console on the site host, `/api`, every project host under the site domain | Anyone; console and `/api` need a session from a service-minted code; projects have only their own auth |
 | 80 | Redirect to 443, and the CA's certificate check at `/.well-known/acme-challenge/<token>` | Anyone; the check is rate-limited (20 a minute per client address, 300 in all) and is unauthenticated |
-| 22 | The login account | Holders of the SSH key the service installed |
+| 22 | The login account | Holders of the SSH key the service installed, and keys the owner approved |
 
 - The service's cloud firewall allows 22, 80 and 443 only. Project `ports:` published by compose
   stay published on the server and rely on that firewall.

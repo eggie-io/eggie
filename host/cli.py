@@ -31,6 +31,20 @@ def _client():
     return _client_factory()
 
 
+def _default_connector(say):
+    import os
+    import socket
+    from pathlib import Path
+
+    from host.core.connect.flow import Connector
+    name = socket.gethostname().removesuffix(".local")
+    return Connector(_client, _provider(), home=Path.home(), env=os.environ,
+                     computer_name=name, say=say)
+
+
+_connector_factory = _default_connector  # tests override this
+
+
 @contextmanager
 def _api_errors():
     """Every failure the API can report is already a sentence written for a
@@ -265,6 +279,31 @@ def destroy(project_id: str):
         typer.echo("Its containers may still be running in the VM: "
                    f"{result.get('detail', '').strip()}", err=True)
         raise typer.Exit(code=1)
+
+
+@app.command()
+def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Code."),
+            codex: bool = typer.Option(False, "--codex", help="Only Codex."),
+            kitchen: list[str] = typer.Option(None, "--kitchen", metavar="NAME",
+                                              help="Only this kitchen; repeatable."),
+            local: bool = typer.Option(False, "--local", help="Only the VM on this computer."),
+            remove: bool = typer.Option(False, "--remove", help="Undo instead.")):
+    """Connect Claude Code and Codex to your kitchens and this computer's VM."""
+    agents = {name for name, on in (("claude", claude), ("codex", codex)) if on}
+    agents = agents or {"claude", "codex"}
+    instances = list(kitchen) if kitchen else ([] if local else None)
+    local = local or not kitchen
+    with _api_errors(), _vm_errors():
+        connector = _connector_factory(typer.echo)
+        lines = (connector.remove if remove else connector.connect)(agents, instances, local)
+    for line in lines:
+        if not line.target:
+            typer.echo(line.text)
+            continue
+        mark = "\u2713" if line.ok else "\u2717"
+        where = f"{line.target} \u00b7 {line.agent}" if line.agent else line.target
+        typer.echo(f"{mark} {where}: {line.text}")
+    raise typer.Exit(code=0 if all(line.ok for line in lines) else 1)
 
 
 @app.command()

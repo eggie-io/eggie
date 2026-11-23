@@ -416,6 +416,8 @@ class LimaProvider:
     # The agents the desktop app can connect to this VM by itself, by their
     # runtime/agents/ id. The console shows the guide's button only for these.
     agent_connections = ("claude-code",)
+    # The ssh host coding agents reach this VM by (setup writes it).
+    local_ssh_alias = ssh_alias.ALIAS
 
     def connect_agent(self, agent_id: str) -> str:
         """Point the agent at the VM. For Claude Code: an "Eggie" entry in its

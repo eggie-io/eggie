@@ -478,6 +478,8 @@ class Wsl2Provider:
     # The agents reach the distro through WSL itself. Codex on Windows runs
     # only in the default distro, so connecting it makes this one the default.
     agent_connections = ("codex",)
+    # No sshd in the distro: the agents reach it through WSL.
+    local_ssh_alias = None
 
     def connect_agent(self, agent_id: str) -> str:
         if agent_id not in self.agent_connections:

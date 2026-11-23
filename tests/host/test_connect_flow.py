@@ -23,6 +23,8 @@ class FakeClient:
         self.request_error = request_error or {}
         self.remove_error = None
         self.calls = []
+        self.fingerprint = "SHA256:abc+/="
+        self.approve_base = "https://app.eggie.io"
 
     def instances(self):
         return self.rows
@@ -31,8 +33,8 @@ class FakeClient:
         self.calls.append(("request", instance_id, public_key, computer_name))
         if instance_id in self.request_error:
             raise self.request_error[instance_id]
-        return {"id": f"req-{instance_id}", "status": "pending",
-                "approve_url": f"https://app.eggie.io/kitchens/connect?request=req-{instance_id}"}
+        return {"id": f"req-{instance_id}", "status": "pending", "fingerprint": self.fingerprint,
+                "approve_url": f"{self.approve_base}/kitchens/connect?request=req-{instance_id}"}
 
     def instance_key_request(self, instance_id, request_id):
         self.calls.append(("poll", instance_id, request_id))
@@ -193,7 +195,7 @@ def test_new_instance_requests_approves_pings_and_writes_all_three(tmp_path):
     assert client.calls[0] == ("request", "id-shop", "ssh-ed25519 AAAA Ihor's Mac", "Ihor's Mac")
     approve = "https://app.eggie.io/kitchens/connect?request=req-id-shop"
     assert w.opened[0] == approve
-    assert any(approve in s and "Shop" in s for s in w.said)
+    assert any(approve in s and "Shop" in s and "SHA256:abc+/=" in s for s in w.said)
     assert w.pinged == ["shop.eggie.app"]
 
     config = w.ssh_config.read_text()
@@ -412,4 +414,22 @@ def test_approved_but_unreachable_says_to_try_again(tmp_path):
 
     assert len(lines) == 1 and not lines[0].ok
     assert lines[0].text.endswith("Run eggie connect again in a minute.")
+    assert not w.ssh_config.exists()
+
+
+@pytest.mark.parametrize("change", [
+    {"fingerprint": "SHA256:someone-else"},
+    {"approve_base": "http://app.eggie.io"},
+])
+def test_request_not_for_this_key_or_not_https_is_refused_unopened(tmp_path, change):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    for name, value in change.items():
+        setattr(client, name, value)
+    w = World(tmp_path, client)
+
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    assert len(lines) == 1 and not lines[0].ok
+    assert w.opened == []
+    assert not any(call[0] == "poll" for call in client.calls)
     assert not w.ssh_config.exists()

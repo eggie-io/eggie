@@ -8,6 +8,7 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.parse
 import webbrowser
 
 from . import ssh
@@ -18,6 +19,7 @@ SETUP_COMMAND = "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INT
 
 _URL = re.compile(r"https://\S+")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+_SIGN_IN_ORIGIN = ("https", "auth.openai.com")
 
 
 def ensure_installed(run, alias: str, setup_command: str = SETUP_COMMAND) -> Probe:
@@ -111,6 +113,8 @@ def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
         if url is None:
             code = proc.wait(timeout=remaining())
             return Probe(False, last or f"codex login exited {code}")
+        if urllib.parse.urlsplit(url)[:2] != _SIGN_IN_ORIGIN:
+            return Probe(False, "Codex printed an unexpected sign-in address; nothing was opened.")
         open_url(url)
         code = proc.wait(timeout=remaining())
     except subprocess.TimeoutExpired:

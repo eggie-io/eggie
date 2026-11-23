@@ -86,7 +86,7 @@ def test_sign_in_opens_the_printed_url():
 
 
 def test_failed_login_reports_not_ok():
-    proc = FakeProc(["https://a.example/x\n", "denied\n", None], returncode=1)
+    proc = FakeProc(["https://auth.openai.com/x\n", "denied\n", None], returncode=1)
     probe = codex_remote.sign_in("eggie-x", popen=lambda a: proc,
                                  open_url=lambda u: None, port_free=lambda p: True)
     assert not probe.ok
@@ -110,7 +110,7 @@ def test_setup_command_matches_the_runtime_manifest():
 
 
 def test_open_url_failure_still_kills_the_tunnel():
-    proc = FakeProc(["https://a.example/x\n"], hang=True)
+    proc = FakeProc(["https://auth.openai.com/x\n"], hang=True)
 
     def boom(url):
         raise RuntimeError("no browser")
@@ -138,3 +138,15 @@ def test_missing_ssh_binary_is_reported():
     probe = codex_remote.sign_in("eggie-x", popen=popen, open_url=lambda u: None,
                                  port_free=lambda p: True)
     assert not probe.ok and "ssh not found" in probe.reason
+
+
+def test_a_sign_in_address_off_openai_is_never_opened():
+    for url in ("https://auth.openai.com.evil.example/x", "https://auth.openai.com:8443/x",
+                "https://auth.openai.com@evil.example/x", "https://evil.example/x"):
+        proc = FakeProc([f"Open {url}\n"], hang=True)
+        opened = []
+        probe = codex_remote.sign_in("eggie-x", popen=lambda a: proc, open_url=opened.append,
+                                     port_free=lambda p: True)
+        assert probe == codex_remote.Probe(
+            False, "Codex printed an unexpected sign-in address; nothing was opened."), url
+        assert opened == [] and proc.killed

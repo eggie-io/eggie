@@ -212,8 +212,15 @@ class Connector:
             if e.api_code != "ssh_key_installed":
                 return ssh.Probe(False, e.message)
         else:
-            url = request["approve_url"]
-            self._say(f"Approve this computer for {target} in your browser: {url}")
+            url, fingerprint = request.get("approve_url") or "", self._fingerprint()
+            if request.get("fingerprint") != fingerprint:
+                return ssh.Probe(False, "The key request is not for this computer's key; "
+                                        "nothing was opened.")
+            if not url.startswith("https://"):
+                return ssh.Probe(False, "The approval page is not an https:// address; "
+                                        "nothing was opened.")
+            self._say(f"Approve this computer for {target} in your browser — "
+                      f"check the page shows {fingerprint}: {url}")
             self._open_url(url)
             status = self._await_decision(api, row["id"], request["id"])
             if status == "denied":

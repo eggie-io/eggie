@@ -376,11 +376,14 @@ def test_instance_key_calls_quote_fingerprint():
     assert opener.calls[-1].path == "/instances/i1/ssh-keys?fingerprint=SHA256%3Aa%2Bb%2Fc%3D"
 
 
-def test_old_api_404_reads_update_eggie():
+@pytest.mark.parametrize("body", [
+    b'{"error": {"code": "not_found", "message": "Not Found"}}',  # the API's missing route
+    b'{"detail": "Not Found"}',
+])
+def test_old_api_404_reads_update_eggie(body):
     def missing_route(call):
         return urllib.error.HTTPError("http://api/x", 404, "Not Found",
-                                      email.message.Message(),
-                                      io.BytesIO(b'{"detail": "Not Found"}'))
+                                      email.message.Message(), io.BytesIO(body))
 
     api, _ = client(missing_route)
     with pytest.raises(ApiError) as old:

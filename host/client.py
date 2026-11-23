@@ -141,10 +141,9 @@ def _api_error(exc: urllib.error.HTTPError) -> ApiError:
                           exc.code)
 
 
-_API_TOO_OLD = ApiError(
-    "api_too_old",
-    "Update Eggie in the virtual machine (Settings \u2192 Update) and try again.",
-    404)
+_API_TOO_OLD = "Update Eggie in the virtual machine (Settings \u2192 Update) and try again."
+# The code a 404 carries when no route matched; the relay's own 404s have their own.
+_NO_ROUTE = ("not_found", "http_error")
 
 
 # Never uploaded: a repository's object store, dependency trees and caches are
@@ -259,14 +258,13 @@ class ApiClient:
 
     def _instance_call(self, method: str, path: str,
                        payload: dict | None = None) -> dict:
-        """A 404 without Eggie's error body is FastAPI's missing route: the VM's
-        API predates these calls."""
+        """A 404 for a route the API does not have means the VM's API predates
+        these calls."""
         try:
             return self._call(method, path, payload)
         except ApiError as e:
-            if e.status == 404 and e.api_code == "http_error":
-                raise ApiError(_API_TOO_OLD.api_code, _API_TOO_OLD.message,
-                               404) from None
+            if e.status == 404 and e.api_code in _NO_ROUTE:
+                raise ApiError("api_too_old", _API_TOO_OLD, 404) from None
             raise
 
     # -- routes ------------------------------------------------------------

@@ -503,6 +503,19 @@ def test_install_appends_the_site_lines_after_writing_env():
         "the site domain becomes EGGIE_DOMAIN by appending, never by rewriting"
 
 
+def test_a_site_hands_its_service_urls_to_the_api_container():
+    # .env is rewritten on every run, so the service URLs must be appended in the
+    # same site block, and stack.yml must pass them on, or the API calls production.
+    commands = _commands()
+    for name in ("EGGIE_CLOUD_URL", "EGGIE_WEB_URL"):
+        (line,) = [l for l in commands if f"'{name}=%s" in l]
+        assert ">> /opt/eggie/.env" in line
+        assert _index_of("EGGIE_VERSION=%s") < _index_of(f"'{name}=%s") < _index_of(" up -d")
+    api_env = yaml.safe_load(STACK_YML.read_text())["services"]["api"]["environment"]
+    assert "EGGIE_CLOUD_URL=${EGGIE_CLOUD_URL:-}" in api_env
+    assert "EGGIE_WEB_URL=${EGGIE_WEB_URL:-}" in api_env
+
+
 def test_every_stack_compose_command_carries_the_site_override():
     stack_lines = [l for l in _commands() if f"compose -f {STACK}" in l]
     assert len(stack_lines) >= 3, stack_lines

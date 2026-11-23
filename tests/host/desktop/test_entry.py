@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from host.core.install import InstallState
-from host.desktop.settings import Settings
+from host.desktop.settings import FIRST_LAUNCH_SENT, Settings
 from host.desktop.__main__ import WEBVIEW_MISSING, run, ui_dir
 
 
@@ -41,6 +41,8 @@ class FakeProvider:
 
 
 class FakeDesktop:
+    login_launch_reported_late = False
+
     def __init__(self, primary=True, tray_fails=False):
         self._primary, self._tray_fails = primary, tray_fails
         self.tray_made, self.login_watch = None, None
@@ -317,3 +319,47 @@ def test_a_tray_failure_is_recorded_in_the_log_file(tmp_path):
     _run(tmp_path, FakeProvider(exists=True), FakeDesktop(tray_fails=True),
          log_path=tmp_path / "eggie.log")
     assert "pystray" in (tmp_path / "eggie.log").read_text()
+
+
+def test_a_second_instance_sends_nothing_and_keeps_the_flag(tmp_path, events):
+    _run(tmp_path, FakeProvider(), FakeDesktop(primary=False), events=events.sender)
+    assert events.sent() == []
+    assert not Settings(tmp_path / "settings.json").get(FIRST_LAUNCH_SENT)
+
+
+def test_a_launch_is_reported_once_the_app_owns_the_instance(tmp_path, events):
+    Settings(tmp_path / "settings.json").set(FIRST_LAUNCH_SENT, True)
+    _run(tmp_path, FakeProvider(), background=True, events=events.sender)
+    assert events.sent() == [("app_launch", {"background": True})]
+
+
+def test_a_mac_login_launch_is_reported_as_background(tmp_path, events):
+    # The login signal arrives only once the loop runs, after the launch was held.
+    class MacLike(FakeDesktop):
+        login_launch_reported_late = True
+
+    desktop = MacLike()
+    Settings(tmp_path / "settings.json").set(FIRST_LAUNCH_SENT, True)
+    run(FakeProvider(), InstallState(tmp_path / "s.json"),
+        create=lambda **kw: FakeWindow(), start=lambda **kw: desktop.login_watch(),
+        app_update_fn=_no_update_check, desktop=desktop,
+        settings=Settings(tmp_path / "settings.json"), events=events.sender)
+    assert events.sent(at_least=1) == [("app_launch", {"background": True})]
+
+
+def test_a_window_that_cannot_open_reports_and_flushes(tmp_path, slow_events):
+    # A slow service: without the flush the process would end before the post.
+    events = slow_events
+    Settings(tmp_path / "settings.json").set(FIRST_LAUNCH_SENT, True)
+
+    def create(**kwargs):
+        raise RuntimeError("WebView2 runtime not found")
+
+    code = run(FakeProvider(), InstallState(tmp_path / "s.json"),
+               create=create, start=lambda **kwargs: None,
+               app_update_fn=_no_update_check, desktop=FakeDesktop(),
+               settings=Settings(tmp_path / "settings.json"), events=events.sender)
+
+    assert code == 3
+    assert [(b["event"], b["properties"].get("error_code")) for b in events.bodies] == [
+        ("app_launch", None), ("app_error", "webview_unavailable")]

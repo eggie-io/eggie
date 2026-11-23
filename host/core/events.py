@@ -33,6 +33,11 @@ _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 # keep "~/x", "http://h" and "and/or" intact.
 _PATH = re.compile(r"\b[A-Za-z]:[\\/]\S*|(?<![\w~:.])/\S*")
 _MAX_MESSAGE = 200
+_CONTEXT_FIELDS = {
+    "app_version": (re.compile(r"[0-9A-Za-z.+-]+"), 32),
+    "os_version": (re.compile(r"[0-9A-Za-z._-]+"), 32),
+    "arch": (re.compile(r"[0-9A-Za-z_-]+"), 16),
+}
 
 
 def error_code(exc: BaseException) -> str:
@@ -74,6 +79,14 @@ def sanitize(text: str, *, home: str, user: str) -> str:
     return " ".join(text.split())[:_MAX_MESSAGE]
 
 
+def clip_context(field: str, text: str) -> str:
+    # The service rejects a body whose context breaks its pattern, so a value
+    # the OS reports oddly keeps only its leading valid run.
+    pattern, limit = _CONTEXT_FIELDS[field]
+    found = pattern.match(str(text).strip())
+    return found.group(0)[:limit] if found else "unknown"
+
+
 def events_base(*, frozen: bool, env: Mapping[str, str]) -> str | None:
     if frozen:
         return SERVICE_API_URL
@@ -99,6 +112,10 @@ class EventSender:
         self._queue: queue.Queue[bytes] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+
+    @property
+    def context(self) -> dict[str, str]:
+        return dict(self._context)
 
     def send(self, event: str, properties: dict | None = None) -> None:
         if not self.enabled:

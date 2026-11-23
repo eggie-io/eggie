@@ -29,6 +29,9 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
   named by the Doctor modal. **Never `print(..., file=sys.stderr)` here**: the Windows build is
   windowed, so `sys.stderr` is `None` and the line is lost. Use `logging.getLogger(__name__)`;
   stderr is mirrored while one exists. Job crashes land here with their traceback.
+- `telemetry.py` — when the app sends its anonymous events (launch, setup run, job and uncaught
+  errors) through `host/core/events.py`. `start_sender` builds the sender for both front doors,
+  `main()` and `cli.setup`; `events=None` everywhere means send nothing.
 - `lifecycle.py` / `settings.py` — pure launch-mode decision and the `settings.json` flags that
   must outlive the VM (`install-state.json` is deleted on reset).
 - `ui/` — HTML/CSS/JS and bundled fonts. Must work fully offline. This is **not** the browser
@@ -89,6 +92,10 @@ write anything a page chose would need a local confirmation again. A new connect
   termination and blocks logout.
 - **macOS tray callbacks run on a daemon thread.** pywebview's Cocoa window methods dispatch to
   the main thread and wait, so calling them from the main thread deadlocks.
+- **macOS learns of a login launch only after `webview.start()`.** SMAppService passes no
+  `--background`, so `report_launch` holds `app_launch` on a thread until
+  `Controller.login_launched` is set or 10 s pass (`login_launch_reported_late`). A resumed or
+  tray-less launch never registers the watch, so it times out as `background: false`.
 - **Quit is not a job.** `JobRegistry` runs one job; Quit anyway must work while an install holds
   it. Quit exits even when stopping the VM fails.
 - **Single instance on Windows is a per-user named pipe without an authkey.** The key

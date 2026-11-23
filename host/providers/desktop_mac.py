@@ -6,8 +6,15 @@ function-local so the suite imports this on Linux.
 """
 from __future__ import annotations
 
+import platform
+
+from ..core.events import clip_context
+
 
 class MacDesktop:
+    # SMAppService passes no --background; the Apple event says so after start().
+    login_launch_reported_late = True
+
     def __init__(self, login_items=None):
         # Resolved lazily so importing this module never needs ServiceManagement.
         self._login_items = login_items
@@ -52,3 +59,8 @@ class MacDesktop:
         """LaunchServices keeps one instance of a .app; a second open arrives
         as the reopen event, which the tray turns into Open Eggie."""
         return True
+
+    def system_info(self) -> dict[str, str]:
+        return {"os": "macos",
+                "os_version": clip_context("os_version", platform.mac_ver()[0]),
+                "arch": clip_context("arch", platform.machine())}

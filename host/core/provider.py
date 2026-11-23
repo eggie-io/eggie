@@ -127,6 +127,11 @@ class DesktopPlatform(Protocol):
     def let_session_end_close(self, on_session_end: Callable[[], None]) -> None: ...
     # Called once the native window exists, before it first shows.
     def style_title_bar(self, window) -> None: ...
+    # {"os": "windows" | "macos", "os_version", "arch"} for anonymous events.
+    def system_info(self) -> dict[str, str]: ...
+    # True where a login launch is known only once the loop runs (macOS), so
+    # the launch event has to wait for watch_login_launch's callback.
+    login_launch_reported_late: bool
 
 
 @runtime_checkable

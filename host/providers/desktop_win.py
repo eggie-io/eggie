@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import getpass
 import logging
+import platform
 from pathlib import Path
+
+from ..core.events import clip_context
 
 from . import registry
 from .theme_win import ThemeWatch
@@ -47,6 +50,8 @@ def _gui_exe(exe_path: str) -> str:
 
 
 class WindowsDesktop:
+    login_launch_reported_late = False
+
     def __init__(self, registry_writer=registry.write_value,
                  registry_reader=registry.read_value,
                  registry_deleter=registry.delete_value,
@@ -117,3 +122,8 @@ class WindowsDesktop:
             self._delete_registry(STARTUP_APPROVED_KEY, AUTOSTART_VALUE_NAME)
         else:
             self._delete_registry(RUN_KEY, AUTOSTART_VALUE_NAME)
+
+    def system_info(self) -> dict[str, str]:
+        return {"os": "windows",
+                "os_version": clip_context("os_version", platform.version()),
+                "arch": clip_context("arch", platform.machine())}

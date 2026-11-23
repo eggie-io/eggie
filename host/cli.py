@@ -294,12 +294,19 @@ def setup(resume: bool = typer.Option(False, "--resume"),
         )
 
     if not headless:
+        import os
+
         from host.desktop.__main__ import run
         from host.desktop.log import log_file
-        raise typer.Exit(code=run(provider, state, desktop=_desktop(),
+        from host.desktop.telemetry import start_sender
+
+        # The installed app's own front door: its shortcut and Run value call `setup`.
+        desktop = _desktop()
+        events = start_sender(desktop, frozen=getattr(_sys, "frozen", False), env=os.environ)
+        raise typer.Exit(code=run(provider, state, desktop=desktop,
                                   steps_factory=build_steps,
                                   resumed=resume, background=background,
-                                  log_path=log_file(root)))
+                                  log_path=log_file(root), events=events))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is

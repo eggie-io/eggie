@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -78,13 +79,17 @@ def _default_start(**kwargs):
 
 def run(provider, state, *, desktop, create=_default_create, start=_default_start,
         resumed: bool = False, background: bool = False, steps_factory=None,
-        app_update_fn=None, settings=None, log_path=None) -> int:
+        app_update_fn=None, settings=None, log_path=None, events=None) -> int:
     from .api import DesktopApi
     from .controller import Controller
     from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
     from .settings import Settings
     from .shell import Shell, guarded
+    from . import telemetry
     from host.core import constants
+    from host.core.events import EventSender
+
+    events = events or EventSender(None, {})
 
     if settings is None:
         from host.providers import default_install_dir
@@ -97,13 +102,19 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     controller = Controller(provider, desktop, settings, shell, push=shell.push)
     if not desktop.single_instance(controller.show, announce=not background):
         return 0
+    try:
+        telemetry.report_launch(events, settings, background=background,
+                                late=desktop.login_launch_reported_late,
+                                wait=controller.login_launched.wait)
+    except Exception:
+        log.warning("could not report the launch", exc_info=True)
 
     mode = launch_mode(resume=resumed, background=background, vm_exists=provider.exists)
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
                      window_shown_once=lambda: controller.shown_once,
-                     log_path=log_path, desktop=desktop)
+                     log_path=log_path, desktop=desktop, events=events)
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
@@ -139,8 +150,10 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
         # ordinary bugs -- without it, a typo'd kwarg reads to the user as
         # "install WebView2", which would not help and would not be true.
         log.error("%s\n(technical detail: %r)", WEBVIEW_MISSING, e)
+        telemetry.app_error(events, "webview_unavailable", e, **telemetry.who())
         if tray is not None:
             tray.stop()
+        events.flush(2.0)
         return 3
 
     shell.window = window
@@ -162,6 +175,7 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     finally:
         if tray is not None:
             tray.stop()
+        events.flush(2.0)
     return 0
 
 
@@ -169,6 +183,8 @@ def main(argv: list[str] | None = None) -> int:
     from host.core import constants
     from host.core.install import VERIFY_TEMPLATE, InstallState, default_steps
     from host.providers import default_install_dir, get_desktop, get_provider
+
+    from .telemetry import start_sender
 
     parser = argparse.ArgumentParser(prog="eggie-desktop")
     # Written by provider.register_resume() into Windows RunOnce. The flag
@@ -192,9 +208,12 @@ def main(argv: list[str] | None = None) -> int:
             exe_path=sys.executable,
         )
 
-    return run(provider, state, desktop=get_desktop(), steps_factory=build_steps,
+    desktop = get_desktop()
+    return run(provider, state, desktop=desktop, steps_factory=build_steps,
                resumed=args.resume, background=args.background,
-               log_path=logfile.log_file(root))
+               log_path=logfile.log_file(root),
+               events=start_sender(desktop, frozen=getattr(sys, "frozen", False),
+                                   env=os.environ))
 
 
 if __name__ == "__main__":

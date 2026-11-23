@@ -13,15 +13,18 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import time
 from urllib.parse import quote
 
 from host.core import constants
+from host.core.events import EventSender, error_code
 from host.core.provider import ProviderError
 from host.core.status import probe
 
 from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
+from .telemetry import app_error, who
 from .view import (agent_offer, connectable, console_path, progress_event,
                    route_for, rows_for, screen_for, terminal_event)
 
@@ -38,8 +41,11 @@ class DesktopApi:
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
                  settings=None, autostart_exe=_FROZEN, window_shown_once=None,
-                 stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None):
+                 stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None,
+                 events: EventSender | None = None, clock=time.monotonic):
         self._provider = provider
+        self._events = events or EventSender(None, {})
+        self._clock = clock
         self._desktop = desktop
         self._state = state
         self._probe = probe_fn
@@ -47,7 +53,7 @@ class DesktopApi:
         self._client_factory = client_factory or self._default_client_factory
         self._install_dir_factory = install_dir_factory or self._default_install_dir
         self._push = push
-        self.jobs = JobRegistry(push)
+        self.jobs = JobRegistry(push, on_crash=self._report_crash)
         self._local_url = local_url or (lambda: None)
         self._home_seen = False
         self._window_shown_once = window_shown_once or (lambda: True)
@@ -84,6 +90,9 @@ class DesktopApi:
         from host.core import app_update
         return app_update.check(current=constants.APP_VERSION,
                                 asset_name=self._provider.installer_asset)
+
+    def _report_crash(self, kind: str, exc: BaseException) -> None:
+        app_error(self._events, f"{kind}/{error_code(exc)}", exc, **who())
 
     @staticmethod
     def _default_quit():
@@ -185,6 +194,13 @@ class DesktopApi:
             added = [a for a in agents if self._added(a)]
             if added:
                 url += f"&added={','.join(added)}"
+        if self._events.enabled:
+            # The console sends its own onboarding events under this session.
+            context = self._events.context
+            for key, value in (("sid", self._events.session_id),
+                               ("app", context["app_version"]), ("os", context["os"]),
+                               ("osv", context["os_version"]), ("arch", context["arch"])):
+                url += f"&{key}={quote(value, safe='')}"
         # The page navigates itself: pywebview resolves this call's promise
         # with evaluate_js after we return, and a page loaded meanwhile lacks
         # the callback.
@@ -221,7 +237,7 @@ class DesktopApi:
         return getattr(self._provider, "agent_connections", ())
 
     def start_install(self) -> dict:
-        from host.core.install import run_install
+        from host.core.install import DeadEnd, InstallError, RebootRequired, run_install
 
         # A fresh list per run: the steps close over provider state
         # (provider.rootfs is assigned while the list is built), so re-running
@@ -232,10 +248,20 @@ class DesktopApi:
             def report(progress):
                 emit(progress_event(progress))
 
+            self._events.send("env_setup_started")
+            started = self._clock()
             try:
                 run_install(steps, self._state, report)
             except Exception as e:
+                if isinstance(e, (InstallError, DeadEnd)):
+                    step = e.step if isinstance(e, InstallError) else "preflight"
+                    self._events.send("env_setup_step_failed",
+                                      {"step": step, "error_code": error_code(e)})
+                elif not isinstance(e, RebootRequired):
+                    self._report_crash("install", e)
                 return terminal_event(e)
+            self._events.send("env_setup_succeeded",
+                              {"duration_sec": int(self._clock() - started)})
             try:
                 turn_on_autostart_once(
                     self._settings, available=self._autostart_exe is not None,
@@ -394,6 +420,8 @@ class DesktopApi:
             path = download.fetch(Image(release.url, release.sha256), dest,
                                   opener=download._default_opener, on_progress=on_progress)
             self._provider.launch_installer(path)
+            # The installer may end this process before run() gets to flush.
+            self._events.flush(2.0)
             self._quit_app()
             return {"type": "done"}
 

@@ -281,7 +281,7 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
     provider = StubProvider()
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None):
+                 log_path=None, desktop=None, events=None):
         captured["provider"] = provider
         captured["a"] = steps_factory()
         captured["b"] = steps_factory()
@@ -314,7 +314,7 @@ def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None):
+                 log_path=None, desktop=None, events=None):
         captured["resumed"] = resumed
         captured["background"] = background
         return 0
@@ -353,7 +353,7 @@ def test_setup_background_reaches_the_window(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None):
+                 log_path=None, desktop=None, events=None):
         captured["background"] = background
         return 0
 
@@ -395,3 +395,29 @@ def test_uninstall_purge_forgets_the_desktop_settings(monkeypatch):
     runner.invoke(cli.app, ["uninstall", "--purge"])
 
     assert Settings(default_install_dir().parent / "settings.json").get(AUTOSTART_SET_ONCE) is False
+
+
+def test_the_installed_app_reaches_the_window_with_events_on(monkeypatch):
+    # The frozen app's shortcut and Run value enter through `setup`, not __main__.
+    import sys
+    import threading
+
+    class InfoDesktop(StubDesktop):
+        def system_info(self):
+            return {"os": "windows", "os_version": "10.0.26100", "arch": "AMD64"}
+
+    captured = {}
+
+    def fake_run(provider, state, *, events=None, **kwargs):
+        captured["events"] = events
+        return 0
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    monkeypatch.setattr(threading, "excepthook", threading.excepthook)
+    monkeypatch.setattr(cli, "_provider_factory", lambda: StubProvider())
+    monkeypatch.setattr(cli, "_desktop_factory", InfoDesktop)
+    monkeypatch.setattr("host.desktop.__main__.run", fake_run)
+    result = runner.invoke(cli.app, ["setup"])
+    assert result.exit_code == 0
+    assert captured["events"].enabled

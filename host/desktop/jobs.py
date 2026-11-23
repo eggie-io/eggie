@@ -25,9 +25,11 @@ class JobBusy(RuntimeError):
 
 class JobRegistry:
     def __init__(self, push: Callable[[dict], None], *,
+                 on_crash: Callable[[str, BaseException], None] | None = None,
                  clock: Callable[[], float] = time.monotonic,
                  min_interval: float = 0.1):
         self._push = push
+        self._on_crash = on_crash
         self._clock = clock
         self._min_interval = min_interval
         self._lock = threading.Lock()
@@ -86,6 +88,11 @@ class JobRegistry:
             result = work(emit)
         except Exception as e:
             log.exception("%s job crashed", kind)
+            if self._on_crash is not None:
+                try:
+                    self._on_crash(kind, e)
+                except Exception:
+                    log.warning("could not report the %s crash", kind, exc_info=True)
             # Never let a worker die into a daemon thread's silence: the
             # screen that started it would spin forever.
             if pending[0] is not None:

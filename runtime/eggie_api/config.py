@@ -64,8 +64,8 @@ class ApiConfig:
     # Projects live under `domain`, which the installer sets alongside it.
     site_host: str | None = None
     web_url: str = "https://app.eggie.io"
-    # Where the service-issued certificate lands; Traefik watches it.
-    tls_dir: Path = Path(f"{constants.GUEST_ROOT}/tls")
+    # Where service-issued certificates and Traefik's routing files land.
+    edge_dir: Path = Path(f"{constants.GUEST_ROOT}/edge")
     # A token pair the service leaves before first boot, imported once.
     account_seed: Path = Path(f"{constants.GUEST_ROOT}/account.json")
     # Extra trust anchor for an instance's certificate (a dev CA); the system
@@ -102,7 +102,8 @@ class ApiConfig:
                                       f"{constants.GUEST_ROOT}/secrets")),
             max_upload_bytes=int(env.get("EGGIE_MAX_UPLOAD_BYTES",
                                          16 * 1024 ** 3)),
-            cloud_url=env.get("EGGIE_CLOUD_URL", "https://app.eggie.io/api"),
+            # stack.yml hands over an empty value when the install named no service.
+            cloud_url=env.get("EGGIE_CLOUD_URL") or "https://app.eggie.io/api",
             stack_file=Path(env.get("EGGIE_STACK_FILE",
                                     f"{constants.GUEST_ROOT}/stack.yml")),
             tunnel_token_path=Path(env.get("EGGIE_TUNNEL_TOKEN",
@@ -118,8 +119,8 @@ class ApiConfig:
             update_dir=Path(env.get("EGGIE_UPDATE_DIR", constants.UPDATE_DIR)),
             runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
-            web_url=env.get("EGGIE_WEB_URL", "https://app.eggie.io"),
-            tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),
+            web_url=env.get("EGGIE_WEB_URL") or "https://app.eggie.io",
+            edge_dir=Path(env.get("EGGIE_EDGE_DIR", f"{constants.GUEST_ROOT}/edge")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",
                                       f"{constants.GUEST_ROOT}/account.json")),
             instance_ca_file=(Path(env["EGGIE_INSTANCE_CA_FILE"])

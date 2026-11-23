@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import ApiConfig
+from .domain.edge import ProjectEdge, covered_hosts
+from .domain.overlay import host_for
 from .errors import EggieError
 from .infra import connect, disk
 from .infra.cloud import Cloud
@@ -19,9 +22,11 @@ from .infra.tunnel import TunnelClient
 from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
-from .services.certificate import Certificate
+from .services.certificates import Certificates
 from .services.desktop_events import DesktopEvents
 from .services.clone import CloneService
+from .services.domains import Domains
+from .services.edge import Edge
 from .services.files import FileService
 from .services.github_link import GitHubLink
 from .services.instance_projects import InstanceProjects
@@ -45,6 +50,24 @@ from .services.uploads import UploadService
 
 
 log = logging.getLogger("eggie.api")
+
+
+def _project_edges(loader: ProjectLoader, projects) -> Callable[[Collection[str]], dict]:
+    def edges(ids: Collection[str]) -> dict[str, ProjectEdge]:
+        out = {}
+        for pid in ids:
+            row = projects.get(pid)
+            if row is None:
+                continue
+            try:
+                webs = loader.load(pid).webs
+            except (EggieError, OSError, UnicodeError):
+                continue
+            if webs:
+                out[pid] = ProjectEdge(host_for(pid, webs[0], row["domain"]),
+                                       f"{pid}--{webs[0].service}")
+        return out
+    return edges
 
 
 def _start_quietly(lifecycle: LifecycleService, project_id: str) -> None:
@@ -80,7 +103,9 @@ class Services:
     instances: Instances
     agents: AgentStatus
     runtime_update: RuntimeUpdate
-    certificate: Certificate | None
+    certificates: Certificates | None
+    domains: Domains | None
+    edge: Edge | None
     sync: SyncLoop
     system: SystemService
     desktop_events: DesktopEvents
@@ -124,14 +149,37 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
     # Looked up at sign-out, not bound now: a public double without
     # release_all then fails there (caught and logged), not at build time.
     account.before_sign_out = lambda: public.release_all()
-    certificate = None
+    certificates = edge = domains = None
     if config.site_host:
-        certificate = Certificate(
-            config.tls_dir, account, cloud,
-            names=(config.site_host, config.domain, f"*.{config.domain}"))
+        certificates = Certificates(config.edge_dir, account, cloud)
+
+        def domains_changed() -> None:
+            # `edge` and `sync` are bound below, before anything can call this.
+            try:
+                edge.write()
+            except Exception:
+                log.exception("writing the edge file failed")
+            sync.wake()
+
+        domains = Domains(repos.domains, loader, account, cloud, config,
+                          covered=lambda: covered_hosts(certificates.installed()),
+                          changed=domains_changed, removed=certificates.recheck)
+        edge = Edge(config.edge_dir, certificates, domains.rows,
+                    _project_edges(loader, repos.projects))
+        loader.primary_url = domains.primary_url
     passes = [public.reconcile, lambda: run_pass(account, cloud, repos)]
-    if certificate is not None:
-        passes.append(certificate.refresh)
+    if edge is not None:
+        def edge_pass() -> None:
+            # Each step on its own: certificates and the file still follow a failed domain sync.
+            for step in (domains.sync,
+                         lambda: certificates.refresh(domains.certificate_ids()),
+                         edge.write):
+                try:
+                    step()
+                except Exception:
+                    log.exception("edge pass step %s failed",
+                                  getattr(step, "__qualname__", step))
+        passes.append(edge_pass)
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
     sync = SyncLoop(passes)
@@ -158,12 +206,15 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
             Path(config.transfers_root))["free_bytes"]),
         sleep=sleep or time.sleep, timer=timer)
     transfers.sweep()
+    domain_hooks = {} if domains is None else {
+        "domains_for": domains.summary, "forget_domains": domains.forget_project}
     return Services(
         config=config, repos=repos, runner=runner, jobs=jobs, locks=locks,
         loader=loader,
         projects=ProjectService(config, runner, loader, repos.projects, secrets,
                                 jobs, locks, uploads, public, http_probe,
-                                sync.wake, push.summary, repos.pushed_projects),
+                                sync.wake, push.summary, repos.pushed_projects,
+                                **domain_hooks),
         lifecycle=lifecycle,
         clone=CloneService(config, runner, loader, repos.projects, locks,
                            github_link, lifecycle, sync.wake),
@@ -175,5 +226,5 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         instances=instances,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificate=certificate, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),
+        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),
         desktop_events=desktop_events or DesktopEvents(cloud))

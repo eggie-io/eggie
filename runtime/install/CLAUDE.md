@@ -9,7 +9,8 @@ Run as root inside the VM (WSL, Lima, or a cloud VM). Tests: `tests/runtime/test
 Hosts fetch it from **`main`**, not from a tag, so an edit here reaches every installed host at once.
 Keep backward compatible: its env vars (`EGGIE_RUNTIME_REPO`, `EGGIE_RUNTIME_REF`,
 `EGGIE_RUNTIME_REPAIR`, `EGGIE_RUNTIME_API`, `EGGIE_RUNTIME_UPDATE`, `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (site mode, both or neither,
-persisted to `/opt/eggie/site.env`)), the marker path
+persisted to `/opt/eggie/site.env`), `EGGIE_CLOUD_URL`/`EGGIE_WEB_URL` (site mode only, the creating service's
+addresses, https, persisted to `site.env`)), the marker path
 `/opt/eggie/runtime.version`, and its exit semantics.
 
 Flow: `resolve_ref` (explicit `EGGIE_RUNTIME_REF` → installed ref on repair → highest `runtime-v*`
@@ -104,10 +105,12 @@ and keeps the last answer. `eggie-update-now.path` fires when the API bumps `req
 ## Site mode
 
 `get.sh` writes `/opt/eggie/site.env` from `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN` (both or neither,
-bare lowercase hostnames); a run without them keeps the file. `install.sh` sources it: appends
-`EGGIE_SITE_HOST`, `EGGIE_DOMAIN`, `EGGIE_API_BIND=127.0.0.1` and `EGGIE_EDGE_BIND=127.0.0.1` to `.env`, adds
+bare lowercase hostnames), plus `EGGIE_CLOUD_URL`/`EGGIE_WEB_URL` when given (a non-production
+service); a run without the site names keeps the file. `install.sh` sources it: appends
+`EGGIE_SITE_HOST`, `EGGIE_DOMAIN`, `EGGIE_API_BIND=127.0.0.1`, `EGGIE_EDGE_BIND=127.0.0.1` and the
+service URLs (when set; `stack.yml` passes them to the api, empty means production) to `.env`, adds
 `-f $RUNTIME_DIR/stack.site.yml` (`$SITE_STACK`, unquoted on purpose) to the stack's compose
-commands, installs `site/tls.yml` into `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik
+commands, creates `/opt/eggie/edge` (`2770 root:docker`: the API writes `edge.yml` and the certificates, Traefik
 reads), enables the metadata guard unit (step 7b) and records `"vm": "site"`. `snapshot-prep.sh` strips per-instance state before a server is
 imaged (`tests/runtime/test_snapshot_prep.py`).
 

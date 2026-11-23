@@ -8,6 +8,11 @@ from collections import deque
 log = logging.getLogger("eggie.api")
 
 
+def client_address(forwarded_for: str, peer: str) -> str:
+    # Traefik replaces a client's own X-Forwarded-For with the address it came from.
+    return forwarded_for.split(",", 1)[0].strip() or peer
+
+
 class Window:
     """At most `limit` takes in any rolling `seconds`. Logs one warning per
     run of refusals, not one per refused request."""

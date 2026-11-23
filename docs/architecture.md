@@ -121,8 +121,8 @@ State lives in `/opt/eggie/state.db` (sqlite). Slow compose work runs as in-proc
 The runtime also runs on a server the Eggie service provisions. Nothing in the host changes: the
 service creates the server from a snapshot, its DNS rows and its certificate, seeds the account
 token through cloud-init, and runs `get.sh` with `EGGIE_SITE_HOST`/`EGGIE_SITE_DOMAIN`. Inside the
-VM, `stack.site.yml` puts Traefik on 443 with the certificate from `/opt/eggie/tls`
-(`services/certificate.py` keeps it current), `rest/auth.py` admits the site host, and
+VM, `stack.site.yml` puts Traefik on 443 with the certificates in `/opt/eggie/edge`
+(`services/certificates.py` keeps them current and `services/edge.py` writes Traefik's `edge.yml`), `rest/auth.py` admits the site host, and
 `services/site.py` redeems web-app handoff codes with the service. A non-web service of a project
 gets `<service>--<id>.<site domain>`. A console without a session sends the person to the web app's
 `/kitchens/open`, which signs them in there and returns with a handoff code; the top bar's switcher
@@ -196,10 +196,10 @@ host/              desktop app: providers, setup, ApiClient, desktop window
 packaging/         Windows installer, macOS pkg, image build script
 runtime/install/   get.sh, install.sh, boot updater, root helpers, systemd units
 runtime/stack.yml  the compose stack inside the VM
-runtime/stack.site.yml  the override for a site: Traefik on 443 with TLS from /opt/eggie/tls
+runtime/stack.site.yml  the override for a site: Traefik on 443 with TLS from /opt/eggie/edge
 runtime/install/snapshot-prep.sh  strips per-instance state before a server is imaged
 runtime/eggie_api/services/site.py  site sign-in: redeems web-app handoff codes with the service
-runtime/eggie_api/services/certificate.py  fetches and renews the site certificate
+runtime/eggie_api/services/certificates.py  fetches and renews the site's certificates
 runtime/eggie_api/ the API
 runtime/web/       the browser console
 runtime/cli/       the in-VM `eggie` command

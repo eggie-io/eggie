@@ -67,6 +67,9 @@ services:
       - EGGIE_EDGE_PORT=${EGGIE_EDGE_PORT:-39080}
       - EGGIE_GITHUB_CLIENT_ID=${EGGIE_GITHUB_CLIENT_ID:-Ov23lie5k9VqSCKI52Ci}
       - EGGIE_SITE_HOST=${EGGIE_SITE_HOST:-}
+      # Empty means production (the API's default); a site names the service that created it.
+      - EGGIE_CLOUD_URL=${EGGIE_CLOUD_URL:-}
+      - EGGIE_WEB_URL=${EGGIE_WEB_URL:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same path on both sides, not negotiable: the api service parses

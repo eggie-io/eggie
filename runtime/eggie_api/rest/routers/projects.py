@@ -36,7 +36,8 @@ def build(s: Services) -> APIRouter:
         return s.projects.delete_preview(project_id)
 
     @router.delete("/projects/{project_id}")
-    def delete_project(project_id: str, purge: bool = False) -> dict:
-        return s.projects.delete(project_id, purge=purge)
+    def delete_project(project_id: str, purge: bool = False,
+                       keep_domains: bool = False) -> dict:
+        return s.projects.delete(project_id, purge=purge, keep_domains=keep_domains)
 
     return router

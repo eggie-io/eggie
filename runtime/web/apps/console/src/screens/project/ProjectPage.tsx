@@ -12,6 +12,7 @@ import { useDeleteProject, useLifecycle, useProject, useStartWhenReady } from ".
 import { useNow } from "../../projects/useNow";
 import type { Project } from "../../projects/types";
 import { projectView, type ProjectView } from "../../projects/view";
+import { DomainBlock } from "./DomainBlock";
 import { AddressRows } from "./AddressRows";
 import { HandoffCard, StepText } from "./HandoffCard";
 import { StartingBody } from "./StartingBody";
@@ -257,6 +258,7 @@ export function ProjectPage() {
     <section className={s.page}>
       {query.isError && <Notice tone="danger">{query.error.message}</Notice>}
       {body}
+      {view.kind !== "gone" && <DomainBlock project={project} />}
     </section>
   );
 }

@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import yaml
+
+from eggie_api.domain.detect import WebSpec
+from eggie_api.domain.edge import Domain, Pair, Plan, ProjectEdge, build_edge, plan, serving
+from eggie_api.domain.overlay import build_overlay
+
+STACK_SITE = Path(__file__).resolve().parents[3] / "runtime" / "stack.site.yml"
+
+EGGIE = "shop.foo.eggie.space"
+INSTANCE = Pair("i", "instance", "/e/certs/i/cert.pem", "/e/certs/i/key.pem",
+                ("foo.eggie.io", "*.foo.eggie.space"))
+PAIRS = [
+    INSTANCE,
+    Pair("c1", "domain", "/e/certs/c1/cert.pem", "/e/certs/c1/key.pem",
+         ("example.com", "ok.example.com")),
+    Pair("c2", "domain", "/e/certs/c2/cert.pem", "/e/certs/c2/key.pem",
+         ("www.example.com",)),
+]
+BOTH = {"example.com", "www.example.com"}
+PROJECTS = {"shop": ProjectEdge(EGGIE, "shop--web")}
+
+
+def d(host, *, primary=False, status="active", cert="c1", project="shop"):
+    return Domain(host, project, primary, status, cert)
+
+
+def _router_for(edge, rule):
+    return next(r for r in edge["http"]["routers"].values() if r["rule"] == rule)
+
+
+def _routers_for(edge, host):
+    return [r for name, r in edge["http"]["routers"].items()
+            if name != "acme-challenge" and r["rule"] == f"Host(`{host}`)"]
+
+
+def test_a_serving_primary_takes_the_address_and_everything_else_redirects():
+    got = plan(EGGIE, [d("example.com", primary=True), d("www.example.com", cert="c2")], BOTH)
+    assert got == Plan("example.com", (), ("www.example.com", EGGIE))
+
+
+def test_a_primary_that_is_not_serving_leaves_the_eggie_address_and_others_direct():
+    got = plan(EGGIE, [d("example.com", primary=True, status="problem"),
+                       d("www.example.com", cert="c2")], BOTH)
+    assert got == Plan(EGGIE, ("www.example.com",), ())
+
+
+def test_active_without_its_certificate_installed_is_not_serving():
+    assert not serving(d("example.com"), set())
+
+
+def test_an_unknown_status_is_not_serving():
+    assert not serving(d("example.com", status="paused"), {"example.com"})
+
+
+def test_a_domain_is_served_by_the_pair_that_covers_its_name_whatever_id_it_names():
+    assert serving(d("example.com", cert="c9"), {"example.com"})
+    edge = build_edge(PAIRS, [d("example.com", primary=True, cert="c9")], PROJECTS)
+    assert _router_for(edge, "Host(`example.com`)")["service"] == "shop--web@docker"
+
+
+def test_the_instance_certificate_covers_no_custom_domain():
+    edge = build_edge([INSTANCE], [d("foo.eggie.io", primary=True)], PROJECTS)
+    assert _routers_for(edge, "foo.eggie.io") == []
+
+
+def test_no_domains_writes_only_certificates():
+    edge = build_edge([INSTANCE], [], {})
+    assert edge == {"tls": {
+        "certificates": [{"certFile": "/e/certs/i/cert.pem", "keyFile": "/e/certs/i/key.pem"}],
+        "stores": {"default": {"defaultCertificate": {
+            "certFile": "/e/certs/i/cert.pem", "keyFile": "/e/certs/i/key.pem"}}}}}
+
+
+def test_nothing_installed_and_no_domains_is_an_empty_file():
+    assert build_edge([], [], {}) == {}
+
+
+def test_a_direct_domain_routes_to_the_projects_docker_service_on_web_only():
+    edge = build_edge(PAIRS, [d("example.com", primary=True, status="problem"),
+                              d("www.example.com", cert="c2")], PROJECTS)
+    router = _router_for(edge, "Host(`www.example.com`)")
+    assert router["service"] == "shop--web@docker" and router["entryPoints"] == ["web"]
+
+
+def test_a_serving_primary_routes_to_the_project_itself():
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
+    assert _routers_for(edge, "example.com") == [{
+        "rule": "Host(`example.com`)", "entryPoints": ["web"], "service": "shop--web@docker"}]
+
+
+def test_beside_a_serving_primary_another_serving_domain_only_redirects():
+    edge = build_edge(PAIRS, [d("example.com", primary=True), d("www.example.com", cert="c2")],
+                      PROJECTS)
+    [router] = _routers_for(edge, "www.example.com")
+    assert router["priority"] == 50000 and router["service"] == "noop@internal"
+    assert router["middlewares"][0] == "redirect-cache"
+    assert "redirectRegex" in edge["http"]["middlewares"][router["middlewares"][1]]
+
+
+def test_a_domain_that_is_not_serving_gets_neither_a_route_nor_a_redirect():
+    edge = build_edge(PAIRS, [d("example.com", primary=True),
+                              d("www.example.com", status="issuing", cert=None),
+                              d("shop.example.com")], PROJECTS)
+    assert _routers_for(edge, "www.example.com") == []
+    assert _routers_for(edge, "shop.example.com") == []
+
+
+def test_the_eggie_host_redirects_on_web_only_with_the_cache_header():
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
+    router = _router_for(edge, f"Host(`{EGGIE}`)")
+    assert router["entryPoints"] == ["web"] and router["service"] == "noop@internal"
+    assert router["priority"] == 50000
+    mws = edge["http"]["middlewares"]
+    regex = next(m["redirectRegex"] for m in mws.values() if "redirectRegex" in m)
+    assert regex == {"regex": "^https?://[^/]+/(.*)",
+                     "replacement": "https://example.com/${1}", "permanent": True}
+    assert {"headers": {"customResponseHeaders": {"Cache-Control": "max-age=600"}}} in mws.values()
+
+
+def test_the_challenge_router_covers_every_mirrored_domain_whatever_its_status():
+    edge = build_edge(PAIRS, [d("example.com", status="waiting_dns", cert=None)], PROJECTS)
+    router = edge["http"]["routers"]["acme-challenge"]
+    assert router == {"rule": "(Host(`example.com`)) && PathPrefix(`/.well-known/acme-challenge/`)",
+                      "entryPoints": ["http", "web"], "priority": 200000,
+                      "service": "eggie-api@docker"}
+
+
+def test_a_name_that_is_not_a_hostname_never_reaches_a_rule():
+    edge = build_edge(PAIRS, [d("exa`mple.com"), d("ok.example.com", primary=True)], PROJECTS)
+    assert "`mple" not in yaml.safe_dump(edge)
+    assert _router_for(edge, "Host(`ok.example.com`)")["service"] == "shop--web@docker"
+
+
+def test_a_domain_whose_project_is_not_here_gets_no_route():
+    edge = build_edge(PAIRS, [d("example.com", project="gone")], PROJECTS)
+    assert set(edge["http"]["routers"]) == {"acme-challenge"}
+
+
+def test_the_challenge_outranks_the_http_redirect_and_the_domain_redirects_do_not():
+    command = yaml.safe_load(STACK_SITE.read_text())["services"]["traefik"]["command"]
+    [flag] = [c for c in command if "redirections.entryPoint.priority=" in c]
+    https_redirect = int(flag.rsplit("=", 1)[1])
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], PROJECTS)
+    routers = edge["http"]["routers"]
+    assert routers["acme-challenge"]["priority"] > https_redirect
+    redirects = [r["priority"] for n, r in routers.items() if n.startswith("redirect-")]
+    assert redirects and all(p < https_redirect for p in redirects)
+
+
+def test_a_custom_domain_routes_to_the_service_the_projects_overlay_declares():
+    from eggie_api.wiring import _project_edges
+
+    webs = [WebSpec("app", 3000)]
+    loader = type("L", (), {"load": lambda self, pid: type("P", (), {"webs": webs})()})()
+    edges = _project_edges(loader, {"shop": {"domain": "foo.eggie.space"}})({"shop"})
+    edge = build_edge(PAIRS, [d("example.com", primary=True)], edges)
+    labels = build_overlay("shop", webs, "foo.eggie.space")["services"]["app"]["labels"]
+    [declared] = [m.group(1) for key in labels
+                  if (m := re.fullmatch(r"traefik\.http\.services\.(.+)\.loadbalancer\.server\.port", key))]
+    assert _router_for(edge, "Host(`example.com`)")["service"] == f"{declared}@docker"

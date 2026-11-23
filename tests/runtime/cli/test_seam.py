@@ -1,3 +1,4 @@
+import io
 import threading
 import time
 
@@ -137,3 +138,41 @@ def test_up_outside_the_projects_root_names_the_real_path_too(guest, tmp_path):
     code, _out, err = guest.run("up", cwd=outside)
     assert code == 1
     assert "~/projects (/opt/eggie/projects)" in err
+
+
+def test_status_lists_a_projects_domains_with_their_states(tmp_path):
+    # The guest fixture's API is the real app, which has no cloud to attach
+    # domains to, so this drives cmd_status with a stub client instead.
+    from eggie_cli.commands import cmd_status
+
+    domains = [
+        {"hostname": "example.com", "display": "example.com",
+         "status": "active", "primary": True},
+        {"hostname": "xn--bcher-kva.example", "display": "bücher.example",
+         "status": "waiting_dns", "primary": False},
+        {"hostname": "new.example.com", "display": "new.example.com",
+         "status": "issuing", "primary": False},
+        {"hostname": "odd.example.com", "display": "odd.example.com",
+         "status": "paused", "primary": False},
+    ]
+    shop = {"id": "shop", "status": "running", "urls": ["http://a", "http://b"],
+            "domains": domains, "problem": {"message": "boom"}}
+    old = {"id": "old", "status": "running", "urls": ["http://c"]}
+
+    class Client:
+        def projects(self):
+            return [shop, old]
+
+    out = io.StringIO()
+    cmd_status(cli.Env(root=tmp_path, cwd=tmp_path, client=Client, out=out), None)
+
+    assert out.getvalue().splitlines() == [
+        "shop                 running          http://a",
+        "    http://b",
+        "    domain  example.com  active (primary)",
+        "    domain  xn--bcher-kva.example  waiting for DNS",
+        "    domain  new.example.com  getting certificate",
+        "    domain  odd.example.com  paused",
+        "    problem: boom",
+        "old                  running          http://c",
+    ]

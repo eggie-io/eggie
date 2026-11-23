@@ -45,6 +45,10 @@ class CloneRepo(BaseModel):
     id: str | None = None
 
 
+class AddAddress(BaseModel):
+    hostname: str
+
+
 class PushRequest(BaseModel):
     instance_id: str = Field(min_length=1, max_length=256)
     replace: bool = False

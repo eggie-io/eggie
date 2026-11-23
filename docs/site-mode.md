@@ -15,7 +15,8 @@ Nothing in the host or the desktop app changes for site mode. Everything lives i
 | Console | `http://localhost:39080` through the desktop's port forward | `https://foo.eggie.io` |
 | Projects | `http://<id>.local.eggie.space:39080` | `https://<id>.foo.eggie.space` |
 | A project's extra web service | `<service>--<id>.local.eggie.space` | `<service>--<id>.foo.eggie.space` |
-| TLS | none | one certificate per server: `foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`, issued by the service |
+| TLS | none | a list of certificates the service issues: one per server (`foo.eggie.io`, `foo.eggie.space`, `*.foo.eggie.space`) and one per custom domain |
+| Custom domain | not shown | a project can also open on the owner's own domain (below) |
 | Sign-in | desktop handoff, or device code in the console | the server boots signed in; the browser gets a session from a code the web app mints |
 | Bearer API (`:39099`) | all interfaces (WSL needs it) | loopback only |
 | Public URLs (tunnel) | available | refused: every project already has a public address |
@@ -37,13 +38,18 @@ hyphen, for project ids and for service subdomains alike), so the two sides cann
 domain projects live under). It validates them (bare lowercase hostnames, both or neither) and
 persists them to `/opt/eggie/site.env`, so repairs, boot updates and manual reruns keep site mode.
 
+A service other than production (staging) also passes `EGGIE_CLOUD_URL` (its API, default
+`https://app.eggie.io/api`) and `EGGIE_WEB_URL` (its web app, default `https://app.eggie.io`).
+Both must be `https` URLs; they are saved in `site.env` too, and the API uses them for every call
+to the service and for the console's redirect to the web app.
+
 `install.sh` sources `site.env` and, in site mode:
 
-- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1` and
-  `EGGIE_EDGE_BIND=127.0.0.1` to `/opt/eggie/.env`;
+- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1`,
+  `EGGIE_EDGE_BIND=127.0.0.1` and the service URLs, when set, to `/opt/eggie/.env`;
 - runs every stack compose command with `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
-- creates `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik reads) with
-  `tls.yml`, Traefik's dynamic config naming `current/site.crt` and `current/site.key`;
+- creates `/opt/eggie/edge` (`2770 root:docker`: the API writes, Traefik reads), where the API
+  puts the certificates and Traefik's dynamic file `edge.yml`;
 - makes `account.json` `root:docker 0640` so the API can import and delete it;
 - installs and enables `eggie-metadata-guard.service` (below);
 - starts the api container once (a new token or a repair recreates it first, then the plain
@@ -51,7 +57,7 @@ persists them to `/opt/eggie/site.env`, so repairs, boot updates and manual reru
   a second start a moment later could lose the reply;
 - records `"vm": "site"` in `connect.json`.
 
-On start the API imports the account seed, rotates the token pair and fetches the certificate;
+On start the API imports the account seed, rotates the token pair and fetches the certificates;
 the server answers on 443 within a minute or two of boot.
 
 ## The edge
@@ -64,26 +70,51 @@ rules admit `${EGGIE_SITE_HOST}` next to `localhost`, and its two port mappings 
 
 - entrypoint `web` moves to `:443` with TLS. Keeping the name `web` means no router label in the
   stack or in a project overlay changes;
-- entrypoint `http` on `:80` redirects to it;
+- entrypoint `http` on `:80` redirects to it, at priority 100000 so no project router can answer
+  plain HTTP; only the certificate check's path (below) is routed ahead of it;
 - entrypoint `probe` on the edge port (`39080`), plain HTTP. The API's readiness probe
   (`infra/health.py`) dials `traefik:39080` over the `edge` network after a project starts;
   project routers name no entrypoint, so they answer there. The base mapping for that port is
   still published (compose merges `ports`), which is why `EGGIE_EDGE_BIND` pins it to loopback;
-- the file provider watches `/opt/eggie/tls`, mounted read-only.
+- the file provider watches `/opt/eggie/edge`, mounted read-only. The API generates `edge.yml`
+  there: the TLS certificate list and the routers and redirects of custom domains.
 
-Until the certificate lands, Traefik serves its own self-signed certificate.
+Until a certificate lands, Traefik serves its own self-signed certificate.
 
-### The certificate
+### The certificates
 
-`services/certificate.py` fetches the certificate from the service on start when
-`/opt/eggie/tls/current` does not resolve to a pair, then once a day from the sync loop. Each
-pair lives in its own directory named by the certificate's expiry
-(`/opt/eggie/tls/<not_after epoch>/site.crt` and `site.key`, key `0600`), and `current` is a
-symlink to the newest. inotify on the watched directory reports only direct children, so files
-written inside a new directory cause no reload; replacing the symlink is one event and Traefik
-loads key and certificate together, never a mismatched pair. A newer `not_after` installs; an
-older or equal one is ignored; old directories are removed at the start of the next check, never
-right after a swap Traefik may still be reloading. A renewed certificate is picked up within a day.
+`services/certificates.py` asks the service for its list of certificates on every start,
+whenever an active custom domain names one it lacks, once a day, and on the next pass after a
+domain is removed. Each pair is stored under `/opt/eggie/edge/certs/<id>/` (`cert.pem`, `key.pem`
+`0600`), staged and moved in with one rename. A renewal is a new id: the pair already held for
+that name keeps serving until the new id is installed, then `edge.yml` names only the new one and
+the old pair leaves disk on the next pass. A pair whose domain was removed stops serving at once.
+Traefik reloads `edge.yml` as one file, so it never sees a key without its certificate. A renewed
+certificate is picked up within a day.
+
+## Custom domains
+
+On a site, a project can also open on the owner's own domain, set up on the project's **Custom
+domain** page in the console. The service decides everything about a domain: whether the name is allowed, whether DNS
+(and a proxy or CAA record) lets a certificate be issued, the certificate and its renewal, the
+status and the plain-language reason. The runtime mirrors the domain list, installs the
+certificates the service lists and generates `edge.yml`.
+
+- The address rule: a domain serves its project only while it is `Active` and a certificate for
+  its name is installed; a `warning` on an active domain (DNS moved, renewal failing) shows in the
+  console and never stops it serving. While the primary domain serves, the project's Eggie address redirects to it
+  (permanent, cached ten minutes) along with the other domains. When the domain is removed or
+  has a problem, the Eggie address serves the project again.
+- The project's first address (console, `eggie up`, push result) is the primary custom domain
+  while it serves.
+- `http://` on a custom host redirects to `https://`, except the CA's check at
+  `/.well-known/acme-challenge/<token>`, which is answered on both ports without a redirect.
+- Every path on a custom host goes to that project's web service. Eggie's console and API never
+  answer on it, nor does another project; the CA's check path is the only exception.
+- Deleting a project forgets its domains on the service; replacing its files from a folder or
+  pushing again keeps them. The Cloud deletes on the service only the domains of projects it
+  deleted itself. A snapshot carries no domains or certificates.
+- `eggie status` lists a project's domains; none of the commands changes one.
 
 ## Account and sign-in
 
@@ -146,17 +177,19 @@ Boundary rows for a site (the full table is in `security.md`):
 | Way in | What it reaches | Who may use it |
 |---|---|---|
 | 443 | Traefik: console on the site host, `/api`, every project host under the site domain | Anyone; console and `/api` need a session from a service-minted code; projects have only their own auth |
-| 80 | Redirect to 443 | Anyone |
+| 80 | Redirect to 443, and the CA's certificate check at `/.well-known/acme-challenge/<token>` | Anyone; the check is rate-limited (20 a minute per client address, 300 in all) and is unauthenticated |
 | 22 | The login account | Holders of the SSH key the service installed |
 
 - The service's cloud firewall allows 22, 80 and 443 only. Project `ports:` published by compose
   stay published on the server and rely on that firewall.
+- Every path on a custom host goes to its project's web service, never to Eggie's console or API
+  or another project; the certificate check is the only exception.
 - The bearer API and the plain-HTTP probe port bind to loopback.
 - `eggie-metadata-guard.service` runs before dockerd and inserts a `DROP` for `169.254.169.254`
   into Docker's `DOCKER-USER` chain, so no bridged container can read the user data that seeded
   the account. A project with `network_mode: host` is outside that, as it is outside every
   container boundary.
-- The certificate key is `0600`, written by the API through the docker group, mounted read-only
-  into Traefik, and covers only this server's names. There is never a zone-wide wildcard or a DNS
+- Certificate keys are `0600`, written by the API through the docker group, mounted read-only
+  into Traefik; each covers only this server's names or one custom domain. There is never a zone-wide wildcard or a DNS
   token on a customer server.
 - The session cookie is `Secure`, `HttpOnly`, `SameSite=Strict`, path `/api`.

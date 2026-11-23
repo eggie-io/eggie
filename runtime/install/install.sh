@@ -139,6 +139,9 @@ if (( SITE )); then
   # The console answers on the site host, projects live under the site
   # domain, and the bearer port stays off the public interface.
   printf 'EGGIE_SITE_HOST=%s\nEGGIE_DOMAIN=%s\nEGGIE_API_BIND=127.0.0.1\nEGGIE_EDGE_BIND=127.0.0.1\n' "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" >> /opt/eggie/.env
+  # Unset means production, the API's own default.
+  if [[ -n "${EGGIE_CLOUD_URL:-}" ]]; then printf 'EGGIE_CLOUD_URL=%s\n' "$EGGIE_CLOUD_URL" >> /opt/eggie/.env; fi
+  if [[ -n "${EGGIE_WEB_URL:-}" ]]; then printf 'EGGIE_WEB_URL=%s\n' "$EGGIE_WEB_URL" >> /opt/eggie/.env; fi
 fi
 
 # 6. the shared secret between the host and the API.

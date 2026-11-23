@@ -37,10 +37,15 @@ hyphen, for project ids and for service subdomains alike), so the two sides cann
 domain projects live under). It validates them (bare lowercase hostnames, both or neither) and
 persists them to `/opt/eggie/site.env`, so repairs, boot updates and manual reruns keep site mode.
 
+A service other than production (staging) also passes `EGGIE_CLOUD_URL` (its API, default
+`https://app.eggie.io/api`) and `EGGIE_WEB_URL` (its web app, default `https://app.eggie.io`).
+Both must be `https` URLs; they are saved in `site.env` too, and the API uses them for every call
+to the service and for the console's redirect to the web app.
+
 `install.sh` sources `site.env` and, in site mode:
 
-- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1` and
-  `EGGIE_EDGE_BIND=127.0.0.1` to `/opt/eggie/.env`;
+- appends `EGGIE_SITE_HOST`, `EGGIE_DOMAIN=<site domain>`, `EGGIE_API_BIND=127.0.0.1`,
+  `EGGIE_EDGE_BIND=127.0.0.1` and the service URLs, when set, to `/opt/eggie/.env`;
 - runs every stack compose command with `-f /opt/eggie/stack.yml -f /opt/eggie/runtime/stack.site.yml`;
 - creates `/opt/eggie/tls` (`2770 root:docker`: the API writes, Traefik reads) with
   `tls.yml`, Traefik's dynamic config naming `current/site.crt` and `current/site.key`;

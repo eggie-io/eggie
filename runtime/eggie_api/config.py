@@ -102,7 +102,8 @@ class ApiConfig:
                                       f"{constants.GUEST_ROOT}/secrets")),
             max_upload_bytes=int(env.get("EGGIE_MAX_UPLOAD_BYTES",
                                          16 * 1024 ** 3)),
-            cloud_url=env.get("EGGIE_CLOUD_URL", "https://app.eggie.io/api"),
+            # stack.yml hands over an empty value when the install named no service.
+            cloud_url=env.get("EGGIE_CLOUD_URL") or "https://app.eggie.io/api",
             stack_file=Path(env.get("EGGIE_STACK_FILE",
                                     f"{constants.GUEST_ROOT}/stack.yml")),
             tunnel_token_path=Path(env.get("EGGIE_TUNNEL_TOKEN",
@@ -118,7 +119,7 @@ class ApiConfig:
             update_dir=Path(env.get("EGGIE_UPDATE_DIR", constants.UPDATE_DIR)),
             runtime_marker=Path(env.get("EGGIE_RUNTIME_MARKER", constants.RUNTIME_VERSION_FILE)),
             site_host=env.get("EGGIE_SITE_HOST") or None,
-            web_url=env.get("EGGIE_WEB_URL", "https://app.eggie.io"),
+            web_url=env.get("EGGIE_WEB_URL") or "https://app.eggie.io",
             tls_dir=Path(env.get("EGGIE_TLS_DIR", f"{constants.GUEST_ROOT}/tls")),
             account_seed=Path(env.get("EGGIE_ACCOUNT_SEED",
                                       f"{constants.GUEST_ROOT}/account.json")),

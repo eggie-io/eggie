@@ -72,6 +72,8 @@ class FakeSsh:
         if alias not in self.authorized:
             return self._done(argv, 255, err=b"Permission denied (publickey).\n")
         script = argv[-1]
+        if "agent.json" in script:
+            return self._done(argv, 0, b"curl -fsSL https://chatgpt.com/codex/install.sh | sh\n")
         if "install.sh" in script:
             self.codex.add(alias)
             return self._done(argv, 0)

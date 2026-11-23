@@ -15,17 +15,24 @@ from . import ssh
 from .ssh import Probe
 
 CALLBACK_PORT = 1455
-SETUP_COMMAND = "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
+# The instance's runtime says how Codex installs there, so a change to it needs no host release.
+READ_SETUP = ("python3 -c 'import json;print(json.load(open("
+              "\"/opt/eggie/runtime/agents/codex/agent.json\"))[\"setup\"][\"run\"])'")
 
 _URL = re.compile(r"https://\S+")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _SIGN_IN_ORIGIN = ("https", "auth.openai.com")
 
 
-def ensure_installed(run, alias: str, setup_command: str = SETUP_COMMAND) -> Probe:
+def ensure_installed(run, alias: str) -> Probe:
     if ssh.login_shell(run, alias, "command -v codex").ok:
         return Probe(True, "")
-    installed = ssh.login_shell(run, alias, setup_command)
+    read = ssh.login_shell(run, alias, READ_SETUP)
+    # The last line: a login shell's profile may print above it.
+    setup = read.stdout.strip().splitlines()[-1:] if read.ok else []
+    if not setup:
+        return Probe(False, "This Eggie can't install Codex; update Eggie and try again.")
+    installed = ssh.login_shell(run, alias, setup[0])
     if not installed.ok:
         lines = (installed.stderr or installed.stdout).splitlines()
         return Probe(False, lines[-1] if lines else f"install exited {installed.returncode}")

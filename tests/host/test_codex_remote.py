@@ -1,20 +1,23 @@
-import json
 import queue
 import subprocess
-from pathlib import Path
+
+import pytest
 
 from host.core.connect import codex_remote
 
 
 class FakeRunner:
-    def __init__(self, *codes):
+    """Answers each call in turn: an exit code, or (code, stdout)."""
+
+    def __init__(self, *answers):
         self.calls = []
-        self._codes = list(codes)
+        self._answers = list(answers)
 
     def __call__(self, argv):
         self.calls.append(argv)
-        code = self._codes.pop(0) if self._codes else 0
-        return subprocess.CompletedProcess(argv, code, b"", b"")
+        answer = self._answers.pop(0) if self._answers else 0
+        code, out = answer if isinstance(answer, tuple) else (answer, b"")
+        return subprocess.CompletedProcess(argv, code, out, b"")
 
 
 class FakeProc:
@@ -50,17 +53,27 @@ class FakeProc:
         self._q.put(None)
 
 
-def test_installs_codex_when_missing():
-    run = FakeRunner(1, 0, 0)
-    probe = codex_remote.ensure_installed(run, "eggie-x", "setup-cmd")
+def test_installs_codex_with_the_remote_runtimes_own_setup_command():
+    run = FakeRunner(1, (0, b"setup-cmd --flag\n"), 0, 0)
+    probe = codex_remote.ensure_installed(run, "eggie-x")
     assert probe.ok
-    assert "setup-cmd" in run.calls[1][-1]
-    assert len(run.calls) == 3
+    assert "/opt/eggie/runtime/agents/codex/agent.json" in run.calls[1][-1]
+    assert run.calls[2][-1] == "bash -lc 'setup-cmd --flag'"
+    assert len(run.calls) == 4
+
+
+@pytest.mark.parametrize("read", [1, (0, b"\n")])
+def test_a_runtime_that_cannot_say_how_to_install_codex_installs_nothing(read):
+    run = FakeRunner(1, read)
+    probe = codex_remote.ensure_installed(run, "eggie-x")
+    assert probe == codex_remote.Probe(
+        False, "This Eggie can't install Codex; update Eggie and try again.")
+    assert len(run.calls) == 2
 
 
 def test_installed_codex_is_not_reinstalled():
     run = FakeRunner(0)
-    assert codex_remote.ensure_installed(run, "eggie-x", "setup-cmd").ok
+    assert codex_remote.ensure_installed(run, "eggie-x").ok
     assert len(run.calls) == 1
 
 
@@ -101,12 +114,6 @@ def test_no_url_kills_and_reports():
     assert proc.killed
     assert probe.reason == "Waiting for the server"
     assert opened == []
-
-
-def test_setup_command_matches_the_runtime_manifest():
-    manifest = Path(__file__).resolve().parents[2] / "runtime/agents/codex/agent.json"
-    run = json.loads(manifest.read_text(encoding="utf-8"))["setup"]["run"]
-    assert codex_remote.SETUP_COMMAND == run
 
 
 def test_open_url_failure_still_kills_the_tunnel():

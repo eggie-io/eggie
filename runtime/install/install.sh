@@ -391,6 +391,13 @@ if (( SITE )); then
     echo "sshd rejected the Eggie key setting; it was removed and sshd left unchanged" >&2
     exit 1
   fi
+  # sshd takes the first AuthorizedKeysFile it reads, so an earlier drop-in wins over ours.
+  # A here-string, not a pipe: grep -q quitting early would SIGPIPE sshd under pipefail.
+  if ! grep -qi '^authorizedkeysfile .*/etc/ssh/eggie-keys/%u' <<< "$(sshd -T)"; then
+    rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
+    echo "Another sshd setting overrides Eggie's AuthorizedKeysFile; it was removed and sshd left unchanged" >&2
+    exit 1
+  fi
   # ssh.service is inactive until the first connection (socket activation).
   systemctl try-reload-or-restart ssh.service
   install -m 644 "$INSTALL_DIR/systemd/eggie-ssh-keys.path" \

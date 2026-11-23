@@ -118,7 +118,7 @@ def test_a_config_with_no_hosts_gets_the_block_at_the_end(tmp_path):
 
 def test_a_block_whose_end_marker_was_deleted_takes_nothing_with_it(tmp_path):
     config = tmp_path / "config"
-    damaged = USER_CONFIG.replace("Host work", ssh_alias._BEGIN + "\nHost work")
+    damaged = USER_CONFIG.replace("Host work", ssh_alias._begin(ssh_alias.ALIAS) + "\nHost work")
     config.write_text(damaged)
     ssh_alias.remove(config)
     assert config.read_text() == damaged
@@ -323,3 +323,47 @@ def test_wsl_offers_only_codex_to_connect():
         provider.connect_agent("claude-code")
     assert provider.agent_connected("claude-code") is False
     assert calls == []
+
+
+CLOUD = [("HostName", "203.0.113.5"), ("User", "eggie"),
+         ("IdentityFile", "/home/you/.eggie/ssh/eggie_ed25519")]
+
+
+def test_two_eggie_hosts_live_side_by_side(tmp_path):
+    config = tmp_path / "config"
+    config.write_text(USER_CONFIG)
+    ssh_alias.install(config, FOUND)
+    with_local = config.read_text()
+    ssh_alias.install_host(config, "eggie-foo", CLOUD)
+    text = config.read_text()
+    assert "Host eggie\n" in text and "Host eggie-foo\n" in text
+    assert text.count("Host work\n") == 1
+    assert text.startswith(USER_CONFIG.split("Host work")[0] + "# >>> Eggie")
+    assert text.endswith("Host work\nHostName example.com\nPort 2200\n")
+
+    ssh_alias.remove_host(config, "eggie-foo")
+    assert config.read_text() == with_local
+    assert not ssh_alias.host_installed(config, "eggie-foo")
+    assert ssh_alias.installed(config)
+
+
+def test_reinstalling_a_host_is_byte_identical(tmp_path):
+    config = tmp_path / "config"
+    config.write_text(USER_CONFIG)
+    ssh_alias.install(config, FOUND)
+    ssh_alias.install_host(config, "eggie-foo", CLOUD)
+    once = config.read_text()
+    ssh_alias.install_host(config, "eggie-foo", CLOUD)
+    assert config.read_text() == once
+
+
+def test_alias_with_space_or_newline_is_refused(tmp_path):
+    import pytest
+    config = tmp_path / "config"
+    config.write_text(USER_CONFIG)
+    with pytest.raises(ValueError):
+        ssh_alias.install_host(config, "eggie foo", CLOUD)
+    with pytest.raises(ValueError):
+        ssh_alias.install_host(config, "eggie-foo",
+                               [("HostName", "a\nProxyCommand x")])
+    assert config.read_text() == USER_CONFIG

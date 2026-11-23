@@ -18,41 +18,61 @@ from __future__ import annotations
 # pulled in with Include: Cursor's host list does not follow Include. It goes
 # just above the first Host/Match line -- see _first_host().
 
+import re
 from pathlib import Path
 
 from ..core.provider import SshSetupError
 
 ALIAS = "eggie"
-_BEGIN = "# >>> Eggie: the 'eggie' host, rewritten by Eggie setup >>>"
+_BEGIN_PREFIX = "# >>> Eggie: the '"
 _END = "# <<< Eggie <<<"
+_ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 # Labels as parse_ssh_config() returns them, to the ssh_config keyword.
 _FIELDS = (("Host", "HostName"), ("Port", "Port"), ("User", "User"),
            ("Identity file", "IdentityFile"))
 
 
+def valid_alias(alias: str) -> bool:
+    return bool(_ALIAS_RE.fullmatch(alias))
+
+
+def _begin(alias: str) -> str:
+    return f"{_BEGIN_PREFIX}{alias}' host, rewritten by Eggie >>>"
+
+
+def _render_host(alias: str, options: list[tuple[str, str]]) -> str:
+    if not valid_alias(alias):
+        raise ValueError(f"'{alias}' is not a usable ssh host name")
+    lines = [_begin(alias), f"Host {alias}"]
+    for keyword, value in options:
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"the {keyword} value has a line break")
+        lines.append(f'  {keyword} "{value}"' if " " in value else f"  {keyword} {value}")
+    lines.append(_END)
+    return "\n".join(lines) + "\n"
+
+
 def render(found: dict[str, str]) -> str:
     missing = [label for label, _ in _FIELDS if label not in found]
     if missing:
         raise SshSetupError("Lima has not written " + ", ".join(missing))
-    lines = [_BEGIN, f"Host {ALIAS}"]
-    for label, keyword in _FIELDS:
-        value = found[label]
-        lines.append(f'  {keyword} "{value}"' if " " in value else f"  {keyword} {value}")
-    lines += ["  IdentitiesOnly yes", _END]
-    return "\n".join(lines) + "\n"
+    options = [(keyword, found[label]) for label, keyword in _FIELDS]
+    options.append(("IdentitiesOnly", "yes"))
+    return _render_host(ALIAS, options)
 
 
-def _split(text: str) -> tuple[list[str], int | None]:
+def _split(text: str, alias: str = ALIAS) -> tuple[list[str], int | None]:
     """The lines with Eggie's block taken out, and where it was.
 
     Only a complete block is ours: a BEGIN whose END the user deleted is left
     alone, rather than taking everything after it with it."""
     lines = text.splitlines(keepends=True)
     marks = [line.rstrip("\r\n") for line in lines]
-    if _BEGIN not in marks:
+    begin_mark = _begin(alias)
+    if begin_mark not in marks:
         return lines, None
-    begin = marks.index(_BEGIN)
+    begin = marks.index(begin_mark)
     if _END not in marks[begin:]:
         return lines, None
     end = marks.index(_END, begin) + 1
@@ -70,6 +90,9 @@ def _first_host(lines: list[str]) -> int:
     ssh takes the first value it finds, so a `Host *` with a User line above
     it would override ours."""
     for i, line in enumerate(lines):
+        # Another Eggie host's block starts with its comment, above its Host line.
+        if line.startswith(_BEGIN_PREFIX):
+            return i
         word = line.split(None, 1)[0].lower() if line.strip() else ""
         if word in ("host", "match"):
             return i
@@ -96,22 +119,26 @@ def _write(path: Path, text: str, *, mode: int = 0o600) -> None:
         raise
 
 
-def installed(user_config: Path) -> bool:
+def host_installed(user_config: Path, alias: str) -> bool:
     try:
-        return _split(user_config.read_text())[1] is not None
+        return _split(user_config.read_text(), alias)[1] is not None
     except OSError:
         return False
 
 
-def install(user_config: Path, found: dict[str, str]) -> None:
-    block = render(found)
+def install_host(user_config: Path, alias: str,
+                 options: list[tuple[str, str]]) -> None:
+    _install_block(user_config, alias, _render_host(alias, options))
+
+
+def _install_block(user_config: Path, alias: str, block: str) -> None:
     # Resolved so a dotfiles symlink is written through, not replaced.
     target = user_config.resolve()
     try:
         current = target.read_text()
     except FileNotFoundError:
         current = ""
-    lines, at = _split(current)
+    lines, at = _split(current, alias)
     if at is None:
         at = _first_host(lines)
     if lines and at == len(lines) and not lines[-1].endswith("\n"):
@@ -120,15 +147,27 @@ def install(user_config: Path, found: dict[str, str]) -> None:
     _write(target, "".join(lines))
 
 
-def remove(user_config: Path) -> None:
+def remove_host(user_config: Path, alias: str) -> None:
     target = user_config.resolve()
     try:
         current = target.read_text()
     except FileNotFoundError:
         return
-    lines, at = _split(current)
+    lines, at = _split(current, alias)
     if at is not None:
         _write(target, "".join(lines))
+
+
+def installed(user_config: Path) -> bool:
+    return host_installed(user_config, ALIAS)
+
+
+def install(user_config: Path, found: dict[str, str]) -> None:
+    _install_block(user_config, ALIAS, render(found))
+
+
+def remove(user_config: Path) -> None:
+    remove_host(user_config, ALIAS)
 
 
 def known_hosts_name(host: str, port: str) -> str:

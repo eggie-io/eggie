@@ -51,8 +51,17 @@ def _load(path: Path) -> dict:
     return data
 
 
-def _ours(entry) -> bool:
-    return isinstance(entry, dict) and entry.get("id") == ENTRY_ID
+def entry_for(alias: str, display_name: str) -> dict:
+    return {
+        "id": alias,
+        "name": f"Eggie \u00b7 {display_name}",
+        "sshHost": alias,
+        "startDirectory": ENTRY["startDirectory"],
+    }
+
+
+def _is(entry, entry_id: str) -> bool:
+    return isinstance(entry, dict) and entry.get("id") == entry_id
 
 
 def _save(path: Path, data: dict) -> None:
@@ -60,40 +69,41 @@ def _save(path: Path, data: dict) -> None:
                      mode=0o600)
 
 
-def installed(claude_dir: Path) -> bool:
+def entry_installed(claude_dir: Path, entry_id: str) -> bool:
     try:
-        return any(_ours(e) for e in _load(settings_path(claude_dir)).get("sshConfigs", []))
+        configs = _load(settings_path(claude_dir)).get("sshConfigs", [])
     except (OSError, ValueError):
         return False
+    return any(_is(e, entry_id) for e in configs)
 
 
-def install(claude_dir: Path) -> None:
-    """Add or refresh the Eggie entry. A missing ~/.claude is created: the
-    user asked for the entry, and Claude Code reads it once it starts."""
+def install_entry(claude_dir: Path, entry: dict) -> None:
+    """Add or refresh the entry with this id. A missing ~/.claude is created:
+    the user asked for the entry, and Claude Code reads it once it starts."""
     claude_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     # Resolved so a dotfiles symlink is written through, not replaced.
     path = settings_path(claude_dir).resolve()
     data = _load(path)
     configs = list(data.get("sshConfigs", []))
-    at = next((i for i, e in enumerate(configs) if _ours(e)), None)
+    at = next((i for i, e in enumerate(configs) if _is(e, entry["id"])), None)
     if at is None:
-        configs.append(dict(ENTRY))
+        configs.append(dict(entry))
     else:
-        configs[at] = dict(ENTRY)
+        configs[at] = dict(entry)
     if configs == data.get("sshConfigs"):
         return
     data["sshConfigs"] = configs
     _save(path, data)
 
 
-def remove(claude_dir: Path) -> None:
+def remove_entry(claude_dir: Path, entry_id: str) -> None:
     path = settings_path(claude_dir)
     if not path.exists():
         return
     path = path.resolve()
     data = _load(path)
     configs = data.get("sshConfigs", [])
-    kept = [e for e in configs if not _ours(e)]
+    kept = [e for e in configs if not _is(e, entry_id)]
     if len(kept) == len(configs):
         return
     if kept:
@@ -101,3 +111,15 @@ def remove(claude_dir: Path) -> None:
     else:
         del data["sshConfigs"]
     _save(path, data)
+
+
+def installed(claude_dir: Path) -> bool:
+    return entry_installed(claude_dir, ENTRY_ID)
+
+
+def install(claude_dir: Path) -> None:
+    install_entry(claude_dir, ENTRY)
+
+
+def remove(claude_dir: Path) -> None:
+    remove_entry(claude_dir, ENTRY_ID)

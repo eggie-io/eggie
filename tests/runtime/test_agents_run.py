@@ -42,7 +42,8 @@ def make(tmp_path):
     path = f"{bin_dir}:/usr/bin:/bin"
     env = {**os.environ, "PATH": path, "EGGIE_APPLY_PATH": path, "LOG": str(log),
            "EGGIE_ROOT_HOME": str(root), "EGGIE_SHELLS_FILE": str(shells),
-           "ADA_HOME": str(ada), "EGGIE_AGENTS_DIR": str(agents)}
+           "EGGIE_HOME_ROOT": str(tmp_path), "ADA_HOME": str(ada),
+           "EGGIE_AGENTS_DIR": str(agents)}
     return SimpleNamespace(env=env, status=status, root=root, ada=ada, log=log)
 
 

@@ -4,6 +4,7 @@ guest user carries the macOS host uid (often 501, always < 1000). Lowering the
 old uid>=1000 bound alone would sweep in system accounts whose home is `/`, so
 this script's job is exactly the extra filtering that makes a lower bound safe.
 """
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,8 +16,9 @@ def _run(passwd_lines: list[str], shells: list[str], tmp_path: Path) -> list[str
     shells_file = tmp_path / "shells"
     shells_file.write_text("\n".join(shells) + "\n")
     passwd = "\n".join(passwd_lines) + "\n"
+    env = {**os.environ, "EGGIE_HOME_ROOT": str(tmp_path / "home")}
     result = subprocess.run(["bash", str(SCRIPT), str(shells_file)],
-                            input=passwd, capture_output=True, text=True)
+                            input=passwd, capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stderr
     return result.stdout.splitlines()
 
@@ -77,4 +79,19 @@ def test_a_real_shell_whose_home_does_not_exist_is_not_selected(tmp_path):
 def test_a_shell_not_listed_in_the_shells_file_is_not_selected(tmp_path):
     home = _home(tmp_path, "weird")
     line = f"weird:x:1500:1500:Weird:{home}:/usr/local/bin/fish"
+    assert _run([line], ["/bin/bash"], tmp_path) == []
+
+
+def test_a_service_account_with_a_shell_outside_the_home_root_is_not_selected(tmp_path):
+    # Packages create e.g. postgres with /bin/bash and, on some images, a uid >= 500.
+    home = tmp_path / "var" / "lib" / "postgresql"
+    home.mkdir(parents=True)
+    line = f"postgres:x:998:998:PostgreSQL:{home}:/bin/bash"
+    assert _run([line], ["/bin/bash"], tmp_path) == []
+
+
+def test_the_home_root_itself_is_not_a_home(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    line = f"odd:x:1500:1500:Odd:{home}:/bin/bash"
     assert _run([line], ["/bin/bash"], tmp_path) == []

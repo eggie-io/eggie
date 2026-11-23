@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import urllib.error
 from pathlib import Path
 
@@ -26,8 +27,9 @@ class DownloadFailed(RuntimeError):
 
 
 # URLError, timeouts and resets are all OSErrors, as is a full disk, which
-# must keep its own type.
-_NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError)
+# must keep its own type. A drop mid-body raises IncompleteRead, not OSError.
+_NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError,
+                   http.client.HTTPException)
 
 
 def sha256_of(path: Path) -> str:

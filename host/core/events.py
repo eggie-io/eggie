@@ -29,9 +29,9 @@ ERROR_CODES = frozenset({
 
 _HRESULT = re.compile(r"0x[0-9a-fA-F]{8}")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-# Drive paths and POSIX absolute paths; "~", ":" and word chars before "/"
-# keep "~/x", "http://h" and "and/or" intact.
-_PATH = re.compile(r"\b[A-Za-z]:[\\/]\S*|(?<![\w~:.])/\S*")
+# Drive paths and POSIX absolute paths; "~", ":", "." and "/" and word chars
+# before "/" keep "~/x", "https://h/x" and "and/or" intact.
+_PATH = re.compile(r"\b[A-Za-z]:[\\/]\S*|(?<![\w~:./])/\S*")
 _MAX_MESSAGE = 200
 _CONTEXT_FIELDS = {
     "app_version": (re.compile(r"[0-9A-Za-z.+-]+"), 32),

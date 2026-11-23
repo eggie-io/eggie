@@ -82,3 +82,19 @@ def test_an_uncaught_thread_error_is_sent_and_still_reaches_the_old_hook(monkeyp
     assert events.sent() == [("app_error", {"error_code": "uncaught",
                                             "message": "OSError: cannot read ~/.eggie/x"})]
     assert isinstance(seen[0], OSError)
+
+
+def test_an_uncaught_main_thread_error_is_delivered_before_the_hook_returns(monkeypatch):
+    import time
+    bodies = []
+
+    def slow_post(url, body):
+        time.sleep(0.1)
+        bodies.append(body)
+
+    monkeypatch.setattr(sys, "excepthook", lambda *a: None)
+    monkeypatch.setattr(threading, "excepthook", lambda args: None)
+    sender = EventSender("http://s/api", {}, post=slow_post)
+    install_hooks(sender, home="/home/ana", user="ana")
+    sys.excepthook(ValueError, ValueError("x"), None)
+    assert len(bodies) == 1 and b"app_error" in bodies[0]

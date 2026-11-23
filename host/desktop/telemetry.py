@@ -96,6 +96,8 @@ def install_hooks(sender: EventSender, *, home: str, user: str) -> None:
 
     def sys_hook(exc_type, exc, tb):
         report(exc)
+        # The interpreter exits next and kills the daemon worker.
+        sender.flush(2.0)
         previous_sys(exc_type, exc, tb)
 
     def thread_hook(args):

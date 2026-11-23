@@ -41,6 +41,11 @@ def test_sanitize_hides_other_absolute_paths_and_caps_length():
     assert "<path>" in out and len(out) <= 200
 
 
+def test_sanitize_keeps_urls_intact():
+    out = sanitize("cannot reach https://app.eggie.io/x", home="/home/u", user="u")
+    assert "https://app.eggie.io/x" in out
+
+
 def test_error_code_uses_the_install_errors_cause_and_hresult():
     cause = VmUnresponsive("Wsl/Service/CreateInstance/0x8007274C")
     try:
@@ -83,13 +88,22 @@ def test_flush_gives_up_after_its_timeout_when_the_service_hangs():
     assert elapsed < 1.0
 
 
-def test_a_failing_post_never_reaches_the_caller():
-    def boom(url, body):
-        raise OSError("down")
+def test_the_worker_survives_a_failing_post():
+    bodies = []
 
-    sender = EventSender("http://s/api", CONTEXT, post=boom)
+    def post(url, body):
+        if not bodies and not calls:
+            calls.append(1)
+            raise OSError("down")
+        bodies.append(body)
+
+    calls = []
+    sender = EventSender("http://s/api", CONTEXT, post=post)
     sender.send("app_launch", {"background": True})
     sender.flush()
+    sender.send("app_launch", {"background": False})
+    sender.flush()
+    assert len(bodies) == 1 and b'"background": false' in bodies[0]
 
 
 def test_error_codes_match_the_public_doc():

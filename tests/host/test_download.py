@@ -78,3 +78,19 @@ def test_network_failures_become_download_failed_but_a_full_disk_does_not(tmp_pa
     with pytest.raises(OSError) as e:
         fetch(image, tmp_path / "y", opener=full_disk)
     assert not isinstance(e.value, DownloadFailed)
+
+
+def test_a_connection_dropped_mid_body_is_download_failed(tmp_path):
+    import http.client
+    from host.core.download import fetch
+    from host.core.events import error_code
+    from host.core.images import Image
+
+    class Dropping:
+        def read(self, n):
+            raise http.client.IncompleteRead(b"")
+
+    with pytest.raises(Exception) as e:
+        fetch(Image("https://example.invalid/x", "0" * 64), tmp_path / "x",
+              opener=lambda url, start: (Dropping(), 10))
+    assert error_code(e.value) == "download_failed"

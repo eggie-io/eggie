@@ -32,9 +32,11 @@ class Opener:
     def __init__(self, *replies):
         self.replies = list(replies)
         self.requests = []
+        self.timeouts = []
 
     def __call__(self, request, timeout):
         self.requests.append(request)
+        self.timeouts.append(timeout)
         reply = self.replies.pop(0)
         if isinstance(reply, BaseException):
             raise reply
@@ -161,13 +163,49 @@ def test_releasing_a_public_url_accepts_an_empty_204():
     assert opener.requests[0].get_method() == "DELETE"
 
 
-def test_the_certificate_is_fetched_from_the_instance_route_with_the_token():
-    opener = Opener((200, b'{"names": [], "certificate": "c", "private_key": "k", "not_after": "x"}'))
-    out = Cloud("https://svc/api", opener=opener).instance_certificate("at-1")
+def test_the_certificate_list_is_fetched_from_the_instance_route_with_the_token():
+    opener = Opener((200, b'{"certificates": []}'))
+    out = Cloud("https://svc/api", opener=opener).instance_certificates("at-1")
     (request,) = opener.requests
-    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/instances/me/certificate")
+    assert (request.get_method(), request.full_url) == ("GET", "https://svc/api/v1/instances/me/certificates")
     assert request.get_header("Authorization") == "Bearer at-1"
-    assert out["private_key"] == "k"
+    assert out == {"certificates": []}
+
+
+def test_a_certificate_id_is_percent_quoted_in_the_path():
+    opener = Opener((200, b'{}'))
+    Cloud("https://svc/api", opener=opener).instance_certificate("at-1", "a/b")
+    assert opener.requests[0].full_url == "https://svc/api/v1/instances/me/certificates/a%2Fb"
+
+
+def test_a_domain_is_deleted_by_its_ascii_hostname_in_the_path():
+    opener = Opener((204, b""))
+    assert Cloud("https://svc/api", opener=opener).delete_instance_domain(
+        "at-1", "xn--mnchen-3ya.de") is None
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == (
+        "DELETE", "https://svc/api/v1/instances/me/domains/xn--mnchen-3ya.de")
+    assert request.get_header("Authorization") == "Bearer at-1"
+
+
+def test_adding_a_domain_posts_the_hostname_project_and_target():
+    opener = Opener((201, b'{"domain": {}, "suggested": null}'))
+    Cloud("https://svc/api", opener=opener).add_instance_domain(
+        "at-1", "example.com", "shop", "shop.foo.eggie.space")
+    (request,) = opener.requests
+    assert (request.get_method(), request.full_url) == (
+        "POST", "https://svc/api/v1/instances/me/domains")
+    assert json.loads(request.data) == {"hostname": "example.com", "project": "shop",
+                                        "target": "shop.foo.eggie.space"}
+
+
+def test_a_domain_check_waits_longer_and_a_challenge_lookup_shorter_than_other_calls():
+    opener = Opener((200, b'{"domain": {}}'), (200, b'{}'), (200, b'{}'))
+    cloud = Cloud("https://svc/api", opener=opener)
+    cloud.check_instance_domain("at-1", "example.com")
+    cloud.acme_challenge("at-1", "t" * 43)
+    cloud.instance_domains("at-1")
+    assert opener.timeouts == [20.0, 3.0, 10.0]
 
 
 def test_a_handoff_code_is_redeemed_with_the_token_and_the_code():

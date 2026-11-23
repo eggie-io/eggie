@@ -34,7 +34,7 @@ from .jobs import JobFailed, JobRegistry
 from .lifecycle import LifecycleService
 from .loader import ProjectLoader
 from .locks import ProjectLocks
-from .ratelimit import KeyedWindow, Window
+from .ratelimit import KeyedWindow, Window, client_address
 from .secrets import SecretService
 
 log = logging.getLogger("eggie.api")
@@ -202,8 +202,7 @@ class Transfers:
         if size > self._config.max_upload_bytes:
             raise TooLarge("payload_too_large",
                            f"A push may be at most {_gb(self._config.max_upload_bytes)}.")
-        # Traefik replaces a client's own X-Forwarded-For with the address it came from.
-        sender = forwarded_for.split(",", 1)[0].strip() or peer
+        sender = client_address(forwarded_for, peer)
         # A full instance refuses before tracking a sender; a refused sender
         # takes nothing from the shared window.
         if not (self._window.has_room() and self._per_sender.take(sender)

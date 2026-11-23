@@ -92,6 +92,11 @@ export function ProjectMenu({ id, project, push, onOpen }: {
                 <Label icon="book">Docs</Label>
               </NavLink>
             )}
+            {notes.domain && (
+              <NavLink to={`${page}/domain`} className={s.item}>
+                <Label icon="globe" note={notes.domain.note}>Custom domain</Label>
+              </NavLink>
+            )}
             {notes.public && (
               <button
                 type="button"

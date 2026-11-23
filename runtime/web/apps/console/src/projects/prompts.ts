@@ -21,6 +21,11 @@ export function fixPrompt(cause: Cause, id: string, detail: string | null): stri
 
 const folder = (id: string) => `~/projects/${id}`;
 
+export function domainPrompt(id: string, hostname: string): string {
+  const url = `https://${hostname}`;
+  return `The project in ${folder(id)} now opens at ${url}. Find every place where the app has its own address written down (login callbacks, allowed hosts, links it sends) and change it to ${url}. ${CLOSE}`;
+}
+
 export function newPrompt(id: string): string {
   return `I'm starting a new project in ${folder(id)}. The folder is empty. Ask me a few short questions about what it should do, then build it there. Add a docker-compose.yml at the top of the folder that starts everything, with the web service listening on 0.0.0.0, and start it with \`eggie up\`. When you're done, tell me in plain words what you made and how to use it.`;
 }

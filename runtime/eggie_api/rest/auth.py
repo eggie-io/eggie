@@ -70,6 +70,10 @@ def install(app: FastAPI, *, token: str, sessions: Sessions,
     @app.middleware("http")
     async def _authenticate(request: Request, call_next):
         path = request.url.path
+        if config.site_host and path.startswith("/.well-known/acme-challenge/"):
+            # The certificate authority's check, on any host: the router answers
+            # only a well-formed token and only from the service.
+            return await call_next(request)
         if config.site_host and (path == "/api/transfers"
                                  or path.startswith("/api/transfers/")):
             # Called by another machine, not a page: no cookie, Origin or bearer

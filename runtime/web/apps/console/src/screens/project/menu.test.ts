@@ -23,6 +23,14 @@ describe("menuNotes", () => {
     });
   });
 
+  it("shows Custom domain only on a site, noting the primary domain", () => {
+    const domains = [{ hostname: "example.com", display: "example.com", status: "active", primary: true }];
+    expect(menuNotes({ ...off, domains }, null, 0).domain).toBeNull();
+    expect(menuNotes({ ...off, domains }, undefined, 0).domain).toBeNull();
+    expect(menuNotes({ ...off, domains }, "foo.eggie.io", 0).domain).toEqual({ note: "example.com" });
+    expect(menuNotes(off, "foo.eggie.io", 0).domain).toEqual({ note: null });
+  });
+
   it("notes Secrets only when the project asks for some", () => {
     expect(menuNotes(off, null, 0).secrets).toBeNull();
     expect(menuNotes({ ...off, secrets_requested: 2 }, null, 0).secrets).toBe("2 requested");

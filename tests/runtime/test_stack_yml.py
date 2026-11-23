@@ -191,7 +191,8 @@ def test_the_site_override_moves_the_web_entrypoint_to_443_with_tls():
     assert "--entryPoints.web.http.tls=true" in command
     assert "--entryPoints.http.address=:80" in command
     assert "--entryPoints.http.http.redirections.entryPoint.to=web" in command
-    assert "--providers.file.directory=/opt/eggie/tls" in command
+    assert "--providers.file.directory=/opt/eggie/edge" in command
+    assert "--entryPoints.http.http.redirections.entryPoint.priority=100000" in command
     assert "--providers.file.watch=true" in command
     # compose replaces `command` wholesale, so the base flags must be repeated.
     base = yaml.safe_load(_text())["services"]["traefik"]["command"]
@@ -200,7 +201,7 @@ def test_the_site_override_moves_the_web_entrypoint_to_443_with_tls():
             continue
         assert flag in command, f"base flag dropped by the override: {flag}"
     assert traefik["ports"] == ["80:80", "443:443"]
-    assert "/opt/eggie/tls:/opt/eggie/tls:ro" in traefik["volumes"]
+    assert "/opt/eggie/edge:/opt/eggie/edge:ro" in traefik["volumes"]
     assert set(yaml.safe_load(SITE_STACK.read_text())["services"]) == {"traefik"}
 
 

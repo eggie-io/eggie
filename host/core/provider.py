@@ -21,6 +21,8 @@ class VmUnresponsive(RuntimeError):
     fails the same way. Raised by `exec()` too: the guest never ran anything,
     and a Completed would read as that command failing inside the VM."""
 
+    code = "vm_unresponsive"
+
 
 @dataclass(frozen=True)
 class CheckResult:

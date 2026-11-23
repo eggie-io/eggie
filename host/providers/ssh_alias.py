@@ -134,6 +134,21 @@ def host_installed(user_config: Path, alias: str) -> bool:
         return False
 
 
+def installed_hosts(user_config: Path) -> list[str]:
+    """Every alias with a complete Eggie block in the file."""
+    try:
+        text = user_config.read_text()
+    except OSError:
+        return []
+    found = []
+    for line in text.splitlines():
+        if line.startswith(_BEGIN_PREFIX) and "'" in line[len(_BEGIN_PREFIX):]:
+            alias = line[len(_BEGIN_PREFIX):].split("'", 1)[0]
+            if alias not in found and _split(text, alias)[1] is not None:
+                found.append(alias)
+    return found
+
+
 def install_host(user_config: Path, alias: str,
                  options: list[tuple[str, str]]) -> None:
     _install_block(user_config, alias, _render_host(alias, options))

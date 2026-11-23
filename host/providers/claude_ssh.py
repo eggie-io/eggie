@@ -77,6 +77,14 @@ def entry_installed(claude_dir: Path, entry_id: str) -> bool:
     return any(_is(e, entry_id) for e in configs)
 
 
+def entry_ids(claude_dir: Path) -> list[str]:
+    try:
+        configs = _load(settings_path(claude_dir)).get("sshConfigs", [])
+    except (OSError, ValueError):
+        return []
+    return [e["id"] for e in configs if isinstance(e, dict) and isinstance(e.get("id"), str)]
+
+
 def install_entry(claude_dir: Path, entry: dict) -> None:
     """Add or refresh the entry with this id. A missing ~/.claude is created:
     the user asked for the entry, and Claude Code reads it once it starts."""

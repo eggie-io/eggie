@@ -64,6 +64,15 @@ def has(codex_home: Path, alias: str) -> bool:
     return any(_is(c, alias) for c in data["remoteConnections"])
 
 
+def aliases(codex_home: Path) -> list[str]:
+    try:
+        data = _load(config_path(codex_home))
+    except (OSError, ValueError):
+        return []
+    return [c["sshAlias"] for c in data["remoteConnections"]
+            if isinstance(c, dict) and isinstance(c.get("sshAlias"), str)]
+
+
 def add(codex_home: Path, alias: str, remote_path: str, label: str) -> bool:
     """Add the connection and its project folder; True when the file changed.
     A label already on that folder is the user's and stays."""

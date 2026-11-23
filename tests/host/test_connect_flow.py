@@ -455,3 +455,57 @@ def test_a_hostname_or_login_ssh_config_cannot_hold_writes_nothing(tmp_path, fie
     assert len(lines) == 1 and not lines[0].ok
     assert client.calls == []
     assert not w.ssh_config.exists()
+
+
+def test_a_key_the_kitchen_does_not_know_points_to_the_web_app_and_still_clears_locally(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    w.connector().connect(BOTH, None, local=False)
+    client.remove_error = ApiError("ssh_key_not_found", "no such key", 404)
+
+    lines = w.connector().remove(BOTH, ["shop"], local=False)
+
+    # Not a success: the owner still has a key to revoke by hand.
+    assert not lines[-1].ok
+    assert lines[-1].text == ("Eggie could not remove this computer's key from Shop; "
+                              "revoke it in the web app (the kitchen's SSH keys)")
+    assert not ssh_alias.host_installed(w.ssh_config, "eggie-shop")
+
+
+def test_remove_all_clears_local_traces_of_a_kitchen_no_longer_listed(tmp_path):
+    client = FakeClient([row("shop"), row("gone")],
+                        polls={"id-shop": ["approved"], "id-gone": ["approved"]})
+    w = World(tmp_path, client)
+    w.connector().connect(BOTH, None, local=False)
+    client.rows = [row("shop", status="stopped")]
+    client.calls.clear()
+
+    lines = w.connector().remove({"claude"}, None, local=False)
+
+    assert all(call[1] != "id-gone" for call in client.calls)
+    gone = [line for line in lines if line.target == "eggie-gone"]
+    assert gone and all(line.ok for line in gone)
+    assert "this computer" in gone[-1].text
+    assert not claude_ssh.entry_installed(w.claude, "eggie-gone")
+    # Codex was not asked for, so its connection and the ssh block it needs stay.
+    assert codex_app.has(w.codex, "eggie-gone")
+    assert ssh_alias.host_installed(w.ssh_config, "eggie-gone")
+
+    lines = w.connector().remove(BOTH, None, local=False)
+
+    assert all(line.ok for line in lines), lines
+    assert not codex_app.has(w.codex, "eggie-gone")
+    assert not ssh_alias.host_installed(w.ssh_config, "eggie-gone")
+    assert all(call[1] != "id-gone" for call in client.calls)
+
+
+def test_remove_all_keeps_unlisted_traces_when_the_listing_failed(tmp_path):
+    client = FakeClient([row("gone")], polls={"id-gone": ["approved"]})
+    w = World(tmp_path, client)
+    w.connector().connect(BOTH, None, local=False)
+    before = w.files()
+    w.client = ApiUnavailableError("could not reach the Eggie API")
+
+    w.connector().remove(BOTH, None, local=False)
+
+    assert w.files() == before

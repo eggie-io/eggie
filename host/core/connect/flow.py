@@ -122,9 +122,13 @@ class Connector:
             api, rows, failed = self._rows(instances)
             lines += failed
             if instances is None:
+                listed = {_alias(r) for r in rows}
                 rows = [r for r in rows if self._has_traces(_alias(r))]
             for r in rows:
                 lines += self._guarded(_title(r), lambda r=r: self._remove_instance(api, r, agents))
+            if instances is None and api is not None:
+                for alias in self._unlisted_aliases(listed):
+                    lines += self._guarded(alias, lambda a=alias: self._remove_unlisted(a, agents))
         if local:
             lines += self._guarded(LOCAL, lambda: self._remove_local(agents))
         return lines
@@ -268,17 +272,22 @@ class Connector:
             raise last_error
         return "expired"
 
-    def _remove_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
-        target, alias = _title(row), _alias(row)
+    def _remove_agents(self, target: str, alias: str, agents: set[str]) -> tuple[list[Line], bool]:
+        """The agents' entries, and whether the ssh block may go too."""
         lines = []
         if CLAUDE in agents:
             lines += self._agent(target, CLAUDE, lambda: self._unclaude(alias))
         if CODEX in agents:
             lines += self._agent(target, CODEX, lambda: self._uncodex(alias))
-        if any(not line.ok for line in lines) or self._agent_left(alias):
+        return lines, all(line.ok for line in lines) and not self._agent_left(alias)
+
+    def _remove_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
+        target, alias = _title(row), _alias(row)
+        lines, block_may_go = self._remove_agents(target, alias, agents)
+        if not block_may_go:
             return lines
         # The ssh block goes last: it is what makes a re-run of --remove retry the service.
-        fingerprint = self._fingerprint()
+        fingerprint, ok = self._fingerprint(), True
         if fingerprint is None:
             text = "This computer has no Eggie key to remove"
         else:
@@ -288,12 +297,29 @@ class Connector:
                 if e.api_code != "ssh_key_not_found":
                     lines.append(Line(target, None, False, e.message))
                     return lines
-                text = "This computer's key was not on the kitchen"
+                # Often a key this computer sent from an earlier Eggie install.
+                ok, text = False, (f"Eggie could not remove this computer's key from {target}; "
+                                   "revoke it in the web app (the kitchen's SSH keys)")
             else:
                 self._ping(row["console_hostname"])
                 text = "This computer's key was removed from the kitchen"
         ssh_alias.remove_host(self._ssh_config, alias)
-        lines.append(Line(target, None, True, text))
+        lines.append(Line(target, None, ok, text))
+        return lines
+
+    def _unlisted_aliases(self, listed: set[str]) -> list[str]:
+        found = (ssh_alias.installed_hosts(self._ssh_config)
+                 + claude_ssh.entry_ids(self._claude_dir) + codex_app.aliases(self._codex_home))
+        return sorted({a for a in found if a.startswith("eggie-") and ssh_alias.valid_alias(a)}
+                      - listed)
+
+    def _remove_unlisted(self, alias: str, agents: set[str]) -> list[Line]:
+        lines, block_may_go = self._remove_agents(alias, alias, agents)
+        if block_may_go:
+            ssh_alias.remove_host(self._ssh_config, alias)
+        lines.append(Line(alias, None, True,
+                          "Not on your account any more, so only this computer's files "
+                          "were changed; no kitchen was asked to remove a key"))
         return lines
 
     def _has_traces(self, alias: str) -> bool:

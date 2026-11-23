@@ -17,6 +17,10 @@ LOGIN = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 # fullmatch, not $: a trailing newline must not smuggle in a second line.
 KEY = re.compile(r"ssh-ed25519 [A-Za-z0-9+/]+={0,2}( [^\x00-\x1f]{0,64})?")
 
+def say(msg):
+    print(f"ssh-keys-apply: {msg}", file=sys.stderr)
+
+
 try:
     with open(desired) as f:
         data = json.load(f)
@@ -24,18 +28,26 @@ try:
     if not isinstance(login, str) or not isinstance(keys, list):
         raise ValueError
 except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    say("desired.json is missing or malformed; nothing changed")
     sys.exit(0)
 
 if not LOGIN.fullmatch(login):
+    say("the login is not a valid account name; nothing changed")
     sys.exit(0)
 
 with open(passwd) as f:
     homes = [line.rstrip("\n").split(":") for line in f]
 if not any(len(p) >= 6 and p[0] == login and p[5].startswith("/home/")
            for p in homes):
+    say("the login has no account under /home; nothing changed")
     sys.exit(0)
 
-lines = [k for k in keys if isinstance(k, str) and KEY.fullmatch(k)]
+lines = []
+for i, k in enumerate(keys):
+    if isinstance(k, str) and KEY.fullmatch(k):
+        lines.append(k)
+    else:
+        say(f"key {i} dropped: not an ssh-ed25519 key line or comment over 64 characters")
 
 os.makedirs(target, mode=0o755, exist_ok=True)
 tmp = os.path.join(target, f".{login}.tmp")

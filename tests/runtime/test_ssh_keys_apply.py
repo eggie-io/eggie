@@ -22,9 +22,14 @@ def setup(tmp_path, desired):
 
 
 def run(keys, target, env):
+    return _run(keys, target, env).returncode
+
+
+def _run(keys, target, env):
     result = subprocess.run(["bash", str(SCRIPT), str(keys), str(target)],
                             env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+    return result
 
 
 def test_writes_the_login_file_with_only_valid_keys(tmp_path):
@@ -61,3 +66,10 @@ def test_bad_json_keeps_the_current_file(tmp_path):
     (target / "ada").write_text("keep")
     run(keys, target, env)
     assert (target / "ada").read_text() == "keep"
+
+
+def test_a_dropped_key_is_reported_by_index_without_its_text(tmp_path):
+    keys, target, env = setup(tmp_path, {"login": "ada", "keys": [KEY, "ssh-rsa SECRETBODY x"]})
+    result = _run(keys, target, env)
+    assert "key 1 dropped" in result.stderr
+    assert "SECRETBODY" not in result.stderr

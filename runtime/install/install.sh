@@ -384,12 +384,15 @@ if (( SITE )); then
   install -d -m 2770 -o root -g docker /opt/eggie/ssh-keys
   install -m 644 "$INSTALL_DIR/sshd/10-eggie-keys.conf" /etc/ssh/sshd_config.d/
   # A broken sshd config would lock the owner out at the next reload.
+  # sshd -t fails without this directory until sshd has run once this boot.
+  mkdir -p /run/sshd
   if ! sshd -t; then
     rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
     echo "sshd rejected the Eggie key setting; it was removed and sshd left unchanged" >&2
     exit 1
   fi
-  systemctl reload ssh
+  # ssh.service is inactive until the first connection (socket activation).
+  systemctl try-reload-or-restart ssh.service
   install -m 644 "$INSTALL_DIR/systemd/eggie-ssh-keys.path" \
     "$INSTALL_DIR/systemd/eggie-ssh-keys.service" /etc/systemd/system/
   systemctl daemon-reload

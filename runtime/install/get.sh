@@ -93,8 +93,21 @@ main() {
         exit 1
       fi
     done
-    printf 'EGGIE_SITE_HOST=%q\nEGGIE_SITE_DOMAIN=%q\n' \
-      "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN" > /opt/eggie/site.env
+    # The service that created the server, when it is not production. They
+    # carry its tokens and land in compose's .env: https, no quotes or spaces.
+    local url_name
+    for url_name in EGGIE_CLOUD_URL EGGIE_WEB_URL; do
+      if [[ -n "${!url_name:-}" \
+            && ! "${!url_name}" =~ ^https://[a-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$ ]]; then
+        echo "$url_name must be an https URL (got '${!url_name}')" >&2
+        exit 1
+      fi
+    done
+    {
+      printf 'EGGIE_SITE_HOST=%q\nEGGIE_SITE_DOMAIN=%q\n' "$EGGIE_SITE_HOST" "$EGGIE_SITE_DOMAIN"
+      if [[ -n "${EGGIE_CLOUD_URL:-}" ]]; then printf 'EGGIE_CLOUD_URL=%q\n' "$EGGIE_CLOUD_URL"; fi
+      if [[ -n "${EGGIE_WEB_URL:-}" ]]; then printf 'EGGIE_WEB_URL=%q\n' "$EGGIE_WEB_URL"; fi
+    } > /opt/eggie/site.env
   fi
   # An update killed after the swap but before install.sh wrote its marker
   # leaves no marker; the working release is runtime.prev. Put it back first.

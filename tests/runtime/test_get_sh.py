@@ -458,7 +458,8 @@ def _run_main(tmp_path, root, **env):
     environ = _bin(tmp_path, dpkg="exit 0\n", curl=f"cp '{tar_path}' \"$4\"\n",
                    git=_git_listing(tmp_path, [ref]))
     for name in ("EGGIE_RUNTIME_REF", "EGGIE_RUNTIME_REPAIR", "EGGIE_RUNTIME_API",
-                 "EGGIE_RUNTIME_UPDATE", "EGGIE_SITE_HOST", "EGGIE_SITE_DOMAIN"):
+                 "EGGIE_RUNTIME_UPDATE", "EGGIE_SITE_HOST", "EGGIE_SITE_DOMAIN",
+                 "EGGIE_CLOUD_URL", "EGGIE_WEB_URL"):
         environ.pop(name, None)
     environ.update(env)
     script = GET.read_text().replace("/opt/eggie", str(root))
@@ -507,3 +508,31 @@ def test_a_run_without_site_variables_keeps_an_existing_site_env(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (root / "site.env").read_text() == (
         "EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n")
+
+
+def test_the_service_urls_are_written_to_site_env(tmp_path):
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    result = _run_main(tmp_path, root, EGGIE_SITE_HOST="foo.eggie.io",
+                       EGGIE_SITE_DOMAIN="foo.eggie.space",
+                       EGGIE_CLOUD_URL="https://app.staging.eggie.io/api",
+                       EGGIE_WEB_URL="https://app.staging.eggie.io")
+    assert result.returncode == 0, result.stderr
+    assert (root / "site.env").read_text() == (
+        "EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n"
+        "EGGIE_CLOUD_URL=https://app.staging.eggie.io/api\n"
+        "EGGIE_WEB_URL=https://app.staging.eggie.io\n")
+
+
+@pytest.mark.parametrize("bad", ["http://app.staging.eggie.io/api", "app.staging.eggie.io",
+                                 "https://app.staging.eggie.io/api?x=1",
+                                 "https://app.staging.eggie.io/a b", "https://a.io/'$(id)'"])
+def test_a_service_url_that_is_not_plain_https_is_refused_before_installing(tmp_path, bad):
+    root = tmp_path / "opt-eggie"
+    root.mkdir()
+    result = _run_main(tmp_path, root, EGGIE_SITE_HOST="foo.eggie.io",
+                       EGGIE_SITE_DOMAIN="foo.eggie.space", EGGIE_CLOUD_URL=bad)
+    assert result.returncode != 0
+    assert "EGGIE_CLOUD_URL must be an https URL" in result.stderr
+    assert not (root / "site.env").exists()
+    assert "install.sh args" not in result.stdout

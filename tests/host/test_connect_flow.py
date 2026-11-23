@@ -336,6 +336,7 @@ def test_local_lima_adds_codex_on_the_vm_alias_and_remove_keeps_its_host(tmp_pat
     lines = w.connector().connect(BOTH, [], local=True)
 
     assert all(line.ok for line in lines), lines
+    assert lines[-2].text == "ssh eggie works"
     assert w.provider.connected == ["claude-code"]
     assert codex_app.has(w.codex, "eggie")
     assert "eggie" in w.ssh.signed_in
@@ -509,3 +510,29 @@ def test_remove_all_keeps_unlisted_traces_when_the_listing_failed(tmp_path):
     w.connector().remove(BOTH, None, local=False)
 
     assert w.files() == before
+
+
+def test_local_lima_reports_when_ssh_eggie_fails(tmp_path):
+    w = World(tmp_path, FakeClient([]), FakeProvider(local_ssh_alias="eggie"))
+
+    lines = w.connector().connect({"claude"}, [], local=True)
+
+    assert not lines[-2].ok
+    assert lines[-2].text == "ssh eggie failed: Permission denied (publickey)."
+
+
+def test_a_new_block_goes_when_the_first_ssh_probe_cannot_run(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    real = w.ssh
+
+    def run(argv):
+        if argv[0] == "ssh":
+            raise FileNotFoundError("ssh")
+        return real(argv)
+
+    w.ssh = run
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    assert len(lines) == 1 and not lines[0].ok
+    assert not w.ssh_config.exists()

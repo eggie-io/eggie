@@ -193,15 +193,16 @@ class Connector:
             ("StrictHostKeyChecking", "accept-new"),
             ("ServerAliveInterval", "30"),
         ])
-        access = ssh.reach(self._run, alias)
-        if not access.ok:
-            try:
-                access = self._gain_access(api, row, public)
-            finally:
-                if not access.ok and not had_block:
-                    self._forget_block(alias, existed)
+        access = ssh.Probe(False, "")
+        try:
+            access = ssh.reach(self._run, alias)
             if not access.ok:
-                return [Line(target, None, False, access.reason)]
+                access = self._gain_access(api, row, public)
+        finally:
+            if not access.ok and not had_block:
+                self._forget_block(alias, existed)
+        if not access.ok:
+            return [Line(target, None, False, access.reason)]
 
         lines = []
         if CLAUDE in agents:
@@ -209,11 +210,13 @@ class Connector:
         if CODEX in agents:
             lines += self._agent(target, CODEX,
                                  lambda: self._codex(alias, f"Eggie · {target}"))
-        check = ssh.reach(self._run, alias)
-        lines.append(Line(target, None, check.ok,
-                          f"ssh {alias} works" if check.ok
-                          else f"ssh {alias} failed: {check.reason}"))
+        lines.append(self._check(target, alias))
         return lines
+
+    def _check(self, target: str, alias: str) -> Line:
+        check = ssh.reach(self._run, alias)
+        return Line(target, None, check.ok,
+                    f"ssh {alias} works" if check.ok else f"ssh {alias} failed: {check.reason}")
 
     def _forget_block(self, alias: str, existed: bool) -> None:
         ssh_alias.remove_host(self._ssh_config, alias)
@@ -357,6 +360,8 @@ class Connector:
                                      lambda: self._codex(alias, f"Eggie · {LOCAL}"))
             else:
                 lines += self._agent(LOCAL, CODEX, lambda: self._provider.connect_agent("codex"))
+        if alias:
+            lines.append(self._check(LOCAL, alias))
         return lines
 
     def _remove_local(self, agents: set[str]) -> list[Line]:

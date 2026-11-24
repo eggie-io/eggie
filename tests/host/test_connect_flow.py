@@ -361,7 +361,7 @@ def test_without_the_api_this_computer_still_connects(tmp_path, error):
     lines = w.connector().connect({"codex"}, None, local=True)
 
     assert not lines[0].ok
-    assert lines[0].text.startswith("Start Eggie and sign in to connect your kitchens: ")
+    assert lines[0].text.startswith("Could not load your kitchens: ")
     assert w.provider.connected == ["codex"]
 
 

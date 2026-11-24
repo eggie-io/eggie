@@ -16,7 +16,8 @@ _ENDED = {"access_denied": "denied", "expired_token": "expired", "invalid_grant"
 
 
 class NotSignedIn(Exception):
-    pass
+    def __init__(self, message: str = "Open the Eggie app and sign in first."):
+        super().__init__(message)
 
 
 @dataclass(frozen=True)

@@ -278,6 +278,15 @@ class ApiClient:
     def handoff_code(self) -> str:
         return str(self._call("POST", "/sessions/handoff")["code"])
 
+    def account(self) -> dict:
+        return self._call("GET", "/account")
+
+    def account_sign_in(self) -> dict:
+        return self._call("POST", "/account/sign-in")
+
+    def agent_setup(self, agent_id: str) -> dict:
+        return self._call("POST", f"/agents/{urllib.parse.quote(agent_id, safe='')}/setup")
+
     def instances(self) -> list[dict]:
         return self._instance_call("GET", "/instances").get("instances", [])
 

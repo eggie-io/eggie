@@ -27,6 +27,15 @@ def _default_client():
 _client_factory = _default_client  # tests override this
 
 
+def _default_cloud_client():
+    from host.core.cloud.client import default_cloud
+    from host.providers import default_install_dir
+    return default_cloud(default_install_dir().parent / "account.json")[1]
+
+
+_cloud_factory = _default_cloud_client  # tests override this
+
+
 def _client():
     return _client_factory()
 
@@ -37,7 +46,7 @@ def _default_connector(say):
 
     from host.core.connect.flow import Connector
     provider = _provider()
-    return Connector(_client, provider, home=Path.home(), env=os.environ,
+    return Connector(_cloud_factory, provider, home=Path.home(), env=os.environ,
                      computer_name=provider.computer_name(), say=say)
 
 
@@ -292,9 +301,14 @@ def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Cod
     agents = agents or {"claude", "codex"}
     instances = list(kitchen) if kitchen else ([] if local else None)
     local = local or not kitchen
-    with _api_errors(), _vm_errors():
-        connector = _connector_factory(typer.echo)
-        lines = (connector.remove if remove else connector.connect)(agents, instances, local)
+    from host.core.cloud.account import NotSignedIn
+    try:
+        with _api_errors(), _vm_errors():
+            connector = _connector_factory(typer.echo)
+            lines = (connector.remove if remove else connector.connect)(agents, instances, local)
+    except NotSignedIn as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=1)
     for line in lines:
         if not line.target:
             typer.echo(line.text)

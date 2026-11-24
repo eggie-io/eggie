@@ -141,7 +141,7 @@ class Connector:
             rows = api.instances()
         except (ApiError, ApiUnavailableError) as e:
             return None, [], [Line("Kitchens", None, False,
-                                   f"Start Eggie and sign in to connect your kitchens: {e}")]
+                                   f"Could not load your kitchens: {e}")]
         if wanted is None:
             return api, rows, []
         picked, missing = [], []

@@ -155,3 +155,33 @@ def test_an_update_refused_by_a_busy_registry_is_still_owed(tmp_path):
     finally:
         release.set()
         api.jobs.join(timeout=5)
+
+
+class Kitchens:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def instances(self):
+        return self.rows
+
+
+class SignedIn:
+    signed_in = True
+    pending = None
+    email = "a@b.c"
+
+
+def test_open_cloud_console_uses_the_switcher_page(tmp_path, monkeypatch):
+    # Not owned on purpose: the switcher page opens an org kitchen too.
+    monkeypatch.delenv("EGGIE_WEB_APP_URL", raising=False)
+    opened = []
+    monkeypatch.setattr("host.desktop.api.webbrowser.open", opened.append)
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: READY,
+                     cloud=(SignedIn(), Kitchens([{"id": "k1", "is_owner": False,
+                                                   "status": "running",
+                                                   "console_hostname": "ihor.eggie.io"}])))
+    api.load_kitchens()
+    assert api.open_cloud_console("k1") == {"ok": True}
+    assert api.open_cloud_console("gone") == {"ok": False}
+    assert opened == ["https://app.eggie.io/kitchens/open?host=ihor.eggie.io"]

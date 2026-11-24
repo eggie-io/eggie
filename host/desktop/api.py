@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 import webbrowser
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 
 from host.core import constants
 from host.client import ApiError, ApiUnavailableError
@@ -349,6 +349,14 @@ class DesktopApi:
         if not isinstance(kitchen_id, str) or not kitchen_id:
             return {"ok": False}
         webbrowser.open(f"{web_app_url()}/kitchens/{quote(kitchen_id, safe='')}")
+        return {"ok": True}
+
+    def open_cloud_console(self, kitchen_id: str) -> dict:
+        row = next((k for k in self._kitchens or [] if k.get("id") == kitchen_id), None)
+        host = (row or {}).get("console_hostname")
+        if not host:
+            return {"ok": False}
+        webbrowser.open(f"{web_app_url()}/kitchens/open?{urlencode({'host': host})}")
         return {"ok": True}
 
     def start_app_update_check(self) -> None:

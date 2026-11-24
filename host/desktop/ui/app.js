@@ -140,7 +140,7 @@ window.eggie.handlers.app_update = (event) => {
   // redrawn: refreshing elsewhere would throw the user off their screen.
   if (event.type === 'available') {
     const screen = document.getElementById('screen').dataset.screen || '';
-    if (screen.startsWith('home:')) refresh();
+    if (screen === 'home') refresh();
     return;
   }
   if (event.type === 'progress') {
@@ -417,18 +417,18 @@ window.eggie.route = (name) => {
 ACTIONS['doctor'] = async () => show('doctor', await api().doctor());
 
 // Returns nothing so wire() doesn't put the busy spinner over a copy.
-ACTIONS['copy-log'] = (node) => {
-  const pre = node.closest('details.log, section, #notice').querySelector('pre');
+function copyFrom(node, source) {
+  const idle = node.dataset.idle || (node.dataset.idle = node.textContent);
   const label = (text) => {
     node.textContent = text;
     clearTimeout(node.resetTimer);
-    node.resetTimer = setTimeout(() => { node.textContent = 'Copy log'; }, 2500);
+    node.resetTimer = setTimeout(() => { node.textContent = idle; }, 2500);
   };
   // execCommand is the fallback for a webview that refuses the async
   // clipboard; if both fail the text stays selected for a keyboard copy.
   const fallback = () => {
     const range = document.createRange();
-    range.selectNodeContents(pre);
+    range.selectNodeContents(source);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
@@ -436,9 +436,15 @@ ACTIONS['copy-log'] = (node) => {
     try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
     label(copied ? 'Copied' : 'Selected \u2014 copy it with your keyboard');
   };
-  const text = pre.textContent;
+  const text = source.textContent;
   if (!navigator.clipboard) return fallback();
   navigator.clipboard.writeText(text).then(() => label('Copied'), fallback);
+}
+ACTIONS['copy-log'] = (node) => {
+  copyFrom(node, node.closest('details.log, section, #notice').querySelector('pre'));
+};
+ACTIONS['copy-details'] = (node) => {
+  copyFrom(node, node.closest('.kcard').querySelector('[data-copy-source]'));
 };
 ACTIONS['repair'] = async () => { await api().start_repair(); };
 ACTIONS['start-vm'] = async () => { await api().start_vm(); };
@@ -460,14 +466,14 @@ window.eggie.handlers.vm = (event) => {
 };
 window.eggie.handlers.background_start = () => {
   const screen = document.getElementById('screen').dataset.screen || '';
-  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
+  if (screen === 'home' || screen === 'unreachable' || screen === 'unresponsive') refresh();
 };
 // Opening from the tray: a page drawn while hidden may be stale. Screens
 // holding user input or a job are left alone.
 window.eggie.handlers.window = (event) => {
   if (event.type !== 'shown') return;
   const screen = document.getElementById('screen').dataset.screen || '';
-  if (screen.startsWith('home:') || screen === 'unreachable' || screen === 'unresponsive') refresh();
+  if (screen === 'home' || screen === 'unreachable' || screen === 'unresponsive') refresh();
 };
 window.eggie.handlers.repair = (event) => {
   if (event.type === 'progress') return;
@@ -842,14 +848,94 @@ function drawSetup(kitchen) {
 
 ACTIONS['open-kitchen-page'] = () => api().open_kitchen_page(setupKitchen);
 
-// 1c's price line; the tile reads fine without it if the catalog can't load.
+// 1c's and Home's price line; each reads fine without it if the catalog can't load.
+// Kept once found, so Home's redraws don't ask the service again.
+let fromPrice = '';
+
 async function showFromPrice() {
   const line = document.querySelector('[data-from-price]');
-  const catalog = await api().catalog();
-  if (!line.isConnected || !catalog.ok || !catalog.from_price) return;
-  line.querySelector('[data-field="from_price"]').textContent = catalog.from_price;
+  if (!fromPrice) {
+    const catalog = await api().catalog();
+    if (catalog.ok) fromPrice = catalog.from_price;
+  }
+  if (!line.isConnected || !fromPrice) return;
+  line.querySelector('[data-field="from_price"]').textContent = fromPrice;
   line.hidden = false;
 }
+
+// --- Home (2a–2c): every kitchen as a card -------------------------------
+
+// A card from a <template data-card>, filled and wired before it joins the page.
+function card(name, data, kitchenId) {
+  const part = document.querySelector(`template[data-card="${name}"]`).content.cloneNode(true);
+  part.querySelectorAll('[data-kitchen]').forEach((node) => { node.dataset.kitchen = kitchenId || ''; });
+  fill(part, data);
+  wire(part);
+  return part;
+}
+
+// Chips come from the agent manifests; until those ship every card has none.
+// With none yet, Connect an agent is the card's main button.
+function withAgents(name, data, kitchenId, agents, canConnect) {
+  const has = agents.length > 0;
+  const part = card(name, Object.assign(data, {
+    has_agents: has, no_agents: !has, can_connect: canConnect, agents_row: has || canConnect,
+  }), kitchenId);
+  if (!has) part.querySelector('[data-action="connect-kitchen"]').className = 'btn-primary btn-sm';
+  return part;
+}
+
+function cloudCard(kitchen) {
+  const opensSetup = kitchen.state === 'getting_ready' || kitchen.state === 'failed';
+  const data = Object.assign({}, kitchen, {
+    [kitchen.state]: true, opens_setup: opensSetup, plain_title: !opensSetup,
+    host_line: kitchen.state !== 'getting_ready' && kitchen.line,
+  });
+  return withAgents('cloud', data, kitchen.id, [], kitchen.can_connect);
+}
+
+function localCard(local, home) {
+  const failed = local.state === 'failed';
+  const unresponsive = home.route === 'unresponsive';
+  const data = {
+    [local.state]: true, problem: home.problem, error: failed && home.problem,
+    retry_start: failed && !unresponsive, retry_recover: failed && unresponsive,
+  };
+  // This computer can always be picked; 3a says when it can't take an agent yet.
+  return withAgents('local', data, 'local', [], true);
+}
+
+function drawHome(home) {
+  const view = home.home;
+  show('home', Object.assign({}, home, view));
+  const list = document.querySelector('[data-cards]');
+  view.cards.forEach((kitchen) => {
+    list.append(kitchen.kind === 'local' ? localCard(kitchen, home) : cloudCard(kitchen));
+  });
+  if (view.missing) list.append(card(`add-${view.missing}`, {}));
+  if (view.missing === 'cloud') showFromPrice();
+  const delay = view.cards.some((kitchen) => kitchen.state === 'getting_ready') ? 3000 : 30000;
+  // A pressed card button is waiting on its job, whose refresh() redraws.
+  const pressed = () => busy.node && busy.node.isConnected;
+  pollWhileShowing(delay, async (node) => {
+    if (pressed()) return delay;
+    await api().load_kitchens();
+    const next = await api().home();
+    if (!node.isConnected) return stash && stash.nodes.contains(node) ? delay : null;
+    if (pressed()) return delay;
+    if (next.screen === 'home' && !next.action) drawHome(next);
+    else refresh();
+    return null;
+  });
+}
+
+ACTIONS['retry-kitchens'] = async () => {
+  await api().load_kitchens();
+  return refresh();
+};
+ACTIONS['open-cloud-console'] = (node) => api().open_cloud_console(node.dataset.kitchen);
+ACTIONS['kitchen-setup'] = (node) => showSetup(node.dataset.kitchen);
+ACTIONS['connect-kitchen'] = (node) => show('connect', { kitchen_id: node.dataset.kitchen });
 
 // A cloud kitchen made on the website meanwhile takes the page to Home.
 async function watchForKitchens() {
@@ -889,6 +975,7 @@ async function refresh() {
   }
   // A reload forgets which button was pressed; the plain sign-in link works for both.
   if (home.screen === 'account:waiting') return beginSignIn(signIn ? signIn.mode : 'existing', false);
+  if (home.screen === 'home') return drawHome(home);
   show(home.screen, home);
   if (home.screen === 'where') {
     whileShowing(30000, watchForKitchens);

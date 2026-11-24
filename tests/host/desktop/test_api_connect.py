@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from host.client import ApiUnavailableError
+from host.core.cloud.account import NotSignedIn
 from host.core.install import InstallState
 from host.core.status import Readiness
 from host.desktop.api import DesktopApi
@@ -159,3 +160,88 @@ def test_get_agent_opens_only_the_manifests_own_page(tmp_path):
     assert api.open_agent_download("cursor") == {"ok": True}
     assert api.open_agent_download("https://evil.example")["ok"] is False
     assert opened == ["https://cursor.com/download"]
+
+
+NEW = dict(SHOP, id="k9", name="bakery", display_name="Bakery", status="provisioning",
+           created_at="2026-11-24")
+CATALOG = {"regions": [{"id": "europe", "label": "Europe", "enabled": True,
+                        "size_ids_with_room": ["small"]}],
+           "sizes": [{"id": "small", "label": "S", "enabled": True}]}
+
+
+class Paying:
+    """The service across a payment: each instances() answers the next list."""
+
+    def __init__(self, *lists):
+        self.lists = list(lists)
+
+    def instances(self):
+        reply = self.lists.pop(0) if len(self.lists) > 1 else self.lists[0]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    def instance(self, instance_id):
+        return dict(NEW, status="running")
+
+    def instance_catalog(self):
+        return CATALOG
+
+    def billing_catalog(self):
+        return {"enabled": False, "sizes": []}
+
+
+def _paid(api):
+    api.catalog()
+    assert api.start_checkout("Bakery", "small", "europe") == {"ok": True}
+    assert api.checkout_status()["state"] == "found"
+
+
+def test_a_kitchen_watched_until_running_can_take_an_agent(tmp_path):
+    cloud = Paying([SHOP], [SHOP, NEW], ApiUnavailableError("down"))
+    api, _, _ = _api(tmp_path, cloud=cloud)
+    _paid(api)
+
+    assert api.kitchen("k9")["state"] == "running"
+    picked = api.agents("k9")["kitchen"]
+    assert (picked["state"], picked["enabled"]) == ("running", True)
+
+
+def test_connect_to_reads_a_fresh_list(tmp_path):
+    cloud = Paying([SHOP], [SHOP, NEW], [SHOP, dict(NEW, status="running")])
+    api, _, _ = _api(tmp_path, cloud=cloud)
+    _paid(api)
+
+    assert api.agents("k9")["kitchen"]["enabled"] is True
+
+
+def test_a_connect_that_finds_the_account_signed_out_says_so(tmp_path):
+    account = Account()
+
+    class SignedOutMidway(Cloud):
+        def instances(self):
+            if self.calls:
+                account.signed_in = False
+                raise NotSignedIn()
+            return super().instances()
+
+    api, _, pushed = _api(tmp_path, cloud=SignedOutMidway([SHOP]))
+    api._account = account
+
+    _, _, end = _run(api, pushed, "cursor", "k1")
+
+    assert end["type"] == "signed_out"
+
+
+def test_sign_out_forgets_the_payment_and_the_pages(tmp_path):
+    opened = []
+    api, _, _ = _api(tmp_path, cloud=Paying([SHOP]), opened=opened)
+    api._account.sign_out = lambda: None
+    api.catalog()
+    api.start_checkout("Bakery", "small", "europe")
+    api.sign_out()
+
+    assert api.checkout_status()["state"] == "none"
+    assert api.open_checkout_page() == {"ok": False}
+    assert api.start_checkout("Bakery", "small", "europe")["ok"] is False
+    assert len(opened) == 1

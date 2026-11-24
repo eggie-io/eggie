@@ -175,7 +175,8 @@ class Connector:
             target, alias = where["target"], where["alias"]
 
             def prepare() -> str:
-                if local and self._local_setup is not None:
+                # With an ssh host the install runs over ssh below; the VM's own would race it.
+                if local and self._local_setup is not None and not alias:
                     self._local_setup("codex")
                 if alias:
                     self._codex_ready(alias, f"Eggie · {target}")
@@ -363,7 +364,7 @@ class Connector:
             return reached
         return ssh.Probe(False, f"The kitchen did not let this computer in: "
                                 f"{reached.reason.rstrip('.')}. "
-                                "Run eggie connect again in a minute.")
+                                "Try again in a minute.")
 
     def _await_decision(self, api, instance_id: str, request_id: str) -> str:
         deadline = self._monotonic() + APPROVAL_TIMEOUT
@@ -524,12 +525,12 @@ class Connector:
         sandbox = codex_remote.sandbox_works(self._run, alias)
         if not sandbox.ok:
             raise _Failed(f"Codex can't run commands there ({sandbox.reason}). "
-                          "Update Eggie on it, then run eggie connect again.")
+                          "Update Eggie on it, then try again.")
         if not codex_remote.signed_in(self._run, alias):
             self._say(f"Sign in to Codex for {label} in your browser…")
             self._progress("agent", "running", "sign_in")
             signed = codex_remote.sign_in(alias, popen=self._popen, open_url=self._open_url,
-                                          port_free=self._port_free)
+                                          port_free=self._port_free, cancelled=self._cancelled)
             if not signed.ok:
                 raise _Failed(f"Codex sign-in did not finish: {signed.reason}")
 

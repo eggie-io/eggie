@@ -237,7 +237,7 @@ window.eggie.handlers.install = (event) => {
     }
     return;
   }
-  if (event.type === 'done') return refresh();
+  if (event.type === 'done') return showPicker('local');
   if (event.type === 'reboot') return swap('install:reboot');
   // A worker exception ('crashed', from jobs.py) is otherwise unhandled and
   // would leave the screen spinning forever with no way out but quitting.
@@ -909,8 +909,14 @@ function drawHome(home) {
     const next = await api().home();
     if (!node.isConnected) return stash && stash.nodes.contains(node) ? delay : null;
     if (pressed()) return delay;
-    if (next.screen === 'home' && !next.action) drawHome(next);
-    else refresh();
+    if (next.screen !== 'home' || next.action) {
+      refresh();
+      return null;
+    }
+    const root = document.getElementById('screen');
+    const top = root.scrollTop;
+    drawHome(next);
+    root.scrollTop = top;
     return null;
   });
 }
@@ -986,11 +992,8 @@ function pickedAgent(node) {
   return picker.cards.find((agent) => agent.id === node.dataset.agent);
 }
 
-ACTIONS['pick-agent'] = (node) => {
-  const agent = pickedAgent(node);
-  if (agent.state === 'connected') return showReady(agent, picker.kitchen, agent.steps);
-  return startConnect(agent, picker.kitchen);
-};
+// A connected card connects again too: the kitchen may have dropped this computer's key.
+ACTIONS['pick-agent'] = (node) => startConnect(pickedAgent(node), picker.kitchen);
 ACTIONS['get-agent'] = (node) => api().open_agent_download(node.dataset.agent || ready.agent.id);
 
 async function startConnect(agent, kitchen) {
@@ -1031,6 +1034,12 @@ function onConnectEvent(event) {
     const screen = document.getElementById('screen').dataset.screen || '';
     if (screen === 'connect' || screen.startsWith('connect:')) showReady(c.agent, c.kitchen, event.steps);
     else connecting = null;
+    return;
+  }
+  if (event.type === 'signed_out') {
+    connecting = null;
+    const screen = document.getElementById('screen').dataset.screen || '';
+    if (screen === 'connect' || screen.startsWith('connect:')) refresh();
     return;
   }
   if (event.type === 'failed' || event.type === 'crashed') {
@@ -1185,8 +1194,10 @@ async function refresh() {
   if (home.action === 'load_kitchens') {
     const loaded = await api().load_kitchens();
     if (generation !== screenGeneration) return;
-    // A failed load is drawn as it is; refreshing would ask again forever.
     if (loaded && loaded.ok) return refresh();
+    // Asked once more, not refresh(): that would load again forever. This reply has the error.
+    home = await api().home();
+    if (generation !== screenGeneration) return;
   }
   if (home.screen === 'account') {
     signIn = null;

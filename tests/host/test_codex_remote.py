@@ -170,3 +170,12 @@ def test_a_sign_in_address_off_openai_is_never_opened():
         assert probe == codex_remote.Probe(
             False, "Codex printed an unexpected sign-in address; nothing was opened."), url
         assert opened == [] and proc.killed
+
+
+def test_cancel_while_waiting_for_the_browser_kills_the_tunnel():
+    proc = FakeProc(["https://auth.openai.com/x\n"], hang=True)
+    opened = []
+    probe = codex_remote.sign_in("eggie-x", popen=lambda a: proc, open_url=opened.append,
+                                 port_free=lambda p: True, cancelled=lambda: bool(opened))
+    assert probe == codex_remote.Probe(False, "Cancelled")
+    assert proc.killed

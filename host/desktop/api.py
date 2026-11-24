@@ -270,8 +270,9 @@ class DesktopApi:
         return next((m for m in self._agent_manifests() if m.id == agent_id), None)
 
     def _targets(self) -> list[dict]:
-        if self._kitchens is None:
-            self.load_kitchens()
+        # Fresh each time: a kitchen that just finished setting up must be pickable.
+        # A failed load keeps the last list.
+        self.load_kitchens()
         readiness = self._probe(self._provider)
         return connect_targets(self._kitchens, local_card(*route_for(readiness))
                                if readiness.vm_exists else "none")
@@ -309,7 +310,6 @@ class DesktopApi:
                        for m in manifests if m.connect == "codex"})
         for card, m in zip(cards, manifests):
             card["has_app"] = self._provider.agent_app(m.id) is not None
-            card["steps"] = self._guide(m, kitchen)
         return {"ok": True, "kitchen": kitchen, "targets": targets, "cards": cards}
 
     def start_connect(self, agent_id: str, kitchen_id: str) -> dict:
@@ -348,6 +348,8 @@ class DesktopApi:
                      f"{line.target}{f' · {line.agent}' if line.agent else ''}: {line.text}"
                      for line in found]
             failed = next((line for line in found if not line.ok), None)
+            if failed and not local and self._account is not None and not self._account.signed_in:
+                return {"type": "signed_out"}
             if failed:
                 return {"type": "failed", "message": failed.text, "lines": lines}
             return {"type": "done", "lines": lines, "steps": self._guide(manifest, kitchen)}
@@ -356,7 +358,6 @@ class DesktopApi:
         return {"ok": True, "job": self.jobs.start("connect", work), "rows": rows}
 
     def cancel_connect(self) -> dict:
-        # A Codex sign-in already in the browser runs to its end or its timeout.
         self._connect_cancel.set()
         return {"ok": True}
 
@@ -461,7 +462,7 @@ class DesktopApi:
     def open_sign_in_page(self) -> dict:
         if not self._sign_in_url:
             return {"ok": False}
-        webbrowser.open(self._sign_in_url)
+        self._open_url(self._sign_in_url)
         return {"ok": True}
 
     def sign_out(self) -> dict:
@@ -469,6 +470,8 @@ class DesktopApi:
             self._account.sign_out()
         self._kitchens, self._kitchens_error = None, ""
         self._just_signed_in = False
+        self._checkout, self._picks = None, {}
+        self._connect_url = self._sign_in_url = ""
         return {"ok": True}
 
     # --- making a cloud kitchen (1d) and watching it (1e) ---------------
@@ -509,14 +512,14 @@ class DesktopApi:
             return self._cloud_failure(e)
         url = checkout_url(web_app_url(), name, size, region)
         self._checkout = {"url": url, "before": before, "started": self._clock()}
-        webbrowser.open(url)
+        self._open_url(url)
         return {"ok": True}
 
     def open_checkout_page(self) -> dict:
         checkout = self._checkout
         if checkout is None:
             return {"ok": False}
-        webbrowser.open(checkout["url"])
+        self._open_url(checkout["url"])
         return {"ok": True}
 
     def checkout_status(self) -> dict:
@@ -548,6 +551,11 @@ class DesktopApi:
             row = self._cloud.instance(kitchen_id)
         except (NotSignedIn, ApiError, ApiUnavailableError) as e:
             return self._cloud_failure(e)
+        if self._kitchens is not None:
+            # 3a's Connect to reads this list; the row must not stay "getting ready".
+            known = any(k.get("id") == row.get("id") for k in self._kitchens)
+            self._kitchens = ([row if k.get("id") == row.get("id") else k for k in self._kitchens]
+                              + ([] if known else [row]))
         status = row.get("status") or ""
         return {"ok": True, **cloud_card(row), "rows": setup_rows(status, row.get("step")),
                 "last_error": row.get("last_error") or "",
@@ -558,7 +566,7 @@ class DesktopApi:
     def open_kitchen_page(self, kitchen_id: str) -> dict:
         if not isinstance(kitchen_id, str) or not kitchen_id:
             return {"ok": False}
-        webbrowser.open(f"{web_app_url()}/kitchens/{quote(kitchen_id, safe='')}")
+        self._open_url(f"{web_app_url()}/kitchens/{quote(kitchen_id, safe='')}")
         return {"ok": True}
 
     def open_cloud_console(self, kitchen_id: str) -> dict:
@@ -566,7 +574,7 @@ class DesktopApi:
         host = (row or {}).get("console_hostname")
         if not host:
             return {"ok": False}
-        webbrowser.open(f"{web_app_url()}/kitchens/open?{urlencode({'host': host})}")
+        self._open_url(f"{web_app_url()}/kitchens/open?{urlencode({'host': host})}")
         return {"ok": True}
 
     def start_app_update_check(self) -> None:

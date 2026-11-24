@@ -451,7 +451,7 @@ def test_approved_but_unreachable_says_to_try_again(tmp_path):
     lines = w.connector().connect(BOTH, ["shop"], local=False)
 
     assert len(lines) == 1 and not lines[0].ok
-    assert lines[0].text.endswith("Run eggie connect again in a minute.")
+    assert lines[0].text.endswith("Try again in a minute.")
     assert not w.ssh_config.exists()
 
 
@@ -641,6 +641,19 @@ def test_codex_local_runs_vm_setup_first(tmp_path):
     # No ssh host on Windows' own VM: no check row.
     assert _finished(events) == ["access", "agent", "entry"] == connector.rows("codex", None)
     assert w.factory_calls == 0
+
+
+def test_codex_on_a_vm_with_an_ssh_host_installs_only_over_ssh(tmp_path):
+    w = World(tmp_path, FakeClient([]), FakeProvider(local_ssh_alias="eggie"))
+    w.ssh.authorized.add("eggie")
+    setups = []
+    connector, events = _recorded(w, local_setup=setups.append)
+
+    connector.connect_one("codex", None)
+
+    assert ("agent", "done", "") in events
+    assert setups == []
+    assert "eggie" in w.ssh.codex
 
 
 def test_a_failed_vm_setup_fails_the_agent_row_and_stops(tmp_path):

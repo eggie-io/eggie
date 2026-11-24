@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -48,11 +49,16 @@ class CloudAccount:
             return {}
 
     def _write(self, data: dict) -> None:
-        tmp = self._path.with_suffix(".tmp")
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(data))
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, self._path)
+        # mkstemp makes the file 0600 from the start and gives `eggie connect` its own name.
+        fd, tmp = tempfile.mkstemp(dir=self._path.parent, prefix=f".{self._path.name}.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(data))
+            os.replace(tmp, self._path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
 
     @property
     def signed_in(self) -> bool:
@@ -129,12 +135,15 @@ class CloudAccount:
             raise NotSignedIn()
         if data["access_expires_at"] - self._clock() >= REFRESH_MARGIN:
             return data["access_token"]
-        stale = data["access_token"]
+        return self.renew(data["access_token"])
+
+    def renew(self, stale: str) -> str:
+        """An access token other than `stale`: the one on file if another caller
+        already refreshed, else a refreshed pair. NotSignedIn only for a dead refresh token."""
         with self._lock:
             data = self._read()
             if not data:
                 raise NotSignedIn()
-            # Another caller refreshed while this one waited for the lock.
             if data["access_token"] != stale:
                 return data["access_token"]
             try:
@@ -142,6 +151,10 @@ class CloudAccount:
                                  {"refresh_token": data["refresh_token"]}, None)
             except ApiError as e:
                 if e.status == 401 and e.api_code == "invalid_token":
+                    # `eggie connect` shares the file: it may have spent this refresh token first.
+                    now = self._read()
+                    if now and now["refresh_token"] != data["refresh_token"]:
+                        return now["access_token"]
                     self._path.unlink(missing_ok=True)
                     raise NotSignedIn() from None
                 raise
@@ -151,8 +164,9 @@ class CloudAccount:
             return data["access_token"]
 
     def forget(self) -> None:
-        self._pending = None
-        self._path.unlink(missing_ok=True)
+        with self._lock:
+            self._pending = None
+            self._path.unlink(missing_ok=True)
 
     def sign_out(self) -> None:
         device_id = self.device_id

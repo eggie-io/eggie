@@ -152,3 +152,26 @@ def test_sign_out_forgets_even_when_revoke_fails(tmp_path):
     assert not path.exists()
     assert not account.signed_in
     assert fake.count("DELETE /v1/auth/devices/d1") == 1
+
+
+def test_signing_out_during_a_refresh_stays_signed_out(tmp_path):
+    path = tmp_path / "cloud.json"
+    signed_in_file(path, expires_at=1000.0)
+    refreshing, answer = threading.Event(), threading.Event()
+
+    def call(method, path_, body, token):
+        refreshing.set()
+        answer.wait(5)
+        return {"access_token": "a2", "refresh_token": "r2", "expires_in": 3600}
+
+    account = CloudAccount(path, call=call, clock=lambda: 1000.0)
+    refresh = threading.Thread(target=account.access_token)
+    refresh.start()
+    refreshing.wait(5)
+    forget = threading.Thread(target=account.forget)
+    forget.start()
+    forget.join(0.2)
+    answer.set()
+    refresh.join(5)
+    forget.join(5)
+    assert not path.exists()

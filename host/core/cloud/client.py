@@ -11,7 +11,7 @@ from pathlib import Path
 
 from host.client import ApiError, ApiUnavailableError
 from host.core import constants, tls
-from host.core.cloud.account import CloudAccount, NotSignedIn
+from host.core.cloud.account import CloudAccount
 
 
 def service_api_url(env: Mapping[str, str] = os.environ) -> str:
@@ -50,7 +50,14 @@ def http_call(base: str, *, opener=None, timeout: float = 15.0):
         except (urllib.error.URLError, OSError) as e:
             raise ApiUnavailableError(
                 f"could not reach the Eggie service ({getattr(e, 'reason', e)})") from e
-        return json.loads(raw.decode("utf-8")) if raw.strip() else {}
+        if not raw.strip():
+            return {}
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except ValueError:
+            # A captive portal or proxy answering 200 with its own page.
+            raise ApiUnavailableError(
+                "could not reach the Eggie service (the reply was not from Eggie)") from None
 
     return call
 
@@ -69,10 +76,11 @@ class CloudClient:
         try:
             return self._call(method, f"/v1{path}", body, token)
         except ApiError as e:
-            if e.status == 401 and e.api_code == "invalid_token":
-                self._account.forget()
-                raise NotSignedIn() from None
-            raise
+            if not (e.status == 401 and e.api_code == "invalid_token"):
+                raise
+        # A refresh elsewhere (this app or `eggie connect`) retired this token; only a
+        # dead refresh token signs out, inside renew().
+        return self._call(method, f"/v1{path}", body, self._account.renew(token))
 
     def instances(self) -> list[dict]:
         out = self._send("GET", "/instances")

@@ -85,12 +85,98 @@ def signed_in(tmp_path, reply):
     return account, CloudClient(account, call), seen, path
 
 
-def test_expired_session_signs_out(tmp_path):
-    _, client, _, path = signed_in(
-        tmp_path, ApiError("invalid_token", "bad", 401))
+class Service:
+    """One access token per device, as the service has it: a refresh retires the
+    old access token at once, and a refresh token works once."""
+
+    def __init__(self, access="a", refresh="r"):
+        self.access, self.refresh, self.n = access, refresh, 0
+        self.refreshes = []
+        self.before_refresh = lambda: None
+        self.before_get = lambda: None
+
+    def rotate(self):
+        self.n += 1
+        self.access, self.refresh = f"a{self.n}", f"r{self.n}"
+
+    def __call__(self, method, path, body, token):
+        if path == "/v1/auth/token/refresh":
+            self.refreshes.append(body["refresh_token"])
+            self.before_refresh()
+            if body["refresh_token"] != self.refresh:
+                raise ApiError("invalid_token", "dead", 401)
+            self.rotate()
+            return {"access_token": self.access, "refresh_token": self.refresh,
+                    "expires_in": 3600}
+        self.before_get()
+        if token != self.access:
+            raise ApiError("invalid_token", "stale", 401)
+        return [{"id": "1", "token": token}]
+
+
+def account_on(path, service, *, expires_at=9e12):
+    path.write_text(json.dumps({"device_id": "d", "access_token": service.access,
+                                "refresh_token": service.refresh,
+                                "access_expires_at": expires_at, "email": ""}))
+    return CloudAccount(path, call=service, clock=lambda: 1000.0)
+
+
+def test_a_token_retired_by_a_refresh_elsewhere_retries_with_the_new_one(tmp_path):
+    path = tmp_path / "account.json"
+    service = Service()
+    account = account_on(path, service)
+
+    def refresh_while_in_flight():
+        service.before_get = lambda: None
+        account.renew("a")
+    service.before_get = refresh_while_in_flight
+
+    assert CloudClient(account, service).instances() == [{"id": "1", "token": "a1"}]
+    assert service.refreshes == ["r"]
+    assert json.loads(path.read_text())["refresh_token"] == "r1"
+
+
+def test_a_rejected_token_with_nothing_newer_refreshes_once_and_retries(tmp_path):
+    service = Service()
+    account = account_on(tmp_path / "account.json", service)
+    service.access = "revoked-by-the-service"
+
+    assert CloudClient(account, service).instances() == [{"id": "1", "token": "a1"}]
+    assert service.refreshes == ["r"]
+
+
+def test_only_a_dead_refresh_token_signs_out(tmp_path):
+    service = Service()
+    path = tmp_path / "account.json"
+    account = account_on(path, service)
+    service.access, service.refresh = "gone", "gone"
+
     with pytest.raises(NotSignedIn):
-        client.instances()
+        CloudClient(account, service).instances()
     assert not path.exists()
+
+
+def test_the_cli_refreshing_first_leaves_the_app_signed_in(tmp_path):
+    path = tmp_path / "account.json"
+    service = Service()
+    app = account_on(path, service, expires_at=1000.0)
+    cli = CloudAccount(path, call=service, clock=lambda: 1000.0)
+    # Both read r; the CLI's refresh lands first and the app's then spends a dead token.
+
+    def cli_wins():
+        service.before_refresh = lambda: None
+        assert cli.access_token() == "a1"
+    service.before_refresh = cli_wins
+
+    assert CloudClient(app, service).instances() == [{"id": "1", "token": "a1"}]
+    assert service.refreshes == ["r", "r"]
+    assert json.loads(path.read_text())["refresh_token"] == "r1"
+
+
+def test_a_reply_that_is_not_json_is_unavailable_not_a_crash():
+    call, _ = call_with(body=b"<html>Sign in to the hotel wifi</html>")
+    with pytest.raises(ApiUnavailableError):
+        call("GET", "/v1/instances", None, "t")
 
 
 def test_other_errors_keep_the_account(tmp_path):

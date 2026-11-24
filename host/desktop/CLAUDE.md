@@ -13,6 +13,11 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
   screen name to `SCREENS` and its template lands in `test_ui_assets.py`'s check.
 - `api.py` — `DesktopApi`, the **only** object JavaScript can reach. A thin, fixed list of methods
   taking scalars; push every decision into `view.py`.
+- `account` (`core/cloud/`) comes first: `screen_for()` starts from signed-in or not, then the
+  account's kitchens, and nothing installs before sign-in. `vm_sign_in.py` signs the local VM in
+  during install with one Approve click, through the VM's existing `/account` routes. Screens:
+  `account`, `where`, `home`, `kitchen:*`, `connect*`.
+- `agents.py` — the bundled agent manifests (`ui/agents/`), validated on load.
 - `shell.py` — `Shell` tracks which page is showing; `guarded()` wraps each public `DesktopApi`
   method so it refuses calls (`NotLocalPage`) unless the local UI is the page showing. A new
   `DesktopApi` method is covered automatically.
@@ -41,7 +46,7 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
-Connect an agent (3a–3d) is local screens only; the console has no part in it. `agents(kitchen_id)`
+Connect an agent (3a–3d) is local screens only; the console has no part in it, and its Agents tab is cloud-only. `agents(kitchen_id)`
 draws the picker from the bundled guides (`ui/agents/`, `agents.py`) and `view.connect_targets`
 (owned kitchens, plus this computer once it has a VM; one not running is listed, not pickable).
 `start_connect` runs `flow.Connector.connect_one` as a `connect` job whose `step` events drive 3b

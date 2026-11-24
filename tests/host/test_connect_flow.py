@@ -4,6 +4,7 @@ import subprocess
 import pytest
 
 from host.client import ApiError, ApiUnavailableError
+from host.core.cloud.account import NotSignedIn
 from host.core.connect import flow
 from host.providers import claude_ssh, codex_app, ssh_alias
 
@@ -161,12 +162,12 @@ class World:
     def sleep(self, seconds):
         self.now += seconds
 
-    def connector(self):
+    def connector(self, **extra):
         return flow.Connector(
             self.factory, self.provider, run=self.ssh, popen=self.login,
             open_url=self.opened.append, port_free=lambda port: self.port_free, ping=self.ping,
             sleep=self.sleep, monotonic=lambda: self.now, home=self.home, env={},
-            computer_name="Ihor's Mac", say=self.said.append)
+            computer_name="Ihor's Mac", say=self.said.append, **extra)
 
     @property
     def ssh_config(self):
@@ -361,8 +362,26 @@ def test_without_the_api_this_computer_still_connects(tmp_path, error):
     lines = w.connector().connect({"codex"}, None, local=True)
 
     assert not lines[0].ok
-    assert lines[0].text.startswith("Start Eggie and sign in to connect your kitchens: ")
+    assert lines[0].text.startswith("Could not load your kitchens: ")
     assert w.provider.connected == ["codex"]
+
+
+def test_signed_out_says_so_and_this_computer_still_connects(tmp_path):
+    w = World(tmp_path, NotSignedIn())
+
+    lines = w.connector().connect({"codex"}, None, local=True)
+
+    assert (lines[0].target, lines[0].ok) == ("Kitchens", False)
+    assert lines[0].text == "Open the Eggie app and sign in first."
+    assert w.provider.connected == ["codex"]
+
+
+def test_local_only_never_touches_the_account(tmp_path):
+    w = World(tmp_path, NotSignedIn())
+
+    w.connector().connect({"codex"}, [], local=True)
+
+    assert w.factory_calls == 0
 
 
 def test_codex_connection_is_taken_back_when_its_sign_in_cannot_start(tmp_path):
@@ -432,7 +451,7 @@ def test_approved_but_unreachable_says_to_try_again(tmp_path):
     lines = w.connector().connect(BOTH, ["shop"], local=False)
 
     assert len(lines) == 1 and not lines[0].ok
-    assert lines[0].text.endswith("Run eggie connect again in a minute.")
+    assert lines[0].text.endswith("Try again in a minute.")
     assert not w.ssh_config.exists()
 
 
@@ -552,3 +571,140 @@ def test_a_new_block_goes_when_the_first_ssh_probe_cannot_run(tmp_path):
 
     assert len(lines) == 1 and not lines[0].ok
     assert not w.ssh_config.exists()
+
+
+# --- one agent to one kitchen, as the desktop app's 3b rows ---------------
+
+def _recorded(w, **extra):
+    events = []
+    connector = w.connector(progress=lambda step, status, message: events.append(
+        (step, status, message)), **extra)
+    return connector, events
+
+
+def _finished(events):
+    return [step for step, status, _ in events if status in ("done", "failed")]
+
+
+def test_progress_reports_each_row_in_order(tmp_path):
+    w = World(tmp_path, FakeClient([row("shop")], polls={"id-shop": ["approved"]}))
+    connector, events = _recorded(w)
+
+    lines = connector.connect_one("codex", "id-shop")
+
+    assert all(line.ok for line in lines), lines
+    assert _finished(events) == ["access", "agent", "entry", "check"]
+    assert _finished(events) == connector.rows("codex", "id-shop")
+    for step in _finished(events):
+        assert events.index((step, "running", "")) < events.index((step, "done", ""))
+    assert codex_app.has(w.codex, "eggie-shop")
+    assert not claude_ssh.entry_installed(w.claude, "eggie-shop")
+
+
+def test_cursor_connects_access_only(tmp_path):
+    w = World(tmp_path, FakeClient([row("shop")], polls={"id-shop": ["approved"]}))
+    connector, events = _recorded(w)
+
+    lines = connector.connect_one(None, "id-shop")
+
+    assert all(line.ok for line in lines), lines
+    assert _finished(events) == ["access", "check"] == connector.rows(None, "id-shop")
+    assert ssh_alias.host_installed(w.ssh_config, "eggie-shop")
+    assert not codex_app.config_path(w.codex).exists()
+    assert not claude_ssh.settings_path(w.claude).exists()
+
+
+def test_codex_sign_in_reports_the_sign_in_state(tmp_path):
+    w = World(tmp_path, FakeClient([row("shop")], polls={"id-shop": ["approved"]}))
+    order = []
+    login = w.login
+    w.login = lambda argv: order.append("sign-in started") or login(argv)
+    connector = w.connector(progress=lambda step, status, message: order.append(
+        (step, status, message)))
+
+    connector.connect_one("codex", "id-shop")
+
+    assert order.index(("agent", "running", "sign_in")) < order.index("sign-in started")
+    assert ("agent", "done", "") in order
+
+
+def test_codex_local_runs_vm_setup_first(tmp_path):
+    w = World(tmp_path, FakeClient([]))
+    order = []
+    w.provider.connect_agent = lambda agent: order.append(("connect", agent)) or "ok"
+    connector, events = _recorded(w, local_setup=lambda agent: order.append(("setup", agent)))
+
+    lines = connector.connect_one("codex", None)
+
+    assert all(line.ok for line in lines), lines
+    assert order == [("setup", "codex"), ("connect", "codex")]
+    # No ssh host on Windows' own VM: no check row.
+    assert _finished(events) == ["access", "agent", "entry"] == connector.rows("codex", None)
+    assert w.factory_calls == 0
+
+
+def test_codex_on_a_vm_with_an_ssh_host_installs_only_over_ssh(tmp_path):
+    w = World(tmp_path, FakeClient([]), FakeProvider(local_ssh_alias="eggie"))
+    w.ssh.authorized.add("eggie")
+    setups = []
+    connector, events = _recorded(w, local_setup=setups.append)
+
+    connector.connect_one("codex", None)
+
+    assert ("agent", "done", "") in events
+    assert setups == []
+    assert "eggie" in w.ssh.codex
+
+
+def test_a_failed_vm_setup_fails_the_agent_row_and_stops(tmp_path):
+    w = World(tmp_path, FakeClient([]))
+
+    def refuse(agent):
+        raise ApiError("agent_setup_unavailable", "This VM can't set up agents yet.", 503)
+
+    connector, events = _recorded(w, local_setup=refuse)
+
+    lines = connector.connect_one("codex", None)
+
+    assert ("agent", "failed", "This VM can't set up agents yet.") in events
+    assert _finished(events) == ["access", "agent"]
+    assert w.provider.connected == []
+    assert not lines[-1].ok
+
+
+def test_cancel_stops_before_the_next_row(tmp_path):
+    w = World(tmp_path, FakeClient([row("shop")], polls={"id-shop": ["approved"]}))
+    events = []
+    connector = w.connector(
+        progress=lambda step, status, message: events.append((step, status, message)),
+        cancelled=lambda: ("access", "done", "") in events)
+
+    lines = connector.connect_one("codex", "id-shop")
+
+    assert _finished(events) == ["access"]
+    assert not lines[-1].ok
+    assert w.login.calls == []
+    assert not codex_app.has(w.codex, "eggie-shop")
+
+
+def test_cancel_ends_the_wait_for_approval(tmp_path):
+    w = World(tmp_path, FakeClient([row("shop")], polls={"id-shop": ["pending"] * 400}))
+    connector, events = _recorded(w, cancelled=lambda: w.now > 10)
+
+    connector.connect_one("codex", "id-shop")
+
+    assert ("access", "running", "approve") in events
+    assert _finished(events) == ["access"]
+    assert events[-1][1] == "failed"
+    assert not ssh_alias.host_installed(w.ssh_config, "eggie-shop")
+
+
+def test_one_kitchen_that_is_not_running_fails_access_with_the_reason(tmp_path):
+    w = World(tmp_path, FakeClient([row("cold", status="stopped")]))
+    connector, events = _recorded(w)
+
+    lines = connector.connect_one("claude", "id-cold")
+
+    assert _finished(events) == ["access"]
+    assert not lines[-1].ok and "stopped" in lines[-1].text
+    assert w.ssh.calls == []

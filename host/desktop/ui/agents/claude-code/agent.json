@@ -1,0 +1,32 @@
+{
+  "name": "Claude Code",
+  "icon": "icon.webp",
+  "get_url": "https://claude.com/download",
+  "connect": "claude",
+  "steps": {
+    "mac": {
+      "local": [
+        {"title": "Open Claude Code", "body": "<p>Open the Claude desktop app and click <b>&lt;/&gt;</b> at the top to switch to Claude Code.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Screenshot · Claude Code switch at the top of the sidebar", "media": ["media/mac-claude-code-0.png"]},
+        {"title": "Choose Eggie", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Under <b>SSH</b>, select <b>Eggie</b>.</li></ol>", "alt": "Screenshot · environment menu with Eggie under SSH", "media": ["media/mac-claude-code-auto-2.png"]},
+        {"title": "Start prompting", "body": "<p>Claude Code opens in your kitchen's <b>projects</b> folder. The first time, it may take a minute to install what it needs there.</p><p>Then tell it what to build.</p>", "alt": "Screenshot · Claude Code prompt on Eggie, in the projects folder", "media": ["media/mac-claude-code-auto-3.png"]}
+      ],
+      "cloud": [
+        {"title": "Open Claude Code", "body": "<p>Open the Claude desktop app and click <b>&lt;/&gt;</b> at the top to switch to Claude Code.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Screenshot · Claude Code switch at the top of the sidebar", "media": ["media/mac-claude-code-0.png"]},
+        {"title": "Choose your kitchen", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Under <b>SSH</b>, select <b>Eggie · {kitchen}</b>. It connects to <code>{ssh_host}</code>.</li></ol>", "alt": "Screenshot · environment menu with Eggie under SSH", "media": ["media/mac-claude-code-auto-2.png"]},
+        {"title": "Start prompting", "body": "<p>Claude Code opens in your kitchen's <b>projects</b> folder. The first time, it may take a minute to install what it needs there.</p><p>Then tell it what to build.</p>", "alt": "Screenshot · Claude Code prompt on Eggie, in the projects folder", "media": ["media/mac-claude-code-auto-3.png"]}
+      ]
+    },
+    "windows": {
+      "local": [
+        {"title": "Open Claude Code", "body": "Open the Claude Code app and sign in.", "alt": "Screenshot · Claude Code start screen", "media": ["media/win-claude-code-0.png"]},
+        {"title": "Switch to WSL", "body": "<ol><li>Open the environment menu next to the prompt box.</li><li>Select <b>WSL</b>.</li><li>Choose <b>eggie-vm</b> from the list.</li></ol>", "alt": "Screenshot · environment menu with WSL", "media": ["media/win-claude-code-1.png"]},
+        {"title": "Start prompting", "body": "Tell Claude Code what to build.", "alt": "Screenshot · Claude Code prompt, connected to the kitchen", "media": ["media/win-claude-code-2.png"]}
+      ],
+      "cloud": [
+        {"title": "Open Claude Code", "body": "<p>Open the Claude desktop app and click <b>&lt;/&gt;</b> at the top to switch to Claude Code.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Screenshot · Claude Code switch at the top of the sidebar", "media": ["media/mac-claude-code-0.png"]},
+        {"title": "Choose your kitchen", "body": "<ol><li>Click <b>This computer</b> under the prompt box.</li><li>Under <b>SSH</b>, select <b>Eggie · {kitchen}</b>. It connects to <code>{ssh_host}</code>.</li></ol>", "alt": "Screenshot · environment menu with Eggie under SSH", "media": ["media/mac-claude-code-auto-2.png"]},
+        {"title": "Start prompting", "body": "<p>Claude Code opens in your kitchen's <b>projects</b> folder. The first time, it may take a minute to install what it needs there.</p><p>Then tell it what to build.</p>", "alt": "Screenshot · Claude Code prompt on Eggie, in the projects folder", "media": ["media/mac-claude-code-auto-3.png"]}
+      ]
+    }
+  }
+}

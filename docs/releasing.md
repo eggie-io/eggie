@@ -2,6 +2,9 @@
 
 The desktop app (`host/`) and the runtime (everything inside the VM) release separately.
 
+Ship the desktop app before a runtime that drops something older apps send people to, such as
+the console's local Agents tab and the macOS/Windows agent guides.
+
 ## How installed machines update
 
 - **Runtime:** every VM checks at boot (`eggie-update.service`) and moves to the newest

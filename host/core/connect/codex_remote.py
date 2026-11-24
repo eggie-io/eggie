@@ -22,6 +22,9 @@ READ_SETUP = ("python3 -c 'import json;print(json.load(open("
 _URL = re.compile(r"https://\S+")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _SIGN_IN_ORIGIN = ("https", "auth.openai.com")
+# How often a wait looks at `cancelled`.
+_TICK = 0.5
+CANCELLED = "Cancelled"
 
 
 def ensure_installed(run, alias: str) -> Probe:
@@ -71,7 +74,7 @@ def _port_free(port: int) -> bool:
 
 def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
             port_free=_port_free, timeout: float = 600,
-            url_timeout: float = 60) -> Probe:
+            url_timeout: float = 60, cancelled=lambda: False) -> Probe:
     if not port_free(CALLBACK_PORT):
         return Probe(False, f"Port {CALLBACK_PORT} on this computer is in use; "
                             "close what uses it (often another Codex sign-in) "
@@ -83,7 +86,7 @@ def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
     except OSError as e:
         return Probe(False, str(e))
     try:
-        return _await_login(proc, open_url, timeout, url_timeout)
+        return _await_login(proc, open_url, timeout, url_timeout, cancelled)
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -93,7 +96,20 @@ def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
                 pass
 
 
-def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
+def _wait(proc, deadline: float, cancelled) -> int | None:
+    """The exit code, or None once `cancelled` says so; TimeoutExpired at the deadline."""
+    while not cancelled():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise subprocess.TimeoutExpired("ssh", 0)
+        try:
+            return proc.wait(timeout=min(left, _TICK))
+        except subprocess.TimeoutExpired:
+            continue
+    return None
+
+
+def _await_login(proc, open_url, timeout: float, url_timeout: float, cancelled) -> Probe:
     lines: queue.Queue = queue.Queue()
 
     def pump():
@@ -104,20 +120,19 @@ def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
     threading.Thread(target=pump, daemon=True).start()
 
     start = time.monotonic()
-
-    def remaining() -> float:
-        return max(timeout - (time.monotonic() - start), 1)
-
+    deadline = start + max(timeout, 1)
     last = ""
     url = None
     while url is None:
+        if cancelled():
+            return Probe(False, CANCELLED)
         left = url_timeout - (time.monotonic() - start)
-        try:
-            if left <= 0:
-                raise queue.Empty
-            line = lines.get(timeout=left)
-        except queue.Empty:
+        if left <= 0:
             return Probe(False, last or "No sign-in link appeared")
+        try:
+            line = lines.get(timeout=min(left, _TICK))
+        except queue.Empty:
+            continue
         if line is None:
             break
         line = _ANSI.sub("", line).strip()
@@ -128,12 +143,14 @@ def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
             url = found.group(0).rstrip(".,)")
     try:
         if url is None:
-            code = proc.wait(timeout=remaining())
-            return Probe(False, last or f"codex login exited {code}")
+            code = _wait(proc, deadline, cancelled)
+            return Probe(False, CANCELLED if code is None else last or f"codex login exited {code}")
         if urllib.parse.urlsplit(url)[:2] != _SIGN_IN_ORIGIN:
             return Probe(False, "Codex printed an unexpected sign-in address; nothing was opened.")
         open_url(url)
-        code = proc.wait(timeout=remaining())
+        code = _wait(proc, deadline, cancelled)
     except subprocess.TimeoutExpired:
         return Probe(False, "Sign-in was not finished in time")
+    if code is None:
+        return Probe(False, CANCELLED)
     return Probe(True, "") if code == 0 else Probe(False, last or f"codex login exited {code}")

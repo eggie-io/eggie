@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { loadCatalog, platformFor, type Connect } from "./catalog";
+import { loadCatalog, type Connect } from "./catalog";
 import { currentAgent } from "./current";
 import type { AgentStatuses } from "./status";
 
@@ -13,11 +13,9 @@ async function fetchJson(url: string): Promise<unknown> {
 export function useAgents() {
   const connect = useQuery({ queryKey: ["connect"], queryFn: () => api.get<Connect>("/api/connect"), staleTime: Infinity, retry: false });
   const catalog = useQuery({ queryKey: ["agents"], queryFn: () => loadCatalog(fetchJson), staleTime: Infinity });
-  // Waits for /connect to settle either way: an API without it still gets
-  // guides, chosen from the browser.
-  const platform = platformFor(connect.data, navigator.userAgent);
-  const agents = connect.isPending ? undefined : catalog.data?.filter((agent) => agent.platforms[platform]);
-  return { platform, agents, connect: connect.data, error: catalog.error };
+  // Waits for /connect to settle either way: the card's SSH facts come from it.
+  const agents = connect.isPending ? undefined : catalog.data?.filter((agent) => agent.guide !== null);
+  return { agents, connect: connect.data, error: catalog.error };
 }
 
 export const POLL_MS = 3000;

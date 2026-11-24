@@ -28,11 +28,7 @@ class Controller:
         self.tray = None
         self._exiting = False
         self._background = None
-        self.shown_once = True
         self.login_launched = threading.Event()
-
-    def mark_hidden_launch(self) -> None:
-        self.shown_once = False
 
     def on_closing(self) -> bool:
         # destroy() and macOS terminate: both arrive here too; only a real
@@ -69,7 +65,6 @@ class Controller:
     def _show_window(self) -> None:
         self.desktop.on_window_shown(True)
         self.window.show()
-        self.shown_once = True
 
     def open_route(self, route: str) -> None:
         if self.window is None:

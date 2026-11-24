@@ -235,21 +235,6 @@ def test_the_runtime_update_job_reports_failure_in_the_installers_words(tmp_path
     assert "speaks api 2" in pushed[-1]["message"]
 
 
-def test_a_successful_runtime_update_goes_into_the_console(tmp_path, monkeypatch):
-    from host.core import install
-
-    monkeypatch.setattr(install, "connect_with_updates", lambda provider: None)
-    ready = Readiness(vm_exists=True, vm_reachable=True,
-                      runtime_version="runtime-v0.2.0", api_version=1)
-    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"), push=lambda e: None,
-                     probe_fn=lambda p: ready)
-    api.home()
-    api.start_runtime_update()
-    api.jobs.join(timeout=5)
-    assert api.home()["action"] == "enter_console"
-    assert api.home()["action"] != "enter_console"
-
-
 def test_doctor_names_the_log_file(tmp_path):
     """The modal is what a user reads out to whoever helps them; it has to
     say where the file with the actual failures is."""

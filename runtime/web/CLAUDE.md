@@ -69,18 +69,17 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     mode with no React in it. One `POST /projects/{id}/files` request, no resume; the API unpacks
     it with Python's `tarfile`.
   - `desktop/desktop.ts` reads the `home=` address the desktop window adds to the handoff link (only
-    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser", and
-    `connect=` (agent ids the window can connect by itself) and `added=` (those already connected):
-    those agents' guides then show the manifest's `auto` steps, whose `"action": "connect"` step
-    fills the picture frame with a card (`ConnectCard`) whose "Add Eggie to <agent>" (or the step's `button`) sends the window to its `#connect=` screen (`desktopConnectUrl`),
-    with "Set it up manually" switching to the ordinary `steps`. With `added=` the list opens
-    past the button. All three are empty in a plain browser, which gets only `steps`.
-  - `/welcome` and `/welcome/:id` — first-run onboarding, the same picker and guide with a "Check the
-    connection" last step. `onboarding/onboarding.ts` decides: shown only when no agent is connected,
-    the counter is empty and this browser's localStorage has no done/skipped mark. Mock: `?scenario=fresh`.
-  - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab). All content is in
+    `http://127.0.0.1:<port>`), which enables the shell's Home button and "open in browser". The
+    window has its own agent picker, so the link carries no `connect=`/`added=`. The header shows a
+    green "Running" `Badge`.
+  - `/welcome` and `/welcome/:id` — first-run onboarding on a cloud kitchen only, the same picker and guide with a "Check the
+    connection" last step. `onboarding/onboarding.ts` decides: shown only on a site, when no agent is connected,
+    the counter is empty and this browser's localStorage has no done/skipped mark. On this computer it never shows. Mock: `?scenario=fresh` (a site with nothing yet).
+  - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab), on a site only: on this computer the
+    tab, the routes (they redirect to `/`) and the handoff card's "Switch agent" are gone. The picker's
+    top line links the web app (`<web_app>`, via `openExternal`) to the desktop app. All content is in
     `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
-    `<id>/agent.json` with `windows`, `mac` and `cloud` blocks, an optional `card` of fields to copy, steps with an HTML
+    `<id>/agent.json` with a `cloud` block (the only one read), an optional `card` of fields to copy, steps with an HTML
     `body` and a `media` list (screenshots and videos; more than one makes a slider).
     `src/agents/catalog.ts` validates it; `content.test.ts` fails on a file that doesn't parse or
     names a missing media file. `screens/agents/AgentMark.tsx` shows an agent's icon, or its

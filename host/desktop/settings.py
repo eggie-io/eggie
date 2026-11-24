@@ -12,6 +12,19 @@ from pathlib import Path
 AUTOSTART_SET_ONCE = "autostart_set_once"
 TRAY_NOTICE_SHOWN = "tray_notice_shown"
 FIRST_LAUNCH_SENT = "first_launch_sent"
+# Agents with no entry of their own (Cursor; Claude Code on Windows' own VM)
+# count as connected once the person pressed Done for that kitchen.
+AGENTS_DONE = "agents_done"
+
+
+def done_flag(agent_id: str, kitchen_id: str) -> str:
+    """`kitchen_id` is a cloud kitchen's id, or "local" for this computer."""
+    return f"{agent_id}:{kitchen_id}"
+
+
+def _members(data: dict, key: str) -> set[str]:
+    value = data.get(key)
+    return {v for v in value if isinstance(v, str)} if isinstance(value, list) else set()
 
 
 class Settings:
@@ -31,5 +44,19 @@ class Settings:
     def set(self, key: str, value: bool) -> None:
         data = self._read()
         data[key] = bool(value)
+        self._write(data)
+
+    def members(self, key: str) -> set[str]:
+        return _members(self._read(), key)
+
+    def add_member(self, key: str, member: str) -> None:
+        data = self._read()
+        current = _members(data, key)
+        if member in current:
+            return
+        data[key] = sorted(current | {member})
+        self._write(data)
+
+    def _write(self, data: dict) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(data, sort_keys=True))

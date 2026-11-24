@@ -48,14 +48,16 @@ def _api(tmp_path, provider=None, *, desktop=None, exe=EXE, steps=None, quits=No
 def test_settings_read_the_real_state(tmp_path):
     desktop = FakeDesktop()
     api = _api(tmp_path, desktop=desktop)
-    assert api.get_settings() == {"autostart": False, "autostart_available": True}
+    settings = api.get_settings()
+    assert (settings["autostart"], settings["autostart_available"]) == (False, True)
     desktop.autostart[EXE] = True     # turned on outside Eggie
     assert api.get_settings()["autostart"] is True
 
 
 def test_a_source_checkout_cannot_register_itself(tmp_path):
     api = _api(tmp_path, exe=None)
-    assert api.get_settings() == {"autostart": False, "autostart_available": False}
+    settings = api.get_settings()
+    assert (settings["autostart"], settings["autostart_available"]) == (False, False)
     assert api.set_autostart(True)["ok"] is False
 
 
@@ -177,3 +179,21 @@ def test_quit_exits_when_stopping_the_vm_hangs(tmp_path, caplog):
         assert "timed out" in caplog.text
     finally:
         release.set()
+
+
+class Machine(FakeProvider):
+    def __init__(self, exists):
+        super().__init__()
+        self._exists = exists
+
+    def exists(self):
+        if isinstance(self._exists, Exception):
+            raise self._exists
+        return self._exists
+
+
+def test_settings_offer_uninstall_only_when_a_vm_exists(tmp_path):
+    assert _api(tmp_path, Machine(True)).get_settings()["vm_exists"] is True
+    assert _api(tmp_path, Machine(False)).get_settings()["vm_exists"] is False
+    # A provider that cannot tell has nothing an uninstall could safely act on.
+    assert _api(tmp_path, Machine(RuntimeError("wsl.exe hung"))).get_settings()["vm_exists"] is False

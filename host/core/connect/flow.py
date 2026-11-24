@@ -1,5 +1,6 @@
 """`eggie connect`: Claude Code and Codex on this computer, connected to the
-owner's instances and to the local VM. The desktop app will call it too."""
+owner's instances and to the local VM. The desktop app connects one agent to
+one kitchen with `connect_one`, which reports each of its rows as it goes."""
 
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from pathlib import Path
 from ...client import ApiError, ApiUnavailableError
 from ...providers import claude_ssh, codex_app, ssh_alias
 from .. import tls
+from ..cloud.account import NotSignedIn
 from . import codex_remote, keys, ssh
 
 log = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ _AGENT_NAMES = {CLAUDE: "Claude Code", CODEX: "Codex"}
 REMOTE_PATH = "/opt/eggie/projects"
 LOCAL = "This computer"
 RESTART = "Quit and reopen Claude and Codex to see the new connections."
+CANCELLED = "Cancelled"
 APPROVAL_TIMEOUT = 600
 APPROVAL_EVERY = 2
 _DECIDED = ("approved", "denied", "expired")
@@ -65,12 +68,21 @@ def _run(argv):
     return subprocess.run(argv, capture_output=True)
 
 
-def _alias(row: dict) -> str:
+def instance_alias(row: dict) -> str:
     return f"eggie-{row['name']}"
 
 
 def _title(row: dict) -> str:
     return row.get("display_name") or row["name"]
+
+
+def _skip_reason(row: dict) -> str | None:
+    if row.get("status") != "running":
+        return (f"Skipped: the kitchen is {row.get('status') or 'not running'}; "
+                "start it in the web app first")
+    if not row.get("is_owner"):
+        return "Skipped: only the kitchen's owner can connect this computer"
+    return None
 
 
 class Connector:
@@ -79,7 +91,10 @@ class Connector:
                  port_free=codex_remote._port_free, ping=ping, sleep=time.sleep,
                  monotonic=time.monotonic, home: Path | None = None,
                  env: Mapping[str, str] = os.environ, computer_name: str,
-                 say: Callable[[str], None] = lambda text: None):
+                 say: Callable[[str], None] = lambda text: None,
+                 progress: Callable[[str, str, str], None] = lambda step, status, message: None,
+                 cancelled: Callable[[], bool] = lambda: False,
+                 local_setup: Callable[[str], object] | None = None):
         self._client_factory = client
         self._provider = provider
         self._run = run
@@ -96,6 +111,11 @@ class Connector:
         self._codex_home = codex_app.default_codex_home(env, home)
         self._computer_name = computer_name
         self._say = say
+        self._progress = progress
+        self._cancelled = cancelled
+        # Asks this computer's VM to install an agent itself (the desktop app's
+        # bearer route); connect_one calls it before Codex's own step.
+        self._local_setup = local_setup
 
     # -- entry points --------------------------------------------------------
 
@@ -115,6 +135,88 @@ class Connector:
             lines.append(Line("", None, True, RESTART))
         return lines
 
+    def rows(self, agent: str | None, instance_id: str | None) -> list[str]:
+        """The rows connect_one reports, in order. `agent` None connects
+        access only (an agent with no entry of its own, like Cursor)."""
+        alias = instance_id is not None or bool(self._provider.local_ssh_alias)
+        rows = ["access"]
+        if agent == CODEX:
+            rows.append("agent")
+        if agent == CODEX or (agent == CLAUDE and alias):
+            rows.append("entry")
+        if alias:
+            rows.append("check")
+        return rows
+
+    def connect_one(self, agent: str | None, instance_id: str | None) -> list[Line]:
+        """One agent to one kitchen (`instance_id` None: this computer). Stops at
+        the first failed row, or before the next one once `cancelled` says so."""
+        local = instance_id is None
+        where = {"target": LOCAL if local else "Kitchen",
+                 "alias": self._provider.local_ssh_alias if local else None}
+        lines: list[Line] = []
+
+        def access() -> list[Line]:
+            if local:
+                return [Line(LOCAL, None, True, "Set up with this computer")]
+            api, rows, failed = self._listing()
+            if failed:
+                return failed
+            row = next((r for r in rows if r.get("id") == instance_id), None)
+            if row is None:
+                return [Line("Kitchen", None, False, "This kitchen is not on your account")]
+            where["target"], where["alias"] = _title(row), instance_alias(row)
+            refused = _skip_reason(row) or self._let_in(api, row)
+            if refused:
+                return [Line(where["target"], None, False, refused)]
+            return [Line(where["target"], None, True, "This computer can reach the kitchen")]
+
+        def agent_step() -> list[Line]:
+            target, alias = where["target"], where["alias"]
+
+            def prepare() -> str:
+                # With an ssh host the install runs over ssh below; the VM's own would race it.
+                if local and self._local_setup is not None and not alias:
+                    self._local_setup("codex")
+                if alias:
+                    self._codex_ready(alias, f"Eggie · {target}")
+                    return "installed there and signed in"
+                return "asked this computer's kitchen to install it"
+
+            return self._agent(target, CODEX, prepare)
+
+        def entry() -> list[Line]:
+            target, alias = where["target"], where["alias"]
+            if agent == CLAUDE:
+                if local:
+                    return self._agent(target, CLAUDE,
+                                       lambda: self._provider.connect_agent("claude-code"))
+                return self._agent(target, CLAUDE, lambda: self._claude(alias, target))
+            if not alias:
+                return self._agent(target, CODEX, lambda: self._provider.connect_agent("codex"))
+
+            def listed() -> str:
+                label = f"Eggie · {target}"
+                codex_app.add(self._codex_home, alias, REMOTE_PATH, label)
+                return f"listed as “{label}”"
+
+            return self._agent(target, CODEX, listed)
+
+        steps = {"access": access, "agent": agent_step, "entry": entry,
+                 "check": lambda: [self._check(where["target"], where["alias"])]}
+        for name in self.rows(agent, instance_id):
+            if self._cancelled():
+                lines.append(Line(where["target"], None, False, CANCELLED))
+                break
+            self._progress(name, "running", "")
+            done = self._guarded(where["target"], steps[name])
+            lines += done
+            failed = next((line for line in done if not line.ok), None)
+            self._progress(name, "failed" if failed else "done", failed.text if failed else "")
+            if failed:
+                break
+        return lines
+
     def remove(self, agents: set[str], instances: list[str] | None,
                local: bool) -> list[Line]:
         lines: list[Line] = []
@@ -122,8 +224,8 @@ class Connector:
             api, rows, failed = self._rows(instances)
             lines += failed
             if instances is None:
-                listed = {_alias(r) for r in rows}
-                rows = [r for r in rows if self._has_traces(_alias(r))]
+                listed = {instance_alias(r) for r in rows}
+                rows = [r for r in rows if self._has_traces(instance_alias(r))]
             for r in rows:
                 lines += self._guarded(_title(r), lambda r=r: self._remove_instance(api, r, agents))
             if instances is None and api is not None:
@@ -135,15 +237,20 @@ class Connector:
 
     # -- instances -----------------------------------------------------------
 
-    def _rows(self, wanted: list[str] | None):
+    def _listing(self):
         try:
             api = self._client_factory()
-            rows = api.instances()
+            return api, api.instances(), []
+        except NotSignedIn as e:
+            return None, [], [Line("Kitchens", None, False, str(e))]
         except (ApiError, ApiUnavailableError) as e:
             return None, [], [Line("Kitchens", None, False,
-                                   f"Start Eggie and sign in to connect your kitchens: {e}")]
-        if wanted is None:
-            return api, rows, []
+                                   f"Could not load your kitchens: {e}")]
+
+    def _rows(self, wanted: list[str] | None):
+        api, rows, failed = self._listing()
+        if failed or wanted is None:
+            return api, rows, failed
         picked, missing = [], []
         for name in wanted:
             found = next((r for r in rows if name in (r.get("name"), r.get("display_name"))), None)
@@ -161,25 +268,35 @@ class Connector:
             return [Line(target, None, False, str(e) or type(e).__name__)]
 
     def _connect_instance(self, api, row: dict, agents: set[str], named: bool) -> list[Line]:
-        target, alias = _title(row), _alias(row)
-        skipped = None
-        if row.get("status") != "running":
-            skipped = (f"Skipped: the kitchen is {row.get('status') or 'not running'}; "
-                       "start it in the web app first")
-        elif not row.get("is_owner"):
-            skipped = "Skipped: only the kitchen's owner can connect this computer"
+        target, alias = _title(row), instance_alias(row)
+        skipped = _skip_reason(row)
         if skipped:
             return [Line(target, None, not named, skipped, neutral=not named)]
+        refused = self._let_in(api, row)
+        if refused:
+            return [Line(target, None, False, refused)]
+
+        lines = []
+        if CLAUDE in agents:
+            lines += self._agent(target, CLAUDE, lambda: self._claude(alias, target))
+        if CODEX in agents:
+            lines += self._agent(target, CODEX,
+                                 lambda: self._codex(alias, f"Eggie · {target}"))
+        lines.append(self._check(target, alias))
+        return lines
+
+    def _let_in(self, api, row: dict) -> str | None:
+        """Writes the kitchen's ssh host block and gets this computer's key onto
+        it. None once `ssh <alias>` works, else why not (the block is taken back)."""
+        alias = instance_alias(row)
         if not ssh_alias.valid_alias(alias):
-            return [Line(target, None, False, f"'{alias}' can't be used as an SSH host name")]
+            return f"'{alias}' can't be used as an SSH host name"
         if not _HOSTNAME_RE.fullmatch(row.get("console_hostname") or ""):
-            return [Line(target, None, False,
-                         f"The kitchen's address '{row.get('console_hostname')}' "
-                         "can't go in your SSH settings")]
+            return (f"The kitchen's address '{row.get('console_hostname')}' "
+                    "can't go in your SSH settings")
         if not _LOGIN_RE.fullmatch(row.get("login_name") or ""):
-            return [Line(target, None, False,
-                         f"The kitchen's login '{row.get('login_name')}' "
-                         "can't go in your SSH settings")]
+            return (f"The kitchen's login '{row.get('login_name')}' "
+                    "can't go in your SSH settings")
 
         private, public = keys.ensure_key(self._key_dir, self._computer_name, self._run)
         existed = self._ssh_config.exists()
@@ -201,17 +318,7 @@ class Connector:
         finally:
             if not access.ok and not had_block:
                 self._forget_block(alias, existed)
-        if not access.ok:
-            return [Line(target, None, False, access.reason)]
-
-        lines = []
-        if CLAUDE in agents:
-            lines += self._agent(target, CLAUDE, lambda: self._claude(alias, target))
-        if CODEX in agents:
-            lines += self._agent(target, CODEX,
-                                 lambda: self._codex(alias, f"Eggie · {target}"))
-        lines.append(self._check(target, alias))
-        return lines
+        return None if access.ok else access.reason
 
     def _check(self, target: str, alias: str) -> Line:
         check = ssh.reach(self._run, alias)
@@ -240,26 +347,31 @@ class Connector:
                                         "nothing was opened.")
             self._say(f"Approve this computer for {target} in your browser — "
                       f"check the page shows {fingerprint}: {url}")
+            self._progress("access", "running", "approve")
             self._open_url(url)
             status = self._await_decision(api, row["id"], request["id"])
+            if status == "cancelled":
+                return ssh.Probe(False, CANCELLED)
             if status == "denied":
                 return ssh.Probe(False, "The request was denied in the browser; nothing was connected.")
             if status != "approved":
                 return ssh.Probe(False, "The request expired before it was approved; "
                                         "run this again.")
         self._ping(row["console_hostname"])
-        reached = ssh.wait_reachable(self._run, _alias(row), sleep=self._sleep,
+        reached = ssh.wait_reachable(self._run, instance_alias(row), sleep=self._sleep,
                                      monotonic=self._monotonic)
         if reached.ok:
             return reached
         return ssh.Probe(False, f"The kitchen did not let this computer in: "
                                 f"{reached.reason.rstrip('.')}. "
-                                "Run eggie connect again in a minute.")
+                                "Try again in a minute.")
 
     def _await_decision(self, api, instance_id: str, request_id: str) -> str:
         deadline = self._monotonic() + APPROVAL_TIMEOUT
         last_error = None
         while self._monotonic() < deadline:
+            if self._cancelled():
+                return "cancelled"
             self._sleep(APPROVAL_EVERY)
             try:
                 status = api.instance_key_request(instance_id, request_id).get("status")
@@ -285,7 +397,7 @@ class Connector:
         return lines, all(line.ok for line in lines) and not self._agent_left(alias)
 
     def _remove_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
-        target, alias = _title(row), _alias(row)
+        target, alias = _title(row), instance_alias(row)
         lines, block_may_go = self._remove_agents(target, alias, agents)
         if not block_may_go:
             return lines
@@ -398,13 +510,14 @@ class Connector:
         had = codex_app.has(self._codex_home, alias)
         codex_app.add(self._codex_home, alias, REMOTE_PATH, label)
         try:
-            return self._codex_ready(alias, label)
+            self._codex_ready(alias, label)
         except Exception:
             if not had:
                 codex_app.remove(self._codex_home, alias)
             raise
+        return f"listed as “{label}”, signed in"
 
-    def _codex_ready(self, alias: str, label: str) -> str:
+    def _codex_ready(self, alias: str, label: str) -> None:
         installed = codex_remote.ensure_installed(self._run, alias)
         if not installed.ok:
             raise _Failed(f"Codex could not be installed there: {installed.reason}")
@@ -412,14 +525,14 @@ class Connector:
         sandbox = codex_remote.sandbox_works(self._run, alias)
         if not sandbox.ok:
             raise _Failed(f"Codex can't run commands there ({sandbox.reason}). "
-                          "Update Eggie on it, then run eggie connect again.")
+                          "Update Eggie on it, then try again.")
         if not codex_remote.signed_in(self._run, alias):
             self._say(f"Sign in to Codex for {label} in your browser…")
+            self._progress("agent", "running", "sign_in")
             signed = codex_remote.sign_in(alias, popen=self._popen, open_url=self._open_url,
-                                          port_free=self._port_free)
+                                          port_free=self._port_free, cancelled=self._cancelled)
             if not signed.ok:
                 raise _Failed(f"Codex sign-in did not finish: {signed.reason}")
-        return f"listed as “{label}”, signed in"
 
     def _unclaude(self, entry_id: str) -> str:
         if not claude_ssh.entry_installed(self._claude_dir, entry_id):

@@ -254,13 +254,6 @@ def test_open_route_does_not_push_window_shown(tmp_path):
     assert "show" in window.calls
 
 
-def test_open_route_still_counts_as_the_first_show(tmp_path):
-    controller, _ = _controller(tmp_path)
-    controller.mark_hidden_launch()
-    controller.open_route("settings")
-    assert controller.shown_once is True
-
-
 def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):
     controller, window = _controller(tmp_path)
 
@@ -270,12 +263,3 @@ def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):
     controller._push = broken
     controller.show()
     assert window.calls[-1] == "show"
-
-
-def test_the_window_counts_as_shown_once_it_has_been_shown_after_a_hidden_launch(tmp_path):
-    controller, _ = _controller(tmp_path)
-    assert controller.shown_once is True
-    controller.mark_hidden_launch()
-    assert controller.shown_once is False
-    controller.show()
-    assert controller.shown_once is True

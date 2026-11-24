@@ -529,13 +529,21 @@ details.log {
   background:var(--accent); animation:om-bar 1.1s var(--ease) infinite;
 }
 button[aria-busy="true"] { cursor:progress; }
-button[aria-busy="true"]::after {
+/* A button with a glyph spins the glyph in place; an agent card's ::after is
+   its click overlay, so it must never become the spinner. */
+button[aria-busy="true"]:not(:has(.ic))::after {
   content:''; display:inline-block; width:14px; height:14px; margin-left:10px;
   vertical-align:-2px; border-radius:50%;
   border:2px solid var(--accent); border-right-color:transparent;
   animation:eg-spin .8s linear infinite;
 }
-.btn-primary[aria-busy="true"]::after, .btn-danger[aria-busy="true"]::after {
+button[aria-busy="true"] .ic {
+  -webkit-mask:none; mask:none; background:none; border-radius:50%;
+  border:2px solid var(--accent); border-right-color:transparent;
+  animation:eg-spin .8s linear infinite;
+}
+.btn-primary[aria-busy="true"]::after, .btn-danger[aria-busy="true"]::after,
+.btn-primary[aria-busy="true"] .ic, .btn-danger[aria-busy="true"] .ic {
   border-color:currentColor; border-right-color:transparent;
 }
 button[aria-busy="true"]:disabled { opacity:1; }

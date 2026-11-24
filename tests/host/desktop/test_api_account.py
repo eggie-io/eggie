@@ -101,6 +101,22 @@ def test_poller_reports_the_outcome_and_the_account_screen_ends(tmp_path):
     assert pushed == [{"kind": "account", "type": "denied"}]
 
 
+def test_poller_survives_a_failing_poll(tmp_path):
+    pushed = []
+    account = FakeAccount(signed_in=False, outcomes=[RuntimeError("boom"), "signed_in"])
+    original = account.poll_once
+
+    def poll_once():
+        if account.outcomes and isinstance(account.outcomes[0], Exception):
+            raise account.outcomes.pop(0)
+        return original()
+
+    account.poll_once = poll_once
+    _api(tmp_path, account, pushed=pushed).start_sign_in("existing")
+    _wait_for(pushed)
+    assert pushed == [{"kind": "account", "type": "signed_in"}]
+
+
 def test_home_after_first_sign_in_goes_to_connect_once(tmp_path):
     pushed = []
     api = _api(tmp_path, FakeAccount(signed_in=False, outcomes=["signed_in"]),

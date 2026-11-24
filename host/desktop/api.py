@@ -226,7 +226,12 @@ class DesktopApi:
             if sign_in is None:
                 return
             self._sleep(sign_in.interval)
-            outcome = self._account.poll_once()
+            try:
+                outcome = self._account.poll_once()
+            except Exception:
+                # A transient failure must not leave the account screen waiting forever.
+                log.warning("sign-in poll failed", exc_info=True)
+                continue
             if outcome == "pending":
                 continue
             if outcome == "signed_in":

@@ -505,9 +505,10 @@ async function refresh() {
   if (home.action === 'start_install') return ACTIONS['start-install'](null, home);
   if (home.action === 'start_runtime_update') return startRuntimeUpdate();
   if (home.action === 'load_kitchens') {
-    await api().load_kitchens();
+    const loaded = await api().load_kitchens();
     if (generation !== screenGeneration) return;
-    return refresh();
+    // A failed load is drawn as it is; refreshing would ask again forever.
+    if (loaded && loaded.ok) return refresh();
   }
   show(home.screen, home);
 }

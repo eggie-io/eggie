@@ -37,9 +37,8 @@ function el(tag, className, text) {
   return node;
 }
 
-// Every [data-field] is replaced by the matching key. Values are written with
-// textContent, never parsed as markup: a runtime version or a provider's error text
-// is data, and some of it comes from a subprocess.
+// Every [data-field] gets its key as textContent, never markup: versions and
+// error text are data, some of it from a subprocess.
 function fill(root, data) {
   root.querySelectorAll('[data-field]').forEach((node) => {
     const value = data[node.dataset.field];

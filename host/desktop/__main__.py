@@ -166,7 +166,6 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
         window.events.closing += controller.on_closing
         controller.tray = tray
     if mode == TRAY_ONLY:
-        controller.mark_hidden_launch()
         desktop.on_window_shown(False)
         controller.start_vm_in_background()
     elif not resumed and tray is not None:

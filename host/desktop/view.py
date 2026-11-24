@@ -243,9 +243,8 @@ def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
 def agent_cards(manifests, *, kind: str, alias: str | None,
                 installed: dict[str, bool], connected: dict[str, bool],
                 signed_in: dict[str, bool] | None = None) -> list[dict]:
-    """3a's agent cards for one kitchen, in manifest order. `kind` and `alias`
-    are the kitchen's ("local" / "cloud", its ssh host or None on Windows' own VM).
-    `signed_in` only adds to an installed card's line."""
+    """3a's agent cards for one kitchen, in manifest order. `alias` is its ssh host,
+    None on Windows' own VM; `signed_in` only adds to an installed card's line."""
     cards = []
     for m in manifests:
         if connected.get(m.id):
@@ -261,9 +260,8 @@ def agent_cards(manifests, *, kind: str, alias: str | None,
 
 
 def connect_targets(kitchens: list[dict] | None, local: str) -> list[dict]:
-    """3a's Connect to: the owner's cloud kitchens, then this computer when it has a
-    VM (`local` is local_card's state). One that isn't running is listed, not pickable.
-    A kitchen someone else owns is left out: only its owner can let a computer in."""
+    """3a's Connect to: owned cloud kitchens (only an owner can let a computer in), then
+    this computer once it has a VM. One not running is listed, not pickable."""
     targets = []
     for row in kitchens or []:
         if row.get("is_owner"):

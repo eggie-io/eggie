@@ -172,9 +172,8 @@ def _fill(text: str, values: dict[str, str]) -> str:
 
 def render_steps(manifest: Manifest, os: str, kind: str, ssh_host: str,
                  kitchen: str) -> list[dict]:
-    """The steps for this OS and kitchen kind with the templates filled.
-    Bodies are HTML, so the values are escaped there; titles and alt text
-    are drawn as text and keep them as typed."""
+    """The steps for this OS and kitchen kind, filled in. Values are escaped in
+    the HTML bodies only; titles and alt text are drawn as text."""
     if os not in OSES or kind not in KINDS:
         raise ValueError(f"no steps for {os} {kind}")
     plain = {"{ssh_host}": ssh_host, "{kitchen}": kitchen}

@@ -235,12 +235,8 @@ class DesktopApi:
         return "cloud", alias if alias and ssh_alias.valid_alias(alias) else None
 
     def _connected_agents(self, kitchen_id: str) -> dict[str, bool]:
-        """Read from what the connect steps leave behind, per agent.
-
-        With an ssh host: its block plus the agent's own entry, or Done for an
-        agent that has none. Windows' own VM has no host: the provider answers
-        for what it connects, Done for the rest.
-        """
+        """From what the connect steps leave behind: the ssh block plus the agent's entry
+        (or Done); on Windows' own VM the provider's answer (or Done)."""
         kind, alias = self._agent_target(kitchen_id)
         done = self._settings.members(AGENTS_DONE)
         block = bool(alias) and ssh_alias.host_installed(self._ssh_config, alias)

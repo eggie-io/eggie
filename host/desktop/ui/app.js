@@ -284,7 +284,7 @@ ACTIONS['settings'] = async () => {
   const settings = await api().get_settings();
   show('settings', {
     unavailable: settings.autostart_available ? '' : 'yes', error: '',
-    signed_in: settings.signed_in, email: settings.email,
+    signed_in: settings.signed_in, email: settings.email, vm_exists: settings.vm_exists,
     no_email: settings.signed_in && !settings.email,
   });
   const box = document.querySelector('[data-setting="autostart"]');
@@ -895,12 +895,7 @@ function cloudCard(kitchen) {
 }
 
 function localCard(local, home) {
-  const failed = local.state === 'failed';
-  const unresponsive = home.route === 'unresponsive';
-  const data = {
-    [local.state]: true, problem: home.problem, error: failed && home.problem,
-    retry_start: failed && !unresponsive, retry_recover: failed && unresponsive,
-  };
+  const data = { [local.state]: true, problem: home.problem, error: local.state === 'failed' && home.problem };
   // This computer can always be picked; 3a says when it can't take an agent yet.
   return withAgents('local', data, 'local', [], true);
 }

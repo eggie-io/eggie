@@ -121,6 +121,19 @@ def test_the_version_tiles_bind_fields_desktop_api_home_actually_returns():
             f"version tile has no data-field for the runtime version: {line.strip()}"
 
 
+def test_nothing_installed_offers_no_uninstall():
+    """With no VM the button could only error or no-op; Settings gates it on vm_exists."""
+    markup = (UI / "index.html").read_text()
+    start = markup.index('data-screen="settings"')
+    screen = markup[start:markup.index("</template>", start)]
+    button = screen.index('data-action="uninstall"')
+    gates = re.findall(r'data-when="([^"]*)"', screen[:button])
+    assert gates and gates[-1] == "vm_exists"
+    for name in ("home", "kitchen:setup", "where"):
+        start = markup.index(f'data-screen="{name}"')
+        assert 'data-action="uninstall"' not in markup[start:markup.index("</template>", start)]
+
+
 def test_no_user_facing_copy_names_one_platform():
     """The app ships on Windows and macOS and may not branch on platform, so a
     sentence naming either one is false on the other."""

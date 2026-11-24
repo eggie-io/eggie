@@ -234,8 +234,7 @@
         <button class="btn-secondary btn-sm" data-action="enter-console" data-when="running">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
         <button class="btn-secondary btn-sm" data-action="start-vm" data-when="stopped"><span class="ic ic-play" aria-hidden="true"></span>Start</button>
         <button class="btn-ghost btn-sm" data-action="doctor" data-when="failed"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
-        <button class="btn-secondary btn-sm" data-action="start-vm" data-when="retry_start"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
-        <button class="btn-secondary btn-sm" data-action="recover" data-when="retry_recover"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        <button class="btn-secondary btn-sm" data-action="restart-vm" data-when="failed"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
       </div>
     </div>
     <div class="kcard-error" data-when="error">
@@ -541,6 +540,10 @@
         <button class="btn-secondary" data-action="sign-out-cancel">Cancel</button>
         <button class="btn-danger" data-action="sign-out">Sign out</button>
       </div>
+    </div>
+    <div class="setting-account" data-when="vm_exists">
+      <p>Removes the Linux machine on this computer and every project in it.</p>
+      <button class="btn-secondary" data-action="uninstall"><span class="ic ic-trash" aria-hidden="true"></span>Uninstall Eggie…</button>
     </div>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
   </section>

@@ -107,20 +107,29 @@ def test_instances_accepts_list_or_wrapper(tmp_path, reply):
     assert seen == [("GET", "/v1/instances", "a")]
 
 
-def test_connect_without_sign_in_says_so(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "_cloud_factory", lambda: _signed_out(tmp_path))
-    monkeypatch.setattr(cli, "_provider_factory", lambda: _NoProvider())
-    result = CliRunner().invoke(cli.app, ["connect", "--kitchen", "shop", "--codex"])
+def test_connect_without_sign_in_still_connects_this_computer(tmp_path, monkeypatch):
+    from host.core.connect.flow import Connector
+
+    class Provider:
+        local_ssh_alias = None
+        connected: list = []
+
+        def connect_agent(self, agent_id):
+            self.connected.append(agent_id)
+            return "ok"
+
+    provider = Provider()
+    monkeypatch.setattr(
+        cli, "_connector_factory",
+        lambda say: Connector(lambda: _signed_out(tmp_path), provider, home=tmp_path,
+                              env={}, computer_name="pc", say=say))
+    result = CliRunner().invoke(cli.app, ["connect", "--codex"])
     assert result.exit_code == 1
-    assert "Open the Eggie app and sign in first." in result.output
+    assert "\u2717 Kitchens: Open the Eggie app and sign in first." in result.output
+    assert provider.connected == ["codex"]
 
 
 def _signed_out(tmp_path):
     def call(*a):
         raise AssertionError("no network without a session")
     return CloudClient(CloudAccount(tmp_path / "account.json", call=call), call)
-
-
-class _NoProvider:
-    def computer_name(self):
-        return "pc"

@@ -17,6 +17,7 @@ from pathlib import Path
 from ...client import ApiError, ApiUnavailableError
 from ...providers import claude_ssh, codex_app, ssh_alias
 from .. import tls
+from ..cloud.account import NotSignedIn
 from . import codex_remote, keys, ssh
 
 log = logging.getLogger(__name__)
@@ -139,6 +140,8 @@ class Connector:
         try:
             api = self._client_factory()
             rows = api.instances()
+        except NotSignedIn as e:
+            return None, [], [Line("Kitchens", None, False, str(e))]
         except (ApiError, ApiUnavailableError) as e:
             return None, [], [Line("Kitchens", None, False,
                                    f"Could not load your kitchens: {e}")]

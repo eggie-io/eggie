@@ -301,14 +301,9 @@ def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Cod
     agents = agents or {"claude", "codex"}
     instances = list(kitchen) if kitchen else ([] if local else None)
     local = local or not kitchen
-    from host.core.cloud.account import NotSignedIn
-    try:
-        with _api_errors(), _vm_errors():
-            connector = _connector_factory(typer.echo)
-            lines = (connector.remove if remove else connector.connect)(agents, instances, local)
-    except NotSignedIn as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(code=1)
+    with _api_errors(), _vm_errors():
+        connector = _connector_factory(typer.echo)
+        lines = (connector.remove if remove else connector.connect)(agents, instances, local)
     for line in lines:
         if not line.target:
             typer.echo(line.text)

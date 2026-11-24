@@ -4,6 +4,7 @@ import subprocess
 import pytest
 
 from host.client import ApiError, ApiUnavailableError
+from host.core.cloud.account import NotSignedIn
 from host.core.connect import flow
 from host.providers import claude_ssh, codex_app, ssh_alias
 
@@ -363,6 +364,24 @@ def test_without_the_api_this_computer_still_connects(tmp_path, error):
     assert not lines[0].ok
     assert lines[0].text.startswith("Could not load your kitchens: ")
     assert w.provider.connected == ["codex"]
+
+
+def test_signed_out_says_so_and_this_computer_still_connects(tmp_path):
+    w = World(tmp_path, NotSignedIn())
+
+    lines = w.connector().connect({"codex"}, None, local=True)
+
+    assert (lines[0].target, lines[0].ok) == ("Kitchens", False)
+    assert lines[0].text == "Open the Eggie app and sign in first."
+    assert w.provider.connected == ["codex"]
+
+
+def test_local_only_never_touches_the_account(tmp_path):
+    w = World(tmp_path, NotSignedIn())
+
+    w.connector().connect({"codex"}, [], local=True)
+
+    assert w.factory_calls == 0
 
 
 def test_codex_connection_is_taken_back_when_its_sign_in_cannot_start(tmp_path):

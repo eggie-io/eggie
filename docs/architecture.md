@@ -30,7 +30,8 @@ has the detail.
 
 - **Host** (`host/`) is the desktop app: one PyInstaller-frozen binary per platform. It creates
   and starts the VM, runs one bootstrap command in it, reads the API token, talks to the
-  API over HTTP, and talks to the Eggie service directly for sign-in, kitchens and agent keys. It holds no guest files and knows nothing about what the runtime installs.
+  API over HTTP, and talks to the Eggie service directly for sign-in, kitchens and agent keys. It
+  holds no guest files and knows nothing about what the runtime installs.
 - **Runtime** (`runtime/`) is everything inside the VM: Docker, the Traefik + API + console
   stack, the in-VM `eggie` CLI, coding-agent instructions and agent manifests. It is released
   as `runtime-vX.Y.Z` tags. The same `get.sh` would provision a cloud VM.
@@ -157,9 +158,9 @@ the console shows for a cloud kitchen; the desktop app ships its own). Agents us
 | GitHub (`eggie-io/eggie`) | `get.sh` on `main`, `runtime-v*` tags, `app-v*` releases | VM, host |
 | ghcr.io | `eggie-api` and `eggie-web` images (amd64 + arm64) | VM |
 | Eggie service (`app.eggie.io`) | Sign-in, project sync, public-URL tunnels | API |
-| Eggie service (`app.eggie.io`) | The app's own sign-in, the user's kitchens, agent keys; needs internet, there is no offline mode | host |
+| Eggie service (`app.eggie.io`), app side | The app's own sign-in, kitchens, agent keys; needs internet, no offline mode | host |
 | GitHub OAuth (Device Flow) | Connecting the user's GitHub account | API |
-| Eggie service (`app.eggie.io`) | Anonymous onboarding events, see [desktop-events.md](desktop-events.md) | host, API |
+| Eggie service (`app.eggie.io`), events | Anonymous onboarding events, see [desktop-events.md](desktop-events.md) | host, API |
 
 ## Updates
 

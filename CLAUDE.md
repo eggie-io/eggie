@@ -21,8 +21,8 @@ Two halves, shipped and versioned independently:
 
 - **Host** (`host/`, a PyInstaller-frozen desktop binary) — creates and runs the VM, runs one
   bootstrap command in it (fetch `EGGIE_RUNTIME_URL` → `bash`), reads the token, forwards ports,
-  talks to the API over HTTP, and to the Eggie service for sign-in, kitchens and agent keys. It holds no guest files and no knowledge of what the runtime
-  installs.
+  talks to the API over HTTP, and to the Eggie service for sign-in, kitchens and agent keys. It
+  holds no guest files and no knowledge of what the runtime installs.
 - **Runtime** (`runtime/`) — everything inside the VM: Docker, the Traefik + API stack, the browser
   console, the in-VM `eggie` CLI, coding-agent instructions and skills. Released as `runtime-v*`
   tags. The same `get.sh` provisions a cloud VM.

@@ -46,7 +46,8 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
-Connect an agent (3a–3d) is local screens only; the console has no part in it, and its Agents tab is cloud-only. `agents(kitchen_id)`
+Connect an agent (3a–3d) is local screens only; the console has no part in it, and its Agents tab
+is cloud-only. `agents(kitchen_id)`
 draws the picker from the bundled guides (`ui/agents/`, `agents.py`) and `view.connect_targets`
 (owned kitchens, plus this computer once it has a VM; one not running is listed, not pickable).
 `start_connect` runs `flow.Connector.connect_one` as a `connect` job whose `step` events drive 3b

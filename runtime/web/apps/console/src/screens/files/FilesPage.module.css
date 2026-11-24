@@ -32,7 +32,7 @@
 .columns {
   height: 36px; flex: none; padding: 0 var(--space-4) 0 var(--space-5);
   background: var(--raised); border-bottom: 1px solid var(--line);
-  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--ink-2);
+  font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink-2);
 }
 .body { flex: 1; min-height: 0; overflow: auto; }
 .bodyPad { padding: var(--space-4); }
@@ -46,8 +46,8 @@
 .row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .name { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .nameIcon { width: 16px; flex: none; display: flex; color: var(--ink-2); }
-.nameText { min-width: 0; font: 450 13px/20px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.folderName { font-weight: 600; }
+.nameText { min-width: 0; font: 400 13px/20px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folderName { font-weight: 500; }
 .meta { font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .size { font-variant-numeric: tabular-nums; }
 .chevron { display: flex; color: var(--ink-3); }
@@ -59,7 +59,7 @@
 .empty p { margin: 0; max-width: 360px; font-size: 14px; line-height: 20px; color: var(--ink-2); }
 
 .noticeText { margin: 0; }
-.stillFull { margin-top: var(--space-2); font-weight: 600; }
+.stillFull { margin-top: var(--space-2); font-weight: 500; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 /* The kit Button is nowrap with a fixed height; the label carries a file name of any length.
    button.x outranks the kit rule whatever order the CSS loads in. */
@@ -80,16 +80,16 @@ button.giveUp {
 .uploadActions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .uploadLine { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); overflow-wrap: anywhere; }
 .uploadTrouble { margin: 0; font-size: 13px; line-height: 18px; color: var(--danger); overflow-wrap: anywhere; }
-.showMe { font-size: 13px; line-height: 20px; font-weight: 600; }
+.showMe { font-size: 13px; line-height: 20px; font-weight: 500; }
 .queueNote { margin: 0; padding-top: var(--space-3); border-top: 1px solid var(--line); font-size: 13px; line-height: 18px; color: var(--ink-2); }
 
 .done { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
 .doneHead { display: flex; align-items: flex-start; gap: var(--space-3); min-width: 0; }
 .doneIcon { display: flex; flex: none; margin-top: 3px; color: var(--success); }
-.doneTitle { margin: 0; min-width: 0; font-size: 18px; line-height: 26px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.doneTitle { margin: 0; min-width: 0; font-size: 18px; line-height: 26px; font-weight: 400; color: var(--ink); overflow-wrap: anywhere; }
 .doneTitle code { font: 500 15px/26px var(--font-mono); }
 .doneLead { margin: 0; max-width: 640px; font-size: 14px; line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
-.doneLead strong { color: var(--ink); font-weight: 600; }
+.doneLead strong { color: var(--ink); font-weight: 500; }
 .doneFoot { display: flex; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; }
 .note { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
 
@@ -103,7 +103,7 @@ button.giveUp {
 .choice:hover { background: var(--hover); }
 .mono { font-family: var(--font-mono); font-size: 13px; }
 .newFolder { align-self: flex-start; }
-.path { margin: 0; font: 450 13px/20px var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.path { margin: 0; font: 400 13px/20px var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; }
 
 @media (max-width: 759px) {
   /* The layout stacks here and the window scrolls: the card takes its natural height. */

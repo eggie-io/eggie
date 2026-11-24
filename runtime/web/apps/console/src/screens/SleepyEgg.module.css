@@ -3,6 +3,6 @@
 .white { position: absolute; inset: 20px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .yolk { position: absolute; left: 47px; top: 52px; width: 30px; height: 24px; border-radius: 50%; background: var(--gold); opacity: .6; }
 .mouth { position: absolute; left: 55px; top: 61px; width: 14px; height: 3px; border-radius: 2px; background: var(--ink); opacity: .45; }
-.z1, .z2 { position: absolute; font-size: 15px; font-weight: 650; font-variation-settings: var(--font-wide); color: var(--ink-3); animation: global(om-zzz) 3s ease-out infinite; }
+.z1, .z2 { position: absolute; font-size: 15px; font-weight: 500; font-variation-settings: var(--font-wide); color: var(--ink-3); animation: global(om-zzz) 3s ease-out infinite; }
 .z1 { left: 88px; top: 34px; }
 .z2 { left: 96px; top: 22px; font-size: 13px; animation-delay: 1s; }

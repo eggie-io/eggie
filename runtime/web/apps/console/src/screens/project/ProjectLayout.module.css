@@ -10,13 +10,13 @@
 .top { position: sticky; top: 0; display: flex; flex-direction: column; padding-top: 28px; }
 .bottom {
   position: sticky; bottom: 0; margin-top: auto; padding: var(--space-3) 0 var(--space-6);
-  border-top: 1px solid var(--line); background: var(--page);
+  border-top: 1px solid var(--line); background: var(--paper);
 }
 
 .allProjects {
   align-self: flex-start; height: var(--control-sm); display: inline-flex; align-items: center; gap: var(--space-2);
   margin: 0 0 var(--space-3) -2px; padding: 0 var(--space-3); border-radius: var(--radius-pill);
-  color: var(--ink); font-size: 13px; line-height: 20px; font-weight: 600; white-space: nowrap;
+  color: var(--ink); font-size: 13px; line-height: 20px; font-weight: 500; white-space: nowrap;
   transition: background-color 120ms ease;
 }
 .allProjects:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
@@ -25,11 +25,11 @@
 .tile { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 10px var(--space-4); }
 .square {
   width: 32px; height: 32px; flex: none; display: grid; place-content: center; border-radius: 8px;
-  font-size: 15px; line-height: 1; font-weight: 650;
+  font-size: 15px; line-height: 1; font-weight: 500;
 }
 .who { display: flex; flex-direction: column; min-width: 0; }
 .name {
-  font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink);
+  font-size: 14px; line-height: 20px; font-weight: 500; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -37,13 +37,13 @@
 .item {
   width: 100%; min-height: 36px; display: flex; align-items: flex-start; gap: 10px; padding: 0 10px;
   border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer;
-  font: inherit; font-size: 14px; line-height: 20px; font-weight: 450; color: var(--ink); text-align: left;
+  font: inherit; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--ink); text-align: left;
   transition: background-color 120ms ease;
 }
 .item > svg { flex: none; margin-top: 10px; }
 .item:hover:not(:disabled) { background: var(--hover); color: var(--ink); text-decoration: none; }
 .item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.item[aria-current="page"], .item[aria-current="page"]:hover { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.item[aria-current="page"], .item[aria-current="page"]:hover { background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
 .item:disabled { color: var(--ink-3); cursor: not-allowed; }
 .danger, .danger:hover:not(:disabled) { color: var(--danger); }
 
@@ -53,7 +53,7 @@
   column-gap: var(--space-2); padding: var(--space-2) 0;
 }
 .label { flex: none; white-space: nowrap; }
-.note { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 16px; font-weight: 450; color: var(--ink-3); }
+.note { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--ink-3); }
 .noteWarning { color: var(--warning); }
 .item[aria-current="page"] .note { color: inherit; }
 

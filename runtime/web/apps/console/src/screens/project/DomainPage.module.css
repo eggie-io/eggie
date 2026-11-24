@@ -4,7 +4,7 @@
 .noticeActions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 
 .cardHead { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--line); }
-.cardTitle { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--ink); }
+.cardTitle { margin: 0; font-size: 15px; line-height: 22px; font-weight: 500; color: var(--ink); }
 .rows { margin: 0; padding: 0; list-style: none; container-type: inline-size; }
 .rows > li + li { border-top: 1px solid var(--line); }
 
@@ -34,12 +34,12 @@
 .dnsLead { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink); }
 .step { margin: var(--space-1) 0 0; }
 .seen { margin: var(--space-2) 0 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.seen dt { display: inline; font-weight: 600; }
+.seen dt { display: inline; font-weight: 500; }
 .seen dd { display: inline; margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
 
 .dns { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 18px; }
 .dns th {
-  padding: 0 var(--space-3) var(--space-2) 0; text-align: left; font-size: 11px; line-height: 16px; font-weight: 600;
+  padding: 0 var(--space-3) var(--space-2) 0; text-align: left; font-size: 11px; line-height: 16px; font-weight: 500;
   letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
 }
 .dns td { padding: var(--space-1) var(--space-3) var(--space-1) 0; color: var(--ink); vertical-align: middle; overflow-wrap: anywhere; }
@@ -73,7 +73,7 @@
   .dns tr + tr { margin-top: var(--space-3); }
   .dns td, .dns td:first-child, .dns td:nth-child(2) { width: auto; padding: 0; display: flex; align-items: baseline; gap: var(--space-2); }
   .dns td::before {
-    content: attr(data-label); flex: none; width: 48px; font: 600 11px/16px var(--font-sans);
+    content: attr(data-label); flex: none; width: 48px; font: 500 11px/16px var(--font-sans);
     letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
   }
 }

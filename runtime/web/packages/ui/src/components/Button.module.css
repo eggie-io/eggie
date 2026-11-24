@@ -1,7 +1,7 @@
 .button {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
   border: 1px solid transparent; border-radius: var(--radius-pill);
-  font: inherit; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer;
+  font: inherit; font-weight: 400; white-space: nowrap; text-decoration: none; cursor: pointer;
   transition: background-color 120ms ease, box-shadow 160ms ease, border-color 120ms ease;
 }
 .button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -11,8 +11,12 @@
 .md { height: var(--control-md); padding: 0 var(--space-4); font-size: 14px; line-height: 20px; }
 .lg { height: var(--control-lg); padding: 0 var(--space-5); font-size: 15px; line-height: 20px; }
 
-.primary { background: var(--gold); color: var(--on-gold); }
-.primary:hover:not(:disabled) { background: var(--orange); box-shadow: var(--shadow-glow); }
+.primary {
+  background: var(--orange) linear-gradient(90deg, var(--gold), var(--orange)); color: var(--on-gold);
+  font-weight: 500; box-shadow: var(--shadow-glow);
+}
+/* Only the image goes: replacing the whole background tweens from transparent and flashes white. */
+.primary:hover:not(:disabled) { background-image: none; }
 
 .secondary { background: var(--paper); color: var(--ink); border-color: var(--line-input); }
 .secondary:hover:not(:disabled) { background: var(--hover); }

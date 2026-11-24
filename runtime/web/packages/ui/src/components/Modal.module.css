@@ -10,7 +10,7 @@
   max-height: calc(100dvh - 2 * var(--space-6));
 }
 .head { flex: none; padding: var(--space-6) calc(var(--space-6) + var(--control-sm) + var(--space-3)) var(--space-2) var(--space-6); }
-.title { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.title { margin: 0; font-size: 18px; line-height: 26px; font-weight: 400; overflow-wrap: anywhere; }
 .close { position: absolute; top: var(--space-6); right: var(--space-6); }
 .body {
   flex: 1 1 auto; min-height: 0; overflow: auto;

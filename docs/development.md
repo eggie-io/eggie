@@ -101,6 +101,12 @@ runs the images pushed under its name (`packaging/images/build.sh --push --tag <
 has both, the newest release's otherwise; `EGGIE_IMAGE_VERSION=<tag>` overrides either. To
 fetch the installer from somewhere else, set `EGGIE_RUNTIME_URL`.
 
+To run against a service other than production (staging), pass `--service <url>` (`-Service <url>`
+on Windows), the service's web app address; its API is `<url>/api`. It writes `EGGIE_CLOUD_URL`
+and `EGGIE_WEB_URL` into the VM's `/opt/eggie/.env` and sends the window's events there. The fast
+loop keeps it; `--full` and `--release` go back to production unless you pass it again, and
+`--service prod` goes back explicitly.
+
 A run from source sends no [desktop events](desktop-events.md). To test them, set
 `EGGIE_EVENTS_URL=<base>` (events go to `<base>/v1/desktop-events`).
 

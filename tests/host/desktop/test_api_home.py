@@ -1,7 +1,6 @@
 """The bridge's answer to "what should I draw".
 
-The first-run rule is carried over from host/setup_app/app.py and is the one
-piece of routing that is not a function of Readiness alone.
+Routing is view.screen_for; this checks the bridge feeds it the probe.
 """
 from __future__ import annotations
 
@@ -25,24 +24,12 @@ def _api(tmp_path, readiness):
                       probe_fn=lambda provider: readiness)
 
 
-def test_a_virgin_machine_is_first_run(tmp_path):
-    assert _api(tmp_path, Readiness()).home()["screen"] == "first-run"
+def test_a_virgin_machine_with_no_account_kitchens_asks_where(tmp_path):
+    assert _api(tmp_path, Readiness()).home()["screen"] == "where"
 
 
-def test_a_machine_that_got_partway_is_not_first_run(tmp_path):
-    # The loop this guards: create_vm failing forever leaves vm_exists False
-    # on every relaunch. Without the state check the app would re-enter the
-    # wizard every time and the user could never reach Home's Doctor button.
-    state = InstallState(tmp_path / "install-state.json")
-    state.mark("preflight")
-    api = DesktopApi(FakeProvider(), state, push=lambda event: None,
-                     probe_fn=lambda provider: Readiness())
-    home = api.home()
-    assert home["screen"] == "home:not_installed"
-
-
-def test_a_ready_machine_is_never_first_run(tmp_path):
-    assert _api(tmp_path, READY).home()["screen"] != "first-run"
+def test_a_machine_with_a_vm_goes_home(tmp_path):
+    assert _api(tmp_path, READY).home()["screen"] == "home"
 
 
 def test_home_carries_the_versions_the_odds_and_ends_row_shows(tmp_path):
@@ -113,22 +100,6 @@ def test_home_never_declares_to_a_vm_that_is_not_answering(tmp_path):
                      probe_fn=lambda p: Readiness(vm_exists=True))
     api.home()
     assert provider.execs == []
-
-
-def test_a_hidden_tray_launch_keeps_the_console_entry_for_the_first_visible_home(tmp_path):
-    """A login launch draws Home in a window nobody sees, while the VM boots.
-    That call must not spend the one-shot, or the user opens a running Eggie
-    and is never taken into the console. Once used, it stays used."""
-    shown = {"yet": False}
-    state = InstallState(tmp_path / "install-state.json")
-    api = DesktopApi(FakeProvider(), state, push=lambda event: None,
-                     probe_fn=lambda provider: READY,
-                     window_shown_once=lambda: shown["yet"])
-    assert api.home()["action"] == ""
-    assert api.home()["action"] == ""
-    shown["yet"] = True
-    assert api.home()["action"] == "enter_console"
-    assert api.home()["action"] == ""
 
 
 OLD_API = Readiness(vm_exists=True, vm_reachable=True,

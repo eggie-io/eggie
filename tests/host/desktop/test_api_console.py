@@ -69,31 +69,6 @@ def test_entering_is_refused_while_a_job_runs(tmp_path):
         api.jobs.join(5)
 
 
-def test_a_running_machine_enters_the_console_at_launch(tmp_path):
-    assert _api(tmp_path).home()["action"] == "enter_console"
-
-
-def test_the_launch_flag_is_spent_by_the_first_home_call(tmp_path):
-    # The console's Home link reloads the local UI, which calls home() again;
-    # a second True would bounce the user straight back into the console.
-    api = _api(tmp_path)
-    api.home()
-    assert api.home()["action"] != "enter_console"
-
-
-def test_a_stopped_machine_does_not_enter_and_still_spends_the_flag(tmp_path):
-    api = _api(tmp_path, readiness=STOPPED)
-    assert api.home()["action"] != "enter_console"
-    api._probe = lambda provider: READY
-    assert api.home()["action"] != "enter_console"
-
-
-def test_a_resumed_install_never_enters_the_console(tmp_path):
-    api = _api(tmp_path)
-    api.resumed = True
-    assert api.home()["action"] != "enter_console"
-
-
 # --- the agent guide's "connect for me" round trip ---
 
 class ConnectingProvider:

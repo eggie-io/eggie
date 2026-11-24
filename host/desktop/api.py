@@ -55,7 +55,6 @@ class DesktopApi:
         self._push = push
         self.jobs = JobRegistry(push, on_crash=self._report_crash)
         self._local_url = local_url or (lambda: None)
-        self._home_seen = False
         self._window_shown_once = window_shown_once or (lambda: True)
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
@@ -121,19 +120,11 @@ class DesktopApi:
         route, state = route_for(readiness)
         resumed = getattr(self, "resumed", False)
         self.resumed = False
-        first_run = not readiness.vm_exists and not self._state.completed()
-        # One-shot like `resumed`: the console's Home link reloads this
-        # page, and a second True would bounce the user back into it.
-        # A tray-only launch draws Home in a hidden window first; that call
-        # must leave the entry for the first one the user can see.
-        visible = self._window_shown_once()
-        enter_console = (visible and not self._home_seen
-                         and (route, state) == ("home", "running")
-                         and not first_run and not resumed)
-        if visible:
-            self._home_seen = True
-        screen = screen_for(route, state, first_run=first_run, resumed=resumed,
-                            enter_console=enter_console,
+        # No cloud account is wired into the bridge yet.
+        screen = screen_for(signed_in=True, pending_sign_in=False, kitchens=[],
+                            kitchens_error="", vm_exists=readiness.vm_exists,
+                            route=route, state=state, resumed=resumed,
+                            just_signed_in=False,
                             update_tried=self._runtime_update_tried,
                             update_error=self._runtime_update_error,
                             problem=readiness.problem)
@@ -362,8 +353,6 @@ class DesktopApi:
                 # when the runtime answers but speaks an old API.
                 self._runtime_update_error = f"{e}"
                 raise
-            # Into the console, as a fresh launch on a running machine would.
-            self._home_seen = False
             return {"type": "done"}
 
         # Cleared before the worker can write a new one, so an earlier

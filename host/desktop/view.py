@@ -21,7 +21,7 @@ from host.core.status import Readiness
 class Screen:
     """What Home draws, and the one thing the page does before or instead.
 
-    `action` is "", "start_install", "enter_console" or
+    `action` is "", "start_install", "load_kitchens" or
     "start_runtime_update"; `name` is the template to draw if the action
     does not take the page elsewhere.
     """
@@ -32,33 +32,119 @@ class Screen:
 
 HOME_STATES = ("not_installed", "stopped", "running", "wrong")
 # Every name screen_for() can return; each must have a template.
-SCREENS = frozenset(
-    [f"home:{state}" for state in HOME_STATES]
-    + ["first-run", "install:running", "unreachable", "unresponsive",
-       "runtime-update:running", "runtime-update:failed"])
+SCREENS = frozenset([
+    "account", "account:waiting", "where", "home", "kitchen:new", "kitchen:setup",
+    "connect", "connect:running", "connect:ready", "connect:sign-in",
+    "install:running", "unreachable", "unresponsive",
+    "runtime-update:running", "runtime-update:failed"])
 
 
-def screen_for(route: str, state: str, *, first_run: bool, resumed: bool,
-               enter_console: bool, update_tried: bool, update_error: str,
-               problem: str) -> Screen:
+def newest_owned(kitchens: list[dict] | None) -> dict | None:
+    """The kitchen the owner most recently made; org kitchens are never chosen."""
+    owned = [k for k in kitchens or [] if k.get("is_owner")]
+    return max(owned, key=lambda k: k.get("created_at") or "", default=None)
+
+
+def screen_for(*, signed_in: bool, pending_sign_in: bool, kitchens: list[dict] | None,
+               kitchens_error: str, vm_exists: bool, route: str, state: str,
+               resumed: bool, just_signed_in: bool, update_tried: bool,
+               update_error: str, problem: str) -> Screen:
     """Ordered: the earlier rule wins.
 
-    A resumed launch still has the first-run shape (nothing recorded, no VM)
-    and must continue setup, not restart it; the runtime update starts once
-    per launch, or an update that "succeeds" without fixing the API would
-    loop forever.
+    A resumed launch still has the nothing-recorded shape and must continue
+    setup, not restart it; the runtime update starts once per launch, or an
+    update that "succeeds" without fixing the API would loop forever.
     """
     if resumed:
         return Screen("install:running", action="start_install")
-    if first_run:
-        return Screen("first-run")
-    if enter_console:
-        return Screen("home:running", action="enter_console")
+    if not signed_in:
+        return Screen("account:waiting" if pending_sign_in else "account")
+    if kitchens is None and not kitchens_error:
+        return Screen("home", action="load_kitchens")
+    if not kitchens and not vm_exists and not kitchens_error:
+        return Screen("where")
+    if just_signed_in:
+        newest = newest_owned(kitchens)
+        if newest:
+            return Screen("connect", message=newest["id"])
     if route == "update_runtime":
         if not update_tried:
             return Screen("runtime-update:running", action="start_runtime_update")
         return Screen("runtime-update:failed", message=update_error or problem)
-    return Screen(f"home:{state}" if route == "home" else route)
+    if route in ("unreachable", "unresponsive"):
+        return Screen(route)
+    return Screen("home")
+
+
+_STEPS_TOTAL = 5
+_SETUP_STEP_DONE = {"certificate": 0, "server": 1, "address": 2, "dns": 3}
+_GETTING_READY = ("provisioning", "booting", "starting")
+
+
+def setup_progress(status: str, step: str | None) -> tuple[int, int]:
+    """How many of the five setup rows are done, for the "N of 5 done" line."""
+    if status == "running":
+        return (_STEPS_TOTAL, _STEPS_TOTAL)
+    if step in _SETUP_STEP_DONE:
+        return (_SETUP_STEP_DONE[step], _STEPS_TOTAL)
+    # Past DNS, waiting for the server to answer.
+    if status in ("booting", "starting"):
+        return (4, _STEPS_TOTAL)
+    return (0, _STEPS_TOTAL)
+
+
+def cloud_card(row: dict) -> dict:
+    status = row.get("status") or ""
+    if status == "running":
+        state = "running"
+    elif status in _GETTING_READY:
+        state = "getting_ready"
+    elif status == "stopped":
+        state = "stopped"
+    elif status == "failed":
+        state = "failed"
+    else:
+        state = "other"
+    host = row.get("console_hostname") or ""
+    line = " \u00b7 ".join(
+        part for part in (host, row.get("size_label"), row.get("region_label")) if part)
+    return {
+        "id": row["id"],
+        "title": row.get("display_name") or row.get("name") or "",
+        "state": state,
+        "badge": "Running" if state == "running" else "",
+        "line": line,
+        "steps_done": setup_progress(status, row.get("step"))[0],
+        "can_connect": bool(row.get("is_owner")) and status == "running",
+        "open_url_host": host,
+    }
+
+
+def local_card(route: str, state: str) -> str:
+    if route == "home":
+        return {"running": "running", "stopped": "stopped",
+                "not_installed": "none"}.get(state, "failed")
+    return "failed"
+
+
+def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
+              vm_exists: bool) -> dict:
+    """Cards in order (cloud, then local) and which kind gets the dashed card."""
+    cards = [{"kind": "cloud", **cloud_card(k)} for k in kitchens or []]
+    has_cloud = bool(cards)
+    if local != "none":
+        cards.append({"kind": "local", "state": local})
+    if kitchens_error:
+        # Offering to create a kitchen while the service is down would only fail.
+        missing = ""
+    elif has_cloud and local == "none":
+        missing = "local"
+    elif local != "none" and not has_cloud:
+        missing = "cloud"
+    else:
+        missing = ""
+    return {"cards": cards, "missing": missing, "show_doctor": vm_exists,
+            "cloud_error": kitchens_error}
 
 
 # --- connecting a coding agent from the console's guide ----------------

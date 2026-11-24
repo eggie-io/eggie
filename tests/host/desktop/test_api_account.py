@@ -158,3 +158,43 @@ def test_sign_out_drops_the_cached_kitchens(tmp_path):
     api.load_kitchens()
     api.sign_out()
     assert api.home()["screen"] == "account"
+
+
+class CheckoutClient(FakeClient):
+    def instance_catalog(self):
+        return {"regions": [{"id": "europe", "label": "Europe", "enabled": True,
+                             "size_ids_with_room": ["small"]}],
+                "sizes": [{"id": "small", "label": "S", "description": "", "vcpus": 1,
+                           "memory_gb": 2, "disk_gb": 40, "enabled": True}]}
+
+    def billing_catalog(self):
+        return {"enabled": False, "sizes": [], "trial_days": None}
+
+    def me(self):
+        raise ApiUnavailableError("down")
+
+
+def test_a_cancelled_payment_waits_until_back_and_back_ends_it(tmp_path, monkeypatch):
+    opened = []
+    monkeypatch.setattr("host.desktop.api.webbrowser.open", opened.append)
+    old = _kitchen("old")
+    api = _api(tmp_path, FakeAccount(), CheckoutClient([old], [old], [old]))
+    now = [1000.0]
+    api._clock = lambda: now[0]
+    assert api.catalog()["name"] == "My cloud"
+    assert api.start_checkout("Bakery", "small", "europe") == {"ok": True}
+    assert len(opened) == 1
+    now[0] += 86400
+    assert api.checkout_status() == {"state": "waiting", "kitchen_id": "", "wait": 10.0}
+    api.cancel_checkout()
+    assert api.checkout_status()["state"] == "none"
+    assert api.open_checkout_page() == {"ok": False} and len(opened) == 1
+
+
+def test_checkout_refuses_a_size_the_catalog_did_not_offer(tmp_path, monkeypatch):
+    opened = []
+    monkeypatch.setattr("host.desktop.api.webbrowser.open", opened.append)
+    api = _api(tmp_path, FakeAccount(), CheckoutClient([]))
+    api.catalog()
+    assert api.start_checkout("Bakery", "large", "europe")["ok"] is False
+    assert opened == []

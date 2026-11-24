@@ -4,14 +4,16 @@ No provider and no client -- nothing here ever reaches the VM, the network
 or the filesystem. That is what makes this the only module in host/desktop
 worth testing, and why api.py stays thin enough to read in one sitting.
 
-No user-facing copy lives here. These functions return state identifiers;
-ui/index.html holds the words, so the design board stays the single source
-for them.
+Little user-facing copy lives here. These functions return state
+identifiers; ui/index.html holds the words, so the design board stays the
+single source for them. The exceptions are values the page only displays:
+1d's tile notes and prices, and the default kitchen name.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 from host.core import constants
 from host.core.status import Readiness
@@ -118,6 +120,100 @@ def cloud_card(row: dict) -> dict:
         "can_connect": bool(row.get("is_owner")) and status == "running",
         "open_url_host": host,
     }
+
+
+def setup_rows(status: str, step: str | None) -> list[str]:
+    """Each 1e row's state: done, running, failed or waiting."""
+    done, total = setup_progress(status, step)
+    current = "failed" if status == "failed" else "running"
+    return ["done" if i < done else current if i == done else "waiting" for i in range(total)]
+
+
+# --- making a cloud kitchen (1d) -----------------------------------------
+#
+# The same rules as the web app's size tiles: prices, limits and room are the
+# service's decisions; these only say what each answer looks like.
+
+def _money(price: dict) -> str:
+    major = price["amount"] / 100
+    number = f"{major:.0f}" if major == int(major) else f"{major:.2f}"
+    currency = str(price.get("currency") or "").upper()
+    return f"${number}" if currency == "USD" else f"{currency} {number}"
+
+
+def size_tiles(instance_catalog: dict, billing_catalog: dict | None) -> list[dict]:
+    billing = billing_catalog or {}
+    prices = {p.get("size_id"): p for p in billing.get("sizes") or []}
+    tiles = []
+    for size in instance_catalog.get("sizes") or []:
+        line = " · ".join(part for part in (
+            f"{size['vcpus']} vCPU" if size.get("vcpus") is not None else "",
+            f"{size['memory_gb']} GB" if size.get("memory_gb") is not None else "",
+            size.get("description") or "") if part)
+        tile = {"id": size["id"], "label": size.get("label") or size["id"], "line": line,
+                "price": "", "money": "", "cents": None, "note": "", "enabled": True}
+        price = prices.get(size["id"]) or {}
+        if not size.get("enabled"):
+            tile.update(note="Coming soon", enabled=False)
+        elif not billing.get("enabled"):
+            # Billing off: the service creates the kitchen with no payment.
+            pass
+        elif price.get("covered_by_license"):
+            tile.update(note="Covered by your license")
+        elif not price.get("monthly"):
+            tile.update(note="No price yet", enabled=False)
+        else:
+            money = _money(price["monthly"])
+            tile.update(price=f"{money}/mo", money=money, cents=price["monthly"]["amount"])
+        tiles.append(tile)
+    return tiles
+
+
+def from_price(tiles: list[dict]) -> str:
+    """1c's "From $24 a month": the cheapest size that can be picked, or ""."""
+    priced = [t for t in tiles if t["enabled"] and t["cents"] is not None]
+    return min(priced, key=lambda t: t["cents"])["money"] if priced else ""
+
+
+def region_tiles(instance_catalog: dict, size_id: str) -> list[dict]:
+    tiles = []
+    for region in instance_catalog.get("regions") or []:
+        if not region.get("enabled"):
+            note = "Coming soon"
+        elif size_id not in (region.get("size_ids_with_room") or []):
+            note = "No room right now"
+        else:
+            note = ""
+        tiles.append({"id": region["id"], "label": region.get("label") or region["id"],
+                      "enabled": not note, "note": note})
+    return tiles
+
+
+def default_kitchen_name(me: dict | None) -> str:
+    first = str(((me or {}).get("user") or {}).get("first_name") or "").strip()
+    return f"{first}’s cloud" if first else "My cloud"
+
+
+def checkout_url(web_origin: str, name: str, size: str, region: str) -> str:
+    query = urlencode({"name": name, "size": size, "region": region, "source": "desktop"})
+    return f"{web_origin.rstrip('/')}/kitchens/new/checkout?{query}"
+
+
+def new_kitchen(before_ids: frozenset[str], rows: list[dict]) -> dict | None:
+    """The kitchen the payment made: the newest owned one not there before it."""
+    return newest_owned([row for row in rows if row.get("id") not in before_ids])
+
+
+_CHECKOUT_SLOW_AFTER = 120.0
+
+
+def checkout_wait(elapsed: float) -> float:
+    """Seconds to the next look for the paid kitchen; never gives up on its own.
+
+    A cancelled payment or a closed browser looks exactly like one still open,
+    so only Back ends the wait.
+    """
+    return 3.0 if elapsed < _CHECKOUT_SLOW_AFTER else 10.0
 
 
 def local_card(route: str, state: str) -> str:

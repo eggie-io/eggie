@@ -604,7 +604,251 @@ window.eggie.handlers.account = (event) => {
   showAccount(SIGN_IN_ENDED[event.type] || '');
 };
 
-ACTIONS['new-kitchen'] = () => show('kitchen:new', {});
+// --- A cloud kitchen: make it (1d), pay in the browser, watch it (1e) ----
+
+// 1d's catalog and picks. `payment` is what was sent to the checkout page:
+// Back from the wait restores it, and 1e's "Paid" line reads it.
+let kitchenForm = null;
+let payment = null;
+let setupKitchen = '';
+
+async function newKitchen(draft) {
+  const generation = screenGeneration;
+  const catalog = await api().catalog();
+  if (generation !== screenGeneration) return;
+  if (catalog.signed_out) return refresh();
+  if (!catalog.ok) return show('kitchen:new', { error: catalog.message, retry: 'yes' });
+  kitchenForm = Object.assign({ catalog, name: catalog.name, size: '', region: '' }, draft || {});
+  show('kitchen:new', { ready: 'yes' });
+  const input = document.querySelector('[data-kitchen-name]');
+  input.value = kitchenForm.name;
+  input.addEventListener('input', () => { kitchenForm.name = input.value; updateContinue(); });
+  buildPicks('[data-sizes]', 'size', catalog.sizes, true);
+  const anySize = catalog.sizes.length ? catalog.sizes[0].id : '';
+  buildPicks('[data-regions]', 'region', catalog.regions[anySize] || [], false);
+  drawPicks();
+}
+
+function firstEnabled(tiles, id) {
+  const chosen = tiles.find((tile) => tile.id === id && tile.enabled);
+  const fallback = tiles.find((tile) => tile.enabled);
+  return (chosen || fallback || { id: '' }).id;
+}
+
+// Tiles are built once and updated in place, so a radio keeps its focus.
+function buildPicks(selector, name, tiles, isSize) {
+  const group = document.querySelector(selector);
+  tiles.forEach((tile) => {
+    const label = document.createElement('label');
+    label.className = isSize ? 'pick' : 'pick pick-region';
+    label.dataset.id = tile.id;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = tile.id;
+    input.addEventListener('change', () => { kitchenForm[name] = tile.id; drawPicks(); });
+    const top = document.createElement('span');
+    top.className = 'pick-top';
+    const mark = document.createElement('span');
+    mark.className = isSize ? 'pick-dot' : 'ic ic-globe pick-globe';
+    mark.setAttribute('aria-hidden', 'true');
+    const title = document.createElement('span');
+    title.className = 'pick-label';
+    title.textContent = tile.label;
+    top.append(mark, title);
+    if (isSize) {
+      const price = document.createElement('span');
+      price.className = 'pick-price';
+      price.textContent = tile.price;
+      top.append(price);
+    } else {
+      const check = document.createElement('span');
+      check.className = 'ic ic-check-circle pick-check';
+      check.setAttribute('aria-hidden', 'true');
+      top.append(check);
+    }
+    label.append(input, top);
+    if (isSize && tile.line) {
+      const line = document.createElement('span');
+      line.className = 'pick-line';
+      line.textContent = tile.line;
+      label.append(line);
+    }
+    // A size has a price or a note, never both, so the note takes the price's place.
+    const note = document.createElement('span');
+    note.className = 'pick-note';
+    (isSize ? top : label).append(note);
+    group.append(label);
+  });
+}
+
+function drawPicks() {
+  const { catalog } = kitchenForm;
+  kitchenForm.size = firstEnabled(catalog.sizes, kitchenForm.size);
+  const regions = catalog.regions[kitchenForm.size] || [];
+  kitchenForm.region = firstEnabled(regions, kitchenForm.region);
+  const paint = (selector, tiles, chosen) => {
+    document.querySelectorAll(`${selector} .pick`).forEach((label) => {
+      const tile = tiles.find((t) => t.id === label.dataset.id) || { enabled: false, note: '' };
+      const input = label.querySelector('input');
+      input.disabled = !tile.enabled;
+      input.checked = tile.enabled && tile.id === chosen;
+      label.querySelector('.pick-note').textContent = tile.note;
+    });
+  };
+  paint('[data-sizes]', catalog.sizes, kitchenForm.size);
+  paint('[data-regions]', regions, kitchenForm.region);
+  updateContinue();
+}
+
+function updateContinue() {
+  document.querySelector('[data-action="continue-to-payment"]').disabled = !(
+    kitchenForm.size && kitchenForm.region && kitchenForm.name.trim());
+}
+
+function showFormError(message) {
+  const alert = document.querySelector('.kitchen .alert');
+  alert.querySelector('[data-field="error"]').textContent = message;
+  alert.querySelector('[data-action]').hidden = true;
+  alert.hidden = false;
+}
+
+// setTimeout, so each look waits for the last answer and the bridge sets the
+// delay. Parked under Settings it pauses instead of ending.
+function pollWhileShowing(firstDelay, tick) {
+  const node = document.getElementById('screen').firstElementChild;
+  const next = (ms) => setTimeout(async () => {
+    if (!node.isConnected) {
+      if (stash && stash.nodes.contains(node)) next(ms);
+      return;
+    }
+    let delay = ms;
+    try {
+      delay = await tick(node);
+    } catch (error) {
+      delay = ms;
+    }
+    if (delay !== null) next(delay);
+  }, ms);
+  next(firstDelay);
+}
+
+ACTIONS['new-kitchen'] = () => newKitchen(null);
+ACTIONS['kitchen-back'] = () => refresh();
+
+ACTIONS['continue-to-payment'] = async () => {
+  const draft = { name: kitchenForm.name.trim(), size: kitchenForm.size, region: kitchenForm.region };
+  const generation = screenGeneration;
+  const started = await api().start_checkout(draft.name, draft.size, draft.region);
+  if (generation !== screenGeneration) return;
+  if (started.signed_out) return refresh();
+  if (!started.ok) return showFormError(started.message);
+  const size = kitchenForm.catalog.sizes.find((s) => s.id === draft.size);
+  payment = { draft, size: size.label, price: size.money, kitchen: '' };
+  waitForPayment();
+};
+
+// A cancelled payment or a closed tab looks the same as one still open, so
+// this never gives up; Back is the way out.
+function waitForPayment() {
+  show('kitchen:setup', { waiting: 'yes' });
+  pollWhileShowing(3000, async (node) => {
+    const status = await api().checkout_status();
+    if (!node.isConnected) return 3000;
+    if (status.state === 'found') {
+      payment.kitchen = status.kitchen_id;
+      showSetup(status.kitchen_id);
+      return null;
+    }
+    if (status.state === 'signed_out') {
+      refresh();
+      return null;
+    }
+    return status.state === 'waiting' ? status.wait * 1000 : null;
+  });
+}
+
+ACTIONS['open-checkout-page'] = () => api().open_checkout_page();
+ACTIONS['checkout-back'] = async () => {
+  await api().cancel_checkout();
+  return newKitchen(payment ? payment.draft : null);
+};
+
+async function showSetup(kitchenId) {
+  const generation = screenGeneration;
+  const kitchen = await api().kitchen(kitchenId);
+  if (generation !== screenGeneration) return;
+  if (!kitchen.ok) {
+    if (!kitchen.signed_out) showNotice(kitchen.message);
+    return refresh();
+  }
+  if (kitchen.state === 'running') return show('connect', { kitchen_id: kitchen.id });
+  const paid = payment && payment.kitchen === kitchenId ? payment : {};
+  setupKitchen = kitchen.id;
+  show('kitchen:setup', {
+    setting_up: 'yes', title: kitchen.title, steps_done: kitchen.steps_done,
+    where_line: [kitchen.region_label, kitchen.size_label].filter(Boolean).join(' · '),
+    paid_size: paid.size || '', paid_price: paid.price || '',
+  });
+  drawSetup(kitchen);
+  pollWhileShowing(3000, async (node) => {
+    const next = await api().kitchen(kitchenId);
+    if (!node.isConnected) return 3000;
+    if (next.signed_out) {
+      refresh();
+      return null;
+    }
+    document.querySelector('[data-field="offline"]').textContent = next.ok ? '' : next.message;
+    if (!next.ok) return 3000;
+    if (next.state === 'running') {
+      show('connect', { kitchen_id: next.id });
+      return null;
+    }
+    if (next.state === 'stopped' || next.state === 'other') {
+      refresh();
+      return null;
+    }
+    drawSetup(next);
+    return 3000;
+  });
+}
+
+function drawSetup(kitchen) {
+  let current = null;
+  document.querySelectorAll('[data-setup-rows] .row-step').forEach((li, i) => {
+    const status = kitchen.rows[i];
+    li.dataset.status = status;
+    li.querySelector('.state').textContent = (
+      status === 'running' && kitchen.slow_boot ? 'Can take a minute' : '');
+    li.querySelector('.detail')?.remove();
+    if (status === 'failed' && kitchen.last_error) {
+      const detail = document.createElement('span');
+      detail.className = 'detail';
+      detail.textContent = kitchen.last_error;
+      li.append(detail);
+    }
+    if (!current && status !== 'done') current = li;
+  });
+  document.querySelector('[data-setup-current]').textContent = (
+    current ? current.querySelector('.label').textContent : '');
+  document.querySelector('[data-field="title"]').textContent = kitchen.title;
+  document.querySelector('[data-field="steps_done"]').textContent = kitchen.steps_done;
+  const bar = document.querySelector('.setup-card .bar');
+  bar.setAttribute('aria-valuenow', kitchen.steps_done);
+  bar.querySelector('span').style.width = `${(kitchen.steps_done / kitchen.rows.length) * 100}%`;
+  document.querySelector('[data-action="open-kitchen-page"]').hidden = kitchen.state !== 'failed';
+}
+
+ACTIONS['open-kitchen-page'] = () => api().open_kitchen_page(setupKitchen);
+
+// 1c's price line; the tile reads fine without it if the catalog can't load.
+async function showFromPrice() {
+  const line = document.querySelector('[data-from-price]');
+  const catalog = await api().catalog();
+  if (!line.isConnected || !catalog.ok || !catalog.from_price) return;
+  line.querySelector('[data-field="from_price"]').textContent = catalog.from_price;
+  line.hidden = false;
+}
 
 // A cloud kitchen made on the website meanwhile takes the page to Home.
 async function watchForKitchens() {
@@ -645,7 +889,10 @@ async function refresh() {
   // A reload forgets which button was pressed; the plain sign-in link works for both.
   if (home.screen === 'account:waiting') return beginSignIn(signIn ? signIn.mode : 'existing', false);
   show(home.screen, home);
-  if (home.screen === 'where') whileShowing(30000, watchForKitchens);
+  if (home.screen === 'where') {
+    whileShowing(30000, watchForKitchens);
+    showFromPrice();
+  }
 }
 
 function start() {

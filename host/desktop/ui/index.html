@@ -121,7 +121,8 @@
             <div><h2>In the cloud</h2>
               <p>Your own small server. Open projects from any device and share links that keep
                 working when this computer is off.</p></div>
-            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Nothing else to install here</li></ul>
+            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Nothing else to install here</li>
+              <li data-from-price hidden><span class="ic ic-check" aria-hidden="true"></span><span>From <span data-field="from_price"></span> a month</span></li></ul>
             <div class="where-cta"><button class="btn-primary" data-action="new-kitchen">Create a cloud kitchen</button></div>
           </div>
         </article>
@@ -151,11 +152,90 @@
 </template>
 
 <template data-screen="kitchen:new">
-  <h1>kitchen:new</h1>
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="kitchen-back" aria-label="Back" title="Back"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body kitchen">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Make a cloud kitchen</h1>
+        <p class="lede">A server of your own. You can change the size later.</p>
+      </div>
+      <div class="alert alert-warning" data-when="error">
+        <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+        <p data-field="error"></p>
+        <button class="btn-secondary" data-action="new-kitchen" data-when="retry">Try again</button>
+      </div>
+      <div class="kitchen-form" data-when="ready">
+        <div class="field field-name">
+          <label for="kitchen-name">Name</label>
+          <input id="kitchen-name" data-kitchen-name maxlength="100" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <span class="field-label" id="kitchen-size">Size</span>
+          <div class="picks" role="radiogroup" aria-labelledby="kitchen-size" data-sizes></div>
+        </div>
+        <div class="field">
+          <span class="field-label" id="kitchen-region">Where</span>
+          <div class="picks" role="radiogroup" aria-labelledby="kitchen-region" data-regions></div>
+          <p class="hint">We put it in the best data centre on that continent.</p>
+        </div>
+        <div class="kitchen-foot">
+          <button class="btn-primary btn-lg" data-action="continue-to-payment">Continue to payment<span class="ic ic-external" aria-hidden="true"></span></button>
+          <span class="hint">Payment opens in your browser once. This window carries on by itself when it’s done.</span>
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
+<!-- Two states: waiting for the payment to make the kitchen, then its setup rows. -->
 <template data-screen="kitchen:setup">
-  <h1>kitchen:setup</h1>
+  <div class="shell">
+    <header class="shell-head"><span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body kitchen" data-when="waiting">
+      <div class="kitchen-head">
+        <span class="wait-status"><span class="spinner spinner-sm" aria-hidden="true"></span>Waiting for you in the browser</span>
+        <h1 class="kitchen-title">Finish paying in your browser</h1>
+        <p class="lede">We opened <span class="mono">app.eggie.io</span> for you. This window carries on
+          by itself when the payment is done.</p>
+      </div>
+      <div class="row">
+        <button class="btn-secondary" data-action="open-checkout-page">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary" data-action="checkout-back">Back</button>
+      </div>
+    </section>
+    <section class="shell-body kitchen kitchen-setup" data-when="setting_up">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Getting <span data-field="title"></span> ready</h1>
+        <p class="lede">About two minutes. When it’s ready we ask which coding agent you use.</p>
+      </div>
+      <div class="setup-col">
+        <p class="setup-paid" data-when="paid_price"><span class="ic ic-check-circle" aria-hidden="true"></span>
+          <span>Paid · <span data-field="paid_size"></span> · <span data-field="paid_price"></span> a month</span></p>
+        <div class="setup-card">
+          <div class="setup-card-head"><span data-setup-current></span>
+            <span class="setup-count"><span data-field="steps_done"></span> of 5 done</span></div>
+          <div class="bar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="5"><span data-setup-bar></span></div>
+          <ol class="rows setup-rows" data-setup-rows>
+            <li class="row-step"><span class="mark"></span><span class="label">Issuing certificate</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Creating server</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Waiting for an address</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Publishing DNS</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Starting Eggie</span><span class="state"></span></li>
+          </ol>
+        </div>
+      </div>
+      <p class="hint" data-field="offline"></p>
+      <div class="setup-foot">
+        <span class="hint"><span data-when="where_line"><span data-field="where_line"></span> · </span>You can close this window.</span>
+        <span class="row">
+          <button class="btn-primary" data-action="open-kitchen-page" data-when="failed">Open in the web app<span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-secondary" data-action="go-home">Back to kitchens</button>
+        </span>
+      </div>
+    </section>
+  </div>
 </template>
 
 <template data-screen="connect">

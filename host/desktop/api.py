@@ -29,8 +29,10 @@ from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
 from .telemetry import app_error, who
-from .view import (agent_offer, connectable, console_path, home_view, local_card,
-                   progress_event, route_for, rows_for, screen_for, terminal_event)
+from .view import (agent_offer, checkout_url, checkout_wait, cloud_card, connectable,
+                   console_path, default_kitchen_name, from_price, home_view, local_card,
+                   new_kitchen, progress_event, region_tiles, route_for, rows_for,
+                   screen_for, setup_rows, size_tiles, terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +70,9 @@ class DesktopApi:
         self._just_signed_in = False
         self._signup_shown = False
         self._sign_in_url = ""
+        # What 1d last offered, so start_checkout accepts only those picks.
+        self._picks: dict[str, set[str]] = {}
+        self._checkout: dict | None = None
         self._poller: threading.Thread | None = None
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
@@ -251,6 +256,100 @@ class DesktopApi:
             self._account.sign_out()
         self._kitchens, self._kitchens_error = None, ""
         self._just_signed_in = False
+        return {"ok": True}
+
+    # --- making a cloud kitchen (1d) and watching it (1e) ---------------
+
+    @staticmethod
+    def _cloud_failure(e: Exception) -> dict:
+        if isinstance(e, NotSignedIn):
+            return {"ok": False, "signed_out": True, "message": ""}
+        if isinstance(e, ApiUnavailableError):
+            return {"ok": False, "signed_out": False, "message": "Can't reach Eggie right now."}
+        return {"ok": False, "signed_out": False, "message": str(e)}
+
+    def catalog(self) -> dict:
+        if self._cloud is None:
+            return {"ok": False, "signed_out": False, "message": "Can't reach Eggie right now."}
+        try:
+            instances = self._cloud.instance_catalog()
+            billing = self._cloud.billing_catalog()
+        except (NotSignedIn, ApiError, ApiUnavailableError) as e:
+            return self._cloud_failure(e)
+        try:
+            me = self._cloud.me()
+        except (ApiError, ApiUnavailableError, NotSignedIn):
+            me = None
+        sizes = size_tiles(instances, billing)
+        regions = {size["id"]: region_tiles(instances, size["id"]) for size in sizes}
+        self._picks = {size["id"]: {r["id"] for r in regions[size["id"]] if r["enabled"]}
+                       for size in sizes if size["enabled"]}
+        return {"ok": True, "name": default_kitchen_name(me), "sizes": sizes,
+                "regions": regions, "from_price": from_price(sizes)}
+
+    def start_checkout(self, name: str, size: str, region: str) -> dict:
+        name = name.strip() if isinstance(name, str) else ""
+        if not name or len(name) > 100:
+            return {"ok": False, "signed_out": False, "message": "Give the kitchen a name."}
+        if region not in self._picks.get(size, ()):
+            return {"ok": False, "signed_out": False,
+                    "message": "That size isn't available there. Pick another."}
+        try:
+            before = frozenset(row["id"] for row in self._cloud.instances())
+        except (NotSignedIn, ApiError, ApiUnavailableError) as e:
+            return self._cloud_failure(e)
+        url = checkout_url(web_app_url(), name, size, region)
+        self._checkout = {"url": url, "before": before, "started": self._clock()}
+        webbrowser.open(url)
+        return {"ok": True}
+
+    def open_checkout_page(self) -> dict:
+        checkout = self._checkout
+        if checkout is None:
+            return {"ok": False}
+        webbrowser.open(checkout["url"])
+        return {"ok": True}
+
+    def checkout_status(self) -> dict:
+        checkout = self._checkout
+        if checkout is None:
+            return {"state": "none", "kitchen_id": "", "wait": 0}
+        wait = checkout_wait(self._clock() - checkout["started"])
+        try:
+            rows = self._cloud.instances()
+        except NotSignedIn:
+            return {"state": "signed_out", "kitchen_id": "", "wait": 0}
+        except (ApiError, ApiUnavailableError):
+            return {"state": "waiting", "kitchen_id": "", "wait": wait}
+        found = new_kitchen(checkout["before"], rows)
+        if found is None:
+            return {"state": "waiting", "kitchen_id": "", "wait": wait}
+        # Kept, not cleared: an answer the page drops (parked under Settings) is asked again.
+        self._kitchens, self._kitchens_error = rows, ""
+        return {"state": "found", "kitchen_id": found["id"], "wait": 0}
+
+    def cancel_checkout(self) -> dict:
+        self._checkout = None
+        return {"ok": True}
+
+    def kitchen(self, kitchen_id: str) -> dict:
+        if self._cloud is None or not isinstance(kitchen_id, str) or not kitchen_id:
+            return {"ok": False, "signed_out": False, "message": "No such kitchen."}
+        try:
+            row = self._cloud.instance(kitchen_id)
+        except (NotSignedIn, ApiError, ApiUnavailableError) as e:
+            return self._cloud_failure(e)
+        status = row.get("status") or ""
+        return {"ok": True, **cloud_card(row), "rows": setup_rows(status, row.get("step")),
+                "last_error": row.get("last_error") or "",
+                "slow_boot": bool(row.get("slow_boot")),
+                "size_label": row.get("size_label") or "",
+                "region_label": row.get("region_label") or ""}
+
+    def open_kitchen_page(self, kitchen_id: str) -> dict:
+        if not isinstance(kitchen_id, str) or not kitchen_id:
+            return {"ok": False}
+        webbrowser.open(f"{web_app_url()}/kitchens/{quote(kitchen_id, safe='')}")
         return {"ok": True}
 
     def start_app_update_check(self) -> None:

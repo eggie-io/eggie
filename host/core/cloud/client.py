@@ -74,6 +74,9 @@ class CloudClient:
                 raise NotSignedIn() from None
             raise
 
+    def me(self) -> dict:
+        return self._send("GET", "/identity/me")
+
     def instances(self) -> list[dict]:
         out = self._send("GET", "/instances")
         return out if isinstance(out, list) else out.get("instances", [])

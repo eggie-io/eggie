@@ -82,6 +82,13 @@ def install(app: FastAPI, *, token: str, sessions: Sessions,
                 return error_body("forbidden_host",
                                   "pushes go to this kitchen's own address", 403)
             return await call_next(request)
+        if config.site_host and request.method == "POST" and path == "/api/ssh-keys/sync":
+            # Pinged by the computer that just got a key approved: no session
+            # exists, and the ping carries nothing.
+            if request.headers.get("host", "") != config.site_host:
+                return error_body("forbidden_host",
+                                  "key sync pings go to this kitchen's own address", 403)
+            return await call_next(request)
         if path == "/api" or path.startswith("/api/"):
             refusal = _browser_refusal(request)
             if refusal is not None:

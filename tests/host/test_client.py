@@ -351,3 +351,48 @@ def test_client_failures_report_catalogued_codes_not_the_apis_own():
     assert error_code(JobFailedError("x")) == "job_failed"
     assert error_code(JobTimeoutError("x")) == "job_timeout"
     assert error_code(ApiUnavailableError("x")) == "api_unreachable"
+
+
+def test_instance_key_calls_quote_fingerprint():
+    def handler(call):
+        if call.method == "GET" and call.path == "/instances":
+            return {"instances": [{"id": "i1"}]}
+        if call.method == "POST":
+            return {"id": "r1"}
+        if call.method == "DELETE":
+            return b""
+        return {"id": "r1", "status": "pending"}
+
+    api, opener = client(handler)
+    assert api.instances() == [{"id": "i1"}]
+    assert api.request_instance_key("a/b", "ssh-ed25519 AAA", "Laptop") == {"id": "r1"}
+    assert opener.calls[-1].json() == {"public_key": "ssh-ed25519 AAA",
+                                       "computer_name": "Laptop"}
+    assert opener.calls[-1].path == "/instances/a%2Fb/ssh-key-requests"
+    api.instance_key_request("i1", "r 1")
+    assert opener.calls[-1].path == "/instances/i1/ssh-key-requests/r%201"
+    assert api.remove_instance_key("i1", "SHA256:a+b/c=") is None
+    assert opener.calls[-1].method == "DELETE"
+    assert opener.calls[-1].path == "/instances/i1/ssh-keys?fingerprint=SHA256%3Aa%2Bb%2Fc%3D"
+
+
+@pytest.mark.parametrize("body", [
+    b'{"error": {"code": "not_found", "message": "Not Found"}}',  # the API's missing route
+    b'{"detail": "Not Found"}',
+])
+def test_old_api_404_reads_update_eggie(body):
+    def missing_route(call):
+        return urllib.error.HTTPError("http://api/x", 404, "Not Found",
+                                      email.message.Message(), io.BytesIO(body))
+
+    api, _ = client(missing_route)
+    with pytest.raises(ApiError) as old:
+        api.instances()
+    assert old.value.api_code == "api_too_old"
+    assert old.value.status == 404
+    assert "Update Eggie" in old.value.message
+
+    api, _ = client(lambda call: http_error(404, "ssh_key_request_not_found", "gone"))
+    with pytest.raises(ApiError) as known:
+        api.instance_key_request("i1", "r1")
+    assert known.value.api_code == "ssh_key_request_not_found"

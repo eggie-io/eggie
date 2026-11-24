@@ -118,3 +118,15 @@ def test_remove_without_an_install_changes_nothing(tmp_path):
 def test_the_provider_looks_next_to_the_ssh_dir_it_was_given(tmp_path):
     provider = LimaProvider(runner=lambda argv: None, ssh_dir=tmp_path / ".ssh")
     assert provider.claude_dir == tmp_path / ".claude"
+
+
+def test_entries_for_two_instances_are_kept_apart(tmp_path):
+    claude = _claude(tmp_path, USER_SETTINGS)
+    foo = claude_ssh.entry_for("eggie-foo", "Foo")
+    bar = claude_ssh.entry_for("eggie-bar", "Bar")
+    claude_ssh.install_entry(claude, foo)
+    claude_ssh.install_entry(claude, bar)
+    claude_ssh.remove_entry(claude, "eggie-foo")
+    assert _read(claude)["sshConfigs"] == [USER_SETTINGS["sshConfigs"][0], bar]
+    assert bar["name"] == "Eggie · Bar" and bar["sshHost"] == "eggie-bar"
+    assert not claude_ssh.entry_installed(claude, "eggie-foo")

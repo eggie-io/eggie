@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import platform
 import shutil
+import socket
 import subprocess
 from pathlib import Path
 
@@ -416,6 +417,8 @@ class LimaProvider:
     # The agents the desktop app can connect to this VM by itself, by their
     # runtime/agents/ id. The console shows the guide's button only for these.
     agent_connections = ("claude-code",)
+    # The ssh host coding agents reach this VM by (setup writes it).
+    local_ssh_alias = ssh_alias.ALIAS
 
     def connect_agent(self, agent_id: str) -> str:
         """Point the agent at the VM. For Claude Code: an "Eggie" entry in its
@@ -432,6 +435,12 @@ class LimaProvider:
         """Whether connect_agent's entry is there, so the guide can skip the
         button. Only the entry: it says nothing about whether the agent uses it."""
         return agent_id == "claude-code" and claude_ssh.installed(self.claude_dir)
+
+    def computer_name(self) -> str:
+        """The name the Mac shows in Sharing settings, not its `.local` host name."""
+        result = self._spawn(["scutil", "--get", "ComputerName"])
+        name = result.stdout.strip() if result.ok else ""
+        return name or socket.gethostname().removesuffix(".local")
 
     def _control(self, verb: str, guest_port: int, host_port: int) -> Completed:
         return self._spawn(["ssh", "-F", str(self._ssh_config()),

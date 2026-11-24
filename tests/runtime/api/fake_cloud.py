@@ -54,6 +54,19 @@ class FakeCloud:
     def list_instances(self, token):
         return self._next("list_instances", token)
 
+    def request_instance_key(self, token, instance_id, public_key, computer_name):
+        return self._next("request_instance_key", token, instance_id, public_key,
+                          computer_name)
+
+    def instance_key_request(self, token, instance_id, request_id):
+        return self._next("instance_key_request", token, instance_id, request_id)
+
+    def remove_instance_key(self, token, instance_id, fingerprint):
+        return self._next("remove_instance_key", token, instance_id, fingerprint)
+
+    def own_ssh_keys(self, token):
+        return self._next("own_ssh_keys", token)
+
     def report_instance_projects(self, token, projects):
         return self._next("report_instance_projects", token, projects)
 

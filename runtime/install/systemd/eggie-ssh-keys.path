@@ -1,0 +1,8 @@
+[Unit]
+Description=Apply the kitchen's approved SSH keys when they change
+
+[Path]
+PathChanged=/opt/eggie/ssh-keys/desired.json
+
+[Install]
+WantedBy=multi-user.target

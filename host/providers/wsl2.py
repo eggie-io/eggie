@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -478,6 +479,8 @@ class Wsl2Provider:
     # The agents reach the distro through WSL itself. Codex on Windows runs
     # only in the default distro, so connecting it makes this one the default.
     agent_connections = ("codex",)
+    # No sshd in the distro: the agents reach it through WSL.
+    local_ssh_alias = None
 
     def connect_agent(self, agent_id: str) -> str:
         if agent_id not in self.agent_connections:
@@ -490,6 +493,9 @@ class Wsl2Provider:
     def agent_connected(self, agent_id: str) -> bool:
         """Whether this distro is the default, so the guide can skip the button."""
         return agent_id == "codex" and self._default_distro() == self.distro
+
+    def computer_name(self) -> str:
+        return socket.gethostname()
 
     def _default_distro(self) -> str | None:
         # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",

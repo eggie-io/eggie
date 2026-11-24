@@ -246,6 +246,15 @@ if ! dpkg -s bubblewrap >/dev/null 2>&1; then
     exit 1
   fi
 fi
+# Ubuntu 24.04 strips capabilities inside unprivileged user namespaces, so bwrap
+# cannot bring up loopback and every Codex command fails. WSL's kernel has no such
+# switch. Every login account is root-equivalent here, so it protects next to nothing.
+if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+  mkdir -p /etc/sysctl.d
+  printf 'kernel.apparmor_restrict_unprivileged_userns = 0\n' > /etc/sysctl.d/60-eggie-userns.conf
+  sysctl -q -p /etc/sysctl.d/60-eggie-userns.conf \
+    || echo "could not allow user namespaces: Codex will not be able to run commands" >&2
+fi
 # Ubuntu 24.04 packages no gh, so this is GitHub's own repo. Its keyring ships
 # dearmored, unlike NodeSource's, so no gpg and no gnupg dependency here.
 # Guarded on the package rather than `command -v gh`: a gh reaching this VM from
@@ -375,6 +384,39 @@ systemctl enable --now eggie-github.path
 if ! systemctl start eggie-github.service; then
   echo "could not apply the GitHub connection to this machine's accounts" >&2
   exit 1
+fi
+
+# 11a. site mode: sshd reads the kitchen's approved keys from /etc/ssh, the
+# API writes them to /opt/eggie/ssh-keys.
+if (( SITE )); then
+  install -d -m 0755 /etc/ssh/eggie-keys
+  install -d -m 2770 -o root -g docker /opt/eggie/ssh-keys
+  install -m 644 "$INSTALL_DIR/sshd/10-eggie-keys.conf" /etc/ssh/sshd_config.d/
+  # A broken sshd config would lock the owner out at the next reload.
+  # sshd -t fails without this directory until sshd has run once this boot.
+  mkdir -p /run/sshd
+  if ! sshd -t; then
+    rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
+    echo "sshd rejected the Eggie key setting; it was removed and sshd left unchanged" >&2
+    exit 1
+  fi
+  # sshd takes the first AuthorizedKeysFile it reads, so an earlier drop-in wins over ours.
+  # A here-string, not a pipe: grep -q quitting early would SIGPIPE sshd under pipefail.
+  if ! grep -qi '^authorizedkeysfile .*/etc/ssh/eggie-keys/%u' <<< "$(sshd -T)"; then
+    rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
+    echo "Another sshd setting overrides Eggie's AuthorizedKeysFile; it was removed and sshd left unchanged" >&2
+    exit 1
+  fi
+  # ssh.service is inactive until the first connection (socket activation).
+  systemctl try-reload-or-restart ssh.service
+  install -m 644 "$INSTALL_DIR/systemd/eggie-ssh-keys.path" \
+    "$INSTALL_DIR/systemd/eggie-ssh-keys.service" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now eggie-ssh-keys.path
+  if ! systemctl start eggie-ssh-keys.service; then
+    echo "could not apply the kitchen's SSH keys to sshd" >&2
+    exit 1
+  fi
 fi
 
 # 11b. the boot-time updater. Enabled only: starting it here would run an

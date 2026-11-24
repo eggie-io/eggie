@@ -324,3 +324,16 @@ def test_vm_failures_and_the_macos_check_carry_catalogued_codes():
         assert e.value.code == code
     old = make(FakeRunner(), mac_ver=lambda: ("12.7", ("", "", ""), "arm64"))
     assert [c.code for c in old.preflight().dead_ends] == ["macos_too_old"]
+
+
+def test_computer_name_is_the_one_the_mac_shows():
+    r = FakeRunner(stdout=b"Ihor's MacBook Air\n")
+    assert make(r).computer_name() == "Ihor's MacBook Air"
+    assert r.calls == [["scutil", "--get", "ComputerName"]]
+
+
+def test_computer_name_falls_back_to_the_host_name_without_local(monkeypatch):
+    import socket
+    monkeypatch.setattr(socket, "gethostname", lambda: "ihors-mac.local")
+    assert make(FakeRunner(returncode=1)).computer_name() == "ihors-mac"
+    assert make(FakeRunner(stdout=b"\n")).computer_name() == "ihors-mac"

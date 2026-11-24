@@ -70,7 +70,7 @@ any other ref runs `EGGIE_IMAGE_VERSION` when set, else the images ghcr holds un
 name when both `eggie-api` and `eggie-web` have one — so `EGGIE_RUNTIME_REF=dev` runs the `dev`
 images `build.sh --push --tag dev` pushed — else the newest release's; a private package reads as
 absent, and ghcr not answering at all is a failure, not a silent release) into `.env` for `stack.yml` → token (only if absent) → the compose stack
-(always pulls, except under `EGGIE_SKIP_PULL=1`, which only `scripts/dev.sh --full` sets after building the images in the VM; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) → Node ≥ 24 from NodeSource →
+(always pulls, except under `EGGIE_SKIP_PULL=1`, which only `scripts/dev.sh --full` sets after building the images in the VM; recreates the api on a new token or repair) → git, gh, bubblewrap (Codex's command sandbox) and, where the kernel has the switch, `/etc/sysctl.d/60-eggie-userns.conf` allowing unprivileged user namespaces (Ubuntu 24.04 blocks bwrap otherwise; see `docs/security.md`) → Node ≥ 24 from NodeSource →
 `/usr/local/bin/eggie` (built from `cli/eggie_cli/` with `zipapp`) → the system-wide instruction files the agent manifests name (`lib/agents.py instructions --system`) → `/etc/profile.d/eggie-cwd.sh` (interactive login shells in `$HOME` open in `~/projects`) → on WSL only, `lib/wsl-user.sh`: the `eggie` account (uid ≥ 1001, passwordless sudo) and `[user] default=eggie` in `/etc/wsl.conf`, so Claude Code is not run as root; then `lib/wsl-conf.py` enforces `[automount] enabled=false` and `[interop] appendWindowsPath=false` (no Windows drives, no Windows `PATH`), rewriting those keys every run and leaving every other line alone → per account (root + `lib/login-users.sh`):
 each manifest's per-account instruction block and the `~/projects` link (`lib/install-agents.sh`) and
 `npx -y skills@1.5.26 add $SKILLS_SOURCE -s '*' -g -a $(agents.py skills) -y </dev/null`
@@ -136,3 +136,6 @@ explained where they run.
   it: WSL2's `eggie` is created from 1001 up (`lib/wsl-user.sh`).
 - While the console's agents screen is open, journald shows an `eggie-agents.service`
   Started/Finished pair every 3 s: each status poll triggers a detection pass.
+- The kitchen's SSH keys are copied from `/opt/eggie/ssh-keys` to `/etc/ssh/eggie-keys/<login>`
+  by `lib/ssh-keys-apply.sh`: `/opt/eggie` is group-writable, so sshd's StrictModes would refuse
+  a keys file there. Site mode only.

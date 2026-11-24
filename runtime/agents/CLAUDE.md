@@ -4,7 +4,7 @@
 one line in `index.json` — no code changes. Two readers, each validating only what it uses:
 
 - the console (`runtime/web/apps/console/src/agents/catalog.ts`) reads `name`, `note`, `icon`,
-  `platforms` (the guide) and whether `setup` exists; served at `/agent-guides/`. `note` is shown
+  `platforms.cloud` (the guide) and whether `setup` exists; served at `/agent-guides/`. `note` is shown
   as written after `name` in the agent list and menu; sentences use `name` alone. Only for an agent
   that lives inside another app, as Codex does in ChatGPT; the others leave it out;
 - `runtime/install/lib/agents.py` reads the install-side fields below, on the VM.
@@ -17,35 +17,26 @@ one line in `index.json` — no code changes. Two readers, each validating only 
 | `detect.ignore` | Top-level names under `home` that Eggie's own install creates (instructions, skills). Anything else there means the agent connected. A setup's own files count too. |
 | `setup.run` | Shell command run once per account when the user opens the agent's guide. |
 
-## The guide (`platforms.<mac|windows|cloud>`)
+## The guide (`platforms.cloud`)
 
-The console picks one by the VM (`/api/connect`'s `vm`): `wsl` → windows, `lima` → mac, a site →
-cloud, otherwise the browser's OS. `cloud` is for any computer reaching a server over SSH with the
-key the user downloaded from the web app.
 
+Only `cloud` is read: the console shows the guides on a cloud kitchen, for any computer reaching a
+server over SSH with the key the user downloaded from the web app. The desktop app ships its own
+guides, so there are no `mac` or `windows` blocks here.
 
 - `tagline`, and `steps`: each `{title, body, alt}` plus an optional `media` list of files in this
-  folder, e.g. `["mac/3a.png", "mac/3b.png", "mac/3.mp4"]`. The kind comes from the extension
+  folder, e.g. `["media/mac-claude-code-3.png"]`. The kind comes from the extension
   (png jpg jpeg webp gif svg avif / mp4 webm; a video plays muted on a loop). More than one makes a
   slider; none gives a placeholder showing `alt`, which is also each image's alt text.
-- `auto` (optional): `{"steps": [...]}`, a shorter list shown instead of `steps` when the desktop
-  window can add the connection itself (`connect=` in its link; Claude Code on Mac, Codex on
-  Windows). Exactly one of its steps has `"action": "connect"`: the picture frame then shows a card
-  with that step's title and body and the "Add Eggie to <agent>" button, so the step needs no
-  `media` (any it has is not shown). That step alone may set `button` (the label) and `done` (the
-  heading once it has run) when "Add Eggie to …" / "Eggie is in …'s connections" would be wrong.
-  No other step may have an `action`. The list shows no card unless `auto` has its own `card`. `steps` stays complete: a plain browser, the cloud and "Set it up
-  manually" all use it.
-- `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1
-  (Codex on Windows only runs in the default WSL distro). Same HTML rules as `body`.
+- `warning` (optional): HTML shown above the steps, for a catch the user must handle before step 1. Same HTML rules as `body`.
 - `body` is HTML limited to `p ul ol li strong em b i code kbd br`, with no attributes. Anything
   else (a link, a class, an unclosed tag) drops the agent, and `content.test.ts` fails on it.
 - `card` (optional): fields to copy, in the order and shape the agent's own form asks for — SSH
-  details on Mac, a fixed path on Windows. Each is `{label, value}`, where `value` is plain text
+  details. Each is `{label, value}`, where `value` is plain text
   or a template over `{user}`, `{host}`, `{port}`, `{key_file}` — Claude Code wants
   `{"label": "SSH Host", "value": "{user}@{host}"}`. Any other placeholder drops the agent. A
   plain-text value is guidance and gets no copy button, unless it has `"copy": true` (a fixed value
-  to paste, like Codex's Windows projects folder); an optional `hint` adds an info tooltip.
+  to paste); an optional `hint` adds an info tooltip.
 
 ## Things that will bite you
 

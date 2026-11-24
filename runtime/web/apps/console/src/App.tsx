@@ -19,33 +19,25 @@ import { ProjectPage } from "./screens/project/ProjectPage";
 import { SignIn } from "./screens/account/SignIn";
 import { SignedOut } from "./screens/SignedOut";
 import { WrongHost } from "./screens/WrongHost";
-import { DesktopAdded, DesktopConnect, DesktopHome } from "./desktop/DesktopContext";
+import { DesktopHome } from "./desktop/DesktopContext";
 import { AccountMenu } from "./shell/AccountMenu";
 import { UpdateButton } from "./shell/UpdateButton";
 import { Shell } from "./shell/Shell";
 import { Tabs } from "./shell/Tabs";
 import { OnboardingProvider, Progress, useOnboarding } from "./screens/onboarding/Onboarding";
-import { isLocalHost, nextSite, nextWebApp, SiteContext, WebAppContext } from "./site/SiteContext";
+import { isLocalHost, nextSite, nextWebApp, SiteContext, useSite, WebAppContext } from "./site/SiteContext";
 import { QueueProvider } from "./uploads/QueueProvider";
 
 export function App({
   handoff,
   home = null,
-  connect = [],
-  added = [],
 }: {
   handoff: string | null;
   home?: string | null;
-  connect?: readonly string[];
-  added?: readonly string[];
 }) {
   return (
     <DesktopHome.Provider value={home}>
-      <DesktopConnect.Provider value={home ? connect : []}>
-        <DesktopAdded.Provider value={home ? added : []}>
-          <Screens handoff={handoff} />
-        </DesktopAdded.Provider>
-      </DesktopConnect.Provider>
+      <Screens handoff={handoff} />
     </DesktopHome.Provider>
   );
 }
@@ -133,6 +125,8 @@ function Screens({ handoff }: { handoff: string | null }) {
 
 function Console({ onSignedOut }: { onSignedOut: () => void }) {
   const { phase } = useOnboarding();
+  // The desktop app has its own agent picker; the guides are for browsers on a cloud kitchen.
+  const onSite = typeof useSite() === "string";
   const welcome = phase === "onboarding";
   return (
     <Shell
@@ -163,8 +157,8 @@ function Console({ onSignedOut }: { onSignedOut: () => void }) {
             <Route path="docs" element={<DocsPage />} />
             <Route path="docs/:page" element={<DocsPage />} />
           </Route>
-          <Route path="/agents" element={<AgentPicker base="/agents" />} />
-          <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />
+          {onSite && <Route path="/agents" element={<AgentPicker base="/agents" />} />}
+          {onSite && <Route path="/agents/:id" element={<AgentGuide base="/agents" />} />}
           <Route path="/kit" element={<Kit />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

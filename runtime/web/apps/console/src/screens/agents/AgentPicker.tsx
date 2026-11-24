@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Badge, Card, Icon } from "@eggie/ui";
 import { useAgents, useAgentStatus } from "../../agents/queries";
+import { openExternal } from "../../desktop/desktop";
+import { useWebApp } from "../../site/SiteContext";
 import { SkipButton } from "../onboarding/Onboarding";
 import { AgentMark } from "./AgentMark";
 import s from "./Agents.module.css";
@@ -10,7 +12,8 @@ export type AgentBase = "/agents" | "/welcome";
 
 export function AgentPicker({ base }: { base: AgentBase }) {
   const welcome = base === "/welcome";
-  const { platform, agents, error } = useAgents();
+  const { agents, error } = useAgents();
+  const webApp = useWebApp();
   const status = useAgentStatus();
 
   let body: ReactNode;
@@ -36,7 +39,7 @@ export function AgentPicker({ base }: { base: AgentBase }) {
                     {agent.name}
                     {agent.note && <span className={s.nameNote}> {agent.note}</span>}
                   </span>
-                  <span className={s.cardTagline}>{agent.platforms[platform]!.tagline}</span>
+                  <span className={s.cardTagline}>{agent.guide!.tagline}</span>
                 </span>
               </Card>
             </Link>
@@ -48,6 +51,13 @@ export function AgentPicker({ base }: { base: AgentBase }) {
 
   return (
     <div className={s.page}>
+      {webApp && (
+        <p className={s.appLine}>
+          Easier:{" "}
+          <a href={webApp} onClick={(event) => { event.preventDefault(); openExternal(webApp); }}>get the Eggie app</a>.
+          {" "}It connects your agent in one click.
+        </p>
+      )}
       <div className={s.heading}>
         <h1 className={s.title}>{welcome ? "Which coding agent do you use?" : "Which agent do you use?"}</h1>
         <p className={s.sub}>

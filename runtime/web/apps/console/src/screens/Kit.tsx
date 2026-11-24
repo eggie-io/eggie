@@ -82,7 +82,6 @@ function Column({ theme }: { theme: "light" | "dark" }) {
         <StatusDot status="failed" />
         <StatusDot status="waiting" />
         <StatusDot status="degraded" />
-        <StatusDot status="running" label="Open" />
       </Section>
       <Section title="State badges">
         <StateBadge state="running" />

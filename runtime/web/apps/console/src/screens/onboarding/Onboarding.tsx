@@ -4,6 +4,7 @@ import { Button, Icon, cx } from "@eggie/ui";
 import { useAgentStatus } from "../../agents/queries";
 import { decide, readMark, writeMark, type Phase } from "../../onboarding/onboarding";
 import { useProjects } from "../../projects/queries";
+import { useSite } from "../../site/SiteContext";
 import s from "./Onboarding.module.css";
 
 const localStore = () => window.localStorage;
@@ -19,7 +20,9 @@ const Context = createContext<Onboarding>({ phase: "off", connectedAgent: null, 
 export const useOnboarding = () => useContext(Context);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
-  const [phase, setPhase] = useState<Phase>(() => (readMark(localStore) ? "off" : "deciding"));
+  const onSite = typeof useSite() === "string";
+  const [phase, setPhase] = useState<Phase>(() =>
+    decide({ marked: readMark(localStore), onSite, statuses: undefined, counterItems: undefined }));
   const [connectedAgent, setConnectedAgent] = useState<string | null>(null);
   const navigate = useNavigate();
   const finish = useCallback(
@@ -46,6 +49,7 @@ function Decide({ onDecided }: { onDecided: (phase: Phase) => void }) {
   const projects = useProjects();
   const phase = decide({
     marked: false,
+    onSite: true,
     statuses: status.data ?? (status.isError ? null : undefined),
     counterItems: projects.data
       ? projects.data.projects.length + projects.data.discovered.length

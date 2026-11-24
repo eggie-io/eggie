@@ -8,22 +8,6 @@
   "detect": {"ignore": ["AGENTS.md", "packages"]},
   "setup": {"run": "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"},
   "platforms": {
-    "mac": {
-      "warning": "<p>Make sure <b>two-factor authentication</b> in your ChatGPT account is enabled before you start.</p>",
-      "tagline": "SSH connection",
-      "card": [
-        {"label": "Hostname", "value": "{host}"},
-        {"label": "SSH port", "value": "{port}"},
-        {"label": "Identity file path", "value": "{key_file}"}
-      ],
-      "steps": [
-        {"title": "Open Codex", "body": "Open the ChatGPT app and switch to Codex.", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
-        {"title": "Add a remote connection", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Name the project, open the <b>Add a folder on this computer</b> menu and select <b>Add remote</b>.</li></ol>", "alt": "Screenshot · Create project dialog with Add remote", "media": ["media/mac-chatgpt-1.png", "media/mac-chatgpt-2.png"]},
-        {"title": "Enter the details", "body": "<ol><li>Name the connection <b>Eggie</b>, select <b>Identity</b>, then copy the hostname, SSH port and identity file path from the card below.</li><li>Click <b>Save</b>, and sign in with ChatGPT if asked.</li></ol>", "alt": "Screenshot · Add SSH connection form, filled in", "media": ["media/mac-chatgpt-3.png", "media/mac-chatgpt-4.png"]},
-        {"title": "Create a project", "body": "<ol><li>Create a new project.</li><li>Enter the project's name.</li><li>Select <b>Eggie</b> as the remote device.</li><li>Select the <b>projects</b> folder and save.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Video · creating a project on the Eggie remote", "media": ["media/mac-chatgpt-5.mp4"]},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
-      ]
-    },
     "cloud": {
       "warning": "<p>Make sure <b>two-factor authentication</b> in your ChatGPT account is enabled before you start.</p><p>Unzip the <b>eggie-…_ed25519.zip</b> file you downloaded from Eggie. It holds two files: your key is the one <b>without</b> <code>.pub</code> at the end.</p>",
       "tagline": "SSH connection",
@@ -39,30 +23,6 @@
         {"title": "Create a project", "body": "<ol><li>Create a new project.</li><li>Enter the project's name.</li><li>Select <b>Eggie</b> as the remote device.</li><li>Select the <b>projects</b> folder and save.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Video · creating a project on the Eggie remote", "media": ["media/mac-chatgpt-5.mp4"]},
         {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
       ]
-    },
-    "windows": {
-      "card": [
-        {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects", "copy": true}
-      ],
-      "tagline": "Inside WSL",
-      "warning": "<p>Because of a limitation in <b>Codex</b> on Windows, it takes a few more steps to set up than the other agents: <b>eggie-vm</b> has to become your default WSL distro.</p><p>If you don't know what WSL is, or you don't use any other WSL distro, you can safely ignore this.</p>",
-      "steps": [
-        {"title": "Make eggie-vm the default", "body": "<ol><li>Search for <b>Windows PowerShell</b> in the Start menu and open it.</li><li>Run <code>wsl --set-default eggie-vm</code>.</li><li>If Codex is already open, restart it.</li></ol>", "alt": "Screenshot · PowerShell running wsl --set-default eggie-vm", "media": ["media/win-chatgpt-0.png"]},
-        {"title": "Run Codex in WSL", "body": "<ol><li>Open the Codex app and sign in.</li><li>Open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
-        {"title": "Open the projects folder", "body": "<ol><li>Click <b>Add new project</b>.</li><li>Paste the projects folder path from the card below into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-3-5.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
-      ],
-      "auto": {
-        "card": [
-          {"label": "Projects folder", "value": "\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects", "copy": true}
-        ],
-        "steps": [
-          {"title": "Make eggie-vm the default", "action": "connect", "button": "Make eggie-vm the default", "done": "eggie-vm is your default WSL distro", "body": "One click: Eggie runs <code>wsl --set-default eggie-vm</code> for you and brings you back here. If Codex is already open, restart it afterwards.", "alt": "Eggie makes eggie-vm the default WSL distro"},
-          {"title": "Run Codex in WSL", "body": "<ol><li>Open the Codex app and sign in.</li><li>Open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
-          {"title": "Open the projects folder", "body": "<ol><li>Click <b>Add new project</b>.</li><li>Paste the projects folder path from the card below into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
-          {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
-        ]
-      }
     }
   }
 }

@@ -124,7 +124,13 @@ class MacTray:
         # and ours refuses (close means hide). Dock Quit, logout and restart
         # must go through, and they end the VM at OS level, so they exit
         # without stopping it here. Cmd+Q is retargeted to Quit Eggie.
-        @objc.signature(b"Q@:@")
+        # PyObjC only replaces a method with one of the same signature, and
+        # pywebview's delegate registers this one as I@:@ rather than the
+        # NSUInteger Q@:@ -- so take whatever it already has.
+        existing = getattr(BrowserView.AppDelegate, "applicationShouldTerminate_", None)
+        terminate_sig = existing.signature if existing is not None else b"Q@:@"
+
+        @objc.signature(terminate_sig)
         def applicationShouldTerminate_(self, app):
             return 1  # NSTerminateNow
 

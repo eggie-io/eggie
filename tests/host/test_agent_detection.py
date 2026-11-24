@@ -66,3 +66,22 @@ def test_wsl_without_localappdata_still_checks_path(tmp_path):
     assert wsl.agent_app("codex") is None
     assert wsl.agent_installed("codex") is True
     assert wsl.agent_installed("claude-code") is False
+
+
+def test_opening_an_agent_launches_its_app_and_nothing_without_one(tmp_path):
+    import subprocess
+    (tmp_path / "Cursor.app").mkdir()
+    ran = []
+    lima = LimaProvider(applications=tmp_path, which=_which({"claude": "/usr/local/bin/claude"}),
+                        runner=lambda argv: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    assert lima.open_agent("cursor") is True
+    assert lima.open_agent("claude-code") is False
+    assert ran == [["open", str(tmp_path / "Cursor.app")]]
+
+    spawned = []
+    cursor = _touch(tmp_path / "Programs" / "cursor" / "Cursor.exe")
+    wsl = Wsl2Provider(env={"LOCALAPPDATA": str(tmp_path)}, which=_which({}),
+                       spawner=spawned.append)
+    assert wsl.open_agent("cursor") is True
+    assert wsl.open_agent("codex") is False
+    assert spawned == [[str(cursor)]]

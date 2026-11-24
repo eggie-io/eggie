@@ -532,6 +532,16 @@ class Wsl2Provider:
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
 
+    def open_agent(self, agent_id: str) -> bool:
+        app = self.agent_app(agent_id)
+        if app is None:
+            return False
+        self._spawn([app])
+        return True
+
+    # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.
+    guide_os = "windows"
+
     def computer_name(self) -> str:
         return socket.gethostname()
 

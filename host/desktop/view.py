@@ -9,11 +9,11 @@ ui/index.html holds the rest, so the design board stays its single source.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from host.core import constants
+from host.core.connect.flow import LOCAL
 from host.core.status import Readiness
 
 
@@ -241,9 +241,11 @@ def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
 
 
 def agent_cards(manifests, *, kind: str, alias: str | None,
-                installed: dict[str, bool], connected: dict[str, bool]) -> list[dict]:
+                installed: dict[str, bool], connected: dict[str, bool],
+                signed_in: dict[str, bool] | None = None) -> list[dict]:
     """3a's agent cards for one kitchen, in manifest order. `kind` and `alias`
-    are the kitchen's ("local" / "cloud", its ssh host or None on Windows' own VM)."""
+    are the kitchen's ("local" / "cloud", its ssh host or None on Windows' own VM).
+    `signed_in` only adds to an installed card's line."""
     cards = []
     for m in manifests:
         if connected.get(m.id):
@@ -253,39 +255,25 @@ def agent_cards(manifests, *, kind: str, alias: str | None,
         else:
             state = "missing"
         cards.append({"id": m.id, "name": m.name, "icon": m.icon, "state": state,
-                      "kind": kind, "ssh_host": alias or ""})
+                      "kind": kind, "ssh_host": alias or "",
+                      "signed_in": state == "installed" and bool((signed_in or {}).get(m.id))})
     return cards
 
 
-# --- connecting a coding agent from the console's guide ----------------
-#
-# The console's guide sends the window to `#connect=<agent>&back=<path>` on
-# the local UI. Both values come from a page served by the VM, so they are
-# checked here, and nothing happens until the user confirms on the local
-# screen.
-
-# The agents ui/index.html has an agent-connect section for, by their
-# runtime/agents/ id. A provider may offer only these.
-CONNECTABLE_AGENTS = frozenset({"claude-code", "codex"})
-# The guide pages the console may ask to come back to.
-_GUIDE_PATH = re.compile(r"/(agents|welcome)/[a-z0-9][a-z0-9-]*")
-
-
-def connectable(available) -> list[str]:
-    """What the handoff link tells the console it may offer, in order."""
-    return [agent for agent in available if agent in CONNECTABLE_AGENTS]
-
-
-def agent_offer(agent_id: object, available) -> dict:
-    """The agent-connect screen's data: `<agent>: True` picks its section."""
-    if not isinstance(agent_id, str) or agent_id not in connectable(available):
-        return {"ok": False, "message": "Eggie can't connect that agent on this computer."}
-    return {"ok": True, "agent": agent_id, agent_id: True}
-
-
-def console_path(back: object) -> str:
-    """Where the console opens: the guide it came from, else its front page."""
-    return back if isinstance(back, str) and _GUIDE_PATH.fullmatch(back) else "/"
+def connect_targets(kitchens: list[dict] | None, local: str) -> list[dict]:
+    """3a's Connect to: the owner's cloud kitchens, then this computer when it has a
+    VM (`local` is local_card's state). One that isn't running is listed, not pickable.
+    A kitchen someone else owns is left out: only its owner can let a computer in."""
+    targets = []
+    for row in kitchens or []:
+        if row.get("is_owner"):
+            card = cloud_card(row)
+            targets.append({"id": card["id"], "title": card["title"], "kind": "cloud",
+                            "state": card["state"], "enabled": card["state"] == "running"})
+    if local != "none":
+        targets.append({"id": "local", "title": LOCAL, "kind": "local",
+                        "state": local, "enabled": local == "running"})
+    return targets
 
 
 def route_for(readiness: Readiness) -> tuple[str, str]:

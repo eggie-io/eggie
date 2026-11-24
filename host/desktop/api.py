@@ -35,10 +35,10 @@ from .lifecycle import turn_on_autostart_once
 from .settings import AGENTS_DONE, Settings, done_flag
 from .telemetry import app_error, who
 from .vm_sign_in import sign_in_vm
-from .view import (agent_offer, checkout_url, checkout_wait, cloud_card, connectable,
-                   console_path, default_kitchen_name, from_price, home_view, local_card,
-                   new_kitchen, progress_event, region_tiles, route_for, rows_for,
-                   screen_for, setup_rows, size_tiles, terminal_event)
+from .view import (agent_cards, checkout_url, checkout_wait, cloud_card, connect_targets,
+                   default_kitchen_name, from_price, home_view, local_card, new_kitchen,
+                   progress_event, region_tiles, route_for, rows_for, screen_for, setup_rows,
+                   size_tiles, terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class DesktopApi:
                  stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None,
                  events: EventSender | None = None, clock=time.monotonic,
                  cloud=None, sleep=time.sleep, open_url=None,
-                 ui_dir=None, home=None, env=None):
+                 ui_dir=None, home=None, env=None, connector_factory=None):
         self._provider = provider
         self._events = events or EventSender(None, {})
         self._clock = clock
@@ -102,10 +102,14 @@ class DesktopApi:
         self._ui_dir = Path(ui_dir) if ui_dir else Path(__file__).resolve().parent / "ui"
         self._manifests: list | None = None
         # Where the connect steps write: the same files Connector uses.
-        home = Path(home) if home else Path.home()
-        self._ssh_config = home / ".ssh" / "config"
-        self._claude_dir = home / ".claude"
-        self._codex_home = codex_app.default_codex_home(os.environ if env is None else env, home)
+        self._home = Path(home) if home else Path.home()
+        self._env = os.environ if env is None else env
+        self._ssh_config = self._home / ".ssh" / "config"
+        self._claude_dir = self._home / ".claude"
+        self._codex_home = codex_app.default_codex_home(self._env, self._home)
+        self._connector_factory = connector_factory or self._default_connector
+        self._connect_cancel = threading.Event()
+        self._connect_url = ""
 
     @staticmethod
     def _default_client_factory(provider):
@@ -118,6 +122,17 @@ class DesktopApi:
         from host.providers import default_install_dir
 
         return default_install_dir()
+
+    def _default_connector(self, **kw):
+        from host.core.connect.flow import Connector
+
+        def cloud():
+            if self._cloud is None:
+                raise NotSignedIn()
+            return self._cloud
+
+        return Connector(cloud, self._provider, home=self._home, env=self._env,
+                         computer_name=self._provider.computer_name(), **kw)
 
     def _default_app_update(self):
         from host.core import app_update
@@ -248,6 +263,127 @@ class DesktopApi:
             else:
                 connected[m.id] = pressed
         return connected
+
+    # --- Connect an agent (3a–3d) ----------------------------------------
+
+    def _manifest(self, agent_id: object):
+        return next((m for m in self._agent_manifests() if m.id == agent_id), None)
+
+    def _targets(self) -> list[dict]:
+        if self._kitchens is None:
+            self.load_kitchens()
+        readiness = self._probe(self._provider)
+        return connect_targets(self._kitchens, local_card(*route_for(readiness))
+                               if readiness.vm_exists else "none")
+
+    def _owned(self, kitchen_id: object) -> bool:
+        return kitchen_id == "local" or any(
+            k.get("id") == kitchen_id and k.get("is_owner") for k in self._kitchens or [])
+
+    def _guide(self, manifest, kitchen: dict) -> list[dict]:
+        kind, alias = self._agent_target(kitchen["id"])
+        return agents.render_steps(manifest, self._provider.guide_os, kind, alias or "",
+                                   kitchen["title"])
+
+    def _installed(self, agent_id: str) -> bool:
+        try:
+            return bool(self._provider.agent_installed(agent_id))
+        except Exception as e:
+            # Only picks the card's line; connecting still works.
+            log.warning("checking whether %s is installed failed: %s", agent_id, e)
+            return False
+
+    def agents(self, kitchen_id: str) -> dict:
+        """3a for one kitchen: where it can connect to, and each agent's card."""
+        targets = self._targets()
+        kitchen = next((t for t in targets if t["id"] == kitchen_id), None)
+        if kitchen is None:
+            return {"ok": False}
+        manifests = self._agent_manifests()
+        kind, alias = self._agent_target(kitchen_id)
+        cards = agent_cards(
+            manifests, kind=kind, alias=alias,
+            installed={m.id: self._installed(m.id) for m in manifests},
+            connected=self._connected_agents(kitchen_id),
+            signed_in={m.id: (self._codex_home / "auth.json").is_file()
+                       for m in manifests if m.connect == "codex"})
+        for card, m in zip(cards, manifests):
+            card["has_app"] = self._provider.agent_app(m.id) is not None
+            card["steps"] = self._guide(m, kitchen)
+        return {"ok": True, "kitchen": kitchen, "targets": targets, "cards": cards}
+
+    def start_connect(self, agent_id: str, kitchen_id: str) -> dict:
+        manifest = self._manifest(agent_id)
+        kitchen = next((t for t in self._targets() if t["id"] == kitchen_id), None)
+        if manifest is None or kitchen is None or not kitchen["enabled"]:
+            return {"ok": False, "message": "That kitchen can't take an agent right now."}
+        if self.jobs.running():
+            return {"ok": False, "message": "Wait for the current job to finish first."}
+        cancel = self._connect_cancel = threading.Event()
+        local = kitchen_id == "local"
+        instance_id = None if local else kitchen_id
+        # The job's emit, once it runs; the connector is made first for its rows.
+        sink = {}
+
+        def opened(url):
+            self._connect_url = url
+            self._open_url(url)
+
+        def setup(agent):
+            self._client_factory(self._provider).agent_setup(agent)
+
+        connector = self._connector_factory(
+            progress=lambda step, status, message: sink["emit"](
+                {"type": "step", "step": step, "status": status, "message": message}),
+            cancelled=cancel.is_set, open_url=opened,
+            local_setup=setup if local else None)
+        rows = connector.rows(manifest.connect, instance_id)
+
+        def work(emit):
+            sink["emit"] = emit
+            found = connector.connect_one(manifest.connect, instance_id)
+            if cancel.is_set():
+                return {"type": "cancelled"}
+            lines = [f"{'✓' if line.ok else '✗'} "
+                     f"{line.target}{f' · {line.agent}' if line.agent else ''}: {line.text}"
+                     for line in found]
+            failed = next((line for line in found if not line.ok), None)
+            if failed:
+                return {"type": "failed", "message": failed.text, "lines": lines}
+            return {"type": "done", "lines": lines, "steps": self._guide(manifest, kitchen)}
+
+        self._connect_url = ""
+        return {"ok": True, "job": self.jobs.start("connect", work), "rows": rows}
+
+    def cancel_connect(self) -> dict:
+        # A Codex sign-in already in the browser runs to its end or its timeout.
+        self._connect_cancel.set()
+        return {"ok": True}
+
+    def open_connect_page(self) -> dict:
+        if not self._connect_url:
+            return {"ok": False}
+        self._open_url(self._connect_url)
+        return {"ok": True}
+
+    def mark_done(self, agent_id: str, kitchen_id: str) -> dict:
+        """3c's Done: the only trace an agent without an entry of its own leaves."""
+        if self._manifest(agent_id) is None or not self._owned(kitchen_id):
+            return {"ok": False}
+        self._settings.add_member(AGENTS_DONE, done_flag(agent_id, kitchen_id))
+        return {"ok": True}
+
+    def open_agent(self, agent_id: str) -> dict:
+        if self._manifest(agent_id) is None:
+            return {"ok": False}
+        return {"ok": bool(self._provider.open_agent(agent_id))}
+
+    def open_agent_download(self, agent_id: str) -> dict:
+        manifest = self._manifest(agent_id)
+        if manifest is None:
+            return {"ok": False}
+        self._open_url(manifest.get_url)
+        return {"ok": True}
 
     # --- the Eggie account ---------------------------------------------
 
@@ -450,9 +586,7 @@ class DesktopApi:
 
     # --- actions ------------------------------------------------------
 
-    def enter_console(self, back: str = "") -> dict:
-        """`back` is the console page to open, from the agent-connect screen;
-        anything but a guide page opens the front page."""
+    def enter_console(self) -> dict:
         if self.jobs.running():
             # Leaving the local UI now would strand the job's events.
             return {"ok": False, "message": "Wait for the current job to finish first."}
@@ -462,19 +596,11 @@ class DesktopApi:
             # Never load the console without a code: its signed-out screen
             # sends the user to the desktop app they are already in.
             return {"ok": False, "message": f"{e}"}
-        url = f"http://localhost:{constants.EDGE_PORT}{console_path(back)}#handoff={code}"
+        url = f"http://localhost:{constants.EDGE_PORT}/#handoff={code}"
         home = self._local_url()
         if home:
             # The console's Home button comes back here.
             url += f"&home={quote(home, safe='')}"
-            # Which agents its guide may send back here to be connected.
-            agents = connectable(self._agents())
-            if agents:
-                url += f"&connect={','.join(agents)}"
-            # Those that have it already: their guide starts past the button.
-            added = [a for a in agents if self._added(a)]
-            if added:
-                url += f"&added={','.join(added)}"
         if self._events.enabled:
             # The console sends its own onboarding events under this session.
             context = self._events.context
@@ -487,35 +613,13 @@ class DesktopApi:
         # the callback.
         return {"ok": True, "url": url}
 
-    def agent_connection(self, agent_id: str) -> dict:
-        """What the agent-connect screen draws, or why it can't."""
-        return agent_offer(agent_id, self._agents())
-
-    def connect_agent(self, agent_id: str) -> dict:
-        offer = agent_offer(agent_id, self._agents())
-        if not offer["ok"]:
-            return offer
-        if self.jobs.running():
-            # Setup and repair rewrite the same SSH files.
-            return {"ok": False, "message": "Wait for the current job to finish first."}
-        try:
-            message = self._provider.connect_agent(agent_id)
-        except Exception as e:
-            log.warning("connecting %s failed: %s", agent_id, e)
-            return {"ok": False, "message": f"{e}"}
-        return {"ok": True, "message": message}
-
     def _added(self, agent_id: str) -> bool:
         try:
             return bool(self._provider.agent_connected(agent_id))
         except Exception as e:
-            # Only decides which steps show first; never block the console.
+            # Only decides a chip or a card's line; reads as not connected.
             log.warning("checking %s's connection failed: %s", agent_id, e)
             return False
-
-    def _agents(self):
-        # Every real provider has it (test_provider_surface); fakes need not.
-        return getattr(self._provider, "agent_connections", ())
 
     def start_install(self) -> dict:
         from host.core.install import DeadEnd, InstallError, RebootRequired, run_install

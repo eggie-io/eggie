@@ -41,19 +41,15 @@ When the VM is running, the same window shows the projects console (`localhost:<
 a handoff code). The console's own top bar links back to the local screens and opens itself in the
 system browser — there is no native menu.
 
-Connecting a coding agent is a round trip through that link. `enter_console` adds
-`&connect=<ids>` (the provider's `agent_connections` that `view.CONNECTABLE_AGENTS` has words for)
-and `&added=<ids>` (those whose `agent_connected` is true, so the guide opens past the button);
-the console's guide then sends the window to `<local>#connect=<id>&back=<guide path>`. The local
-`agent-connect` screen is only a spinner: it calls `connect_agent` at once and `enter_console(back)`
-reopens the guide (`view.console_path` allows only `/agents/<id>` and `/welcome/<id>`), so the user
-clicks once, in the guide. `agent-connect:failed` (Try again / Back to the guide) shows only on an
-error. Both values come from a VM-served page and are checked in `view.py`. There is no local
-confirmation, so a page could send the window there unasked: that is accepted only because the
-write is fixed (the agent's entry for this VM, or for Codex on WSL making this VM the default distro;
-allowlisted agents only). A connect step that could
-write anything a page chose would need a local confirmation again. A new connectable agent needs a
-`data-when="<id>"` section in the `agent-connect` template.
+Connect an agent (3a–3d) is local screens only; the console has no part in it. `agents(kitchen_id)`
+draws the picker from the bundled guides (`ui/agents/`, `agents.py`) and `view.connect_targets`
+(owned kitchens, plus this computer once it has a VM; one not running is listed, not pickable).
+`start_connect` runs `flow.Connector.connect_one` as a `connect` job whose `step` events drive 3b
+and whose `("agent", "running", "sign_in")` switches to 3d. Every bridge method here takes only an
+agent id and a kitchen id, checked against the loaded manifests and the owned targets, so a page
+can't name what runs: `open_agent_download` opens the manifest's https `get_url`, `open_agent`
+starts the provider's `agent_app(id)`. Guide bodies are HTML
+from those files; `app.js` rebuilds only the allowlisted tags as new elements (no `innerHTML`).
 
 ## Things that will bite you
 

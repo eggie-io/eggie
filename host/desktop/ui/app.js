@@ -30,8 +30,15 @@ function show(screen, data) {
   wire(root);
 }
 
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 // Every [data-field] is replaced by the matching key. Values are written with
-// textContent, never innerHTML: a runtime version or a provider's error text
+// textContent, never parsed as markup: a runtime version or a provider's error text
 // is data, and some of it comes from a subprocess.
 function fill(root, data) {
   root.querySelectorAll('[data-field]').forEach((node) => {
@@ -167,11 +174,13 @@ ACTIONS['start-install'] = async (node, data) => {
     li.className = 'row-step';
     li.dataset.status = 'waiting';
     li.dataset.name = row.name;
-    li.innerHTML = '<span class="mark"></span><span class="label"></span><span class="state"></span>'
-      + '<div class="row-progress" hidden><span class="track"><span class="fill"></span></span>'
-      + '<span class="pct"></span></div>';
-    li.querySelector('.label').textContent = row.label;
-    li.querySelector('.state').textContent = 'Waiting';
+    const progress = el('div', 'row-progress');
+    progress.hidden = true;
+    const track = el('span', 'track');
+    track.append(el('span', 'fill'));
+    progress.append(track, el('span', 'pct'));
+    li.append(el('span', 'mark'), el('span', 'label', row.label), el('span', 'state', 'Waiting'),
+      progress);
     list.appendChild(li);
     rowsByName[row.name] = li;
   });
@@ -374,37 +383,6 @@ async function fromTray(go) {
 const ROUTES = {
   'settings': () => fromTray(ACTIONS.settings),
   'quit': () => fromTray(() => startQuit(false)),
-};
-
-// The console's agent guide sends the window here as
-// #connect=<agent>&back=<guide path> after the user clicked "Add Eggie to
-// <agent>". The window adds it straight away and goes back: the click in the
-// guide is the request. The bridge checks both values again, and what it can
-// write is fixed (an entry for this VM), so a page sending the window here
-// unasked can do no more than that.
-let connectRequest = null;
-
-async function openConnect(agent, back) {
-  const offer = await api().agent_connection(agent);
-  if (!offer.ok) {
-    showNotice(offer.message);
-    return refresh();
-  }
-  connectRequest = { agent, back, offer };
-  return ACTIONS['connect-agent']();
-}
-
-ACTIONS['connect-agent'] = async () => {
-  show('agent-connect', connectRequest.offer);
-  const result = await api().connect_agent(connectRequest.agent);
-  if (!result.ok) return show('agent-connect:failed', result);
-  // The guide shows the result: it opens with the connection marked added.
-  return ACTIONS['connect-back']();
-};
-ACTIONS['connect-back'] = async () => {
-  const result = await api().enter_console(connectRequest ? connectRequest.back : '');
-  if (result.ok) window.location.assign(result.url);
-  else show('agent-connect:failed', result);
 };
 
 window.eggie.route = (name) => {
@@ -789,7 +767,7 @@ async function showSetup(kitchenId) {
     if (!kitchen.signed_out) showNotice(kitchen.message);
     return refresh();
   }
-  if (kitchen.state === 'running') return show('connect', { kitchen_id: kitchen.id });
+  if (kitchen.state === 'running') return showPicker(kitchen.id);
   const paid = payment && payment.kitchen === kitchenId ? payment : {};
   setupKitchen = kitchen.id;
   show('kitchen:setup', {
@@ -808,7 +786,7 @@ async function showSetup(kitchenId) {
     document.querySelector('[data-field="offline"]').textContent = next.ok ? '' : next.message;
     if (!next.ok) return 3000;
     if (next.state === 'running') {
-      show('connect', { kitchen_id: next.id });
+      showPicker(next.id);
       return null;
     }
     if (next.state === 'stopped' || next.state === 'other') {
@@ -943,7 +921,7 @@ ACTIONS['retry-kitchens'] = async () => {
 };
 ACTIONS['open-cloud-console'] = (node) => api().open_cloud_console(node.dataset.kitchen);
 ACTIONS['kitchen-setup'] = (node) => showSetup(node.dataset.kitchen);
-ACTIONS['connect-kitchen'] = (node) => show('connect', { kitchen_id: node.dataset.kitchen });
+ACTIONS['connect-kitchen'] = (node) => showPicker(node.dataset.kitchen);
 
 // A cloud kitchen made on the website meanwhile takes the page to Home.
 async function watchForKitchens() {
@@ -953,6 +931,239 @@ async function watchForKitchens() {
   if (document.getElementById('screen').dataset.screen !== 'where') return;
   if (home.screen !== 'where' || home.action) refresh();
 }
+
+// --- Connect an agent (3a–3d) -------------------------------------------
+
+// The picker's last agents() reply, the connect job it started, and 3c's guide.
+let picker = null;
+let connecting = null;
+let ready = null;
+// Events can beat start_connect()'s reply here; held until it names the job.
+let connectEarly = [];
+
+const TARGET_STATES = {
+  stopped: 'Stopped', getting_ready: 'Getting ready', failed: 'Didn’t start', other: 'Not running',
+};
+
+async function showPicker(kitchenId) {
+  const generation = screenGeneration;
+  const reply = await api().agents(kitchenId);
+  if (generation !== screenGeneration) return;
+  if (!reply.ok) return refresh();
+  picker = reply;
+  const { kitchen } = reply;
+  show('connect', { kitchen: kitchen.title, not_running: !kitchen.enabled });
+  const select = document.querySelector('[data-targets]');
+  reply.targets.forEach((target) => {
+    const option = el('option', '', target.enabled ? target.title
+      : `${target.title} · ${TARGET_STATES[target.state] || TARGET_STATES.other}`);
+    option.value = target.id;
+    option.disabled = !target.enabled;
+    option.selected = target.id === kitchen.id;
+    select.append(option);
+  });
+  select.addEventListener('change', () => showPicker(select.value));
+  const list = document.querySelector('[data-agent-cards]');
+  reply.cards.forEach((agent) => list.append(agentCard(agent, kitchen)));
+}
+
+function agentCard(agent, kitchen) {
+  const part = document.querySelector('template[data-card="agent"]').content.cloneNode(true);
+  part.querySelectorAll('[data-agent]').forEach((node) => { node.dataset.agent = agent.id; });
+  part.querySelector('[data-icon]').src = mediaPath(agent.icon);
+  fill(part, Object.assign({}, agent, { [agent.state]: true, kitchen: kitchen.title }));
+  part.querySelector('[data-action="pick-agent"]').disabled = !kitchen.enabled;
+  wire(part);
+  return part;
+}
+
+// Paths come from the bridge's checked manifests; anything else loads nothing.
+function mediaPath(path) {
+  return /^agents\/[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9._/-]*$/.test(path || '') ? path : '';
+}
+
+function pickedAgent(node) {
+  return picker.cards.find((agent) => agent.id === node.dataset.agent);
+}
+
+ACTIONS['pick-agent'] = (node) => {
+  const agent = pickedAgent(node);
+  if (agent.state === 'connected') return showReady(agent, picker.kitchen, agent.steps);
+  return startConnect(agent, picker.kitchen);
+};
+ACTIONS['get-agent'] = (node) => api().open_agent_download(node.dataset.agent || ready.agent.id);
+
+async function startConnect(agent, kitchen) {
+  const started = await api().start_connect(agent.id, kitchen.id);
+  if (!started.ok) return showNotice(started.message);
+  connecting = {
+    agent, kitchen, job: started.job, rows: started.rows,
+    status: {}, message: {}, ended: '', error: '', lines: [], signIn: false,
+  };
+  const early = connectEarly.filter((event) => event.job === started.job);
+  connectEarly = [];
+  early.forEach(onConnectEvent);
+  if (connecting) drawConnecting();
+}
+
+window.eggie.handlers.connect = (event) => {
+  if (!connecting || connecting.job !== event.job) {
+    connectEarly.push(event);
+    return;
+  }
+  onConnectEvent(event);
+  const screen = document.getElementById('screen').dataset.screen || '';
+  // Parked under Settings or left for another screen: nothing to redraw.
+  if (connecting && (screen === 'connect:running' || screen === 'connect:sign-in')) drawConnecting();
+};
+
+function onConnectEvent(event) {
+  const c = connecting;
+  if (event.type === 'step') {
+    c.status[event.step] = event.status;
+    c.message[event.step] = event.message;
+    // 3d stays up once the sign-in began, so a failed one offers Try again there.
+    if (event.step === 'agent' && event.status === 'running' && event.message === 'sign_in') c.signIn = true;
+    if (event.step === 'agent' && event.status === 'done') c.signIn = false;
+    return;
+  }
+  if (event.type === 'done') {
+    const screen = document.getElementById('screen').dataset.screen || '';
+    if (screen === 'connect' || screen.startsWith('connect:')) showReady(c.agent, c.kitchen, event.steps);
+    else connecting = null;
+    return;
+  }
+  if (event.type === 'failed' || event.type === 'crashed') {
+    c.ended = 'failed';
+    c.error = event.message || '';
+    c.lines = event.lines || [];
+  }
+}
+
+const ROW_WORDS = { running: 'Working…', done: 'Done', failed: 'Didn’t work' };
+
+function drawConnecting() {
+  const c = connecting;
+  const ssh = c.rows.includes('check');
+  const done = c.rows.filter((row) => c.status[row] === 'done').length;
+  const common = { agent: c.agent.name, kitchen: c.kitchen.title, total: c.rows.length };
+  if (c.signIn) {
+    show('connect:sign-in', Object.assign(common, {
+      step: c.rows.indexOf('agent') + 1, waiting: !c.ended, error: c.ended ? c.error : '',
+    }));
+    return;
+  }
+  show('connect:running', Object.assign(common, {
+    done, working: !c.ended, failed: c.ended === 'failed', lines: c.lines.join('\n'),
+    cloud: c.kitchen.kind === 'cloud', local: c.kitchen.kind === 'local', ssh, no_ssh: !ssh,
+  }));
+  let current = null;
+  document.querySelectorAll('.connect-rows [data-row]').forEach((li) => {
+    const row = li.dataset.row;
+    li.hidden = !c.rows.includes(row);
+    const status = c.status[row] || 'waiting';
+    li.dataset.status = status;
+    const waitingOnYou = status === 'running' && c.message[row] === 'approve';
+    li.querySelector('.state').textContent = waitingOnYou ? 'Waiting for you in the browser'
+      : ROW_WORDS[status] || '';
+    if (status === 'failed' && c.error) li.append(el('span', 'detail', c.error));
+    if (!li.hidden && !current && status !== 'done') current = li;
+  });
+  document.querySelector('[data-connect-current]').textContent = current
+    ? current.querySelector('.label:not([hidden])').textContent : '';
+  const bar = document.querySelector('.connecting .bar');
+  bar.setAttribute('aria-valuemax', c.rows.length);
+  bar.setAttribute('aria-valuenow', done);
+  bar.querySelector('span').style.width = `${(done / c.rows.length) * 100}%`;
+}
+
+async function leaveConnecting(then) {
+  connecting = null;
+  await api().cancel_connect();
+  return then();
+}
+
+ACTIONS['connect-cancel'] = () => leaveConnecting(() => showPicker(picker.kitchen.id));
+ACTIONS['connect-leave'] = () => leaveConnecting(refresh);
+ACTIONS['connect-back'] = () => leaveConnecting(() => showPicker(picker.kitchen.id));
+ACTIONS['connect-retry'] = () => {
+  const { agent, kitchen } = connecting;
+  connecting = null;
+  return startConnect(agent, kitchen);
+};
+ACTIONS['open-connect-page'] = () => api().open_connect_page();
+
+const COUNTS = ['', 'One step', 'Two steps', 'Three steps', 'Four steps', 'Five steps', 'Six steps'];
+
+function showReady(agent, kitchen, steps) {
+  connecting = null;
+  ready = { agent, kitchen, steps };
+  show('connect:ready', {
+    agent: agent.name, kitchen: kitchen.title, count: COUNTS[steps.length] || `${steps.length} steps`,
+    has_app: agent.has_app, missing: !agent.has_app && agent.state === 'missing',
+  });
+  const list = document.querySelector('[data-ready-steps]');
+  steps.forEach((step, i) => {
+    const item = el('li', 'ready-step');
+    const pick = el('button', 'ready-pick');
+    pick.type = 'button';
+    pick.append(el('span', 'ready-num', String(i + 1)));
+    const text = el('span', 'ready-text');
+    text.append(el('span', 'ready-title', step.title), stepBody(step.body));
+    pick.append(text);
+    pick.addEventListener('click', () => pickStep(i));
+    item.append(pick);
+    list.append(item);
+  });
+  const first = steps.findIndex((step) => step.media.length);
+  pickStep(first < 0 ? 0 : first);
+}
+
+function pickStep(index) {
+  const step = ready.steps[index];
+  document.querySelectorAll('.ready-step').forEach((item, i) => {
+    item.classList.toggle('picked', i === index);
+    item.querySelector('button').setAttribute('aria-pressed', String(i === index));
+  });
+  const pane = document.querySelector('[data-ready-media]');
+  const pictures = (step ? step.media : []).map(mediaPath).filter(Boolean);
+  pane.replaceChildren(...pictures.map((path) => {
+    const img = el('img');
+    img.src = path;
+    img.alt = step.alt;
+    return img;
+  }));
+  if (!pictures.length) pane.append(el('p', 'ready-placeholder', step ? step.alt : ''));
+}
+
+// A guide body is HTML from a checked manifest. It is rebuilt from the
+// allowlisted tags only, as new elements: never parsed into the page itself.
+const BODY_TAGS = new Set(['P', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'B', 'I', 'CODE', 'KBD', 'BR']);
+
+function stepBody(html) {
+  const parsed = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  const copy = (from, to) => {
+    from.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        to.append(document.createTextNode(node.textContent));
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        if (!BODY_TAGS.has(node.tagName)) return copy(node, to);
+        const built = document.createElement(node.tagName.toLowerCase());
+        copy(node, built);
+        to.append(built);
+      }
+    });
+  };
+  const body = el('div', 'step-body');
+  copy(parsed.body, body);
+  return body;
+}
+
+ACTIONS['open-agent'] = () => api().open_agent(ready.agent.id);
+ACTIONS['connect-done'] = async () => {
+  await api().mark_done(ready.agent.id, ready.kitchen.id);
+  return refresh();
+};
 
 async function refresh() {
   stash = null;
@@ -984,6 +1195,7 @@ async function refresh() {
   // A reload forgets which button was pressed; the plain sign-in link works for both.
   if (home.screen === 'account:waiting') return beginSignIn(signIn ? signIn.mode : 'existing', false);
   if (home.screen === 'home') return drawHome(home);
+  if (home.screen === 'connect') return showPicker(home.kitchen_id);
   show(home.screen, home);
   if (home.screen === 'where') {
     whileShowing(30000, watchForKitchens);
@@ -998,11 +1210,6 @@ function start() {
   if (route && ROUTES[route]) {
     history.replaceState(null, '', window.location.pathname);
     return ROUTES[route]();
-  }
-  const params = new URLSearchParams(route);
-  if (params.has('connect')) {
-    history.replaceState(null, '', window.location.pathname);
-    return openConnect(params.get('connect'), params.get('back') || '');
   }
   return refresh();
 }

@@ -40,23 +40,25 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 
-# What the desktop app asks to connect a coding agent (`DesktopApi.connect_agent`)
-# and to tell whether one is on this computer. Apart from the install list: it
-# runs whenever the user asks, long after setup.
+# What `eggie connect` and the desktop app's Connect an agent ask of the machine:
+# connect an agent to this VM, tell whether one is on this computer, open it, and
+# which guide applies. Apart from the install list: it runs long after setup.
 AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected",
-                 "local_ssh_alias", "computer_name", "agent_installed", "agent_app"}
+                 "local_ssh_alias", "computer_name", "agent_installed", "agent_app",
+                 "open_agent", "guide_os"}
 
 
-def test_every_provider_says_which_agents_it_can_connect():
-    from host.desktop.view import CONNECTABLE_AGENTS
+def test_every_provider_offers_the_agent_surface():
+    from host.desktop.agents import OSES
     from host.providers.lima import LimaProvider
     from host.providers.wsl2 import Wsl2Provider
 
     for cls in (LimaProvider, Wsl2Provider):
         missing = [name for name in AGENT_SURFACE if not hasattr(cls, name)]
         assert not missing, f"{cls.__name__} does not provide {missing}"
-        # The local screens have words only for these.
-        assert set(cls.agent_connections) <= CONNECTABLE_AGENTS, cls.__name__
+        # The app ships guides only for these.
+        assert cls.guide_os in OSES, cls.__name__
+    assert {LimaProvider.guide_os, Wsl2Provider.guide_os} == set(OSES)
     assert not (AGENT_SURFACE & (LIFECYCLE_SURFACE | INSTALL_SURFACE))
 
 

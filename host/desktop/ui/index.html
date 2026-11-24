@@ -368,20 +368,144 @@
   </div>
 </template>
 
+<!-- 3a: one picker for every agent and kitchen. Cards come from agents(kitchen_id). -->
 <template data-screen="connect">
-  <h1>connect</h1>
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="go-home" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span>Connect an agent</header>
+    <section class="shell-body picker">
+      <div class="picker-head">
+        <div class="picker-title">
+          <h1 class="home-title">Which agent do you use?</h1>
+          <p class="home-sub">Pick one. We set everything up and tell you the one thing left to do in the agent.</p>
+        </div>
+        <label class="picker-target"><span>Connect to</span>
+          <span class="select"><select data-targets></select><span class="ic ic-chevron-down" aria-hidden="true"></span></span></label>
+      </div>
+      <div class="home-offline" data-when="not_running">
+        <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+        <p><span data-field="kitchen"></span> isn’t running. Start it from your kitchens, or pick another one.</p>
+      </div>
+      <div class="acards" data-agent-cards></div>
+      <p class="picker-more"><span class="ic ic-info" aria-hidden="true"></span>More agents are coming. Each one shows up here as a new card, and connects the same way.</p>
+      <div class="picker-foot">
+        <span class="hint">Works the same for a cloud kitchen and for this computer. We only use agents installed here.</span>
+        <button class="btn-ghost" data-action="go-home">Cancel</button>
+      </div>
+    </section>
+  </div>
 </template>
 
+<!-- One 3a card. [data-agent] gets the agent's id. -->
+<template data-card="agent">
+  <article class="acard">
+    <button class="acard-main" data-action="pick-agent" data-agent>
+      <span class="acard-top">
+        <img class="acard-icon" data-icon alt="">
+        <span class="badge badge-running" data-when="connected"><span class="ic ic-check-circle" aria-hidden="true"></span>Connected</span>
+        <span class="ic ic-chevron-right acard-go" aria-hidden="true"></span>
+      </span>
+      <span class="acard-text">
+        <span class="acard-name" data-field="name"></span>
+        <span class="acard-line" data-when="connected">Connected to <span data-field="kitchen"></span></span>
+        <span class="acard-line" data-when="installed">On this computer<span data-when="signed_in"> · signed in</span></span>
+        <span class="acard-line" data-when="missing">Not on this computer</span>
+      </span>
+    </button>
+    <span class="acard-get" data-when="missing"><button class="btn-ghost btn-sm" data-action="get-agent" data-agent><span>Get <span data-field="name"></span></span><span class="ic ic-external" aria-hidden="true"></span></button></span>
+  </article>
+</template>
+
+<!-- 3b: the rows start_connect() names are shown; the rest stay hidden. -->
 <template data-screen="connect:running">
-  <h1>connect:running</h1>
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="connect-leave" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body kitchen connecting">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Connecting <span data-field="agent"></span> to <span data-field="kitchen"></span></h1>
+        <p class="lede" data-when="working">Nothing to do here. We’ll tell you when it’s ready.</p>
+        <p class="lede" data-when="failed">It stopped at the step marked below. Nothing else was changed.</p>
+      </div>
+      <div class="setup-card">
+        <div class="setup-card-head"><span data-connect-current></span>
+          <span class="setup-count"><span data-field="done"></span> of <span data-field="total"></span> done</span></div>
+        <div class="bar" role="progressbar" aria-label="Progress" aria-valuemin="0"><span data-connect-bar></span></div>
+        <ol class="rows setup-rows connect-rows">
+          <li class="row-step" data-row="access"><span class="mark"></span><span class="row-text">
+            <span class="label">Let this computer into the kitchen</span>
+            <span class="sub" data-when="cloud">A key made just for this computer. You can take it back from Settings.</span>
+            <span class="sub" data-when="local">Done when this computer was set up.</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="agent"><span class="mark"></span><span class="row-text">
+            <span class="label" data-when="ssh">Sign <span data-field="agent"></span> in on the kitchen</span>
+            <span class="label" data-when="no_ssh">Install <span data-field="agent"></span> on the kitchen</span>
+            <span class="sub" data-when="ssh">If it asks, you sign in to ChatGPT in your browser. It goes straight to the kitchen, not through Eggie.</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="entry"><span class="mark"></span><span class="row-text">
+            <span class="label">Add the kitchen to <span data-field="agent"></span></span>
+            <span class="sub">So it’s in the <span data-field="agent"></span> project list</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="check"><span class="mark"></span><span class="row-text">
+            <span class="label">Check it works</span>
+            <span class="sub">We open a test connection from here</span></span><span class="state"></span></li>
+        </ol>
+      </div>
+      <div class="connect-foot">
+        <details class="log" data-when="lines"><summary>Technical details</summary><pre data-field="lines"></pre></details>
+        <span class="row">
+          <button class="btn-secondary" data-action="connect-cancel" data-when="working">Cancel</button>
+          <button class="btn-secondary" data-action="connect-back" data-when="failed">Back</button>
+          <button class="btn-primary" data-action="connect-retry" data-when="failed"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        </span>
+      </div>
+    </section>
+  </div>
 </template>
 
+<!-- 3c: the agent's own steps from its guide, with the picture of the one picked. -->
 <template data-screen="connect:ready">
-  <h1>connect:ready</h1>
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="go-home" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body ready">
+      <div class="ready-side">
+        <div class="ready-head">
+          <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Connected</span>
+          <h1 class="kitchen-title"><span data-field="agent"></span> is ready</h1>
+          <p class="lede"><span data-field="count"></span> in <span data-field="agent"></span> and you can start prompting.</p>
+        </div>
+        <ol class="ready-steps" data-ready-steps></ol>
+        <div class="row">
+          <button class="btn-primary btn-lg" data-action="open-agent" data-when="has_app"><span>Open <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-primary btn-lg" data-action="get-agent" data-when="missing"><span>Get <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-ghost btn-lg" data-action="connect-done">Done</button>
+        </div>
+      </div>
+      <div class="ready-media" data-ready-media></div>
+    </section>
+  </div>
 </template>
 
+<!-- 3d: Codex signs in on the kitchen through this computer's browser. -->
 <template data-screen="connect:sign-in">
-  <h1>connect:sign-in</h1>
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="connect-leave" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body kitchen">
+      <div class="kitchen-head">
+        <span class="paused"><span class="ic ic-alert-triangle" aria-hidden="true"></span><span>Paused at step <span data-field="step"></span> of <span data-field="total"></span></span></span>
+        <h1 class="kitchen-title">Sign in to <span data-field="agent"></span> in your browser</h1>
+        <p class="lede">We opened the ChatGPT sign-in for <span data-field="kitchen"></span>. Finish it there; this screen carries on by itself.</p>
+      </div>
+      <div class="alert alert-danger" data-when="error"><span class="ic ic-x-circle" aria-hidden="true"></span><p data-field="error"></p></div>
+      <div class="row">
+        <button class="btn-primary btn-lg" data-action="open-connect-page" data-when="waiting">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary btn-lg" data-action="connect-retry" data-when="error"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+      </div>
+    </section>
+  </div>
 </template>
 
 <template data-screen="unreachable">
@@ -546,31 +670,6 @@
       <button class="btn-secondary" data-action="uninstall"><span class="ic ic-trash" aria-hidden="true"></span>Uninstall Eggie…</button>
     </div>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
-  </section>
-</template>
-
-<template data-screen="agent-connect">
-  <section class="pad centered">
-    <span class="spinner" aria-hidden="true"></span>
-    <div data-when="claude-code">
-      <h2 class="title">Adding Eggie to Claude Code…</h2>
-      <p class="lede">You'll be back in the guide in a moment.</p>
-    </div>
-    <div data-when="codex">
-      <h2 class="title">Making eggie-vm your default WSL distro…</h2>
-      <p class="lede">You'll be back in the guide in a moment.</p>
-    </div>
-  </section>
-</template>
-
-<template data-screen="agent-connect:failed">
-  <section class="pad centered">
-    <h2 class="title">Couldn't add the connection</h2>
-    <p class="lede" data-field="message"></p>
-    <div class="row">
-      <button class="btn-primary" data-action="connect-agent">Try again</button>
-      <button class="btn-secondary" data-action="connect-back">Back to the guide</button>
-    </div>
   </section>
 </template>
 

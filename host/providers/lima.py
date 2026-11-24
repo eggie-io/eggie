@@ -205,7 +205,7 @@ class LimaProvider:
         # The user's own ~/.ssh, where setup adds the `eggie` host. Injectable
         # so no test can edit the real one.
         self.ssh_dir = Path(ssh_dir) if ssh_dir else Path.home() / ".ssh"
-        # Claude Code's ~/.claude, where the agent-connect screen adds the
+        # Claude Code's ~/.claude, where Connect an agent adds the
         # "Eggie" SSH connection.
         # Next to the injected ~/.ssh by default, so a test that moves one
         # moves both.
@@ -461,6 +461,15 @@ class LimaProvider:
         cli = _AGENT_CLIS.get(agent_id)
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
+
+    def open_agent(self, agent_id: str) -> bool:
+        app = self.agent_app(agent_id)
+        if app is None:
+            return False
+        return self._spawn(["open", app]).ok
+
+    # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.
+    guide_os = "mac"
 
     def computer_name(self) -> str:
         """The name the Mac shows in Sharing settings, not its `.local` host name."""

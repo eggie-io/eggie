@@ -338,22 +338,12 @@ def test_every_home_tile_has_an_icon():
     assert not missing, f"home tiles without an icon: {missing}"
 
 
-def test_every_connectable_agent_has_words_on_the_connect_screen():
-    from host.desktop.view import CONNECTABLE_AGENTS
-    markup = (UI / "index.html").read_text()
-    start = markup.index('data-screen="agent-connect"')
-    screen = markup[start:markup.index("</template>", start)]
-    assert CONNECTABLE_AGENTS, "nothing to check"
-    for agent in CONNECTABLE_AGENTS:
-        assert f'data-when="{agent}"' in screen, agent
-    assert 'data-screen="agent-connect:failed"' in markup
-
-
-def test_the_connect_route_is_handled_and_its_actions_exist():
+def test_the_page_never_parses_markup_into_itself():
+    """Manifest bodies and job messages are data; the page builds elements from
+    them. One innerHTML is a hole a bad guide or a VM's error text walks through."""
     script = (UI / "app.js").read_text()
-    assert "params.has('connect')" in script
-    for action in ("connect-agent", "connect-back"):
-        assert f"ACTIONS['{action}']" in script, action
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
+        assert sink not in script, sink
 
 
 def test_every_button_in_the_markup_has_an_action():

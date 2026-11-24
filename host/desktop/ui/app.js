@@ -874,13 +874,26 @@ function card(name, data, kitchenId) {
   return part;
 }
 
-// Chips come from the agent manifests; until those ship every card has none.
+function agentChip(name) {
+  const chip = document.createElement('span');
+  chip.className = 'badge badge-running';
+  const icon = document.createElement('span');
+  icon.className = 'ic ic-check-circle';
+  icon.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('span');
+  label.textContent = name;
+  chip.append(icon, label);
+  return chip;
+}
+
+// `agents` are the names of the card's connected agents (api.home()).
 // With none yet, Connect an agent is the card's main button.
 function withAgents(name, data, kitchenId, agents, canConnect) {
   const has = agents.length > 0;
   const part = card(name, Object.assign(data, {
     has_agents: has, no_agents: !has, can_connect: canConnect, agents_row: has || canConnect,
   }), kitchenId);
+  part.querySelector('[data-chips]').append(...agents.map(agentChip));
   if (!has) part.querySelector('[data-action="connect-kitchen"]').className = 'btn-primary btn-sm';
   return part;
 }
@@ -891,13 +904,13 @@ function cloudCard(kitchen) {
     [kitchen.state]: true, opens_setup: opensSetup, plain_title: !opensSetup,
     host_line: kitchen.state !== 'getting_ready' && kitchen.line,
   });
-  return withAgents('cloud', data, kitchen.id, [], kitchen.can_connect);
+  return withAgents('cloud', data, kitchen.id, kitchen.agents || [], kitchen.can_connect);
 }
 
 function localCard(local, home) {
   const data = { [local.state]: true, problem: home.problem, error: local.state === 'failed' && home.problem };
   // This computer can always be picked; 3a says when it can't take an agent yet.
-  return withAgents('local', data, 'local', [], true);
+  return withAgents('local', data, 'local', local.agents || [], true);
 }
 
 function drawHome(home) {

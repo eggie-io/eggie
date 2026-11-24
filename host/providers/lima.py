@@ -43,6 +43,16 @@ _PORT_UNCONFIRMED = "assigned when the virtual machine is created"
 
 GIB = 1024 ** 3
 
+# Where each coding agent's app lands, by runtime/agents/ id. None of these
+# has been checked on a real Mac.
+_AGENT_APPS = {
+    "claude-code": ("Claude.app",),
+    # The guide's screenshots show Codex inside the ChatGPT app.
+    "codex": ("Codex.app", "ChatGPT.app"),
+    "cursor": ("Cursor.app",),
+}
+_AGENT_CLIS = {"claude-code": "claude", "codex": "codex", "cursor": "cursor"}
+
 
 def vm_size(mem_bytes: int | None, ncpu: int | None) -> tuple[int, int]:
     """(cpus, memory GiB) for a new VM. Memory is half the Mac's, 4..16 GiB:
@@ -184,7 +194,8 @@ class LimaProvider:
                  limactl="limactl", runner=_default_runner,
                  lima_home: Path | None = None, data_root: Path | None = None,
                  mac_ver=None, machine=None, ssh_dir: Path | None = None,
-                 claude_dir: Path | None = None):
+                 claude_dir: Path | None = None, applications: Path | None = None,
+                 which=shutil.which):
         self.name = name
         self.config = Path(config) if config else None
         self.limactl = limactl
@@ -208,6 +219,8 @@ class LimaProvider:
         # Injectable for the same reason: platform.machine() on the Windows host
         # returns the Windows architecture, not the target macOS one.
         self._machine = machine or platform.machine
+        self.applications = Path(applications) if applications else Path("/Applications")
+        self._which = which
 
     def _spawn(self, argv: list[str]) -> Completed:
         p = self._run(argv)
@@ -435,6 +448,19 @@ class LimaProvider:
         """Whether connect_agent's entry is there, so the guide can skip the
         button. Only the entry: it says nothing about whether the agent uses it."""
         return agent_id == "claude-code" and claude_ssh.installed(self.claude_dir)
+
+    def agent_app(self, agent_id: str) -> str | None:
+        """The agent's app bundle, to open it from the app; None for a CLI-only install."""
+        for name in _AGENT_APPS.get(agent_id, ()):
+            app = self.applications / name
+            if app.is_dir():
+                return str(app)
+        return None
+
+    def agent_installed(self, agent_id: str) -> bool:
+        cli = _AGENT_CLIS.get(agent_id)
+        return cli is not None and (self.agent_app(agent_id) is not None
+                                    or self._which(cli) is not None)
 
     def computer_name(self) -> str:
         """The name the Mac shows in Sharing settings, not its `.local` host name."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import socket
 import subprocess
@@ -161,6 +162,30 @@ def _default_arch() -> str:
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
 
 
+_AGENT_CLIS = {"claude-code": "claude", "codex": "codex", "cursor": "cursor"}
+
+
+def _agent_apps(env, agent_id: str) -> list[Path]:
+    """Where each coding agent's Windows app lands, by runtime/agents/ id."""
+    local = env.get("LOCALAPPDATA")
+    programs = env.get("ProgramFiles")
+    found = []
+    if local:
+        # Store apps' execution aliases, one folder per package.
+        aliases = Path(local) / "Microsoft" / "WindowsApps"
+        found += {
+            "claude-code": [aliases / "Claude_pzs8sxrjxfjjc" / "claude-desktop.exe",
+                            # The older installer's app; not seen on a real machine.
+                            Path(local) / "AnthropicClaude" / "claude.exe"],
+            "codex": [aliases / "OpenAI.Codex_2p2nqsd0c76g0" / "chatgpt-desktop.exe"],
+            "cursor": [Path(local) / "Programs" / "cursor" / "Cursor.exe"],
+        }.get(agent_id, [])
+    if programs and agent_id == "cursor":
+        # Cursor's all-users install; not seen on a real machine.
+        found.append(Path(programs) / "cursor" / "Cursor.exe")
+    return found
+
+
 class RootfsMissing(FileNotFoundError):
     code = "rootfs_missing"
 
@@ -171,7 +196,8 @@ class Wsl2Provider:
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=registry.write_value, arch=None,
                  spawner=_default_spawner,
-                 sleep=time.sleep, clock=time.monotonic):
+                 sleep=time.sleep, clock=time.monotonic,
+                 env=os.environ, which=shutil.which):
         self.distro = distro
         self.install_dir = Path(install_dir) if install_dir else None
         self.rootfs = Path(rootfs) if rootfs else None
@@ -185,6 +211,8 @@ class Wsl2Provider:
         self._clock = clock
         self._arch = arch or _default_arch()
         self._features_enabled = False
+        self._env = env
+        self._which = which
 
     # --- wsl.exe's own output is UTF-16LE ---
     def _meta(self, args: list[str]) -> Completed:
@@ -493,6 +521,16 @@ class Wsl2Provider:
     def agent_connected(self, agent_id: str) -> bool:
         """Whether this distro is the default, so the guide can skip the button."""
         return agent_id == "codex" and self._default_distro() == self.distro
+
+    def agent_app(self, agent_id: str) -> str | None:
+        """The agent's app, to open it from the app; None for a CLI-only install."""
+        # exists(), not is_file(): a Store alias is a reparse point.
+        return next((str(p) for p in _agent_apps(self._env, agent_id) if p.exists()), None)
+
+    def agent_installed(self, agent_id: str) -> bool:
+        cli = _AGENT_CLIS.get(agent_id)
+        return cli is not None and (self.agent_app(agent_id) is not None
+                                    or self._which(cli) is not None)
 
     def computer_name(self) -> str:
         return socket.gethostname()

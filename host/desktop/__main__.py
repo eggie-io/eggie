@@ -115,7 +115,8 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
                      log_path=log_path, desktop=desktop, events=events,
-                     cloud=default_cloud(default_install_dir().parent / "account.json"))
+                     cloud=default_cloud(default_install_dir().parent / "account.json"),
+                     ui_dir=ui_dir())
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed

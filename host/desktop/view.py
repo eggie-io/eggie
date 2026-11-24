@@ -217,12 +217,16 @@ def local_card(route: str, state: str) -> str:
 
 
 def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
-              vm_exists: bool) -> dict:
-    """Cards in order (cloud, then local) and which kind gets the dashed card."""
+              vm_exists: bool, agents: dict[str, list[str]] | None = None) -> dict:
+    """Cards in order (cloud, then local) and which kind gets the dashed card.
+    `agents` names each card's connected agents by card id ("local" for this computer)."""
+    agents = agents or {}
     cards = [{"kind": "cloud", **cloud_card(k)} for k in kitchens or []]
     has_cloud = bool(cards)
     if local != "none":
-        cards.append({"kind": "local", "state": local})
+        cards.append({"kind": "local", "id": "local", "state": local})
+    for card in cards:
+        card["agents"] = list(agents.get(card["id"], []))
     if kitchens_error:
         # Offering to create a kitchen while the service is down would only fail.
         missing = ""
@@ -234,6 +238,23 @@ def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
         missing = ""
     return {"cards": cards, "missing": missing, "show_doctor": vm_exists,
             "cloud_error": kitchens_error}
+
+
+def agent_cards(manifests, *, kind: str, alias: str | None,
+                installed: dict[str, bool], connected: dict[str, bool]) -> list[dict]:
+    """3a's agent cards for one kitchen, in manifest order. `kind` and `alias`
+    are the kitchen's ("local" / "cloud", its ssh host or None on Windows' own VM)."""
+    cards = []
+    for m in manifests:
+        if connected.get(m.id):
+            state = "connected"
+        elif installed.get(m.id):
+            state = "installed"
+        else:
+            state = "missing"
+        cards.append({"id": m.id, "name": m.name, "icon": m.icon, "state": state,
+                      "kind": kind, "ssh_host": alias or ""})
+    return cards
 
 
 # --- connecting a coding agent from the console's guide ----------------

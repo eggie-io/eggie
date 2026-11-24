@@ -11,23 +11,28 @@ window.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
 from host.core import constants
 from host.client import ApiError, ApiUnavailableError
 from host.core.cloud.account import NotSignedIn
 from host.core.cloud.client import web_app_url
+from host.core.connect.flow import instance_alias
 from host.core.events import EventSender, error_code
 from host.core.provider import ProviderError
 from host.core.status import probe
+from host.providers import claude_ssh, codex_app, ssh_alias
 
+from . import agents
 from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
-from .settings import Settings
+from .settings import AGENTS_DONE, Settings, done_flag
 from .telemetry import app_error, who
 from .vm_sign_in import sign_in_vm
 from .view import (agent_offer, checkout_url, checkout_wait, cloud_card, connectable,
@@ -50,7 +55,8 @@ class DesktopApi:
                  settings=None, autostart_exe=_FROZEN,
                  stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None,
                  events: EventSender | None = None, clock=time.monotonic,
-                 cloud=None, sleep=time.sleep, open_url=None):
+                 cloud=None, sleep=time.sleep, open_url=None,
+                 ui_dir=None, home=None, env=None):
         self._provider = provider
         self._events = events or EventSender(None, {})
         self._clock = clock
@@ -93,6 +99,13 @@ class DesktopApi:
         self._runtime_update_error = ""
         self._stop_timeout = stop_timeout
         self._log_path = log_path
+        self._ui_dir = Path(ui_dir) if ui_dir else Path(__file__).resolve().parent / "ui"
+        self._manifests: list | None = None
+        # Where the connect steps write: the same files Connector uses.
+        home = Path(home) if home else Path.home()
+        self._ssh_config = home / ".ssh" / "config"
+        self._claude_dir = home / ".claude"
+        self._codex_home = codex_app.default_codex_home(os.environ if env is None else env, home)
 
     @staticmethod
     def _default_client_factory(provider):
@@ -152,6 +165,7 @@ class DesktopApi:
                             update_tried=self._runtime_update_tried,
                             update_error=self._runtime_update_error,
                             problem=readiness.problem)
+        local = local_card(route, state)
         if signed_in and screen.action != "load_kitchens":
             # Held until the kitchen list is in, or the first load would eat it.
             self._just_signed_in = False
@@ -161,8 +175,8 @@ class DesktopApi:
             "message": screen.message,
             "signed_in": signed_in,
             "email": self._account.email if self._account else "",
-            "home": home_view(self._kitchens, self._kitchens_error,
-                              local_card(route, state), readiness.vm_exists),
+            "home": home_view(self._kitchens, self._kitchens_error, local,
+                              readiness.vm_exists, agents=self._agent_chips(local)),
             "kitchen_id": screen.message if screen.name == "connect" else "",
             "route": route,
             "state": state,
@@ -174,6 +188,65 @@ class DesktopApi:
             "resumed": resumed,
             "app_update": self._app_release.version if self._app_release else "",
         }
+
+    # --- coding agents ------------------------------------------------
+
+    def _agent_manifests(self) -> list:
+        if self._manifests is None:
+            try:
+                self._manifests = agents.load(self._ui_dir)
+            except (OSError, ValueError):
+                # The shipped guides are checked by a test; a broken one hides agents, not Home.
+                log.exception("could not load the agent guides")
+                self._manifests = []
+        return self._manifests
+
+    def _agent_chips(self, local: str) -> dict[str, list[str]]:
+        """Each Home card's connected agents' names. Files only: Home redraws often."""
+        ids = [k["id"] for k in self._kitchens or []] + (["local"] if local != "none" else [])
+        chips = {}
+        for kitchen_id in ids:
+            connected = self._connected_agents(kitchen_id)
+            chips[kitchen_id] = [m.name for m in self._agent_manifests() if connected[m.id]]
+        return chips
+
+    def _agent_target(self, kitchen_id: str) -> tuple[str, str | None]:
+        """("local" or "cloud", the ssh host agents reach it by)."""
+        if kitchen_id == "local":
+            return "local", getattr(self._provider, "local_ssh_alias", None)
+        row = next((k for k in self._kitchens or [] if k.get("id") == kitchen_id), None)
+        alias = instance_alias(row) if row and row.get("name") else None
+        return "cloud", alias if alias and ssh_alias.valid_alias(alias) else None
+
+    def _connected_agents(self, kitchen_id: str) -> dict[str, bool]:
+        """Read from what the connect steps leave behind, per agent.
+
+        With an ssh host: its block plus the agent's own entry, or Done for an
+        agent that has none. Windows' own VM has no host: the provider answers
+        for what it connects, Done for the rest.
+        """
+        kind, alias = self._agent_target(kitchen_id)
+        done = self._settings.members(AGENTS_DONE)
+        block = bool(alias) and ssh_alias.host_installed(self._ssh_config, alias)
+        connected = {}
+        for m in self._agent_manifests():
+            pressed = done_flag(m.id, kitchen_id) in done
+            if alias:
+                if m.connect == "claude":
+                    own = claude_ssh.entry_installed(self._claude_dir, alias)
+                elif m.connect == "codex":
+                    own = codex_app.has(self._codex_home, alias)
+                else:
+                    own = pressed
+                connected[m.id] = block and own
+            elif kind == "cloud":
+                # A kitchen whose name can't be an ssh host was never connected.
+                connected[m.id] = False
+            elif m.id in getattr(self._provider, "agent_connections", ()):
+                connected[m.id] = self._added(m.id)
+            else:
+                connected[m.id] = pressed
+        return connected
 
     # --- the Eggie account ---------------------------------------------
 

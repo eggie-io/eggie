@@ -40,11 +40,11 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
                    "recover_warning", "installer_asset", "launch_installer"}
 
 
-# What the desktop app asks to connect a coding agent from the console's
-# guide (`DesktopApi.connect_agent`). Apart from the install list: it runs
-# whenever the user asks, long after setup.
+# What the desktop app asks to connect a coding agent (`DesktopApi.connect_agent`)
+# and to tell whether one is on this computer. Apart from the install list: it
+# runs whenever the user asks, long after setup.
 AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected",
-                 "local_ssh_alias", "computer_name"}
+                 "local_ssh_alias", "computer_name", "agent_installed", "agent_app"}
 
 
 def test_every_provider_says_which_agents_it_can_connect():

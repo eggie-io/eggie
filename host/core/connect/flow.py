@@ -66,7 +66,7 @@ def _run(argv):
     return subprocess.run(argv, capture_output=True)
 
 
-def _alias(row: dict) -> str:
+def instance_alias(row: dict) -> str:
     return f"eggie-{row['name']}"
 
 
@@ -123,8 +123,8 @@ class Connector:
             api, rows, failed = self._rows(instances)
             lines += failed
             if instances is None:
-                listed = {_alias(r) for r in rows}
-                rows = [r for r in rows if self._has_traces(_alias(r))]
+                listed = {instance_alias(r) for r in rows}
+                rows = [r for r in rows if self._has_traces(instance_alias(r))]
             for r in rows:
                 lines += self._guarded(_title(r), lambda r=r: self._remove_instance(api, r, agents))
             if instances is None and api is not None:
@@ -164,7 +164,7 @@ class Connector:
             return [Line(target, None, False, str(e) or type(e).__name__)]
 
     def _connect_instance(self, api, row: dict, agents: set[str], named: bool) -> list[Line]:
-        target, alias = _title(row), _alias(row)
+        target, alias = _title(row), instance_alias(row)
         skipped = None
         if row.get("status") != "running":
             skipped = (f"Skipped: the kitchen is {row.get('status') or 'not running'}; "
@@ -251,7 +251,7 @@ class Connector:
                 return ssh.Probe(False, "The request expired before it was approved; "
                                         "run this again.")
         self._ping(row["console_hostname"])
-        reached = ssh.wait_reachable(self._run, _alias(row), sleep=self._sleep,
+        reached = ssh.wait_reachable(self._run, instance_alias(row), sleep=self._sleep,
                                      monotonic=self._monotonic)
         if reached.ok:
             return reached
@@ -288,7 +288,7 @@ class Connector:
         return lines, all(line.ok for line in lines) and not self._agent_left(alias)
 
     def _remove_instance(self, api, row: dict, agents: set[str]) -> list[Line]:
-        target, alias = _title(row), _alias(row)
+        target, alias = _title(row), instance_alias(row)
         lines, block_may_go = self._remove_agents(target, alias, agents)
         if not block_may_go:
             return lines

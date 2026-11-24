@@ -1,0 +1,32 @@
+{
+  "name": "Codex",
+  "icon": "icon.webp",
+  "get_url": "https://chatgpt.com/codex",
+  "connect": "codex",
+  "steps": {
+    "mac": {
+      "local": [
+        {"title": "Open Codex", "body": "<p>Open the ChatGPT app and switch to <b>Codex</b>.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
+      ],
+      "cloud": [
+        {"title": "Open Codex", "body": "<p>Open the ChatGPT app and switch to <b>Codex</b>.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
+      ]
+    },
+    "windows": {
+      "local": [
+        {"title": "Run Codex in WSL", "body": "<ol><li>Open the Codex app and sign in. If it was already open, quit it and open it again.</li><li>Open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
+        {"title": "Open the projects folder", "body": "<ol><li>Click <b>Add new project</b>.</li><li>Paste <code>\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
+      ],
+      "cloud": [
+        {"title": "Open Codex", "body": "<p>Open the Codex app and sign in.</p><p>If it was already open, quit it and open it again so it lists the new connection.</p>", "alt": "Codex start screen"},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
+      ]
+    }
+  }
+}

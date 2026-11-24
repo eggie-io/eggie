@@ -28,3 +28,22 @@ def test_setting_one_key_keeps_the_other(tmp_path):
     reread = Settings(path)
     assert reread.get(AUTOSTART_SET_ONCE) is True
     assert reread.get(TRAY_NOTICE_SHOWN) is True
+
+
+def test_a_string_set_keeps_its_members_once_and_the_other_keys(tmp_path):
+    path = tmp_path / "settings.json"
+    Settings(path).set(AUTOSTART_SET_ONCE, True)
+    Settings(path).add_member("done", "cursor:k1")
+    Settings(path).add_member("done", "cursor:k1")
+    Settings(path).add_member("done", "cursor:local")
+    reread = Settings(path)
+    assert reread.members("done") == {"cursor:k1", "cursor:local"}
+    assert reread.get(AUTOSTART_SET_ONCE) is True
+
+
+def test_a_flag_where_a_set_belongs_reads_as_empty(tmp_path):
+    path = tmp_path / "settings.json"
+    Settings(path).set("done", True)
+    assert Settings(path).members("done") == set()
+    Settings(path).add_member("done", "x")
+    assert Settings(path).members("done") == {"x"}

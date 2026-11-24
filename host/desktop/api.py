@@ -480,11 +480,13 @@ class DesktopApi:
         from host.core.install import Progress
 
         # The CLI's headless install has no browser, so only the app asks.
-        emit(progress_event(Progress("connect", "running", "Press Approve in your browser")))
+        def waiting():
+            emit(progress_event(Progress("connect", "running", "Press Approve in your browser")))
+
         try:
             outcome = sign_in_vm(self._client_factory(self._provider),
                                  open_url=self._open_url, sleep=self._sleep,
-                                 monotonic=self._clock)
+                                 monotonic=self._clock, on_waiting=waiting)
             if outcome != "signed_in":
                 log.warning("the VM's own sign-in ended: %s", outcome)
         except Exception as e:

@@ -1,6 +1,7 @@
 """The VM's own sign-in, and how the install carries on around it."""
 from __future__ import annotations
 
+from host.client import ApiUnavailableError
 from host.core.install import InstallState, Step
 from host.core.status import Readiness
 from host.desktop.api import DesktopApi
@@ -14,7 +15,10 @@ class FakeClient:
         self.signed_in_calls = 0
 
     def account(self):
-        return self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        item = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        if isinstance(item, Exception):
+            raise item
+        return item
 
     def account_sign_in(self):
         self.signed_in_calls += 1
@@ -79,3 +83,22 @@ def test_install_finishes_when_nobody_approves(tmp_path):
                         ("connect", "running", "Press Approve in your browser"),
                         ("connect", "done", ""), ("verify", "running", "")]
     assert pushed[-1]["type"] == "done"
+
+
+def test_a_failing_poll_does_not_end_the_wait():
+    client = FakeClient([{"state": "signed_out"}, ApiUnavailableError("down"), {"state": "signed_in"}])
+    outcome, _, _ = _run(client)
+    assert outcome == "signed_in"
+
+
+def test_an_already_signed_in_vm_never_shows_the_approve_prompt(tmp_path):
+    pushed = []
+    client = FakeClient([{"state": "signed_in"}])
+    steps = [Step("connect", lambda: None, always_run=True)]
+    api = DesktopApi(object(), InstallState(tmp_path / "s.json"), push=pushed.append,
+                     probe_fn=lambda p: Readiness(), steps_factory=lambda: steps,
+                     client_factory=lambda p: client, open_url=lambda u: None,
+                     sleep=lambda s: None)
+    api.start_install()
+    api.jobs.join(timeout=5)
+    assert not [e for e in pushed if e.get("message") == "Press Approve in your browser"]

@@ -87,12 +87,13 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     from .shell import Shell, guarded
     from . import telemetry
     from host.core import constants
+    from host.core.cloud.client import default_cloud
     from host.core.events import EventSender
+    from host.providers import default_install_dir
 
     events = events or EventSender(None, {})
 
     if settings is None:
-        from host.providers import default_install_dir
         settings = Settings(default_install_dir().parent / "settings.json")
 
     logfile.setup(log_path)
@@ -113,8 +114,8 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
-                     window_shown_once=lambda: controller.shown_once,
-                     log_path=log_path, desktop=desktop, events=events)
+                     log_path=log_path, desktop=desktop, events=events,
+                     cloud=default_cloud(default_install_dir().parent / "account.json"))
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed

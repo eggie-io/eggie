@@ -504,7 +504,11 @@ async function refresh() {
   // action that cannot complete falls through to the screen it named.
   if (home.action === 'start_install') return ACTIONS['start-install'](null, home);
   if (home.action === 'start_runtime_update') return startRuntimeUpdate();
-  // load_kitchens: the cloud list is wired in a later step; just show the screen.
+  if (home.action === 'load_kitchens') {
+    await api().load_kitchens();
+    if (generation !== screenGeneration) return;
+    return refresh();
+  }
   show(home.screen, home);
 }
 

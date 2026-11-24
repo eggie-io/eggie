@@ -14,9 +14,13 @@ import logging
 import sys
 import threading
 import time
-from urllib.parse import quote
+import webbrowser
+from urllib.parse import quote, urlsplit
 
 from host.core import constants
+from host.client import ApiError, ApiUnavailableError
+from host.core.cloud.account import NotSignedIn
+from host.core.cloud.client import web_app_url
 from host.core.events import EventSender, error_code
 from host.core.provider import ProviderError
 from host.core.status import probe
@@ -25,8 +29,8 @@ from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
 from .telemetry import app_error, who
-from .view import (agent_offer, connectable, console_path, progress_event,
-                   route_for, rows_for, screen_for, terminal_event)
+from .view import (agent_offer, connectable, console_path, home_view, local_card,
+                   progress_event, route_for, rows_for, screen_for, terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -40,9 +44,10 @@ class DesktopApi:
                  probe_fn=probe, steps_factory=None,
                  client_factory=None, install_dir_factory=None, local_url=None,
                  app_update_fn=None, quit_app=None,
-                 settings=None, autostart_exe=_FROZEN, window_shown_once=None,
+                 settings=None, autostart_exe=_FROZEN,
                  stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None,
-                 events: EventSender | None = None, clock=time.monotonic):
+                 events: EventSender | None = None, clock=time.monotonic,
+                 cloud=None, sleep=time.sleep):
         self._provider = provider
         self._events = events or EventSender(None, {})
         self._clock = clock
@@ -55,7 +60,15 @@ class DesktopApi:
         self._push = push
         self.jobs = JobRegistry(push, on_crash=self._report_crash)
         self._local_url = local_url or (lambda: None)
-        self._window_shown_once = window_shown_once or (lambda: True)
+        # (CloudAccount, CloudClient); None only for tests that need no account.
+        self._account, self._cloud = cloud if cloud else (None, None)
+        self._sleep = sleep
+        self._kitchens: list[dict] | None = None
+        self._kitchens_error = ""
+        self._just_signed_in = False
+        self._signup_shown = False
+        self._sign_in_url = ""
+        self._poller: threading.Thread | None = None
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
         self._quit_app = quit_app or self._default_quit
@@ -120,18 +133,29 @@ class DesktopApi:
         route, state = route_for(readiness)
         resumed = getattr(self, "resumed", False)
         self.resumed = False
-        # No cloud account is wired into the bridge yet.
-        screen = screen_for(signed_in=True, pending_sign_in=False, kitchens=[],
-                            kitchens_error="", vm_exists=readiness.vm_exists,
+        signed_in = self._account is None or self._account.signed_in
+        screen = screen_for(signed_in=signed_in,
+                            pending_sign_in=bool(self._account and self._account.pending),
+                            kitchens=[] if self._account is None else self._kitchens,
+                            kitchens_error=self._kitchens_error,
+                            vm_exists=readiness.vm_exists,
                             route=route, state=state, resumed=resumed,
-                            just_signed_in=False,
+                            just_signed_in=self._just_signed_in,
                             update_tried=self._runtime_update_tried,
                             update_error=self._runtime_update_error,
                             problem=readiness.problem)
+        if signed_in and screen.action != "load_kitchens":
+            # Held until the kitchen list is in, or the first load would eat it.
+            self._just_signed_in = False
         return {
             "screen": screen.name,
             "action": screen.action,
             "message": screen.message,
+            "signed_in": signed_in,
+            "email": self._account.email if self._account else "",
+            "home": home_view(self._kitchens, self._kitchens_error,
+                              local_card(route, state), readiness.vm_exists),
+            "kitchen_id": screen.message if screen.name == "connect" else "",
             "route": route,
             "state": state,
             "app_version": constants.APP_VERSION,
@@ -142,6 +166,87 @@ class DesktopApi:
             "resumed": resumed,
             "app_update": self._app_release.version if self._app_release else "",
         }
+
+    # --- the Eggie account ---------------------------------------------
+
+    def load_kitchens(self) -> dict:
+        if self._cloud is None:
+            return {"ok": False}
+        try:
+            self._kitchens = self._cloud.instances()
+            self._kitchens_error = ""
+        except NotSignedIn:
+            self._kitchens = None
+            self._kitchens_error = ""
+            return {"ok": False}
+        except ApiUnavailableError:
+            self._kitchens_error = "Can't reach Eggie right now."
+            return {"ok": False}
+        except ApiError as e:
+            self._kitchens_error = str(e)
+            return {"ok": False}
+        return {"ok": True}
+
+    def account_screen_shown(self) -> None:
+        if not self._signup_shown:
+            self._signup_shown = True
+            self._events.send("signup_screen_shown")
+
+    def start_sign_in(self, mode: str) -> dict:
+        if self._account is None or mode not in ("create", "existing"):
+            return {"ok": False, "message": "Can't sign in from here."}
+        fresh = self._account.pending is None
+        try:
+            sign_in = self._account.start()
+        except (ApiError, ApiUnavailableError) as e:
+            message = ("Can't reach Eggie right now."
+                       if isinstance(e, ApiUnavailableError) else str(e))
+            return {"ok": False, "message": message}
+        if mode == "create":
+            target = urlsplit(sign_in.url)
+            path = target.path + (f"?{target.query}" if target.query else "")
+            url = f"{web_app_url()}/signup?redirect={quote(path, safe='')}"
+        else:
+            url = sign_in.url
+        self._sign_in_url = url
+        if fresh:
+            # The service's event names the new-account method "new".
+            self._events.send("signup_started",
+                              {"method": "new" if mode == "create" else "existing"})
+        if not (self._poller and self._poller.is_alive()):
+            self._poller = threading.Thread(target=self._poll_sign_in, daemon=True,
+                                            name="eggie-sign-in")
+            self._poller.start()
+        return {"ok": True, "url": url, "user_code": sign_in.user_code,
+                "expires_in": max(0, int(sign_in.expires_at - time.time()))}
+
+    def _poll_sign_in(self) -> None:
+        while True:
+            sign_in = self._account.pending
+            if sign_in is None:
+                return
+            self._sleep(sign_in.interval)
+            outcome = self._account.poll_once()
+            if outcome == "pending":
+                continue
+            if outcome == "signed_in":
+                self._kitchens, self._kitchens_error = None, ""
+                self._just_signed_in = True
+            self._push({"kind": "account", "type": outcome})
+            return
+
+    def open_sign_in_page(self) -> dict:
+        if not self._sign_in_url:
+            return {"ok": False}
+        webbrowser.open(self._sign_in_url)
+        return {"ok": True}
+
+    def sign_out(self) -> dict:
+        if self._account is not None:
+            self._account.sign_out()
+        self._kitchens, self._kitchens_error = None, ""
+        self._just_signed_in = False
+        return {"ok": True}
 
     def start_app_update_check(self) -> None:
         """Once per launch, off the window's thread; announces a release so Home redraws."""

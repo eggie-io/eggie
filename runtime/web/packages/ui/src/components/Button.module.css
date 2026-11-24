@@ -12,10 +12,11 @@
 .lg { height: var(--control-lg); padding: 0 var(--space-5); font-size: 15px; line-height: 20px; }
 
 .primary {
-  background: linear-gradient(90deg, var(--gold), var(--orange)); color: var(--on-gold);
+  background: var(--orange) linear-gradient(90deg, var(--gold), var(--orange)); color: var(--on-gold);
   font-weight: 500; box-shadow: var(--shadow-glow);
 }
-.primary:hover:not(:disabled) { background: var(--orange); box-shadow: var(--shadow-glow); }
+/* Only the image goes: replacing the whole background tweens from transparent and flashes white. */
+.primary:hover:not(:disabled) { background-image: none; }
 
 .secondary { background: var(--paper); color: var(--ink); border-color: var(--line-input); }
 .secondary:hover:not(:disabled) { background: var(--hover); }

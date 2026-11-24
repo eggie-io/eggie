@@ -81,7 +81,7 @@
 .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .step { border: 1px solid transparent; border-radius: var(--radius-md); transition: background-color 120ms ease; }
 .step:hover { background: var(--hover); }
-.stepActive, .stepActive:hover { background: var(--paper); border-color: var(--line); box-shadow: var(--shadow-sm); }
+.stepActive, .stepActive:hover { background: var(--tile); border-color: var(--tile-line); box-shadow: var(--shadow-sm); }
 .stepHead {
   width: 100%; display: flex; gap: var(--space-3); align-items: flex-start; padding: 12px 14px;
   border: 0; border-radius: var(--radius-md); background: transparent; font: inherit; text-align: left; cursor: pointer;
@@ -127,7 +127,7 @@
 
 .key {
   margin-top: auto; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3);
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  background: var(--tile); border: 1px solid var(--tile-line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
 }
 .keyLabel {
   margin: 0; padding: 0 var(--space-1); font-size: 11px; line-height: 16px; font-weight: 500;

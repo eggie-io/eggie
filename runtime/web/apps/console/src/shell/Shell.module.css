@@ -1,9 +1,13 @@
-.page { min-height: 100vh; display: flex; flex-direction: column; background: var(--page); }
-.content { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.page { min-height: 100vh; display: flex; flex-direction: column; background: var(--raised); }
+.content {
+  flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column;
+  margin: 0 var(--space-2) var(--space-2); background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
 
 .header {
   flex: none; position: relative; z-index: var(--z-dropdown);
-  background: var(--raised); border-bottom: 1px solid var(--line);
+  background: var(--raised);
 }
 /* The bar and tabs share the page column, so their edges line up with the content. */
 .bar {

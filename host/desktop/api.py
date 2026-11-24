@@ -36,9 +36,9 @@ from .settings import AGENTS_DONE, Settings, done_flag
 from .telemetry import app_error, who
 from .vm_sign_in import sign_in_vm
 from .view import (agent_cards, checkout_url, checkout_wait, cloud_card, connect_targets,
-                   default_kitchen_name, from_price, home_view, local_card, new_kitchen,
-                   progress_event, region_tiles, route_for, rows_for, screen_for, setup_rows,
-                   size_tiles, terminal_event)
+                   default_kitchen_name, from_price, home_view, local_card, local_repair,
+                   new_kitchen, progress_event, region_tiles, route_for, rows_for, screen_for,
+                   setup_rows, size_tiles, terminal_event)
 
 log = logging.getLogger(__name__)
 
@@ -79,10 +79,12 @@ class DesktopApi:
         self._just_signed_in = False
         self._signup_shown = False
         self._sign_in_url = ""
+        self._vm_sign_in_url = ""
         # What 1d last offered, so start_checkout accepts only those picks.
         self._picks: dict[str, set[str]] = {}
         self._checkout: dict | None = None
         self._poller: threading.Thread | None = None
+        self._sign_in_lock = threading.Lock()
         self._declared = False
         self._app_update_fn = app_update_fn or self._default_app_update
         self._quit_app = quit_app or self._default_quit
@@ -177,10 +179,9 @@ class DesktopApi:
                             vm_exists=readiness.vm_exists,
                             route=route, state=state, resumed=resumed,
                             just_signed_in=self._just_signed_in,
-                            update_tried=self._runtime_update_tried,
-                            update_error=self._runtime_update_error,
-                            problem=readiness.problem)
+                            update_tried=self._runtime_update_tried)
         local = local_card(route, state)
+        repair = local_repair(route, self._runtime_update_error, readiness.problem)
         if signed_in and screen.action != "load_kitchens":
             # Held until the kitchen list is in, or the first load would eat it.
             self._just_signed_in = False
@@ -191,7 +192,8 @@ class DesktopApi:
             "signed_in": signed_in,
             "email": self._account.email if self._account else "",
             "home": home_view(self._kitchens, self._kitchens_error, local,
-                              readiness.vm_exists, agents=self._agent_chips(local)),
+                              readiness.vm_exists, agents=self._agent_chips(local),
+                              repair=repair),
             "kitchen_id": screen.message if screen.name == "connect" else "",
             "route": route,
             "state": state,
@@ -410,13 +412,19 @@ class DesktopApi:
     def start_sign_in(self, mode: str) -> dict:
         if self._account is None or mode not in ("create", "existing"):
             return {"ok": False, "message": "Can't sign in from here."}
-        fresh = self._account.pending is None
-        try:
-            sign_in = self._account.start()
-        except (ApiError, ApiUnavailableError) as e:
-            message = ("Can't reach Eggie right now."
-                       if isinstance(e, ApiUnavailableError) else str(e))
-            return {"ok": False, "message": message}
+        # Both buttons may press at once; one code, and the poller can't exit past a fresh one.
+        with self._sign_in_lock:
+            fresh = self._account.pending is None
+            try:
+                sign_in = self._account.start()
+            except (ApiError, ApiUnavailableError) as e:
+                message = ("Can't reach Eggie right now."
+                           if isinstance(e, ApiUnavailableError) else str(e))
+                return {"ok": False, "message": message}
+            if self._poller is None or not self._poller.is_alive():
+                self._poller = threading.Thread(target=self._poll_sign_in, daemon=True,
+                                                name="eggie-sign-in")
+                self._poller.start()
         if mode == "create":
             target = urlsplit(sign_in.url)
             path = target.path + (f"?{target.query}" if target.query else "")
@@ -428,18 +436,16 @@ class DesktopApi:
             # The service's event names the new-account method "new".
             self._events.send("signup_started",
                               {"method": "new" if mode == "create" else "existing"})
-        if not (self._poller and self._poller.is_alive()):
-            self._poller = threading.Thread(target=self._poll_sign_in, daemon=True,
-                                            name="eggie-sign-in")
-            self._poller.start()
         return {"ok": True, "url": url, "user_code": sign_in.user_code,
                 "expires_in": max(0, int(sign_in.expires_at - time.time()))}
 
     def _poll_sign_in(self) -> None:
         while True:
-            sign_in = self._account.pending
-            if sign_in is None:
-                return
+            with self._sign_in_lock:
+                sign_in = self._account.pending
+                if sign_in is None:
+                    self._poller = None
+                    return
             self._sleep(sign_in.interval)
             try:
                 outcome = self._account.poll_once()
@@ -453,7 +459,6 @@ class DesktopApi:
                 self._kitchens, self._kitchens_error = None, ""
                 self._just_signed_in = True
             self._push({"kind": "account", "type": outcome})
-            return
 
     def open_sign_in_page(self) -> dict:
         if not self._sign_in_url:
@@ -671,17 +676,29 @@ class DesktopApi:
 
         # The CLI's headless install has no browser, so only the app asks.
         def waiting():
-            emit(progress_event(Progress("connect", "running", "Press Approve in your browser")))
+            emit({**progress_event(Progress("connect", "running", "Press Approve in your browser")),
+                  "reopen": bool(self._vm_sign_in_url)})
+
+        def opened(url):
+            self._vm_sign_in_url = url
+            self._open_url(url)
 
         try:
             outcome = sign_in_vm(self._client_factory(self._provider),
-                                 open_url=self._open_url, sleep=self._sleep,
+                                 open_url=opened, sleep=self._sleep,
                                  monotonic=self._clock, on_waiting=waiting)
             if outcome != "signed_in":
                 log.warning("the VM's own sign-in ended: %s", outcome)
         except Exception as e:
             log.warning("the VM's own sign-in failed: %r", e)
+        self._vm_sign_in_url = ""
         emit(progress_event(done))
+
+    def open_vm_sign_in_page(self) -> dict:
+        if not self._vm_sign_in_url:
+            return {"ok": False}
+        self._open_url(self._vm_sign_in_url)
+        return {"ok": True}
 
     def reboot_now(self) -> dict:
         # Order matters and is pinned by a test: a machine that goes down

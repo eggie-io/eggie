@@ -102,3 +102,22 @@ def test_an_already_signed_in_vm_never_shows_the_approve_prompt(tmp_path):
     api.start_install()
     api.jobs.join(timeout=5)
     assert not [e for e in pushed if e.get("message") == "Press Approve in your browser"]
+
+
+def test_open_the_page_again_reopens_the_approve_page_only_while_waiting(tmp_path):
+    opened, clock, reopened = [], Clock(), []
+    client = FakeClient([{"state": "signed_out"}, {"state": "pending"}, {"state": "signed_in"}])
+    steps = [Step("connect", lambda: None, always_run=True)]
+
+    def sleep(seconds):
+        clock.sleep(seconds)
+        reopened.append(api.open_vm_sign_in_page()["ok"])
+
+    api = DesktopApi(object(), InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: Readiness(), steps_factory=lambda: steps,
+                     client_factory=lambda p: client, open_url=opened.append,
+                     sleep=sleep, clock=clock)
+    api.start_install()
+    api.jobs.join(timeout=5)
+    assert reopened[0] is True and opened[:2] == ["https://x/approve", "https://x/approve"]
+    assert api.open_vm_sign_in_page() == {"ok": False}

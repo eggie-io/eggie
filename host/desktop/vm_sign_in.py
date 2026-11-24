@@ -16,9 +16,9 @@ def sign_in_vm(client, *, open_url, sleep, monotonic, limit: float = 600.0,
         return "signed_in"
     if reply.get("state") != "pending":
         return "refused"
-    on_waiting()
     if reply.get("url"):
         open_url(reply["url"])
+    on_waiting()
     deadline = monotonic() + limit
     while monotonic() < deadline:
         sleep(POLL_SECONDS)

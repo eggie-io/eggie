@@ -102,6 +102,11 @@ def test_home_never_declares_to_a_vm_that_is_not_answering(tmp_path):
     assert provider.execs == []
 
 
+def _local(home):
+    card = next(c for c in home["home"]["cards"] if c["kind"] == "local")
+    return card["state"], card["repair"], card["repair_message"]
+
+
 OLD_API = Readiness(vm_exists=True, vm_reachable=True,
                     runtime_version="runtime-v0.1.0", api_version=0)
 
@@ -121,8 +126,8 @@ def test_a_runtime_update_is_started_once_per_launch_and_then_shows_why_it_faile
     api.start_runtime_update()
     api.jobs.join(timeout=5)
     again = api.home()
-    assert again["action"] == ""
-    assert (again["screen"], again["message"]) == ("runtime-update:failed", "ghcr timed out")
+    assert (again["screen"], again["action"]) == ("home", "")
+    assert _local(again) == ("failed", "runtime-update:failed", "ghcr timed out")
 
 
 def test_a_retry_that_runs_clean_does_not_show_the_earlier_attempts_error(tmp_path, monkeypatch):
@@ -134,10 +139,10 @@ def test_a_retry_that_runs_clean_does_not_show_the_earlier_attempts_error(tmp_pa
     monkeypatch.setattr("host.core.install.connect_with_updates", failing_update)
     api = _api(tmp_path, OLD_API)
     api.start_runtime_update(); api.jobs.join(timeout=5)
-    assert api.home()["message"] == "ghcr timed out"
+    assert _local(api.home())[2] == "ghcr timed out"
     monkeypatch.setattr("host.core.install.connect_with_updates", lambda provider: None)
     api.start_runtime_update(); api.jobs.join(timeout=5)
-    assert api.home()["message"] == ""
+    assert _local(api.home())[2] == ""
 
 
 def test_an_update_refused_by_a_busy_registry_is_still_owed(tmp_path):

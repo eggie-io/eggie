@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from host.desktop.view import cloud_card, home_view, local_card, setup_progress
+from host.desktop.view import Screen, cloud_card, home_view, local_card, setup_progress
 
 
 def _row(**fields):
@@ -72,3 +72,18 @@ def test_missing_kind_gets_the_dashed_card():
 def test_doctor_only_with_a_local_vm():
     assert home_view([_row()], "", "none", False)["show_doctor"] is False
     assert home_view([_row()], "", "failed", True)["show_doctor"] is True
+
+
+def test_unreachable_local_vm_is_a_failed_card_next_to_a_running_cloud_one():
+    view = home_view([_row()], "", local_card("unreachable", ""), True,
+                     repair=Screen("unreachable", message="refused"))
+    cloud, local = view["cards"]
+    assert (cloud["state"], local["state"]) == ("running", "failed")
+    assert (local["repair"], local["repair_message"]) == ("unreachable", "refused")
+
+
+@pytest.mark.parametrize("status,seconds", [
+    ("running", 30), ("provisioning", 3), ("starting", 3), ("stopping", 3), ("stopped", 30),
+])
+def test_home_polls_fast_only_while_a_kitchen_is_changing(status, seconds):
+    assert home_view([_row(status=status)], "", "none", False)["poll_seconds"] == seconds

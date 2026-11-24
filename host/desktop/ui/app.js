@@ -190,6 +190,7 @@ ACTIONS['start-install'] = async (node, data) => {
 };
 
 ACTIONS['reboot-now'] = () => api().reboot_now();
+ACTIONS['open-vm-sign-in-page'] = () => api().open_vm_sign_in_page();
 
 const STATE_WORDS = {
   running: 'Working…', done: 'Done', skipped: 'Done',
@@ -203,6 +204,13 @@ window.eggie.handlers.install = (event) => {
       li.dataset.status = event.status;
       li.querySelector('.state').textContent = (event.status === 'running' && event.message)
         || STATE_WORDS[event.status] || '';
+      li.querySelector('.row-reopen')?.remove();
+      if (event.status === 'running' && event.reopen) {
+        const reopen = el('button', 'btn-ghost btn-sm row-reopen', 'Open the page again');
+        reopen.dataset.action = 'open-vm-sign-in-page';
+        li.append(reopen);
+        wire(li);
+      }
     }
     // The overall bar and "Step N of M" move together, on completed steps
     // only -- not on every 'running' tick, and clamped so the last step's
@@ -273,6 +281,7 @@ function swap(screen, data) {
   show(screen, data);
   if (keep) {
     document.querySelector('[data-rows]').replaceWith(keep);
+    wire(keep);
     rowsByName = {};
     keep.querySelectorAll('.row-step').forEach((li) => {
       rowsByName[li.dataset.name] = li;
@@ -884,22 +893,37 @@ function cloudCard(kitchen) {
   return withAgents('cloud', data, kitchen.id, kitchen.agents || [], kitchen.can_connect);
 }
 
+// The full screen a failed local card's Try again opens (view.local_repair), or null.
+let localRepair = null;
+
 function localCard(local, home) {
-  const data = { [local.state]: true, problem: home.problem, error: local.state === 'failed' && home.problem };
+  const failed = local.state === 'failed';
+  const detail = local.repair_message || home.problem;
+  localRepair = failed && local.repair ? { name: local.repair, detail } : null;
+  const data = {
+    [local.state]: true, problem: detail, error: failed && detail,
+    repair: Boolean(localRepair), restart: failed && !localRepair,
+  };
   // This computer can always be picked; 3a says when it can't take an agent yet.
   return withAgents('local', data, 'local', local.agents || [], true);
 }
 
+ACTIONS['open-repair'] = () => {
+  if (!localRepair) return refresh();
+  show(localRepair.name, { problem: localRepair.detail, message: localRepair.detail });
+};
+
 function drawHome(home) {
   const view = home.home;
   show('home', Object.assign({}, home, view));
+  localRepair = null;
   const list = document.querySelector('[data-cards]');
   view.cards.forEach((kitchen) => {
     list.append(kitchen.kind === 'local' ? localCard(kitchen, home) : cloudCard(kitchen));
   });
   if (view.missing) list.append(card(`add-${view.missing}`, {}));
   if (view.missing === 'cloud') showFromPrice();
-  const delay = view.cards.some((kitchen) => kitchen.state === 'getting_ready') ? 3000 : 30000;
+  const delay = view.poll_seconds * 1000;
   // A pressed card button is waiting on its job, whose refresh() redraws.
   const pressed = () => busy.node && busy.node.isConnected;
   pollWhileShowing(delay, async (node) => {

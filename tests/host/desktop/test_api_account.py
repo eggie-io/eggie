@@ -1,6 +1,7 @@
 """The account half of the bridge: sign-in links, one-shot flags, the cached kitchen list."""
 from __future__ import annotations
 
+import threading
 import time
 
 from host.client import ApiError, ApiUnavailableError
@@ -116,6 +117,34 @@ def test_poller_survives_a_failing_poll(tmp_path):
     _api(tmp_path, account, pushed=pushed).start_sign_in("existing")
     _wait_for(pushed)
     assert pushed == [{"kind": "account", "type": "signed_in"}]
+
+
+def test_both_sign_in_buttons_pressed_at_once_mint_one_code(tmp_path):
+    account = FakeAccount(signed_in=False)
+    minted = []
+
+    def slow_start():
+        if account.pending is None:
+            time.sleep(0.05)
+            minted.append(1)
+            account.pending = SignIn(f"CODE-{len(minted)}", DEVICE_URL, time.time() + 600, 0.0)
+        return account.pending
+
+    account.start = slow_start
+    api = _api(tmp_path, account)
+    gate = threading.Barrier(2)
+    codes = []
+
+    def press(mode):
+        gate.wait()
+        codes.append(api.start_sign_in(mode)["user_code"])
+
+    threads = [threading.Thread(target=press, args=(m,)) for m in ("create", "existing")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(5)
+    assert (len(minted), codes) == (1, ["CODE-1", "CODE-1"])
 
 
 def test_home_after_first_sign_in_goes_to_connect_once(tmp_path):

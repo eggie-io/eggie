@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from itertools import product
 
-from host.desktop.view import HOME_STATES, SCREENS, Screen, newest_owned, screen_for
+import pytest
+
+from host.desktop.view import (HOME_STATES, SCREENS, Screen, local_repair, newest_owned,
+                               screen_for)
 
 KITCHEN = {"id": "k1", "is_owner": True, "created_at": "2026-01-01T00:00:00Z"}
 
@@ -17,8 +20,7 @@ KITCHEN = {"id": "k1", "is_owner": True, "created_at": "2026-01-01T00:00:00Z"}
 def _screen(route="home", state="running", **flags):
     defaults = dict(signed_in=True, pending_sign_in=False, kitchens=[KITCHEN],
                     kitchens_error="", vm_exists=False, resumed=False,
-                    just_signed_in=False, update_tried=False, update_error="",
-                    problem="")
+                    just_signed_in=False, update_tried=False)
     return screen_for(route=route, state=state, **{**defaults, **flags})
 
 
@@ -59,22 +61,27 @@ def test_service_down_still_shows_home_with_local_card():
     assert screen == Screen("home")
 
 
-def test_an_old_runtime_api_starts_the_update_once():
+def test_an_old_runtime_api_starts_the_update_once_then_stays_on_home():
     first = _screen("update_runtime", "", vm_exists=True)
     assert (first.name, first.action) == ("runtime-update:running", "start_runtime_update")
-    again = _screen("update_runtime", "", vm_exists=True, update_tried=True,
-                    update_error="ghcr timed out")
-    assert again == Screen("runtime-update:failed", message="ghcr timed out")
+    assert _screen("update_runtime", "", vm_exists=True, update_tried=True) == Screen("home")
 
 
-def test_a_failed_update_with_no_job_error_shows_the_probe_problem():
-    assert _screen("update_runtime", "", vm_exists=True, update_tried=True,
-                   problem="api 3 not supported").message == "api 3 not supported"
+@pytest.mark.parametrize("route", ["unreachable", "unresponsive"])
+def test_a_broken_local_vm_still_lands_on_home_with_the_cloud_kitchens(route):
+    assert _screen(route, "", vm_exists=True) == Screen("home")
 
 
-def test_broken_machines_keep_their_own_screens():
-    assert _screen("unreachable", "", vm_exists=True).name == "unreachable"
-    assert _screen("unresponsive", "", vm_exists=True).name == "unresponsive"
+@pytest.mark.parametrize("route,update_error,problem,expected", [
+    ("unreachable", "", "refused", Screen("unreachable", message="refused")),
+    ("unresponsive", "", "hung", Screen("unresponsive", message="hung")),
+    ("update_runtime", "ghcr timed out", "", Screen("runtime-update:failed", message="ghcr timed out")),
+    ("update_runtime", "", "api 3 not supported",
+     Screen("runtime-update:failed", message="api 3 not supported")),
+    ("home", "", "no marker", None),
+])
+def test_a_failed_local_card_opens_the_screen_that_repairs_it(route, update_error, problem, expected):
+    assert local_repair(route, update_error, problem) == expected
 
 
 def test_every_screen_for_result_is_a_name_the_template_check_covers():

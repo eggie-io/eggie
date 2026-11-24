@@ -47,8 +47,7 @@ def newest_owned(kitchens: list[dict] | None) -> dict | None:
 
 def screen_for(*, signed_in: bool, pending_sign_in: bool, kitchens: list[dict] | None,
                kitchens_error: str, vm_exists: bool, route: str, state: str,
-               resumed: bool, just_signed_in: bool, update_tried: bool,
-               update_error: str, problem: str) -> Screen:
+               resumed: bool, just_signed_in: bool, update_tried: bool) -> Screen:
     """Ordered: the earlier rule wins.
 
     A resumed launch still has the nothing-recorded shape and must continue
@@ -67,18 +66,30 @@ def screen_for(*, signed_in: bool, pending_sign_in: bool, kitchens: list[dict] |
         newest = newest_owned(kitchens)
         if newest:
             return Screen("connect", message=newest["id"])
-    if route == "update_runtime":
-        if not update_tried:
-            return Screen("runtime-update:running", action="start_runtime_update")
-        return Screen("runtime-update:failed", message=update_error or problem)
-    if route in ("unreachable", "unresponsive"):
-        return Screen(route)
+    if route == "update_runtime" and not update_tried:
+        return Screen("runtime-update:running", action="start_runtime_update")
+    # A broken local VM is a failed card on Home (local_repair): its own screen
+    # would hide every cloud kitchen.
     return Screen("home")
+
+
+_REPAIR_SCREENS = {"unreachable": "unreachable", "unresponsive": "unresponsive",
+                   "update_runtime": "runtime-update:failed"}
+
+
+def local_repair(route: str, update_error: str, problem: str) -> Screen | None:
+    """The screen a failed local card's Try again opens; None keeps it a VM restart."""
+    name = _REPAIR_SCREENS.get(route)
+    if name is None:
+        return None
+    return Screen(name, message=(update_error or problem) if route == "update_runtime" else problem)
 
 
 _STEPS_TOTAL = 5
 _SETUP_STEP_DONE = {"certificate": 0, "server": 1, "address": 2, "dns": 3}
 _GETTING_READY = ("provisioning", "booting", "starting")
+# Home looks again every 3 s while a kitchen is changing, else every 30 s.
+_CHANGING = _GETTING_READY + ("stopping",)
 
 
 def setup_progress(status: str, step: str | None) -> tuple[int, int]:
@@ -217,14 +228,17 @@ def local_card(route: str, state: str) -> str:
 
 
 def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
-              vm_exists: bool, agents: dict[str, list[str]] | None = None) -> dict:
+              vm_exists: bool, agents: dict[str, list[str]] | None = None,
+              repair: Screen | None = None) -> dict:
     """Cards in order (cloud, then local) and which kind gets the dashed card.
     `agents` names each card's connected agents by card id ("local" for this computer)."""
     agents = agents or {}
     cards = [{"kind": "cloud", **cloud_card(k)} for k in kitchens or []]
     has_cloud = bool(cards)
     if local != "none":
-        cards.append({"kind": "local", "id": "local", "state": local})
+        cards.append({"kind": "local", "id": "local", "state": local,
+                      "repair": repair.name if repair else "",
+                      "repair_message": repair.message if repair else ""})
     for card in cards:
         card["agents"] = list(agents.get(card["id"], []))
     if kitchens_error:
@@ -236,8 +250,9 @@ def home_view(kitchens: list[dict] | None, kitchens_error: str, local: str,
         missing = "cloud"
     else:
         missing = ""
+    changing = any((k.get("status") or "") in _CHANGING for k in kitchens or [])
     return {"cards": cards, "missing": missing, "show_doctor": vm_exists,
-            "cloud_error": kitchens_error}
+            "cloud_error": kitchens_error, "poll_seconds": 3 if changing else 30}
 
 
 def agent_cards(manifests, *, kind: str, alias: str | None,

@@ -88,25 +88,35 @@ def test_denied_and_expired_end_the_code(tmp_path, code, outcome):
 def test_refresh_runs_once_for_two_callers(tmp_path):
     path = tmp_path / "cloud.json"
     signed_in_file(path, expires_at=1000.0)
-    gate = threading.Event()
+    calls = []
 
     def call(method, path_, body, token):
-        fake.calls.append((method, path_))
-        gate.wait(1)
+        calls.append((method, path_))
         return {"access_token": "a2", "refresh_token": "r2", "expires_in": 3600}
 
-    fake = type("F", (), {"calls": []})()
-    account = CloudAccount(path, call=call, clock=lambda: 1000.0)
+    class Overlapping(CloudAccount):
+        # Each thread's first read waits for the other, so both hold the
+        # stale token before either takes the refresh lock.
+        barrier = threading.Barrier(2, timeout=5)
+        seen = threading.local()
+
+        def _read(self):
+            data = super()._read()
+            if not getattr(self.seen, "done", False):
+                self.seen.done = True
+                self.barrier.wait()
+            return data
+
+    account = Overlapping(path, call=call, clock=lambda: 1000.0)
     results = []
     threads = [threading.Thread(target=lambda: results.append(account.access_token()))
                for _ in range(2)]
     for t in threads:
         t.start()
-    gate.set()
     for t in threads:
         t.join()
     assert results == ["a2", "a2"]
-    assert len(fake.calls) == 1
+    assert len(calls) == 1
     assert json.loads(path.read_text())["refresh_token"] == "r2"
 
 

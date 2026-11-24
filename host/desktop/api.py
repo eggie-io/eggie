@@ -29,6 +29,7 @@ from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
 from .settings import Settings
 from .telemetry import app_error, who
+from .vm_sign_in import sign_in_vm
 from .view import (agent_offer, checkout_url, checkout_wait, cloud_card, connectable,
                    console_path, default_kitchen_name, from_price, home_view, local_card,
                    new_kitchen, progress_event, region_tiles, route_for, rows_for,
@@ -49,7 +50,7 @@ class DesktopApi:
                  settings=None, autostart_exe=_FROZEN,
                  stop_timeout=QUIT_STOP_TIMEOUT, log_path=None, desktop=None,
                  events: EventSender | None = None, clock=time.monotonic,
-                 cloud=None, sleep=time.sleep):
+                 cloud=None, sleep=time.sleep, open_url=None):
         self._provider = provider
         self._events = events or EventSender(None, {})
         self._clock = clock
@@ -65,6 +66,8 @@ class DesktopApi:
         # (CloudAccount, CloudClient); None only for tests that need no account.
         self._account, self._cloud = cloud if cloud else (None, None)
         self._sleep = sleep
+        # Looked up per call: __main__ wraps webbrowser.open to http(s) only.
+        self._open_url = open_url or (lambda url: webbrowser.open(url))
         self._kitchens: list[dict] | None = None
         self._kitchens_error = ""
         self._just_signed_in = False
@@ -442,6 +445,9 @@ class DesktopApi:
 
         def work(emit):
             def report(progress):
+                if progress.status == "done" and progress.step == "connect":
+                    self._sign_in_vm_during_install(emit, progress)
+                    return
                 emit(progress_event(progress))
 
             self._events.send("env_setup_started")
@@ -469,6 +475,21 @@ class DesktopApi:
 
         job_id = self.jobs.start("install", work)
         return {"job": job_id, "rows": rows_for(steps)}
+
+    def _sign_in_vm_during_install(self, emit, done) -> None:
+        from host.core.install import Progress
+
+        # The CLI's headless install has no browser, so only the app asks.
+        emit(progress_event(Progress("connect", "running", "Press Approve in your browser")))
+        try:
+            outcome = sign_in_vm(self._client_factory(self._provider),
+                                 open_url=self._open_url, sleep=self._sleep,
+                                 monotonic=self._clock)
+            if outcome != "signed_in":
+                log.warning("the VM's own sign-in ended: %s", outcome)
+        except Exception as e:
+            log.warning("the VM's own sign-in failed: %r", e)
+        emit(progress_event(done))
 
     def reboot_now(self) -> dict:
         # Order matters and is pinned by a test: a machine that goes down

@@ -193,7 +193,8 @@ window.eggie.handlers.install = (event) => {
     const li = rowsByName[event.step];
     if (li) {
       li.dataset.status = event.status;
-      li.querySelector('.state').textContent = STATE_WORDS[event.status] || '';
+      li.querySelector('.state').textContent = (event.status === 'running' && event.message)
+        || STATE_WORDS[event.status] || '';
     }
     // The overall bar and "Step N of M" move together, on completed steps
     // only -- not on every 'running' tick, and clamped so the last step's

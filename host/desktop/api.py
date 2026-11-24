@@ -202,7 +202,8 @@ class DesktopApi:
         return self._manifests
 
     def _agent_chips(self, local: str) -> dict[str, list[str]]:
-        """Each Home card's connected agents' names. Files only: Home redraws often."""
+        """Each Home card's connected agents' names. File reads, plus one `wsl -l -v`
+        on Windows for this computer's card; never ssh: Home redraws often."""
         ids = [k["id"] for k in self._kitchens or []] + (["local"] if local != "none" else [])
         chips = {}
         for kitchen_id in ids:

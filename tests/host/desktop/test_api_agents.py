@@ -90,11 +90,12 @@ def test_cursor_needs_its_host_block_and_done_for_that_kitchen(tmp_path):
     api = _api(tmp_path, MacLike())
     assert _chips(api)["k1"] == []
     _block(home, "eggie-bakery")
-    chips = _chips(api)
-    assert chips["k1"] == ["Cursor"]
-    # Done is per kitchen.
+    assert _chips(api)["k1"] == ["Cursor"]
+    # Done is per kitchen: this computer's block alone is not enough.
     _block(home, "eggie")
-    assert chips["local"] == []
+    assert _chips(api)["local"] == []
+    settings.add_member(AGENTS_DONE, done_flag("cursor", "local"))
+    assert _chips(api) == {"k1": ["Cursor"], "local": ["Cursor"]}
 
 
 def test_windows_local_asks_the_provider_for_codex_and_done_for_the_rest(tmp_path):

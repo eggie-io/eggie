@@ -248,8 +248,9 @@ if ! dpkg -s bubblewrap >/dev/null 2>&1; then
 fi
 # Ubuntu 24.04 strips capabilities inside unprivileged user namespaces, so bwrap
 # cannot bring up loopback and every Codex command fails. WSL's kernel has no such
-# switch. Every login account is root-equivalent here, so it protects nothing.
+# switch. Every login account is root-equivalent here, so it protects next to nothing.
 if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+  mkdir -p /etc/sysctl.d
   printf 'kernel.apparmor_restrict_unprivileged_userns = 0\n' > /etc/sysctl.d/60-eggie-userns.conf
   sysctl -q -p /etc/sysctl.d/60-eggie-userns.conf \
     || echo "could not allow user namespaces: Codex will not be able to run commands" >&2

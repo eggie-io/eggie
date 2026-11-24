@@ -388,6 +388,7 @@ def test_codex_that_cannot_run_commands_there_fails_and_is_taken_back(tmp_path):
     codex = [line for line in lines if line.agent == "Codex"]
     assert len(codex) == 1 and not codex[0].ok and "RTM_NEWADDR" in codex[0].text
     assert not codex_app.has(w.codex, "eggie-shop")
+    assert w.login.calls == []
 
 
 def test_failed_key_removal_keeps_the_host_so_remove_retries(tmp_path):

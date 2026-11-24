@@ -49,7 +49,8 @@ Because of that, `install.sh` turns off Ubuntu's restriction on unprivileged use
 (`kernel.apparmor_restrict_unprivileged_userns = 0`), which otherwise stops Codex's `bwrap`
 sandbox from starting. The restriction guards against a non-root account reaching root through
 kernel bugs; here every login account is root-equivalent already, and Docker's default seccomp
-profile still keeps containers out of user namespaces. What remains is a non-root service outside
+profile still keeps containers out of user namespaces (unless one runs `privileged` or
+`seccomp=unconfined`, which is root-equivalent anyway). What remains is a non-root service outside
 Docker, if one were broken into, gaining one more path to root.
 
 ## The user's own computer

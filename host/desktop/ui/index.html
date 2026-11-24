@@ -34,15 +34,116 @@
 <div id="busy" hidden></div>
 
 <template data-screen="account">
-  <h1>account</h1>
+  <section class="welcome">
+    <div class="welcome-side">
+      <span class="welcome-lockup" role="img" aria-label="eggie"><span class="brand-mark"></span>eggie</span>
+      <p class="welcome-tag"><b>Let’s get you cooking</b>
+        <span>One free account, then your kitchen lives on this computer.</span></p>
+    </div>
+    <div class="welcome-main">
+      <div class="welcome-body">
+        <div class="welcome-head">
+          <h1 class="display">Create your free Eggie account</h1>
+          <p class="lede">An Eggie account keeps track of your projects. It’s free, takes about a
+            minute, and you only set it up once on this computer.</p>
+        </div>
+        <div class="alert alert-warning" data-when="reason">
+          <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+          <p data-field="reason"></p>
+        </div>
+        <div class="welcome-actions">
+          <div class="row">
+            <button class="btn-primary btn-lg" data-action="create-account">Create free account<span class="ic ic-external" aria-hidden="true"></span></button>
+            <button class="btn-secondary btn-lg" data-action="existing-account">I already have an account</button>
+          </div>
+          <p class="hint">Both open app.eggie.io in your browser. This window waits for you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 </template>
 
 <template data-screen="account:waiting">
-  <h1>account:waiting</h1>
+  <section class="welcome">
+    <div class="welcome-side">
+      <span class="welcome-lockup" role="img" aria-label="eggie"><span class="brand-mark"></span>eggie</span>
+      <p class="welcome-tag"><b>Let’s get you cooking</b>
+        <span>One free account, then your kitchen lives on this computer.</span></p>
+    </div>
+    <div class="welcome-main welcome-wait">
+      <div class="welcome-back">
+        <button class="btn-icon" data-action="sign-in-back" aria-label="Back" title="Back"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      </div>
+      <div class="welcome-head">
+        <span class="wait-status"><span class="spinner spinner-sm" aria-hidden="true"></span>Waiting for you in the browser</span>
+        <h1 class="display">Finish in your browser</h1>
+        <p class="lede">We opened <span class="mono">app.eggie.io</span> for you. Do these three
+          things there. This window carries on by itself when you’re done.</p>
+      </div>
+      <ol class="wait-steps">
+        <li data-when="create"><span class="wait-num">1</span>
+          <p><b>Create your account</b><span>With your email and a password. It’s free.</span></p></li>
+        <li data-when="existing"><span class="wait-num">1</span>
+          <p><b>Sign in</b><span>Use the account you already have.</span></p></li>
+        <li class="wait-code-step"><span class="wait-num">2</span>
+          <p><b>Check the page shows this code</b><span>If the codes match, it’s really this computer asking.</span></p>
+          <span class="wait-code" data-field="user_code"></span></li>
+        <li><span class="wait-num">3</span>
+          <p><b>Press Approve</b><span>The page asks “Approve this device?”. After that, Eggie opens here by itself.</span></p></li>
+      </ol>
+      <div class="wait-phone">
+        <span class="wait-qr"><canvas data-qr role="img" aria-label="QR code that opens the same page on a phone"></canvas></span>
+        <p><b>Or use your phone</b><span>Scan the code and do the same three steps there. The code
+          works for <span data-field="minutes"></span>.</span></p>
+        <button class="btn-secondary" data-action="open-sign-in-page">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
+      </div>
+    </div>
+  </section>
 </template>
 
 <template data-screen="where">
-  <h1>where</h1>
+  <div class="shell">
+    <header class="shell-head"><span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body where">
+      <div class="where-head">
+        <span class="signed-in" data-when="email"><span class="ic ic-check-circle" aria-hidden="true"></span><span>Signed in as <span data-field="email"></span></span></span>
+        <h1 class="where-title">Where should your projects live?</h1>
+        <p class="lede">Pick one to start. You can add the other one any time.</p>
+      </div>
+      <div class="where-tiles">
+        <article class="where-tile">
+          <div class="where-art where-art-cloud" aria-hidden="true">
+            <span class="where-kind"><span class="ic ic-cloud"></span>Cloud</span>
+            <span class="where-lockup"><span class="brand-mark"></span>eggie</span>
+            <dl class="where-facts"><dt>region</dt><dd>Europe</dd><dt>size</dt><dd>Small</dd></dl>
+          </div>
+          <div class="where-text">
+            <div><h2>In the cloud</h2>
+              <p>Your own small server. Open projects from any device and share links that keep
+                working when this computer is off.</p></div>
+            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Nothing else to install here</li></ul>
+            <div class="where-cta"><button class="btn-primary" data-action="new-kitchen">Create a cloud kitchen</button></div>
+          </div>
+        </article>
+        <article class="where-tile">
+          <div class="where-art where-art-local" aria-hidden="true">
+            <span class="where-kind"><span class="ic ic-terminal"></span>This computer</span>
+            <span class="where-lockup"><span class="brand-mark"></span>eggie</span>
+            <dl class="where-facts"><dt>runs on</dt><dd>this computer</dd><dt>storage</dt><dd>your own disk</dd>
+              <dt>price</dt><dd>$0 forever</dd></dl>
+          </div>
+          <div class="where-text">
+            <div><h2>On this computer</h2>
+              <p>A small Linux computer inside this one. Free.</p></div>
+            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Free</li>
+              <li><span class="ic ic-check" aria-hidden="true"></span>About 10 GB and 5–10 minutes to set up</li></ul>
+            <div class="where-cta"><button class="btn-secondary" data-action="start-install">Set up on this computer</button></div>
+          </div>
+        </article>
+      </div>
+      <p class="hint">Made a cloud kitchen on app.eggie.io already? It shows up here by itself.</p>
+    </section>
+  </div>
 </template>
 
 <template data-screen="home">
@@ -391,6 +492,19 @@
     </label>
     <p class="hint" data-when="unavailable">Only an installed Eggie can open when you sign in.</p>
     <p class="hint" data-field="error"></p>
+    <div class="setting-account" data-when="signed_in">
+      <p><span data-when="email">Signed in as <b data-field="email"></b></span>
+        <span data-when="no_email">Signed in to Eggie</span></p>
+      <button class="btn-secondary" data-action="sign-out-ask">Sign out</button>
+    </div>
+    <div class="alert alert-warning" data-sign-out hidden>
+      <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+      <p>Your agents lose access to your cloud kitchens until you sign in again.</p>
+      <div class="row">
+        <button class="btn-secondary" data-action="sign-out-cancel">Cancel</button>
+        <button class="btn-danger" data-action="sign-out">Sign out</button>
+      </div>
+    </div>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
   </section>
 </template>
@@ -543,6 +657,7 @@
   </section>
 </template>
 
+<script src="qr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

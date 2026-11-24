@@ -364,3 +364,21 @@ def test_the_connect_route_is_handled_and_its_actions_exist():
     assert "params.has('connect')" in script
     for action in ("connect-agent", "connect-back"):
         assert f"ACTIONS['{action}']" in script, action
+
+
+def test_every_button_in_the_markup_has_an_action():
+    """wire() calls ACTIONS[name] on click; a name with no entry throws, and
+    the button does nothing at all."""
+    markup = (UI / "index.html").read_text()
+    script = (UI / "app.js").read_text()
+    used = set(re.findall(r'data-action="([^"]+)"', markup))
+    defined = set(re.findall(r"ACTIONS\['([^']+)'\]\s*=", script))
+    defined |= set(re.findall(r"^  '([a-z-]+)':", script, re.MULTILINE))
+    assert used and defined
+    assert used <= defined, sorted(used - defined)
+
+
+def test_the_vendored_code_licence_ships_with_it():
+    # qr.js is MIT, which requires its notice to travel with the binary.
+    assert (UI / "qr.js").is_file()
+    assert "qr.js" in (UI / "LICENSES.txt").read_text()

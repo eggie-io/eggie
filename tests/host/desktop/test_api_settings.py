@@ -48,14 +48,16 @@ def _api(tmp_path, provider=None, *, desktop=None, exe=EXE, steps=None, quits=No
 def test_settings_read_the_real_state(tmp_path):
     desktop = FakeDesktop()
     api = _api(tmp_path, desktop=desktop)
-    assert api.get_settings() == {"autostart": False, "autostart_available": True}
+    settings = api.get_settings()
+    assert (settings["autostart"], settings["autostart_available"]) == (False, True)
     desktop.autostart[EXE] = True     # turned on outside Eggie
     assert api.get_settings()["autostart"] is True
 
 
 def test_a_source_checkout_cannot_register_itself(tmp_path):
     api = _api(tmp_path, exe=None)
-    assert api.get_settings() == {"autostart": False, "autostart_available": False}
+    settings = api.get_settings()
+    assert (settings["autostart"], settings["autostart_available"]) == (False, False)
     assert api.set_autostart(True)["ok"] is False
 
 

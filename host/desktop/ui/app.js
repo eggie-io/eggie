@@ -281,10 +281,26 @@ ACTIONS['start-over'] = async () => { await api().reset_install(); refresh(); };
 
 ACTIONS['settings'] = async () => {
   const settings = await api().get_settings();
-  show('settings', { unavailable: settings.autostart_available ? '' : 'yes', error: '' });
+  show('settings', {
+    unavailable: settings.autostart_available ? '' : 'yes', error: '',
+    signed_in: settings.signed_in, email: settings.email,
+    no_email: settings.signed_in && !settings.email,
+  });
   const box = document.querySelector('[data-setting="autostart"]');
   box.checked = settings.autostart;
   box.disabled = !settings.autostart_available;
+};
+
+function askSignOut(asking) {
+  document.querySelector('[data-sign-out]').hidden = !asking;
+  document.querySelector('[data-action="sign-out-ask"]').disabled = asking;
+}
+ACTIONS['sign-out-ask'] = () => askSignOut(true);
+ACTIONS['sign-out-cancel'] = () => askSignOut(false);
+ACTIONS['sign-out'] = async () => {
+  await api().sign_out();
+  signIn = null;
+  return refresh();
 };
 
 ACTIONS['toggle-autostart'] = async (node) => {
@@ -487,6 +503,118 @@ window.eggie.handlers.uninstall = (event) => {
   refresh();
 };
 
+// --- The Eggie account (1a, 1b) and where to cook (1c) ------------------
+
+// The code the window is waiting on, and which button asked for it: "Open
+// the page again" and the QR code reopen that same address.
+let signIn = null;
+
+const SIGN_IN_ENDED = {
+  expired: 'That code ran out before it was approved.',
+  denied: 'The sign-in was denied in the browser.',
+};
+
+function showAccount(reason) {
+  show('account', { reason });
+  api().account_screen_shown();
+}
+
+async function beginSignIn(mode, openPage) {
+  const generation = screenGeneration;
+  const started = await api().start_sign_in(mode);
+  if (generation !== screenGeneration) return;
+  if (!started.ok) return showAccount(started.message);
+  signIn = {
+    mode, url: started.url, code: started.user_code,
+    until: Date.now() + started.expires_in * 1000,
+  };
+  if (openPage) await api().open_sign_in_page();
+  if (generation !== screenGeneration) return;
+  showWaiting();
+}
+
+function minutesLeft() {
+  const minutes = Math.max(1, Math.ceil((signIn.until - Date.now()) / 60000));
+  return minutes === 1 ? '1 more minute' : `${minutes} more minutes`;
+}
+
+function showWaiting() {
+  show('account:waiting', {
+    user_code: signIn.code, minutes: minutesLeft(),
+    create: signIn.mode === 'create', existing: signIn.mode !== 'create',
+  });
+  drawQr(document.querySelector('[data-qr]'), signIn.url);
+  whileShowing(15000, () => {
+    document.querySelector('[data-field="minutes"]').textContent = minutesLeft();
+  });
+}
+
+// Whole modules only, or the code blurs on a fractional device pixel ratio.
+function drawQr(canvas, text) {
+  const code = qrcode(0, 'M');
+  code.addData(text);
+  code.make();
+  const modules = code.getModuleCount();
+  const quiet = 2;
+  const cells = modules + quiet * 2;
+  const ratio = window.devicePixelRatio || 1;
+  const scale = Math.max(1, Math.floor((84 * ratio) / cells));
+  const size = cells * scale;
+  canvas.width = size;
+  canvas.height = size;
+  canvas.style.width = `${size / ratio}px`;
+  canvas.style.height = `${size / ratio}px`;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, size, size);
+  context.fillStyle = '#1d1829';
+  for (let row = 0; row < modules; row += 1) {
+    for (let col = 0; col < modules; col += 1) {
+      if (code.isDark(row, col)) {
+        context.fillRect((col + quiet) * scale, (row + quiet) * scale, scale, scale);
+      }
+    }
+  }
+}
+
+// Runs `tick` every `ms` until the screen drawn just before this call changes.
+function whileShowing(ms, tick) {
+  const generation = screenGeneration;
+  const timer = setInterval(() => {
+    if (generation !== screenGeneration) return clearInterval(timer);
+    tick();
+  }, ms);
+}
+
+ACTIONS['create-account'] = () => beginSignIn('create', true);
+ACTIONS['existing-account'] = () => beginSignIn('existing', true);
+ACTIONS['open-sign-in-page'] = () => api().open_sign_in_page();
+// The code stays pending: pressing either button again reuses it.
+ACTIONS['sign-in-back'] = () => showAccount('');
+
+window.eggie.handlers.account = (event) => {
+  signIn = null;
+  const screen = document.getElementById('screen').dataset.screen || '';
+  // Over Settings from the tray: Back must redraw, not restore the old 1b.
+  if (screen !== 'account' && screen !== 'account:waiting') {
+    stash = null;
+    return;
+  }
+  if (event.type === 'signed_in') return refresh();
+  showAccount(SIGN_IN_ENDED[event.type] || '');
+};
+
+ACTIONS['new-kitchen'] = () => show('kitchen:new', {});
+
+// A cloud kitchen made on the website meanwhile takes the page to Home.
+async function watchForKitchens() {
+  const loaded = await api().load_kitchens();
+  if (!loaded || !loaded.ok) return;
+  const home = await api().home();
+  if (document.getElementById('screen').dataset.screen !== 'where') return;
+  if (home.screen !== 'where' || home.action) refresh();
+}
+
 async function refresh() {
   stash = null;
   if (!busy.timer) setBusy(null);
@@ -510,7 +638,14 @@ async function refresh() {
     // A failed load is drawn as it is; refreshing would ask again forever.
     if (loaded && loaded.ok) return refresh();
   }
+  if (home.screen === 'account') {
+    signIn = null;
+    return showAccount('');
+  }
+  // A reload forgets which button was pressed; the plain sign-in link works for both.
+  if (home.screen === 'account:waiting') return beginSignIn(signIn ? signIn.mode : 'existing', false);
   show(home.screen, home);
+  if (home.screen === 'where') whileShowing(30000, watchForKitchens);
 }
 
 function start() {

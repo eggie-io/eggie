@@ -530,8 +530,10 @@ class DesktopApi:
 
     def get_settings(self) -> dict:
         available = self._autostart_exe is not None
+        signed_in = bool(self._account and self._account.signed_in)
         return {"autostart": available and self._desktop.autostart_enabled(self._autostart_exe),
-                "autostart_available": available}
+                "autostart_available": available,
+                "signed_in": signed_in, "email": self._account.email if signed_in else ""}
 
     def set_autostart(self, on: bool) -> dict:
         if self._autostart_exe is None:

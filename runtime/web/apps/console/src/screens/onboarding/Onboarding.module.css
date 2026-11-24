@@ -6,11 +6,11 @@
 .item + .item::before { content: ""; width: 16px; height: 1px; margin-right: var(--space-1); background: var(--line-strong); }
 .dot {
   flex: none; width: 22px; height: 22px; border-radius: var(--radius-pill); display: grid; place-content: center;
-  background: var(--hover); color: var(--ink-2); font: 600 12px/1 var(--font-mono);
+  background: var(--hover); color: var(--ink-2); font: 500 12px/1 var(--font-mono);
 }
 .dot svg { width: 13px; height: 13px; }
 .done .dot { background: var(--success-soft); color: var(--success); }
-.current { color: var(--ink); font-weight: 600; }
+.current { color: var(--ink); font-weight: 500; }
 .current .dot { background: var(--gold); color: var(--on-gold); }
 
 @media (max-width: 860px) {

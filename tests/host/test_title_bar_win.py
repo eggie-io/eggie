@@ -15,15 +15,15 @@ def test_colorref_is_bgr():
 def test_light_title_bar_sets_caption_text_border_and_light_buttons():
     calls = []
     apply(7, False, lambda h, a, v: calls.append((h, a, v)))
-    assert sorted(calls) == sorted([(7, 20, 0), (7, 34, 0x00D9E6EF),
-                                    (7, 35, 0x00F7FBFE), (7, 36, 0x0048586A)])
+    assert sorted(calls) == sorted([(7, 20, 0), (7, 34, 0x00EBE5E3),
+                                    (7, 35, 0x00FBF9F8), (7, 36, 0x006B5A5D)])
 
 
 def test_dark_title_bar_uses_dark_tokens_and_dark_buttons():
     calls = []
     apply(7, True, lambda h, a, v: calls.append((a, v)))
-    assert dict(calls) == {20: 1, 34: colorref("#332f52"),
-                           35: colorref("#1c1a33"), 36: colorref("#bdb8d8")}
+    assert dict(calls) == {20: 1, 34: colorref("#2f2a40"),
+                           35: colorref("#1a1727"), 36: colorref("#b8b4c8")}
 
 
 def test_an_unsupported_attribute_does_not_stop_the_others():

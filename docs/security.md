@@ -45,6 +45,13 @@ Each of these is root-equivalent in the VM:
   real shell and a uid from 500; a service account such as `postgres` gets none of this.
 - **Coding agents.** They run as a login account, so they have everything above.
 
+Because of that, `install.sh` turns off Ubuntu's restriction on unprivileged user namespaces
+(`kernel.apparmor_restrict_unprivileged_userns = 0`), which otherwise stops Codex's `bwrap`
+sandbox from starting. The restriction guards against a non-root account reaching root through
+kernel bugs; here every login account is root-equivalent already, and Docker's default seccomp
+profile still keeps containers out of user namespaces. What remains is a non-root service outside
+Docker, if one were broken into, gaining one more path to root.
+
 ## The user's own computer
 
 These settings keep agents from damaging the user's files by accident. They are not a security

@@ -414,6 +414,10 @@ class Connector:
                                           port_free=self._port_free)
             if not signed.ok:
                 raise _Failed(f"Codex sign-in did not finish: {signed.reason}")
+        sandbox = codex_remote.sandbox_works(self._run, alias)
+        if not sandbox.ok:
+            raise _Failed(f"Codex can't run commands there ({sandbox.reason}). "
+                          "Update Eggie on it, then run eggie connect again.")
         return f"listed as “{label}”, signed in"
 
     def _unclaude(self, entry_id: str) -> str:

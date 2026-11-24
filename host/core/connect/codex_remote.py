@@ -45,6 +45,16 @@ def signed_in(run, alias: str) -> bool:
     return ssh.login_shell(run, alias, "codex login status").ok
 
 
+def sandbox_works(run, alias: str) -> Probe:
+    # Only bwrap's own complaint fails it: a Codex whose CLI has changed proves nothing.
+    result = ssh.login_shell(run, alias, "codex sandbox -- true")
+    if result.ok:
+        return Probe(True, "")
+    lines = [line for line in (result.stderr + "\n" + result.stdout).splitlines()
+             if line.startswith("bwrap:")]
+    return Probe(False, lines[-1]) if lines else Probe(True, "")
+
+
 def _popen(argv):
     return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1)

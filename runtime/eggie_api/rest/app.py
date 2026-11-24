@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from ..config import ApiConfig
 from ..wiring import Services, build
 from . import auth, errors
-from .routers import (account, addresses, files, github, instances, jobs, lifecycle,
-                      projects, public, push, recipes, runtime_update, secrets, sessions,
-                      system, transfers, uploads)
+from .routers import (account, addresses, desktop_events, files, github, instance_key_sync, instance_keys, instances, jobs,
+                      lifecycle, projects, public, push, recipes, runtime_update, secrets,
+                      sessions, system, transfers, uploads)
 
 FEATURES = (system, account, github, projects, lifecycle, files, uploads,
-            secrets, jobs, public, recipes)
+            secrets, jobs, public, recipes, desktop_events)
 
 
 def create_app(*, config: ApiConfig | None = None, services: Services | None = None,
@@ -44,8 +44,11 @@ def create_app(*, config: ApiConfig | None = None, services: Services | None = N
     app.include_router(runtime_update.build_console(services), prefix="/api")
     app.include_router(push.build_console(services), prefix="/api")
     app.include_router(sessions.build(services))
+    if not config.site_host:
+        app.include_router(instance_keys.build(services))
     if config.site_host:
         app.include_router(transfers.build(services))
+        app.include_router(instance_key_sync.build(services))
         router = addresses.build(services)
         app.include_router(router)
         app.include_router(router, prefix="/api")

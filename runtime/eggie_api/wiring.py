@@ -23,14 +23,17 @@ from .infra.uploads import UploadStore
 from .services.account import Account
 from .services.agents import AgentStatus
 from .services.certificates import Certificates
+from .services.desktop_events import DesktopEvents
 from .services.clone import CloneService
 from .services.domains import Domains
 from .services.edge import Edge
 from .services.files import FileService
 from .services.github_link import GitHubLink
 from .services.instance_projects import InstanceProjects
+from .services.instance_keys import InstanceKeys
 from .services.instances import Instances
 from .services.jobs import JobRegistry
+from .services.instance_key_sync import InstanceKeySync
 from .services.lifecycle import LifecycleService
 from .services.loader import ProjectLoader
 from .services.locks import ProjectLocks
@@ -100,6 +103,8 @@ class Services:
     sessions: Sessions
     site: SiteSignIn
     instances: Instances
+    instance_keys: InstanceKeys
+    instance_key_sync: InstanceKeySync | None
     agents: AgentStatus
     runtime_update: RuntimeUpdate
     certificates: Certificates | None
@@ -107,12 +112,14 @@ class Services:
     edge: Edge | None
     sync: SyncLoop
     system: SystemService
+    desktop_events: DesktopEvents
 
 
 def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
           github=None, account=None, public=None, github_link=None,
           sessions=None, jobs=None, repos=None, instance=None,
-          sleep=None, clock=None, free_bytes=None, timer=None) -> Services:
+          sleep=None, clock=None, free_bytes=None, timer=None,
+          desktop_events=None) -> Services:
     """The one place that knows the whole graph. Keyword arguments are the
     fakes tests inject; production passes none."""
     runner = runner or LocalRunner()
@@ -177,8 +184,11 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
                     log.exception("edge pass step %s failed",
                                   getattr(step, "__qualname__", step))
         passes.append(edge_pass)
+    key_sync = None
     if config.site_host:
         passes.append(InstanceProjects(repos.projects, loader, account, cloud).report)
+        key_sync = InstanceKeySync(account, cloud, config.ssh_keys_dir)
+        passes.append(key_sync.run_pass)
     sync = SyncLoop(passes)
     account.on_signed_in = sync.wake
     github = github or GitHub(config.github_url, config.github_api_url)
@@ -220,7 +230,9 @@ def build(config: ApiConfig, *, runner=None, http_probe=None, cloud=None,
         recipes=RecipeService(config, account, cloud),
         github_link=github_link,
         sessions=sessions, site=site,
-        instances=instances,
+        instances=instances, instance_keys=InstanceKeys(account, cloud),
+        instance_key_sync=key_sync,
         agents=AgentStatus(config.agent_status_dir, config.agents_dir),
         runtime_update=RuntimeUpdate(config.update_dir, config.runtime_marker),
-        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login))
+        certificates=certificates, domains=domains, edge=edge, sync=sync, system=SystemService(config, runner, site_login=instances.own_login),
+        desktop_events=desktop_events or DesktopEvents(cloud))

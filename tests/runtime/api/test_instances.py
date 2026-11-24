@@ -80,9 +80,8 @@ def test_a_service_error_is_a_502_with_its_message(tmp_path):
     assert (e.value.code, e.value.message) == ("cloud_error", "boom")
 
 
-def test_instances_is_reachable_from_the_console_only(env):
+def test_the_console_lists_instances_under_api(env):
     assert console(env.app, env.client).get("/api/instances").status_code != 404
-    assert env.client.get("/instances").status_code == 404
 
 
 def test_own_login_is_the_login_of_the_instance_this_server_is(tmp_path):

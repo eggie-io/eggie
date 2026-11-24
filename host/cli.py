@@ -31,6 +31,19 @@ def _client():
     return _client_factory()
 
 
+def _default_connector(say):
+    import os
+    from pathlib import Path
+
+    from host.core.connect.flow import Connector
+    provider = _provider()
+    return Connector(_client, provider, home=Path.home(), env=os.environ,
+                     computer_name=provider.computer_name(), say=say)
+
+
+_connector_factory = _default_connector  # tests override this
+
+
 @contextmanager
 def _api_errors():
     """Every failure the API can report is already a sentence written for a
@@ -268,6 +281,31 @@ def destroy(project_id: str):
 
 
 @app.command()
+def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Code."),
+            codex: bool = typer.Option(False, "--codex", help="Only Codex."),
+            kitchen: list[str] = typer.Option(None, "--kitchen", metavar="NAME",
+                                              help="Only this kitchen; repeatable."),
+            local: bool = typer.Option(False, "--local", help="Only the VM on this computer."),
+            remove: bool = typer.Option(False, "--remove", help="Undo instead.")):
+    """Connect Claude Code and Codex to your kitchens and this computer's VM."""
+    agents = {name for name, on in (("claude", claude), ("codex", codex)) if on}
+    agents = agents or {"claude", "codex"}
+    instances = list(kitchen) if kitchen else ([] if local else None)
+    local = local or not kitchen
+    with _api_errors(), _vm_errors():
+        connector = _connector_factory(typer.echo)
+        lines = (connector.remove if remove else connector.connect)(agents, instances, local)
+    for line in lines:
+        if not line.target:
+            typer.echo(line.text)
+            continue
+        mark = "\u2013" if line.neutral else "\u2713" if line.ok else "\u2717"
+        where = f"{line.target} \u00b7 {line.agent}" if line.agent else line.target
+        typer.echo(f"{mark} {where}: {line.text}")
+    raise typer.Exit(code=0 if all(line.ok for line in lines) else 1)
+
+
+@app.command()
 def setup(resume: bool = typer.Option(False, "--resume"),
           headless: bool = typer.Option(False, "--headless"),
           background: bool = typer.Option(False, "--background")):
@@ -294,12 +332,19 @@ def setup(resume: bool = typer.Option(False, "--resume"),
         )
 
     if not headless:
+        import os
+
         from host.desktop.__main__ import run
         from host.desktop.log import log_file
-        raise typer.Exit(code=run(provider, state, desktop=_desktop(),
+        from host.desktop.telemetry import start_sender
+
+        # The installed app's own front door: its shortcut and Run value call `setup`.
+        desktop = _desktop()
+        events = start_sender(desktop, frozen=getattr(_sys, "frozen", False), env=os.environ)
+        raise typer.Exit(code=run(provider, state, desktop=desktop,
                                   steps_factory=build_steps,
                                   resumed=resume, background=background,
-                                  log_path=log_file(root)))
+                                  log_path=log_file(root), events=events))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is

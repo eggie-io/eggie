@@ -1,0 +1,7 @@
+[Unit]
+Description=Copy the kitchen's approved SSH keys to where sshd reads them
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/eggie/runtime/install/lib/ssh-keys-apply.sh

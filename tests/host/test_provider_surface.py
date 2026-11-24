@@ -43,7 +43,8 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
 # What the desktop app asks to connect a coding agent from the console's
 # guide (`DesktopApi.connect_agent`). Apart from the install list: it runs
 # whenever the user asks, long after setup.
-AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected"}
+AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected",
+                 "local_ssh_alias", "computer_name"}
 
 
 def test_every_provider_says_which_agents_it_can_connect():
@@ -111,7 +112,7 @@ def test_the_install_surface_stays_out_of_the_lifecycle_protocol():
 # platform missing one fails only there, at the user's first launch.
 DESKTOP_SURFACE = {"autostart_enabled", "set_autostart", "single_instance",
                    "watch_login_launch", "on_window_shown", "tray",
-                   "let_session_end_close", "style_title_bar"}
+                   "let_session_end_close", "style_title_bar", "system_info"}
 
 
 def test_the_desktop_protocol_is_exactly_the_desktop_surface():
@@ -125,6 +126,8 @@ def test_every_desktop_platform_offers_the_whole_surface():
     for cls in (MacDesktop, WindowsDesktop):
         missing = [name for name in DESKTOP_SURFACE if not callable(getattr(cls, name, None))]
         assert not missing, f"{cls.__name__} does not implement {missing}"
+        # An attribute, not a method: run() reads it before the loop starts.
+        assert isinstance(getattr(cls, "login_launch_reported_late", None), bool), cls.__name__
 
 
 def test_the_vm_providers_carry_none_of_the_desktop_surface():

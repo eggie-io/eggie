@@ -106,3 +106,14 @@ def test_a_title_bar_failure_does_not_stop_launch():
         pass
 
     assert WindowsDesktop().style_title_bar(NoNative()) is None
+
+
+def test_system_info_clips_what_windows_reports_to_what_the_service_accepts(monkeypatch):
+    import re
+
+    import host.providers.desktop_win as mod
+    monkeypatch.setattr(mod.platform, "version", lambda: "10.0.22631 (Insider Preview)")
+    monkeypatch.setattr(mod.platform, "machine", lambda: "")
+    info = WindowsDesktop().system_info()
+    assert info["os"] == "windows" and info["os_version"] == "10.0.22631"
+    assert re.fullmatch(r"[0-9A-Za-z_-]{1,16}", info["arch"])

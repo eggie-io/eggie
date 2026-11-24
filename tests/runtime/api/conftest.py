@@ -158,6 +158,7 @@ def _make_env(tmp_path, *, cloud=None, instance=None, sleep=None, clock=None,
             "edge_dir": tmp_path / "edge",
             "account_seed": tmp_path / "account.json",
             "transfers_root": tmp_path / "transfers",
+            "ssh_keys_dir": tmp_path / "ssh-keys",
             **overrides,
         })
     runner = FakeRunner()

@@ -98,6 +98,9 @@ class Cloud:
                              "the Eggie service sent something that is not JSON",
                              status) from None
 
+    def desktop_event(self, body: dict) -> None:
+        self.call("POST", "/v1/desktop-events", body=body)
+
     def device_code(self, client_name: str):
         return self.call("POST", "/v1/auth/device/code",
                          body={"client_name": client_name})
@@ -143,6 +146,29 @@ class Cloud:
     def list_instances(self, token: str):
         """Every instance on the account, whichever device made it."""
         return self.call("GET", "/v1/instances", token=token)
+
+    def _key_requests_path(self, instance_id: str) -> str:
+        return f"/v1/instances/{urllib.parse.quote(instance_id, safe='')}/ssh-key-requests"
+
+    def request_instance_key(self, token: str, instance_id: str, public_key: str,
+                             computer_name: str):
+        return self.call("POST", self._key_requests_path(instance_id), token=token,
+                         body={"public_key": public_key, "computer_name": computer_name})
+
+    def instance_key_request(self, token: str, instance_id: str, request_id: str):
+        quoted = urllib.parse.quote(request_id, safe="")
+        return self.call("GET", f"{self._key_requests_path(instance_id)}/{quoted}",
+                         token=token)
+
+    def remove_instance_key(self, token: str, instance_id: str, fingerprint: str) -> None:
+        # The fingerprint holds "/" and "+", which must not reach the service raw.
+        self.call("DELETE",
+                  f"/v1/instances/{urllib.parse.quote(instance_id, safe='')}/ssh-keys"
+                  f"?fingerprint={urllib.parse.quote(fingerprint, safe='')}", token=token)
+
+    def own_ssh_keys(self, token: str):
+        """The keys this server must accept, from the service."""
+        return self.call("GET", "/v1/instances/me/ssh-keys", token=token)
 
     def report_instance_projects(self, token: str, projects: list[dict]) -> None:
         """Replaces the kitchen's whole project list on the service."""

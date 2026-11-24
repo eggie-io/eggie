@@ -29,6 +29,7 @@ class Controller:
         self._exiting = False
         self._background = None
         self.shown_once = True
+        self.login_launched = threading.Event()
 
     def mark_hidden_launch(self) -> None:
         self.shown_once = False
@@ -95,6 +96,7 @@ class Controller:
                 self.window.destroy()
 
     def on_login_launch(self) -> None:
+        self.login_launched.set()
         # Hiding with no tray would leave nothing to bring the window back.
         if self.tray is None:
             return

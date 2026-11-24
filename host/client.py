@@ -47,13 +47,18 @@ class ApiUnavailableError(RuntimeError):
     or nothing listening. Raised instead of a socket error or a bare 401 so
     the first symptom a user sees names the VM, not the transport."""
 
+    code = "api_unreachable"
+
 
 class ApiError(RuntimeError):
-    """A structured failure from the API: its own code and its own sentence."""
+    """A structured failure from the API: its own code and its own sentence.
+    The API's code is `api_code`; `code` is the catalogued one for events."""
 
-    def __init__(self, code: str, message: str, status: int):
+    code = "api_error"
+
+    def __init__(self, api_code: str, message: str, status: int):
         super().__init__(message)
-        self.code = code
+        self.api_code = api_code
         self.message = message
         self.status = status
 
@@ -64,6 +69,8 @@ class JobFailedError(RuntimeError):
     stack reached, for instance), so a caller can tell the failure modes
     apart instead of reporting "it failed"."""
 
+    code = "job_failed"
+
     def __init__(self, message: str, result: dict | None = None):
         super().__init__(message)
         self.result = result or {}
@@ -71,6 +78,8 @@ class JobFailedError(RuntimeError):
 
 class JobTimeoutError(RuntimeError):
     """A job was still running when the client's deadline passed."""
+
+    code = "job_timeout"
 
 
 def read_token(provider: VmProvider) -> str:
@@ -130,6 +139,11 @@ def _api_error(exc: urllib.error.HTTPError) -> ApiError:
         return ApiError("http_error",
                           f"the API answered HTTP {exc.code} ({exc.reason})",
                           exc.code)
+
+
+_API_TOO_OLD = "Update Eggie in the virtual machine (Settings \u2192 Update) and try again."
+# The code a 404 carries when no route matched; the relay's own 404s have their own.
+_NO_ROUTE = ("not_found", "http_error")
 
 
 # Never uploaded: a repository's object store, dependency trees and caches are
@@ -238,9 +252,20 @@ class ApiClient:
             try:
                 return call()
             except ApiError as e:
-                if e.code != "project_busy" or self._monotonic() >= deadline:
+                if e.api_code != "project_busy" or self._monotonic() >= deadline:
                     raise
             self._sleep(BUSY_RETRY_INTERVAL)
+
+    def _instance_call(self, method: str, path: str,
+                       payload: dict | None = None) -> dict:
+        """A 404 for a route the API does not have means the VM's API predates
+        these calls."""
+        try:
+            return self._call(method, path, payload)
+        except ApiError as e:
+            if e.status == 404 and e.api_code in _NO_ROUTE:
+                raise ApiError("api_too_old", _API_TOO_OLD, 404) from None
+            raise
 
     # -- routes ------------------------------------------------------------
 
@@ -252,6 +277,26 @@ class ApiClient:
 
     def handoff_code(self) -> str:
         return str(self._call("POST", "/sessions/handoff")["code"])
+
+    def instances(self) -> list[dict]:
+        return self._instance_call("GET", "/instances").get("instances", [])
+
+    def request_instance_key(self, instance_id: str, public_key: str,
+                             computer_name: str) -> dict:
+        quoted = urllib.parse.quote(instance_id, safe="")
+        return self._instance_call(
+            "POST", f"/instances/{quoted}/ssh-key-requests",
+            {"public_key": public_key, "computer_name": computer_name})
+
+    def instance_key_request(self, instance_id: str, request_id: str) -> dict:
+        return self._instance_call(
+            "GET", f"/instances/{urllib.parse.quote(instance_id, safe='')}"
+                   f"/ssh-key-requests/{urllib.parse.quote(request_id, safe='')}")
+
+    def remove_instance_key(self, instance_id: str, fingerprint: str) -> None:
+        self._instance_call(
+            "DELETE", f"/instances/{urllib.parse.quote(instance_id, safe='')}"
+                      f"/ssh-keys?fingerprint={urllib.parse.quote(fingerprint, safe='')}")
 
     def create_project(self, project_id: str, *, web: list[dict] | None = None,
                        domain: str | None = None) -> dict:
@@ -268,7 +313,7 @@ class ApiClient:
         try:
             return self.create_project(project_id, **kwargs)
         except ApiError as e:
-            if e.code != "project_exists":
+            if e.api_code != "project_exists":
                 raise
         return self.get_project(project_id_for(project_id))
 

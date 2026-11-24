@@ -101,6 +101,9 @@ runs the images pushed under its name (`packaging/images/build.sh --push --tag <
 has both, the newest release's otherwise; `EGGIE_IMAGE_VERSION=<tag>` overrides either. To
 fetch the installer from somewhere else, set `EGGIE_RUNTIME_URL`.
 
+A run from source sends no [desktop events](desktop-events.md). To test them, set
+`EGGIE_EVENTS_URL=<base>` (events go to `<base>/v1/desktop-events`).
+
 ## Web console (`runtime/web/`)
 
 Needs Node **24+**.

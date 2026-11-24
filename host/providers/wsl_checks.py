@@ -43,7 +43,8 @@ def preflight_checks(*, wsl_version_text: str, build: int,
     checks.append(CheckResult(
         f"Windows build {build} supports WSL2", build_ok,
         None if build_ok else
-        f"Windows build {MIN_BUILD} or newer is required; run Windows Update"))
+        f"Windows build {MIN_BUILD} or newer is required; run Windows Update",
+        code=None if build_ok else "windows_build_too_old"))
 
     # A running hypervisor proves virtualization works even when the firmware
     # flag reads False, which it does once Hyper-V has claimed the CPU.
@@ -52,7 +53,8 @@ def preflight_checks(*, wsl_version_text: str, build: int,
         "CPU virtualization available", virt_ok,
         None if virt_ok else
         "Restart into BIOS/UEFI setup and enable Intel VT-x or AMD-V "
-        "(often called 'Virtualization Technology' or 'SVM Mode')"))
+        "(often called 'Virtualization Technology' or 'SVM Mode')",
+        code=None if virt_ok else "cpu_virtualization_off"))
 
     checks.append(CheckResult(
         "Windows virtualization features enabled", wsl_features_enabled,
@@ -72,6 +74,7 @@ def preflight_checks(*, wsl_version_text: str, build: int,
     checks.append(CheckResult(
         f"At least {MIN_FREE_GB:.0f} GB free disk space", disk_ok,
         None if disk_ok else
-        f"only {free_gb:.1f} GB free; free up space and run setup again"))
+        f"only {free_gb:.1f} GB free; free up space and run setup again",
+        code=None if disk_ok else "low_disk_space"))
 
     return Diagnosis(checks)

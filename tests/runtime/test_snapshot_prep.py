@@ -13,7 +13,7 @@ PER_INSTANCE = ["api.token", "state.db", "state.db-wal", "state.db-shm", "connec
                 "tunnel/token", "uploads/partial", "github/token", "github/desired.json",
                 "github/applied.json", "projects/blog/docker-compose.yml",
                 "agent-status/status.json", "update/status.json",
-                "secrets/blog/ASC_API_KEY"]
+                "secrets/blog/ASC_API_KEY", "ssh-keys/desired.json"]
 KEPT = ["runtime/install/install.sh", ".env", "runtime.env", "runtime.version",
         "stack.yml"]
 BUILDER_ONLY = [".ssh/authorized_keys", ".bash_history"]
@@ -30,6 +30,9 @@ def _run(tmp_path: Path):
         path = root_home / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x")
+    ssh_keys = tmp_path / "etc-ssh-eggie-keys"
+    ssh_keys.mkdir()
+    (ssh_keys / "ada").write_text("x")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log = tmp_path / "calls.log"
@@ -39,7 +42,9 @@ def _run(tmp_path: Path):
         fake.chmod(0o755)
     text = SCRIPT.read_text()
     assert "ROOT_HOME=/root\n" in text
+    assert "SSH_KEYS=/etc/ssh/eggie-keys\n" in text
     script = text.replace("ROOT_HOME=/root\n", f"ROOT_HOME={root_home}\n").replace(
+        "SSH_KEYS=/etc/ssh/eggie-keys\n", f"SSH_KEYS={ssh_keys}\n").replace(
         "/opt/eggie", str(root)).replace("/usr/bin/docker", str(bin_dir / "docker"))
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
     result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
@@ -55,6 +60,7 @@ def test_prep_removes_every_per_instance_file_and_keeps_the_runtime(tmp_path):
     assert result.returncode == 0, result.stderr
     for rel in PER_INSTANCE:
         assert not (root / rel).exists(), rel
+    assert list((root.parent / "etc-ssh-eggie-keys").iterdir()) == []
     for rel in KEPT:
         assert (root / rel).exists(), rel
 

@@ -136,3 +136,6 @@ explained where they run.
   it: WSL2's `eggie` is created from 1001 up (`lib/wsl-user.sh`).
 - While the console's agents screen is open, journald shows an `eggie-agents.service`
   Started/Finished pair every 3 s: each status poll triggers a detection pass.
+- The kitchen's SSH keys are copied from `/opt/eggie/ssh-keys` to `/etc/ssh/eggie-keys/<login>`
+  by `lib/ssh-keys-apply.sh`: `/opt/eggie` is group-writable, so sshd's StrictModes would refuse
+  a keys file there. Site mode only.

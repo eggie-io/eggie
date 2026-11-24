@@ -143,7 +143,7 @@ def test_an_error_response_reports_the_apis_own_sentence():
         c.get_project("blog")
         raise AssertionError("expected ApiError")
     except ApiError as e:
-        assert e.code == "project_not_found"
+        assert e.api_code == "project_not_found"
         assert e.status == 404
         assert "no project with id 'blog'" in str(e)
         assert "HTTP Error" not in str(e)
@@ -232,7 +232,7 @@ def test_a_project_that_stays_busy_is_finally_reported():
         c.project_up("blog")
         raise AssertionError("expected ApiError")
     except ApiError as e:
-        assert e.code == "project_busy"
+        assert e.api_code == "project_busy"
 
 
 def test_upload_directory_sends_a_tar_gz_of_the_directory_contents(tmp_path):
@@ -307,7 +307,7 @@ def test_a_stale_token_is_reported_with_the_command_that_fixes_it():
         c.list_projects()
         raise AssertionError("expected ApiError")
     except ApiError as e:
-        assert e.code == "unauthorized"
+        assert e.api_code == "unauthorized"
         assert "eggie setup" in str(e)
         # The API's own wording is kept, not replaced.
         assert "bearer token" in str(e)
@@ -341,3 +341,58 @@ def test_project_id_matches_the_rule_the_api_slugs_with():
     from eggie_api.domain.project import _slug
     for name in ("My Blog", "blog", "  Spaced Out  ", "a_b.c", "UPPER"):
         assert project_id_for(name) == _slug(name)
+
+
+def test_client_failures_report_catalogued_codes_not_the_apis_own():
+    from host.core.events import error_code
+    refusal = ApiError("unauthorized", "no", 401)
+    assert refusal.api_code == "unauthorized"
+    assert error_code(refusal) == "api_error"
+    assert error_code(JobFailedError("x")) == "job_failed"
+    assert error_code(JobTimeoutError("x")) == "job_timeout"
+    assert error_code(ApiUnavailableError("x")) == "api_unreachable"
+
+
+def test_instance_key_calls_quote_fingerprint():
+    def handler(call):
+        if call.method == "GET" and call.path == "/instances":
+            return {"instances": [{"id": "i1"}]}
+        if call.method == "POST":
+            return {"id": "r1"}
+        if call.method == "DELETE":
+            return b""
+        return {"id": "r1", "status": "pending"}
+
+    api, opener = client(handler)
+    assert api.instances() == [{"id": "i1"}]
+    assert api.request_instance_key("a/b", "ssh-ed25519 AAA", "Laptop") == {"id": "r1"}
+    assert opener.calls[-1].json() == {"public_key": "ssh-ed25519 AAA",
+                                       "computer_name": "Laptop"}
+    assert opener.calls[-1].path == "/instances/a%2Fb/ssh-key-requests"
+    api.instance_key_request("i1", "r 1")
+    assert opener.calls[-1].path == "/instances/i1/ssh-key-requests/r%201"
+    assert api.remove_instance_key("i1", "SHA256:a+b/c=") is None
+    assert opener.calls[-1].method == "DELETE"
+    assert opener.calls[-1].path == "/instances/i1/ssh-keys?fingerprint=SHA256%3Aa%2Bb%2Fc%3D"
+
+
+@pytest.mark.parametrize("body", [
+    b'{"error": {"code": "not_found", "message": "Not Found"}}',  # the API's missing route
+    b'{"detail": "Not Found"}',
+])
+def test_old_api_404_reads_update_eggie(body):
+    def missing_route(call):
+        return urllib.error.HTTPError("http://api/x", 404, "Not Found",
+                                      email.message.Message(), io.BytesIO(body))
+
+    api, _ = client(missing_route)
+    with pytest.raises(ApiError) as old:
+        api.instances()
+    assert old.value.api_code == "api_too_old"
+    assert old.value.status == 404
+    assert "Update Eggie" in old.value.message
+
+    api, _ = client(lambda call: http_error(404, "ssh_key_request_not_found", "gone"))
+    with pytest.raises(ApiError) as known:
+        api.instance_key_request("i1", "r1")
+    assert known.value.api_code == "ssh_key_request_not_found"

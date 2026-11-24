@@ -43,3 +43,14 @@ def test_a_refused_registration_reaches_the_caller():
 
 def test_single_instance_is_left_to_launchservices():
     assert MacDesktop().single_instance(lambda: None, announce=True) is True
+
+
+def test_system_info_is_accepted_even_when_macos_reports_no_version(monkeypatch):
+    import re
+
+    import host.providers.desktop_mac as mod
+    monkeypatch.setattr(mod.platform, "mac_ver", lambda: ("", ("", "", ""), ""))
+    monkeypatch.setattr(mod.platform, "machine", lambda: "arm64")
+    info = MacDesktop().system_info()
+    assert info["os"] == "macos" and info["arch"] == "arm64"
+    assert re.fullmatch(r"[0-9A-Za-z._-]{1,32}", info["os_version"])

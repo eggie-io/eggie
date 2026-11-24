@@ -515,18 +515,18 @@ def test_the_service_urls_are_written_to_site_env(tmp_path):
     root.mkdir()
     result = _run_main(tmp_path, root, EGGIE_SITE_HOST="foo.eggie.io",
                        EGGIE_SITE_DOMAIN="foo.eggie.space",
-                       EGGIE_CLOUD_URL="https://app.staging.eggie.io/api",
-                       EGGIE_WEB_URL="https://app.staging.eggie.io")
+                       EGGIE_CLOUD_URL="https://service.example.com/api",
+                       EGGIE_WEB_URL="https://service.example.com")
     assert result.returncode == 0, result.stderr
     assert (root / "site.env").read_text() == (
         "EGGIE_SITE_HOST=foo.eggie.io\nEGGIE_SITE_DOMAIN=foo.eggie.space\n"
-        "EGGIE_CLOUD_URL=https://app.staging.eggie.io/api\n"
-        "EGGIE_WEB_URL=https://app.staging.eggie.io\n")
+        "EGGIE_CLOUD_URL=https://service.example.com/api\n"
+        "EGGIE_WEB_URL=https://service.example.com\n")
 
 
-@pytest.mark.parametrize("bad", ["http://app.staging.eggie.io/api", "app.staging.eggie.io",
-                                 "https://app.staging.eggie.io/api?x=1",
-                                 "https://app.staging.eggie.io/a b", "https://a.io/'$(id)'"])
+@pytest.mark.parametrize("bad", ["http://service.example.com/api", "service.example.com",
+                                 "https://service.example.com/api?x=1",
+                                 "https://service.example.com/a b", "https://a.io/'$(id)'"])
 def test_a_service_url_that_is_not_plain_https_is_refused_before_installing(tmp_path, bad):
     root = tmp_path / "opt-eggie"
     root.mkdir()

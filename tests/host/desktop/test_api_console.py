@@ -194,3 +194,19 @@ def test_connecting_waits_for_a_running_job(tmp_path):
     finally:
         release.set()
         api.jobs.join(5)
+
+
+def test_console_link_carries_the_session_only_when_sending(tmp_path, events):
+    from host.core.events import EventSender
+
+    def link(sender):
+        return DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"),
+                          push=lambda event: None, probe_fn=lambda p: READY,
+                          client_factory=lambda p: HandoffClient(code="abc"),
+                          local_url=lambda: "http://127.0.0.1:53817/",
+                          events=sender).enter_console()["url"]
+
+    fragment = link(events.sender).split("#", 1)[1]
+    assert (f"&sid={events.sender.session_id}&app=0.9.1&os=windows&osv=10.0.26100&arch=AMD64"
+            in fragment)
+    assert "sid=" not in link(EventSender(None, {}))

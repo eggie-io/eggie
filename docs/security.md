@@ -16,7 +16,8 @@ user's machine can reach in, so read this before adding any way in.
 | Site, port `443` | Traefik: the console on the site host, the API at `/api`, every project under the site domain | The internet (site mode only) |
 | Site, port `80` | A redirect to 443, and `/.well-known/acme-challenge/<token>` on the hosts of attached custom domains, the certificate authority's check (rate-limited; 404 unless the service has that challenge open) | The internet (site mode only) |
 | Site, a custom domain | Every path but the certificate check above goes to one project's web service; never Eggie's console or API, or another project | The internet (site mode only) |
-| Site, port `22` | The login account | Whoever holds the login account's SSH key (site mode only) |
+| Site, port `22` | The login account | Whoever holds one of the login account's keys from when the site was created, or a key the owner approved in the web app (site mode only) |
+| Site, `POST /api/ssh-keys/sync` | Makes the API re-pull its approved SSH keys from the service and nothing else; it takes no input. Its early wake is rate-limited | Anyone who can reach the site host (site mode only) |
 | Site, `/api/transfers` | A pushed project's bundle, into the project store | Whoever holds a one-use push ticket (site mode only) |
 
 The host-side forwards are loopback-only: WSL2's `localhostForwarding` puts guest ports onto the
@@ -80,6 +81,8 @@ What this does not stop:
 - Windows can always reach into the VM: `wsl -d eggie-vm -u root` needs no password, and
   `\\wsl.localhost\eggie-vm` shows its files to any Windows program.
 
+Onboarding events are anonymous: no install or machine ID, nothing on disk to recognise the user, no IP or location, no usernames, emails, paths or project names, no link to the website visitor or the account, never sent to ad platforms. See [desktop-events.md](desktop-events.md).
+
 ## What each secret protects, and what it doesn't
 
 | Secret | Where | Protects against | Does not protect against |
@@ -131,6 +134,8 @@ and `/api` need a session the service issues, and projects are public with whate
 have themselves. The challenge path is unauthenticated: from the internet Traefik routes it for
 custom hosts only, containers on the server's own network can call the API's copy directly,
 and either way it answers nothing but a challenge value the service has open.
+The key-sync ping is unauthenticated as well: the API fetches the keys from the service with its
+own device token, so a caller can only make it ask sooner.
 
 ## Before adding a way in
 

@@ -8,6 +8,7 @@
 | [releasing.md](releasing.md) | Cutting runtime and desktop app releases, and how installed machines update |
 | [vm.md](vm.md) | Running the VM by hand, looking inside it, troubleshooting, uninstalling |
 | [site-mode.md](site-mode.md) | The runtime on a server the Eggie service provisions: how it boots signed in, the edge and TLS, sign-in from the web app, what the console shows |
+| [desktop-events.md](desktop-events.md) | The anonymous install and onboarding events the desktop app sends, and the error codes |
 | [security.md](security.md) | The VM trust boundary: what's inside it, what each secret does and doesn't protect, public URLs |
 
 Code-level guidance for contributors and coding agents is in the `CLAUDE.md` files: one at the

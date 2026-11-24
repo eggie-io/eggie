@@ -47,8 +47,12 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
   The host checks `/health`'s `api` against `constants.SUPPORTED_API`.
 - `core/install.py`, `core/status.py`, `core/diagnose.py` — the setup steps, readiness probe and
   doctor, shared by the CLI and the desktop app.
+- `core/connect/` — `eggie connect`: `flow.Connector` (the desktop app's entry point later) joins
+  this computer's key (`keys.py`), ssh probes (`ssh.py`) and Codex install/sign-in on a remote
+  (`codex_remote.py`) with the file writers in `providers/` (`ssh_alias`, `claude_ssh`,
+  `codex_app`).
 - `cli.py` — the typer app (`eggie setup|doctor|vm|port|up|status|logs|down|destroy|uninstall|
-  selfcheck`). `setup` launches the desktop GUI; `--headless` bypasses it for a machine with no
+  connect|selfcheck`). `setup` launches the desktop GUI; `--headless` bypasses it for a machine with no
   webview runtime. `selfcheck` is what the packaging scripts run against the frozen binary.
 - `desktop/` — the GUI; has its own CLAUDE.md (security-sensitive).
 

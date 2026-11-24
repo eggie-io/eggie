@@ -165,3 +165,25 @@ def test_a_crashed_job_is_logged_with_its_traceback(caplog):
     crash = next(r for r in caplog.records if "import" in r.getMessage())
     assert crash.exc_info is not None
     assert "compose file unreadable" in caplog.text
+
+
+def test_a_crash_is_handed_to_on_crash_and_still_pushed():
+    pushed, crashes = [], []
+    jobs = JobRegistry(pushed.append, on_crash=lambda kind, e: crashes.append((kind, e)))
+    error = RuntimeError("limactl failed")
+    jobs.start("vm", lambda emit: (_ for _ in ()).throw(error))
+    jobs.join(timeout=5)
+    assert crashes == [("vm", error)]
+    assert pushed[-1]["type"] == "crashed"
+
+
+def test_a_failing_on_crash_still_lets_the_screen_hear_of_the_crash():
+    pushed = []
+
+    def on_crash(kind, e):
+        raise ValueError("reporting broke")
+
+    jobs = JobRegistry(pushed.append, on_crash=on_crash)
+    jobs.start("vm", lambda emit: (_ for _ in ()).throw(RuntimeError("boom")))
+    jobs.join(timeout=5)
+    assert pushed[-1]["type"] == "crashed"

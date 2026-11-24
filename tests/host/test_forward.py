@@ -181,3 +181,15 @@ def test_both_providers_expose_the_same_forwarding_surface():
     for name in ("forward", "unforward", "forwards"):
         assert callable(getattr(Wsl2Provider, name, None)), f"Wsl2Provider.{name}"
         assert callable(getattr(LimaProvider, name, None)), f"LimaProvider.{name}"
+
+
+def test_forward_failures_carry_catalogued_codes():
+    with pytest.raises(RuntimeError) as e:
+        wsl(elevator=FakeElevator(code=ELEVATION_DECLINED)).forward(5432, 5433)
+    assert e.value.code == "elevation_declined"
+    with pytest.raises(RuntimeError) as e:
+        wsl(elevator=FakeElevator(code=1)).forward(5432, 5433)
+    assert e.value.code == "port_forward_failed"
+    with pytest.raises(RuntimeError) as e:
+        lima(FakeRunner(returncode=1)).forward(5432, 5433)
+    assert e.value.code == "port_forward_failed"

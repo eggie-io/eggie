@@ -1,6 +1,10 @@
+import json
 import logging
+import time
 
 import pytest
+
+from host.core.events import EventSender
 
 
 @pytest.fixture(autouse=True)
@@ -13,3 +17,37 @@ def _forget_eggie_log_handlers():
         if getattr(handler, "eggie", False):
             root.removeHandler(handler)
             handler.close()
+
+
+CONTEXT = {"app_version": "0.9.1", "os": "windows", "os_version": "10.0.26100", "arch": "AMD64"}
+
+
+class EventRecorder:
+    """A real EventSender whose posts land in a list instead of the network."""
+
+    def __init__(self, delay: float = 0.0):
+        self.bodies = []
+        self._delay = delay
+        self.sender = EventSender("http://events.invalid/api", CONTEXT, post=self._post)
+
+    def _post(self, url, body):
+        if self._delay:
+            time.sleep(self._delay)
+        self.bodies.append(json.loads(body))
+
+    def sent(self, *, at_least: int = 0, timeout: float = 5.0) -> list[tuple[str, dict]]:
+        deadline = time.monotonic() + timeout
+        while len(self.bodies) < at_least and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.sender.flush(timeout)
+        return [(b["event"], b["properties"]) for b in self.bodies]
+
+
+@pytest.fixture
+def events():
+    return EventRecorder()
+
+
+@pytest.fixture
+def slow_events():
+    return EventRecorder(delay=0.2)

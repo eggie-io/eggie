@@ -377,6 +377,39 @@ if ! systemctl start eggie-github.service; then
   exit 1
 fi
 
+# 11a. site mode: sshd reads the kitchen's approved keys from /etc/ssh, the
+# API writes them to /opt/eggie/ssh-keys.
+if (( SITE )); then
+  install -d -m 0755 /etc/ssh/eggie-keys
+  install -d -m 2770 -o root -g docker /opt/eggie/ssh-keys
+  install -m 644 "$INSTALL_DIR/sshd/10-eggie-keys.conf" /etc/ssh/sshd_config.d/
+  # A broken sshd config would lock the owner out at the next reload.
+  # sshd -t fails without this directory until sshd has run once this boot.
+  mkdir -p /run/sshd
+  if ! sshd -t; then
+    rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
+    echo "sshd rejected the Eggie key setting; it was removed and sshd left unchanged" >&2
+    exit 1
+  fi
+  # sshd takes the first AuthorizedKeysFile it reads, so an earlier drop-in wins over ours.
+  # A here-string, not a pipe: grep -q quitting early would SIGPIPE sshd under pipefail.
+  if ! grep -qi '^authorizedkeysfile .*/etc/ssh/eggie-keys/%u' <<< "$(sshd -T)"; then
+    rm -f /etc/ssh/sshd_config.d/10-eggie-keys.conf
+    echo "Another sshd setting overrides Eggie's AuthorizedKeysFile; it was removed and sshd left unchanged" >&2
+    exit 1
+  fi
+  # ssh.service is inactive until the first connection (socket activation).
+  systemctl try-reload-or-restart ssh.service
+  install -m 644 "$INSTALL_DIR/systemd/eggie-ssh-keys.path" \
+    "$INSTALL_DIR/systemd/eggie-ssh-keys.service" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now eggie-ssh-keys.path
+  if ! systemctl start eggie-ssh-keys.service; then
+    echo "could not apply the kitchen's SSH keys to sshd" >&2
+    exit 1
+  fi
+fi
+
 # 11b. the boot-time updater. Enabled only: starting it here would run an
 # update inside this install.
 install -m 644 "$INSTALL_DIR/systemd/eggie-update.service" /etc/systemd/system/

@@ -1,7 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
 body {
-  margin: 0; background: var(--page); color: var(--ink);
+  margin: 0; background: var(--raised); color: var(--ink);
   font: 350 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); text-decoration: none; }

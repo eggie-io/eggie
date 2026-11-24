@@ -14,6 +14,8 @@
   .\scripts\dev -Only web          # rebuild one image (api|web)
   .\scripts\dev -NoWindow          # update the VM only
   .\scripts\dev -Release           # put the latest released runtime back
+  .\scripts\dev -Service https://staging.example.com   # point the VM's API at another service
+                                   # (its API is <url>/api); -Service prod goes back to production
 
 .NOTES
   The VM records the runtime as `local`. The host only installs when that
@@ -25,7 +27,8 @@ param(
     [switch]$Full,
     [ValidateSet('api', 'web')][string]$Only,
     [switch]$NoWindow,
-    [switch]$Release
+    [switch]$Release,
+    [string]$Service
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +44,20 @@ function Say($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host "dev: $msg" -ForegroundColor Red; exit 1 }
 
 if (-not (Test-Path $py)) { Fail "no .venv here; run .\setup.ps1 -NoCreate first" }
+
+$Service = "$Service".TrimEnd('/')
+# It is spliced into a bash script in the VM, so only URL-safe characters.
+if ($Service -and $Service -ne 'prod' -and $Service -cnotmatch '^https?://[A-Za-z0-9.:-]+(/[A-Za-z0-9._~/-]*)?$') {
+    Fail "-Service wants http(s)://host[/path] or prod, not: $Service"
+}
+# Written after install.sh, which rewrites .env and names no service outside site mode.
+$setService = ''
+if ($Service) {
+    $setService = "sed -i '/^EGGIE_CLOUD_URL=/d;/^EGGIE_WEB_URL=/d' /opt/eggie/.env"
+    if ($Service -ne 'prod') {
+        $setService += "`nprintf 'EGGIE_CLOUD_URL=%s\nEGGIE_WEB_URL=%s\n' '$Service/api' '$Service' >> /opt/eggie/.env"
+    }
+}
 
 # Runs argv in the VM as root with $Stdin (a stream) as its stdin. Not a
 # PowerShell pipe: Windows PowerShell re-encodes piped bytes as text, and
@@ -153,10 +170,14 @@ chmod 755 /opt/eggie/runtime
 flock /opt/eggie/update.lock env EGGIE_IMAGE_VERSION=$TAG EGGIE_SKIP_PULL=1 \
   bash /opt/eggie/runtime/install/install.sh $TAG
 '@ 'install.sh'
+        if ($setService) {
+            Say "Pointing the API at service $Service"
+            Invoke-VmScript "$setService`n/usr/bin/docker compose -f /opt/eggie/stack.yml up -d api" 'setting the service'
+        }
     } else {
         Say "Restarting the stack on the local images"
         # What install.sh's steps 5, 7 and the CLI step do, minus everything slow.
-        Invoke-VmScript @'
+        Invoke-VmScript ($setService + "`n" + @'
 sed -i "s/^EGGIE_VERSION=.*/EGGIE_VERSION=$TAG/" /opt/eggie/.env
 install -m 644 /opt/eggie/runtime/stack.yml /opt/eggie/stack.yml
 /usr/bin/docker compose -f /opt/eggie/stack.yml up -d
@@ -164,12 +185,15 @@ cli=$(mktemp)
 python3 -m zipapp /opt/eggie/runtime/cli -m eggie_cli.cli:run -p '/usr/bin/env python3' -o $cli
 install -m 755 $cli /usr/local/bin/eggie && rm -f $cli
 echo $TAG > /opt/eggie/runtime.version
-'@ 'restarting the stack'
+'@) 'restarting the stack'
     }
 
     # --- window --------------------------------------------------------------
     if (-not $NoWindow) {
         Say "Opening the desktop window from this checkout (close it, or Ctrl-C, to stop)"
+        if ($Service -and $Service -ne 'prod' -and -not $env:EGGIE_EVENTS_URL) {
+            $env:EGGIE_EVENTS_URL = "$Service/api"
+        }
         & $py -m host.desktop
         exit $LASTEXITCODE
     }

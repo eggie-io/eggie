@@ -58,6 +58,7 @@ class FakeSsh:
         self.authorized = set()
         self.codex = set()
         self.signed_in = set()
+        self.sandbox_error = None
 
     def __call__(self, argv):
         self.calls.append(argv)
@@ -81,6 +82,8 @@ class FakeSsh:
             return self._done(argv, 0 if alias in self.codex else 1)
         if "codex login status" in script:
             return self._done(argv, 0 if alias in self.signed_in else 1)
+        if "codex sandbox" in script and self.sandbox_error:
+            return self._done(argv, 1, err=self.sandbox_error)
         return self._done(argv, 0)
 
     @staticmethod
@@ -373,6 +376,19 @@ def test_codex_connection_is_taken_back_when_its_sign_in_cannot_start(tmp_path):
     assert len(codex) == 1 and not codex[0].ok and "1455" in codex[0].text
     assert not codex_app.has(w.codex, "eggie-shop")
     assert claude_ssh.entry_installed(w.claude, "eggie-shop")
+
+
+def test_codex_that_cannot_run_commands_there_fails_and_is_taken_back(tmp_path):
+    client = FakeClient([row("shop")], polls={"id-shop": ["approved"]})
+    w = World(tmp_path, client)
+    w.ssh.sandbox_error = b"bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n"
+
+    lines = w.connector().connect(BOTH, ["shop"], local=False)
+
+    codex = [line for line in lines if line.agent == "Codex"]
+    assert len(codex) == 1 and not codex[0].ok and "RTM_NEWADDR" in codex[0].text
+    assert not codex_app.has(w.codex, "eggie-shop")
+    assert w.login.calls == []
 
 
 def test_failed_key_removal_keeps_the_host_so_remove_retries(tmp_path):

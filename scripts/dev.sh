@@ -9,6 +9,8 @@
 #   scripts/dev.sh --only web      # rebuild one image (api|web)
 #   scripts/dev.sh --no-window     # update the VM only
 #   scripts/dev.sh --release       # put the latest released runtime back
+#   scripts/dev.sh --service https://staging.example.com   # point the VM's API at another service
+#                                  # (its API is <url>/api); --service prod goes back to production
 #
 # The VM records the runtime as `local`. The host only installs when that
 # marker is missing, and the boot updater skips anything not a release tag, so
@@ -22,11 +24,11 @@ TAG=local
 STAGE=/opt/eggie/dev    # mirror of the checkout parts build.sh needs
 
 usage() {
-  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
-full=0 window=1 only="" release=0
+full=0 window=1 only="" release=0 service=""
 while (( $# )); do
   case "$1" in
     --full) full=1 ;;
@@ -35,6 +37,9 @@ while (( $# )); do
       only="${2:-}"; shift
       [[ "$only" == api || "$only" == web ]] || usage ;;
     --release) release=1 ;;
+    --service)
+      service="${2:-}"; shift
+      [[ -n "$service" ]] || usage ;;
     -h|--help) usage ;;
     *) usage ;;
   esac
@@ -45,6 +50,20 @@ say() { printf '\n==> %s\n' "$*"; }
 die() { printf 'dev.sh: %s\n' "$*" >&2; exit 1; }
 
 [[ -x "$PY" ]] || die "no .venv here; see docs/development.md to create it"
+
+service="${service%/}"
+# It is spliced into a shell command in the VM, so only URL-safe characters.
+if [[ -n "$service" && "$service" != prod && ! "$service" =~ ^https?://[A-Za-z0-9.:-]+(/[A-Za-z0-9._~/-]*)?$ ]]; then
+  die "--service wants http(s)://host[/path] or prod, not: $service"
+fi
+# Written after install.sh, which rewrites .env and names no service outside site mode.
+set_service=""
+if [[ "$service" == prod ]]; then
+  set_service="sed -i '/^EGGIE_CLOUD_URL=/d;/^EGGIE_WEB_URL=/d' /opt/eggie/.env"
+elif [[ -n "$service" ]]; then
+  set_service="sed -i '/^EGGIE_CLOUD_URL=/d;/^EGGIE_WEB_URL=/d' /opt/eggie/.env
+    printf 'EGGIE_CLOUD_URL=%s\\nEGGIE_WEB_URL=%s\\n' '$service/api' '$service' >> /opt/eggie/.env"
+fi
 
 # The same limactl and VM name the app uses (a managed Lima, not Homebrew's).
 read -r LIMACTL VM < <("$PY" -c '
@@ -106,12 +125,17 @@ if (( full )); then
   say "Running install.sh from your checkout"
   vm_root "flock /opt/eggie/update.lock env EGGIE_IMAGE_VERSION=$TAG EGGIE_SKIP_PULL=1 \
              bash /opt/eggie/runtime/install/install.sh $TAG"
+  if [[ -n "$set_service" ]]; then
+    say "Pointing the API at service ${service}"
+    vm_root "set -e; $set_service; /usr/bin/docker compose -f /opt/eggie/stack.yml up -d api"
+  fi
 else
   say "Restarting the stack on the local images"
   # What install.sh's steps 5, 7 and the CLI step do, minus everything slow.
   vm_root "
     set -e
     sed -i 's/^EGGIE_VERSION=.*/EGGIE_VERSION=$TAG/' /opt/eggie/.env
+    ${set_service}
     install -m 644 /opt/eggie/runtime/stack.yml /opt/eggie/stack.yml
     /usr/bin/docker compose -f /opt/eggie/stack.yml up -d
     cli=\$(mktemp)
@@ -124,6 +148,9 @@ fi
 if (( window )); then
   say "Opening the desktop window from this checkout (Ctrl-C to close)"
   cd "$ROOT"
+  if [[ -n "$service" && "$service" != prod && -z "${EGGIE_EVENTS_URL:-}" ]]; then
+    export EGGIE_EVENTS_URL="$service/api"
+  fi
   exec "$PY" -m host.desktop
 fi
 say "VM updated. Open the window with: .venv/bin/python -m host.desktop"

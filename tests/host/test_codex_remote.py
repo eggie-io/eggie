@@ -77,6 +77,19 @@ def test_installed_codex_is_not_reinstalled():
     assert len(run.calls) == 1
 
 
+@pytest.mark.parametrize("answer, ok", [
+    (0, True),
+    ((1, b"bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n"), False),
+    # A Codex whose CLI changed shape must not fail a working connection.
+    ((2, b"error: unrecognized subcommand 'sandbox'\n"), True),
+])
+def test_only_a_bwrap_failure_means_codex_cannot_run_commands(answer, ok):
+    probe = codex_remote.sandbox_works(FakeRunner(answer), "eggie-x")
+    assert probe.ok is ok
+    if not ok:
+        assert probe.reason.startswith("bwrap: loopback")
+
+
 def test_busy_port_stops_before_ssh():
     spawned = []
     probe = codex_remote.sign_in("eggie-x", popen=lambda a: spawned.append(a),

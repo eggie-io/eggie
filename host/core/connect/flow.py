@@ -408,6 +408,11 @@ class Connector:
         installed = codex_remote.ensure_installed(self._run, alias)
         if not installed.ok:
             raise _Failed(f"Codex could not be installed there: {installed.reason}")
+        # Before sign-in, so nobody signs in to a Codex that cannot run anything.
+        sandbox = codex_remote.sandbox_works(self._run, alias)
+        if not sandbox.ok:
+            raise _Failed(f"Codex can't run commands there ({sandbox.reason}). "
+                          "Update Eggie on it, then run eggie connect again.")
         if not codex_remote.signed_in(self._run, alias):
             self._say(f"Sign in to Codex for {label} in your browser…")
             signed = codex_remote.sign_in(alias, popen=self._popen, open_url=self._open_url,

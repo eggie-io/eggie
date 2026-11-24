@@ -18,6 +18,7 @@ class FakeAccount:
     def __init__(self, signed_in=True, outcomes=()):
         self.signed_in = signed_in
         self.email = "a@b.c"
+        self.first_name = ""
         self.pending = None
         self.outcomes = list(outcomes)
         self.starts = 0
@@ -169,9 +170,6 @@ class CheckoutClient(FakeClient):
 
     def billing_catalog(self):
         return {"enabled": False, "sizes": [], "trial_days": None}
-
-    def me(self):
-        raise ApiUnavailableError("down")
 
 
 def test_a_cancelled_payment_waits_until_back_and_back_ends_it(tmp_path, monkeypatch):

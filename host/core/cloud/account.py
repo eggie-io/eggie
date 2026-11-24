@@ -63,6 +63,10 @@ class CloudAccount:
         return self._read().get("email", "")
 
     @property
+    def first_name(self) -> str:
+        return self._read().get("first_name", "")
+
+    @property
     def device_id(self) -> str:
         return self._read().get("device_id", "")
 
@@ -102,17 +106,20 @@ class CloudAccount:
             return "pending"
         data = {"device_id": tokens["device_id"], "access_token": tokens["access_token"],
                 "refresh_token": tokens["refresh_token"],
-                "access_expires_at": self._clock() + tokens["expires_in"], "email": ""}
+                "access_expires_at": self._clock() + tokens["expires_in"],
+                "email": "", "first_name": ""}
         with self._lock:
             self._write(data)
         self._pending = None
         try:
             me = self._call("GET", "/v1/identity/me", None, tokens["access_token"])
-            data["email"] = me.get("email", "")
+            user = me.get("user") or {}
+            data["email"] = user.get("email") or ""
+            data["first_name"] = user.get("first_name") or ""
             with self._lock:
                 self._write(data)
         except (ApiError, ApiUnavailableError):
-            # Signed in all the same; the address is read again on demand.
+            # Signed in all the same; email and first name stay empty.
             pass
         return "signed_in"
 

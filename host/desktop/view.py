@@ -4,10 +4,8 @@ No provider and no client -- nothing here ever reaches the VM, the network
 or the filesystem. That is what makes this the only module in host/desktop
 worth testing, and why api.py stays thin enough to read in one sitting.
 
-Little user-facing copy lives here. These functions return state
-identifiers; ui/index.html holds the words, so the design board stays the
-single source for them. The exceptions are values the page only displays:
-1d's tile notes and prices, and the default kitchen name.
+No user-facing copy lives here but 1d's tile notes, prices and default name;
+ui/index.html holds the rest, so the design board stays its single source.
 """
 from __future__ import annotations
 
@@ -130,9 +128,7 @@ def setup_rows(status: str, step: str | None) -> list[str]:
 
 
 # --- making a cloud kitchen (1d) -----------------------------------------
-#
-# The same rules as the web app's size tiles: prices, limits and room are the
-# service's decisions; these only say what each answer looks like.
+# Same rules as the web app's size tiles; prices and room are the service's call.
 
 def _money(price: dict) -> str:
     major = price["amount"] / 100
@@ -189,8 +185,8 @@ def region_tiles(instance_catalog: dict, size_id: str) -> list[dict]:
     return tiles
 
 
-def default_kitchen_name(me: dict | None) -> str:
-    first = str(((me or {}).get("user") or {}).get("first_name") or "").strip()
+def default_kitchen_name(first_name: str) -> str:
+    first = (first_name or "").strip()
     return f"{first}’s cloud" if first else "My cloud"
 
 
@@ -208,11 +204,8 @@ _CHECKOUT_SLOW_AFTER = 120.0
 
 
 def checkout_wait(elapsed: float) -> float:
-    """Seconds to the next look for the paid kitchen; never gives up on its own.
-
-    A cancelled payment or a closed browser looks exactly like one still open,
-    so only Back ends the wait.
-    """
+    """Seconds to the next look for the paid kitchen. Never gives up: a cancelled
+    payment looks like an open one, so only Back ends the wait."""
     return 3.0 if elapsed < _CHECKOUT_SLOW_AFTER else 10.0
 
 

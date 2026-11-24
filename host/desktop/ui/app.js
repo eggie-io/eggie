@@ -606,8 +606,8 @@ window.eggie.handlers.account = (event) => {
 
 // --- A cloud kitchen: make it (1d), pay in the browser, watch it (1e) ----
 
-// 1d's catalog and picks. `payment` is what was sent to the checkout page:
-// Back from the wait restores it, and 1e's "Paid" line reads it.
+// `payment` is what went to the checkout page: Back from the wait restores it,
+// and 1e's "Paid" line reads it.
 let kitchenForm = null;
 let payment = null;
 let setupKitchen = '';

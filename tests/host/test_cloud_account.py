@@ -47,7 +47,10 @@ def signed_in_file(path, *, expires_at, access="a1"):
 def started(tmp_path, token_replies):
     fake = Fake(**{"POST /v1/auth/device/code": [CODE],
                    "POST /v1/auth/device/token": token_replies,
-                   "GET /v1/identity/me": [{"email": "ihor@eggie.io"}]})
+                   "GET /v1/identity/me": [{"user": {"email": "ihor@eggie.io",
+                                                     "first_name": "Ihor"},
+                                            "current_org_id": "o1", "organizations": [],
+                                            "device_id": "d1"}]})
     account = CloudAccount(tmp_path / "cloud.json", call=fake, clock=lambda: 1000.0)
     account.start()
     return account, fake
@@ -58,7 +61,7 @@ def test_poll_stores_the_pair_and_email_when_approved(tmp_path):
     assert account.poll_once() == "pending"
     assert not account.signed_in
     assert account.poll_once() == "signed_in"
-    assert account.email == "ihor@eggie.io"
+    assert (account.email, account.first_name) == ("ihor@eggie.io", "Ihor")
     path = tmp_path / "cloud.json"
     assert json.loads(path.read_text())["refresh_token"] == "r1"
     assert path.stat().st_mode & 0o777 == 0o600

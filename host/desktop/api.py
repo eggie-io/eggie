@@ -276,15 +276,11 @@ class DesktopApi:
             billing = self._cloud.billing_catalog()
         except (NotSignedIn, ApiError, ApiUnavailableError) as e:
             return self._cloud_failure(e)
-        try:
-            me = self._cloud.me()
-        except (ApiError, ApiUnavailableError, NotSignedIn):
-            me = None
         sizes = size_tiles(instances, billing)
         regions = {size["id"]: region_tiles(instances, size["id"]) for size in sizes}
         self._picks = {size["id"]: {r["id"] for r in regions[size["id"]] if r["enabled"]}
                        for size in sizes if size["enabled"]}
-        return {"ok": True, "name": default_kitchen_name(me), "sizes": sizes,
+        return {"ok": True, "name": default_kitchen_name(self._account.first_name if self._account else ""), "sizes": sizes,
                 "regions": regions, "from_price": from_price(sizes)}
 
     def start_checkout(self, name: str, size: str, region: str) -> dict:

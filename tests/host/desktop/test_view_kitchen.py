@@ -88,9 +88,8 @@ def test_checkout_url_encodes_the_name():
 
 
 def test_default_name_uses_the_first_name_when_there_is_one():
-    assert default_kitchen_name({"user": {"first_name": " Ihor "}}) == "Ihor’s cloud"
-    assert default_kitchen_name({"user": {"first_name": ""}}) == "My cloud"
-    assert default_kitchen_name(None) == "My cloud"
+    assert default_kitchen_name(" Ihor ") == "Ihor’s cloud"
+    assert default_kitchen_name("") == "My cloud"
 
 
 def test_new_kitchen_ignores_ids_seen_before_and_others_kitchens():

@@ -1,7 +1,8 @@
 """One running Eggie per user.
 
-A second launch (Start menu, the login entry, the post-update relaunch) hands
-the first one a "show" and exits instead of opening a second tray icon.
+A second launch (Start menu, the login entry, the post-update relaunch, an
+eggie:// link) hands the first one a "show" or its link and exits instead of
+opening a second tray icon.
 """
 from __future__ import annotations
 
@@ -12,20 +13,25 @@ from typing import Callable
 
 SHOW = b"show"
 HELLO = b"hello"
+LINK = b"link "
 
 
 def claim(address: str, family: str, on_show: Callable[[], None], *,
-          announce: bool, before_show: Callable[[], None] | None = None) -> bool:
+          announce: bool, before_show: Callable[[], None] | None = None,
+          link: str = "", on_link: Callable[[str], None] | None = None) -> bool:
     """True if this process is the first instance; never raises."""
     try:
         conn = Client(address, family=family)
     except Exception:
-        return _listen(address, family, on_show)
+        return _listen(address, family, on_show, on_link)
     else:
         try:
-            if announce and before_show is not None:
+            if (announce or link) and before_show is not None:
                 before_show()
-            conn.send_bytes(SHOW if announce else HELLO)
+            if link:
+                conn.send_bytes(LINK + link.encode("utf-8"))
+            else:
+                conn.send_bytes(SHOW if announce else HELLO)
         except Exception:
             pass
         finally:
@@ -33,7 +39,7 @@ def claim(address: str, family: str, on_show: Callable[[], None], *,
         return False
 
 
-def _listen(address, family, on_show) -> bool:
+def _listen(address, family, on_show, on_link=None) -> bool:
     try:
         listener = Listener(address, family=family)
     except Exception:
@@ -53,6 +59,8 @@ def _listen(address, family, on_show) -> bool:
                 msg = conn.recv_bytes()
                 if msg == SHOW:
                     on_show()
+                elif msg.startswith(LINK) and on_link is not None:
+                    on_link(msg[len(LINK):].decode("utf-8", "replace"))
         except Exception:
             pass
         finally:

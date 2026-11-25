@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 
+from .links import kitchen_from_link
 from .settings import TRAY_NOTICE_SHOWN, Settings
 
 log = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ class Controller:
         self._exiting = False
         self._background = None
         self.login_launched = threading.Event()
+        # Replaced by run() once the bridge exists; a link before that waits here.
+        self.early_link = ""
+        self.link_to = lambda kitchen: setattr(self, "early_link", kitchen)
 
     def on_closing(self) -> bool:
         # destroy() and macOS terminate: both arrive here too; only a real
@@ -80,6 +84,21 @@ class Controller:
         local = self.shell.local_url()
         if local:
             self.window.load_url(f"{local}#{route}")
+
+    def follow_link(self, url: str) -> None:
+        """An eggie:// link opened while the app runs (or, on macOS, launched it)."""
+        kitchen = kitchen_from_link(url)
+        if kitchen is None:
+            self.show()
+            return
+        self.link_to(kitchen)
+        if self.window is None:
+            return
+        # A page that has not loaded yet draws Home itself, and Home reads the link.
+        if self.shell.local_url() is None:
+            self._show_window()
+            return
+        self.open_route("link")
 
     def exit(self) -> None:
         self._exiting = True

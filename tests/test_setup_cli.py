@@ -281,7 +281,7 @@ def test_setup_hands_the_window_a_factory_it_can_call_twice(monkeypatch, tmp_pat
     provider = StubProvider()
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None, events=None):
+                 log_path=None, desktop=None, events=None, link=""):
         captured["provider"] = provider
         captured["a"] = steps_factory()
         captured["b"] = steps_factory()
@@ -314,7 +314,7 @@ def test_setup_resume_reaches_the_window_as_resumed(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None, events=None):
+                 log_path=None, desktop=None, events=None, link=""):
         captured["resumed"] = resumed
         captured["background"] = background
         return 0
@@ -353,7 +353,7 @@ def test_setup_background_reaches_the_window(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run(provider, state, *, steps_factory=None, resumed=False, background=False,
-                 log_path=None, desktop=None, events=None):
+                 log_path=None, desktop=None, events=None, link=""):
         captured["background"] = background
         return 0
 

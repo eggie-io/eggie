@@ -77,6 +77,8 @@ class DesktopApi:
         self._kitchens: list[dict] | None = None
         self._kitchens_error = ""
         self._just_signed_in = False
+        # An eggie:// link's kitchen (links.py), held until Home can show its picker.
+        self.linked = ""
         self._signup_shown = False
         self._sign_in_url = ""
         self._vm_sign_in_url = ""
@@ -179,12 +181,14 @@ class DesktopApi:
                             vm_exists=readiness.vm_exists,
                             route=route, state=state, resumed=resumed,
                             just_signed_in=self._just_signed_in,
-                            update_tried=self._runtime_update_tried)
+                            update_tried=self._runtime_update_tried,
+                            linked=self.linked)
         local = local_card(route, state)
         repair = local_repair(route, self._runtime_update_error, readiness.problem)
         if signed_in and screen.action != "load_kitchens":
             # Held until the kitchen list is in, or the first load would eat it.
             self._just_signed_in = False
+            self.linked = ""
         return {
             "screen": screen.name,
             "action": screen.action,
@@ -219,8 +223,8 @@ class DesktopApi:
         return self._manifests
 
     def _agent_chips(self, local: str) -> dict[str, list[str]]:
-        """Each Home card's connected agents' names. File reads, plus one `wsl -l -v`
-        on Windows for this computer's card; never ssh: Home redraws often."""
+        """Each Home card's connected agents' names. File reads, plus on Windows two
+        quick `wsl.exe` calls for this computer's Codex; never ssh: Home redraws often."""
         ids = [k["id"] for k in self._kitchens or []] + (["local"] if local != "none" else [])
         chips = {}
         for kitchen_id in ids:
@@ -238,14 +242,17 @@ class DesktopApi:
 
     def _connected_agents(self, kitchen_id: str) -> dict[str, bool]:
         """From what the connect steps leave behind: the ssh block plus the agent's entry
-        (or Done); on Windows' own VM the provider's answer (or Done)."""
+        (or Done); on Windows' own VM the provider's answer (or Done). Never for an
+        agent whose app is gone: what it left behind outlives it."""
         kind, alias = self._agent_target(kitchen_id)
         done = self._settings.members(AGENTS_DONE)
         block = bool(alias) and ssh_alias.host_installed(self._ssh_config, alias)
         connected = {}
         for m in self._agent_manifests():
             pressed = done_flag(m.id, kitchen_id) in done
-            if alias:
+            if not self._installed(m.id):
+                connected[m.id] = False
+            elif alias:
                 if m.connect == "claude":
                     own = claude_ssh.entry_installed(self._claude_dir, alias)
                 elif m.connect == "codex":

@@ -47,7 +47,8 @@ def newest_owned(kitchens: list[dict] | None) -> dict | None:
 
 def screen_for(*, signed_in: bool, pending_sign_in: bool, kitchens: list[dict] | None,
                kitchens_error: str, vm_exists: bool, route: str, state: str,
-               resumed: bool, just_signed_in: bool, update_tried: bool) -> Screen:
+               resumed: bool, just_signed_in: bool, update_tried: bool,
+               linked: str = "") -> Screen:
     """Ordered: the earlier rule wins.
 
     A resumed launch still has the nothing-recorded shape and must continue
@@ -62,6 +63,10 @@ def screen_for(*, signed_in: bool, pending_sign_in: bool, kitchens: list[dict] |
         return Screen("home", action="load_kitchens")
     if not kitchens and not vm_exists and not kitchens_error:
         return Screen("where")
+    # `linked`: an eggie:// link's kitchen, which any web page can name.
+    if linked and ((linked == "local" and vm_exists) or any(
+            k.get("id") == linked and k.get("is_owner") for k in kitchens or [])):
+        return Screen("connect", message=linked)
     if just_signed_in:
         newest = newest_owned(kitchens)
         if newest:

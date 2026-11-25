@@ -425,7 +425,30 @@ def test_connecting_codex_trusts_the_projects_folder_and_runs_no_wsl(tmp_path):
     projects = tomllib.loads((tmp_path / "config.toml").read_text())["projects"]
     assert projects == {UNC_KEY: {"trust_level": "trusted"},
                         "/opt/eggie/projects": {"trust_level": "trusted"}}
+
+
+LIST_RUNNING = ("wsl.exe", "-l", "--running")
+IN_VM = ("wsl.exe", "-d", "eggie-vm")
+
+
+@pytest.mark.parametrize("signed_in", [True, False])
+def test_codex_counts_as_connected_only_while_signed_in_inside_the_vm(tmp_path, signed_in):
+    r = PrefixRunner({LIST_RUNNING: (0, RUNNING),
+                      IN_VM: (0 if signed_in else 1, b"")})
+    provider = make(r, env={"CODEX_HOME": str(tmp_path)})
+    provider.connect_agent("codex")
+
+    assert provider.agent_connected("codex") is signed_in
+    assert r.calls[-1][-3:] == ["test", "-s", ".codex/auth.json"]
+
+
+def test_a_stopped_vm_is_never_booted_to_check_codex_sign_in(tmp_path):
+    r = PrefixRunner({LIST_RUNNING: (1, b"")})
+    provider = make(r, env={"CODEX_HOME": str(tmp_path)})
+    provider.connect_agent("codex")
+
     assert provider.agent_connected("codex") is True
+    assert not any(tuple(call[:3]) == IN_VM for call in r.calls)
 
 
 def test_a_codex_config_eggie_cannot_read_does_not_fail_the_connection(tmp_path):

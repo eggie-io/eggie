@@ -33,7 +33,8 @@ DATAS = [
 HIDDEN = ["host.desktop.__main__", "host.desktop.api", "host.desktop.view",
           "host.desktop.jobs", "host.desktop.controller", "host.desktop.lifecycle",
           "host.desktop.settings", "host.providers.tray_mac",
-          "host.providers.mac_login", "ServiceManagement", "PyObjCTools.AppHelper",
+          "host.providers.mac_login", "host.providers.links_mac", "host.desktop.links",
+          "ServiceManagement", "PyObjCTools.AppHelper",
           "webview", "webview.platforms.cocoa"]
 
 cli = Analysis(["../../host/cli.py"], pathex=["../.."], datas=DATAS,
@@ -80,6 +81,10 @@ app = BUNDLE(
         "LSBackgroundOnly": False,
         # vz — the VM type eggie.yaml asks Lima for — is macOS 13+.
         "LSMinimumSystemVersion": "13.0",
+        # eggie:// links (a kitchen's console opens the app on it); they arrive
+        # as Apple events, see host/providers/links_mac.py.
+        "CFBundleURLTypes": [{"CFBundleURLName": "io.eggie.app",
+                              "CFBundleURLSchemes": ["eggie"]}],
         "NSHighResolutionCapable": True,
         # Nothing here opens documents or takes a URL scheme; the window is the
         # whole interface.

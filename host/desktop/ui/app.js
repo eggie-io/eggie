@@ -388,12 +388,24 @@ async function fromTray(go) {
   }
 }
 
+const JOB_SCREENS = new Set(['install:running', 'runtime-update:running', 'connect:running',
+  'connect:sign-in', 'app-update:running', 'quitting']);
+
 const ROUTES = {
   'settings': () => fromTray(ACTIONS.settings),
   'quit': () => fromTray(() => startQuit(false)),
+  // An eggie:// link: Home reads its kitchen (view.screen_for) and shows the picker.
+  // Never over a job's screen: the job would carry on with nothing showing it.
+  'link': () => (JOB_SCREENS.has(document.getElementById('screen').dataset.screen) ? null : refresh()),
 };
 
+// A route that lands before start() waits for it: two refresh() calls racing
+// would draw Home over the linked picker.
+let started = false;
+let earlyRoute = null;
+
 window.eggie.route = (name) => {
+  if (!started) { earlyRoute = name; return; }
   const go = ROUTES[name];
   if (go) go();
 };
@@ -1238,7 +1250,8 @@ async function refresh() {
 }
 
 function start() {
-  const route = window.location.hash.slice(1);
+  started = true;
+  const route = window.location.hash.slice(1) || earlyRoute;
   // The tray reloads this page with #settings or #quit when the console was
   // showing; cleared so a later reload lands on Home.
   if (route && ROUTES[route]) {

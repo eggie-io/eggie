@@ -49,6 +49,20 @@ def test_first_sign_in_with_kitchens_opens_connect_on_newest_owned():
     assert _screen(kitchens=[older, newer], just_signed_in=True) == Screen("connect", message="new")
 
 
+def test_a_link_opens_the_picker_only_for_a_kitchen_the_account_owns():
+    theirs = {**KITCHEN, "id": "theirs", "is_owner": False}
+    newer = {**KITCHEN, "id": "new", "created_at": "2026-06-01T00:00:00Z"}
+    assert _screen(kitchens=[KITCHEN, newer], linked="k1", just_signed_in=True) \
+        == Screen("connect", message="k1")
+    assert _screen(kitchens=[KITCHEN, theirs], linked="theirs") == Screen("home")
+    assert _screen(linked="gone") == Screen("home")
+    assert _screen(linked="local", vm_exists=True) == Screen("connect", message="local")
+    assert _screen(linked="local", vm_exists=False) == Screen("home")
+    # Signed out or still loading: the link waits for the account and its kitchens.
+    assert _screen(signed_in=False, linked="k1") == Screen("account")
+    assert _screen(kitchens=None, linked="k1").action == "load_kitchens"
+
+
 def test_org_kitchen_not_owned_is_never_chosen_and_cannot_connect():
     theirs = {**KITCHEN, "id": "theirs", "is_owner": False, "created_at": "2030-01-01T00:00:00Z"}
     assert newest_owned([theirs, KITCHEN])["id"] == "k1"

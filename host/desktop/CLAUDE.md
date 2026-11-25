@@ -21,6 +21,11 @@ the old tkinter wizard. `cli.setup` launches it. Tests: `tests/host/desktop/`.
 - `shell.py` — `Shell` tracks which page is showing; `guarded()` wraps each public `DesktopApi`
   method so it refuses calls (`NotLocalPage`) unless the local UI is the page showing. A new
   `DesktopApi` method is covered automatically.
+- `links.py` — `eggie://connect/<kitchen id>` (registered by the Windows installer and the mac
+  `Info.plist`), which the browser console's **Open Eggie** opens. Any page can open one, so it only
+  sets `DesktopApi.linked`; `screen_for` shows that kitchen's picker if the account owns it (or
+  `local` with a VM). Windows hands a second launch's link over the single-instance pipe; macOS
+  delivers links as Apple events (`providers/links_mac.py`).
 - `jobs.py` — runs **one** slow job at a time on a worker thread (`JobBusy` otherwise):
   `InstallState` is a JSON file and two installs writing it would race.
 - Two platform objects reach here, both from `host/providers`: the `VmProvider` (the machine) and
@@ -48,7 +53,8 @@ system browser — there is no native menu.
 
 Connect an agent (3a–3d) is local screens only; the console has no part in it, and its Agents tab
 is cloud-only. `agents(kitchen_id)`
-draws the picker from the bundled guides (`ui/agents/`, `agents.py`) and `view.connect_targets`
+draws the picker from the bundled guides (`ui/agents/`, `agents.py`); an agent counts as on this
+computer only when its app is found (a CLI on PATH is not enough), and never as connected without it and `view.connect_targets`
 (owned kitchens, plus this computer once it has a VM; one not running is listed, not pickable).
 `start_connect` runs `flow.Connector.connect_one` as a `connect` job whose `step` events drive 3b
 and whose `("agent", "running", "sign_in")` switches to 3d. Every bridge method here takes only an

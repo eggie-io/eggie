@@ -22,7 +22,6 @@
       "local": [
         {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "Screenshot · File menu with Quit ChatGPT", "media": ["media/win-chatgpt-0.png"]},
         {"title": "Run Codex in eggie-vm", "body": "<p>Click <b>This computer</b> above the prompt box, then <b>Remote</b> → <b>WSL: eggie-vm</b>.</p>", "alt": "Screenshot · WSL: eggie-vm in the Work in list", "media": ["media/win-chatgpt-1.png"]},
-        {"title": "Open the projects folder", "body": "<p>Click <b>Open ChatGPT (Codex)</b> below: it opens a new chat in the projects folder.</p><p>If the folder isn’t there:</p><ol><li>Click <b>Add new project</b>.</li><li>Paste <code>\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Adding the projects folder from eggie-vm"},
         {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt on WSL: eggie-vm", "media": ["media/win-chatgpt-2.png"]}
       ],
       "cloud": [

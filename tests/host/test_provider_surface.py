@@ -41,11 +41,13 @@ INSTALL_SURFACE = {"image", "register_resume", "location", "terminal",
 
 
 # What `eggie connect` and the desktop app's Connect an agent ask of the machine:
-# connect an agent to this VM, tell whether one is on this computer, open it, and
-# which guide applies. Apart from the install list: it runs long after setup.
+# connect an agent to this VM, tell whether one is on this computer, open it,
+# which guide applies, and put back a system default the connection switched.
+# Apart from the install list: it runs long after setup.
 AGENT_SURFACE = {"agent_connections", "connect_agent", "agent_connected",
                  "local_ssh_alias", "computer_name", "agent_installed", "agent_app",
-                 "open_agent", "guide_os"}
+                 "open_agent", "guide_os", "switches_default", "current_default",
+                 "can_restore_default", "restore_default"}
 
 
 def test_every_provider_offers_the_agent_surface():

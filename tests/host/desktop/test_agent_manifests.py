@@ -124,3 +124,29 @@ def test_render_steps_refuses_an_unknown_platform():
     m = agents.load(UI)[0]
     with pytest.raises(ValueError):
         agents.render_steps(m, "linux", "local", "eggie", "This computer")
+
+
+def _with_confirm(tmp_path, confirm):
+    root = _fixture(tmp_path)
+    path = root / "agents" / "demo" / "agent.json"
+    data = json.loads(path.read_text())
+    data["confirm"] = confirm
+    path.write_text(json.dumps(data))
+    return root
+
+
+def test_a_confirm_is_kept_per_os():
+    [codex] = [m for m in agents.load(UI) if m.id == "codex"]
+    assert set(codex.confirm) == {"windows"}
+    assert codex.confirm["windows"].button == "Make eggie-vm the default"
+
+
+@pytest.mark.parametrize("confirm", [
+    {"linux": {"title": "T", "body": "<p>B</p>", "button": "Go"}},
+    {"windows": {"title": "T", "body": '<a href="x">B</a>', "button": "Go"}},
+    {"windows": {"title": "T", "body": "<p>B {kitchen}</p>", "button": "Go"}},
+    {"windows": {"title": "T", "body": "<p>B</p>"}},
+])
+def test_a_confirm_the_page_could_not_draw_safely_fails_the_load(tmp_path, confirm):
+    with pytest.raises(ValueError, match="agents/demo"):
+        agents.load(_with_confirm(tmp_path, confirm))

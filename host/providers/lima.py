@@ -462,11 +462,24 @@ class LimaProvider:
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
 
-    def open_agent(self, agent_id: str) -> bool:
+    def open_agent(self, agent_id: str, local: bool = False) -> bool:
         app = self.agent_app(agent_id)
         if app is None:
             return False
         return self._spawn(["open", app]).ok
+
+    # Connecting an agent changes nothing outside Eggie here: no default to switch.
+    def switches_default(self, agent_id: str) -> str | None:
+        return None
+
+    def current_default(self) -> str | None:
+        return None
+
+    def can_restore_default(self, name: str) -> bool:
+        return False
+
+    def restore_default(self, name: str) -> str:
+        raise ValueError("Nothing to switch back on this computer")
 
     # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.
     guide_os = "mac"

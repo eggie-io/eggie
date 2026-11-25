@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import socket
@@ -7,13 +8,16 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from ..core.images import WSL_IMAGES
 from ..core.provider import (Access, AccessField, Completed, Diagnosis, ProviderError,
                              VmUnresponsive)
-from . import registry
+from . import codex_app, codex_trust, registry
 from .wsl_encoding import decode_wsl
 from .wsl_checks import diagnose_wsl2, preflight_checks
+
+log = logging.getLogger(__name__)
 
 RUNONCE_KEY = r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
@@ -50,6 +54,11 @@ def _default_spawner(argv):
     # after the window closes. `wsl --terminate` in stop() ends it.
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, creationflags=_NO_WINDOW)
+
+
+def _default_opener(target: str) -> None:
+    # ShellExecute, as Start-Process does: the only way to hand Windows an app's own link.
+    os.startfile(target)  # type: ignore[attr-defined]
 
 
 def _default_facts() -> dict:
@@ -195,7 +204,7 @@ class Wsl2Provider:
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=registry.write_value, arch=None,
-                 spawner=_default_spawner,
+                 spawner=_default_spawner, opener=_default_opener,
                  sleep=time.sleep, clock=time.monotonic,
                  env=os.environ, which=shutil.which):
         self.distro = distro
@@ -204,6 +213,7 @@ class Wsl2Provider:
         self.wsl = wsl
         self._run = runner
         self._spawn = spawner
+        self._open = opener
         self._facts = facts
         self._elevate = elevator
         self._write_registry = registry_writer
@@ -247,8 +257,11 @@ class Wsl2Provider:
         return diagnose_wsl2(self._run, self.wsl)
 
     def exists(self) -> bool:
+        return self.distro in self._distros()
+
+    def _distros(self) -> list[str]:
         out = self._meta(["-l", "-q"]).stdout
-        return self.distro in [line.strip() for line in out.splitlines()]
+        return [line.strip() for line in out.splitlines() if line.strip()]
 
     def running(self) -> bool:
         # Not exec(): any `wsl -d` boots the distro. With nothing running this
@@ -505,7 +518,8 @@ class Wsl2Provider:
         return None
 
     # The agents reach the distro through WSL itself. Codex on Windows runs
-    # only in the default distro, so connecting it makes this one the default.
+    # only in the default distro, so connecting it makes this one the default
+    # for every WSL app: the app asks first, and can put the old one back.
     agent_connections = ("codex",)
     # No sshd in the distro: the agents reach it through WSL.
     local_ssh_alias = None
@@ -516,11 +530,46 @@ class Wsl2Provider:
         self._require(self._meta(["--set-default", self.distro]),
                       f"'{self.distro}' could not be made the default WSL distro",
                       "vm_configure_failed")
+        try:
+            codex_trust.trust(codex_app.default_codex_home(self._env, Path.home()),
+                              self._codex_folders())
+        except (OSError, ValueError) as e:
+            # Only spares the person Codex's Trust folder question.
+            log.warning("could not mark the projects folder trusted in Codex: %s", e)
         return f"{self.distro} is now your default WSL distro."
+
+    def _codex_folders(self) -> list[str]:
+        # The keys Codex itself writes: its lowercased Windows path, and the
+        # Linux path when Codex runs in WSL.
+        return [rf"\\?\unc\wsl.localhost\{self.distro}\opt\eggie\projects".lower(),
+                "/opt/eggie/projects"]
 
     def agent_connected(self, agent_id: str) -> bool:
         """Whether this distro is the default, so the guide can skip the button."""
         return agent_id == "codex" and self._default_distro() == self.distro
+
+    def switches_default(self, agent_id: str) -> str | None:
+        """The distro connecting `agent_id` would make every WSL app's default;
+        None when it is already, or when connecting changes nothing outside Eggie."""
+        if agent_id != "codex" or self._default_distro() == self.distro:
+            return None
+        return self.distro
+
+    def current_default(self) -> str | None:
+        return self._default_distro()
+
+    def can_restore_default(self, name: str) -> bool:
+        """Whether `name` is another installed distro and this one is still the default."""
+        return (bool(name) and name != self.distro
+                and self._default_distro() == self.distro and name in self._distros())
+
+    def restore_default(self, name: str) -> str:
+        if not self.can_restore_default(name):
+            raise ValueError(f"'{name}' can't be made the default WSL distro")
+        self._require(self._meta(["--set-default", name]),
+                      f"'{name}' could not be made the default WSL distro",
+                      "vm_configure_failed")
+        return f"{name} is your default WSL distro again."
 
     def agent_app(self, agent_id: str) -> str | None:
         """The agent's app, to open it from the app; None for a CLI-only install."""
@@ -532,11 +581,16 @@ class Wsl2Provider:
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
 
-    def open_agent(self, agent_id: str) -> bool:
+    def open_agent(self, agent_id: str, local: bool = False) -> bool:
+        """`local`: open it on this computer's kitchen, which only Codex can be told."""
         app = self.agent_app(agent_id)
         if app is None:
             return False
-        self._spawn([app])
+        if local and agent_id == "codex":
+            folder = rf"\\wsl.localhost\{self.distro}\opt\eggie\projects"
+            self._open("codex://threads/new?path=" + quote(folder, safe=""))
+        else:
+            self._spawn([app])
         return True
 
     # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.

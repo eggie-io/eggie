@@ -418,6 +418,25 @@
   </article>
 </template>
 
+<!-- Before 3b, for an agent whose connection changes this computer's default WSL distro. -->
+<template data-screen="connect:confirm">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="connect-back" aria-label="Back to agents" title="Back to agents"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body kitchen">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title" data-confirm-title>Make <span data-field="distro"></span> the default</h1>
+        <div class="lede confirm-body" data-confirm-body><p>Connecting <span data-field="agent"></span> makes <b data-field="distro"></b> the default for this computer’s other apps too.</p></div>
+      </div>
+      <div class="row">
+        <button class="btn-primary btn-lg" data-action="connect-confirm"><span data-confirm-button>Make <span data-field="distro"></span> the default</span></button>
+        <button class="btn-secondary btn-lg" data-action="connect-back">Back</button>
+      </div>
+    </section>
+  </div>
+</template>
+
 <!-- 3b: the rows start_connect() names are shown; the rest stay hidden. -->
 <template data-screen="connect:running">
   <div class="shell">
@@ -481,6 +500,11 @@
           <button class="btn-primary btn-lg" data-action="open-agent" data-when="has_app"><span>Open <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
           <button class="btn-primary btn-lg" data-action="get-agent" data-when="missing"><span>Get <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
           <button class="btn-ghost btn-lg" data-action="connect-done">Done</button>
+        </div>
+        <div class="switch-back" data-when="switch_back">
+          <p>Eggie made its machine your default WSL distro. Before, it was <b data-field="switch_back"></b>.
+            Switching back stops <span data-field="agent"></span> from reaching this computer’s kitchen.</p>
+          <button class="btn-ghost btn-sm" data-action="switch-default-back"><span>Make <span data-field="switch_back"></span> the default again</span></button>
         </div>
       </div>
       <div class="ready-media" data-ready-media></div>
@@ -666,6 +690,11 @@
         <button class="btn-secondary" data-action="sign-out-cancel">Cancel</button>
         <button class="btn-danger" data-action="sign-out">Sign out</button>
       </div>
+    </div>
+    <div class="setting-account" data-when="switch_back">
+      <p>Eggie made its machine your default WSL distro so Codex can reach it. Before, it was
+        <b data-field="switch_back"></b>. Switching back stops Codex from reaching this computer’s kitchen.</p>
+      <button class="btn-secondary" data-action="switch-default-back"><span>Make <span data-field="switch_back"></span> the default again</span></button>
     </div>
     <div class="setting-account" data-when="vm_exists">
       <p>Removes the Linux machine on this computer and every project in it.</p>

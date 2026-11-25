@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -35,6 +35,14 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Confirm:
+    """What the person agrees to before a connection switches a system default."""
+    title: str
+    body: str
+    button: str
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     name: str
@@ -42,6 +50,7 @@ class Manifest:
     get_url: str
     connect: str | None
     steps: dict  # {os: {kind: tuple[Step, ...]}}
+    confirm: dict = field(default_factory=dict)  # {os: Confirm}, only where one applies
 
 
 class _Body(HTMLParser):
@@ -143,7 +152,22 @@ def _manifest(folder: Path, agent_id: str) -> Manifest:
             steps[os_name][kind] = tuple(_step(folder, agent_id, s) for s in listed)
     return Manifest(id=agent_id, name=_text(data, "name"),
                     icon=_file(folder, agent_id, data.get("icon")), get_url=get_url,
-                    connect=connect, steps=steps)
+                    connect=connect, steps=steps, confirm=_confirms(data.get("confirm", {})))
+
+
+def _confirms(data: object) -> dict:
+    if not isinstance(data, dict) or not set(data) <= set(OSES):
+        raise ValueError(f"'confirm' must map some of {OSES} to an object")
+    confirms = {}
+    for os_name, entry in data.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"'confirm' for {os_name} must be an object")
+        title, body, button = (_text(entry, k) for k in ("title", "body", "button"))
+        if any(_TEMPLATE_RE.search(t) for t in (title, body, button)):
+            raise ValueError("'confirm' takes no templates")
+        _check_body(body)
+        confirms[os_name] = Confirm(title, body, button)
+    return confirms
 
 
 def load(ui_dir: Path) -> list[Manifest]:

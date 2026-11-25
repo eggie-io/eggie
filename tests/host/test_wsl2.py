@@ -19,8 +19,12 @@ class FakeRunner:
         return R()
 
 
+# A CODEX_HOME nothing can be written under, so no test reaches the real ~/.codex.
+_NO_CODEX = {"CODEX_HOME": "/dev/null/codex"}
+
+
 def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"),
-         spawner=None):
+         spawner=None, env=None):
     return Wsl2Provider(
         distro="eggie-vm",
         install_dir=install_dir,
@@ -28,6 +32,7 @@ def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"
         wsl="wsl.exe",
         runner=runner,
         spawner=spawner if spawner is not None else [].append,
+        env=_NO_CODEX if env is None else env,
     )
 
 
@@ -410,11 +415,22 @@ def _listing(*rows: str) -> bytes:
     return "\r\n".join((header, *rows)).encode("utf-16-le")
 
 
-def test_connecting_codex_makes_this_distro_the_default():
+def test_connecting_codex_makes_this_distro_the_default_and_trusts_its_projects(tmp_path):
     r = FakeRunner()
-    message = make(r).connect_agent("codex")
+    message = make(r, env={"CODEX_HOME": str(tmp_path)}).connect_agent("codex")
     assert r.calls == [["wsl.exe", "--set-default", "eggie-vm"]]
     assert "eggie-vm" in message
+    import tomllib
+    projects = tomllib.loads((tmp_path / "config.toml").read_text())["projects"]
+    assert projects == {r"\\?\unc\wsl.localhost\eggie-vm\opt\eggie\projects": {"trust_level": "trusted"},
+                        "/opt/eggie/projects": {"trust_level": "trusted"}}
+
+
+def test_a_codex_config_eggie_cannot_read_does_not_fail_the_connection(tmp_path):
+    (tmp_path / "config.toml").write_text("model = \n")
+    message = make(FakeRunner(), env={"CODEX_HOME": str(tmp_path)}).connect_agent("codex")
+    assert "eggie-vm" in message
+    assert (tmp_path / "config.toml").read_text() == "model = \n"
 
 
 def test_connecting_codex_reports_a_failed_set_default():

@@ -54,7 +54,10 @@ draws the picker from the bundled guides (`ui/agents/`, `agents.py`) and `view.c
 and whose `("agent", "running", "sign_in")` switches to 3d. Every bridge method here takes only an
 agent id and a kitchen id, checked against the loaded manifests and the owned targets, so a page
 can't name what runs: `open_agent_download` opens the manifest's https `get_url`, `open_agent`
-starts the provider's `agent_app(id)`. Guide bodies are HTML
+starts the provider's `agent_app(id)`. An agent whose connection switches a system default
+(`switches_default`, today Codex on WSL) gets a confirm screen first, and `start_connect` refuses
+it without `confirmed=True`; the replaced default is kept in settings (`previous_default`) and
+offered back on 3c and in Settings (`switch_default_back`). Guide bodies are HTML
 from those files; `app.js` rebuilds only the allowlisted tags as new elements (no `innerHTML`).
 
 ## Things that will bite you

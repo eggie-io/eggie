@@ -115,7 +115,8 @@ def test_codex_local_checks_its_sign_in_in_the_vm_before_trusting_the_folder(tmp
     assert rows == [("access", "running"), ("access", "done"), ("agent", "running"),
                     ("agent", "done"), ("entry", "running"), ("entry", "done")]
     assert end["type"] == "done"
-    assert end["steps"][0]["title"] == "Run Codex in WSL"
+    # ChatGPT reads what Eggie set up only when it starts.
+    assert [step["title"] for step in end["steps"]][:2] == ["Restart ChatGPT", "Run Codex in WSL"]
 
 
 def test_a_vm_that_does_not_answer_fails_the_agent_row(tmp_path):

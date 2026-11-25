@@ -52,6 +52,7 @@ QUIT_STOP_TIMEOUT = 60.0
 # then the default read next can't be told apart from the VM's own.
 _UNKNOWN_VM = "Eggie’s machine"
 
+
 class DesktopApi:
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,

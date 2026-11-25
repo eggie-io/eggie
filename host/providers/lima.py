@@ -449,6 +449,10 @@ class LimaProvider:
         button. Only the entry: it says nothing about whether the agent uses it."""
         return agent_id == "claude-code" and claude_ssh.installed(self.claude_dir)
 
+    def shell_argv(self, script: str) -> list[str]:
+        """A login shell in the VM as its user, for a process the caller reads as it runs."""
+        return [self.limactl, "shell", self.name, "bash", "-lc", script]
+
     def agent_app(self, agent_id: str) -> str | None:
         """The agent's app bundle, to open it from the app; None for a CLI-only install."""
         for name in _AGENT_APPS.get(agent_id, ()):

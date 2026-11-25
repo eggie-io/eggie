@@ -5,7 +5,7 @@ import pytest
 
 from host.client import ApiError, ApiUnavailableError
 from host.core.cloud.account import NotSignedIn
-from host.core.connect import flow
+from host.core.connect import flow, ssh
 from host.providers import claude_ssh, codex_app, ssh_alias
 
 RESTART = "Quit and reopen Claude and Codex to see the new connections."
@@ -124,13 +124,22 @@ class FakeLogin:
 
 
 class FakeProvider:
+    """The VM's own shell answers as FakeSsh's host "vm"."""
+
     def __init__(self, local_ssh_alias=None):
         self.local_ssh_alias = local_ssh_alias
         self.connected = []
+        self.ssh = None
 
     def connect_agent(self, agent_id):
         self.connected.append(agent_id)
         return f"{agent_id} connected."
+
+    def exec(self, argv, *, root=False):
+        return ssh.spawn(self.ssh, self.shell_argv(argv[-1]))
+
+    def shell_argv(self, script):
+        return ["vm-shell", "-T", "vm", script]
 
 
 class World:
@@ -139,6 +148,8 @@ class World:
         self.client = client
         self.provider = provider or FakeProvider()
         self.ssh = FakeSsh()
+        self.ssh.authorized.add("vm")
+        self.provider.ssh = self.ssh
         self.login = FakeLogin(self.ssh)
         self.opened = []
         self.pinged = []
@@ -325,6 +336,7 @@ def test_local_wsl_connects_codex_and_explains_claude(tmp_path):
     lines = w.connector().connect(BOTH, [], local=True)
 
     assert w.provider.connected == ["codex"]
+    assert "vm" in w.ssh.signed_in
     assert w.factory_calls == 0
     claude = [line for line in lines if line.agent == "Claude Code"]
     assert claude[0].text == "On Windows, pick eggie-vm under WSL in Claude Code."
@@ -628,16 +640,18 @@ def test_codex_sign_in_reports_the_sign_in_state(tmp_path):
     assert ("agent", "done", "") in order
 
 
-def test_codex_local_runs_vm_setup_first(tmp_path):
+def test_codex_on_a_vm_without_an_ssh_host_installs_and_signs_in_through_its_shell(tmp_path):
     w = World(tmp_path, FakeClient([]))
-    order = []
-    w.provider.connect_agent = lambda agent: order.append(("connect", agent)) or "ok"
-    connector, events = _recorded(w, local_setup=lambda agent: order.append(("setup", agent)))
+    connector, events = _recorded(w)
 
     lines = connector.connect_one("codex", None)
 
     assert all(line.ok for line in lines), lines
-    assert order == [("setup", "codex"), ("connect", "codex")]
+    assert "vm" in w.ssh.codex and "vm" in w.ssh.signed_in
+    assert w.login.calls == [w.provider.shell_argv("codex login")]
+    assert w.opened == ["https://auth.openai.com/oauth/authorize?client_id=x"]
+    assert ("agent", "running", "sign_in") in events
+    assert w.provider.connected == ["codex"]
     # No ssh host on Windows' own VM: no check row.
     assert _finished(events) == ["access", "agent", "entry"] == connector.rows("codex", None)
     assert w.factory_calls == 0
@@ -646,30 +660,26 @@ def test_codex_local_runs_vm_setup_first(tmp_path):
 def test_codex_on_a_vm_with_an_ssh_host_installs_only_over_ssh(tmp_path):
     w = World(tmp_path, FakeClient([]), FakeProvider(local_ssh_alias="eggie"))
     w.ssh.authorized.add("eggie")
-    setups = []
-    connector, events = _recorded(w, local_setup=setups.append)
+    connector, events = _recorded(w)
 
     connector.connect_one("codex", None)
 
     assert ("agent", "done", "") in events
-    assert setups == []
     assert "eggie" in w.ssh.codex
+    assert "vm" not in w.ssh.codex
 
 
-def test_a_failed_vm_setup_fails_the_agent_row_and_stops(tmp_path):
+def test_codex_that_cannot_sandbox_in_the_vm_is_never_signed_in_or_trusted(tmp_path):
     w = World(tmp_path, FakeClient([]))
-
-    def refuse(agent):
-        raise ApiError("agent_setup_unavailable", "This VM can't set up agents yet.", 503)
-
-    connector, events = _recorded(w, local_setup=refuse)
+    w.ssh.sandbox_error = b"bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n"
+    connector, events = _recorded(w)
 
     lines = connector.connect_one("codex", None)
 
-    assert ("agent", "failed", "This VM can't set up agents yet.") in events
     assert _finished(events) == ["access", "agent"]
+    assert "bwrap: loopback" in lines[-1].text and not lines[-1].ok
+    assert w.login.calls == []
     assert w.provider.connected == []
-    assert not lines[-1].ok
 
 
 def test_cancel_stops_before_the_next_row(tmp_path):

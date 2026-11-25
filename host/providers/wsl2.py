@@ -545,6 +545,10 @@ class Wsl2Provider:
         return agent_id == "codex" and codex_trust.trusted(self._codex_home(),
                                                            self._codex_folders())
 
+    def shell_argv(self, script: str) -> list[str]:
+        """A login shell in the VM as its user, for a process the caller reads as it runs."""
+        return [self.wsl, "-d", self.distro, "--cd", "~", "--", "bash", "-lc", script]
+
     def agent_app(self, agent_id: str) -> str | None:
         """The agent's app, to open it from the app; None for a CLI-only install."""
         # exists(), not is_file(): a Store alias is a reparse point.

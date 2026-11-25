@@ -7,6 +7,7 @@ from pathlib import Path
 from host.client import ApiUnavailableError
 from host.core.cloud.account import NotSignedIn
 from host.core.install import InstallState
+from host.core.provider import Completed, VmUnresponsive
 from host.core.status import Readiness
 from host.desktop.api import DesktopApi
 from host.desktop.settings import AGENTS_DONE, Settings, done_flag
@@ -25,8 +26,17 @@ class WindowsLike:
     agent_connections = ("codex",)
     guide_os = "windows"
 
-    def __init__(self, order):
-        self.order = order
+    def __init__(self, order, vm_error=None):
+        self.order, self.vm_error = order, vm_error
+
+    def exec(self, argv, *, root=False):
+        self.order.append(("vm", argv[-1]))
+        if self.vm_error:
+            raise self.vm_error
+        return Completed(0, "", "")
+
+    def shell_argv(self, script):
+        return ["vm", script]
 
     def agent_installed(self, agent_id):
         return agent_id == "codex"
@@ -60,24 +70,13 @@ class Cloud:
         return self.rows
 
 
-class VmClient:
-    def __init__(self, order, error=None):
-        self.order, self.error = order, error
-
-    def agent_setup(self, agent_id):
-        self.order.append(("setup", agent_id))
-        if self.error:
-            raise self.error
-        return {"requested": True}
-
-
-def _api(tmp_path, *, cloud=None, readiness=READY, client_error=None, opened=None):
+def _api(tmp_path, *, cloud=None, readiness=READY, vm_error=None, opened=None):
     order, pushed = [], []
-    api = DesktopApi(WindowsLike(order), InstallState(tmp_path / "s.json"), push=pushed.append,
-                     probe_fn=lambda p: readiness, settings=Settings(tmp_path / "settings.json"),
+    api = DesktopApi(WindowsLike(order, vm_error), InstallState(tmp_path / "s.json"),
+                     push=pushed.append, probe_fn=lambda p: readiness,
+                     settings=Settings(tmp_path / "settings.json"),
                      cloud=(Account(), cloud or Cloud([SHOP, THEIRS])), ui_dir=UI,
                      home=tmp_path / "home", env={},
-                     client_factory=lambda p: VmClient(order, client_error),
                      open_url=(opened if opened is not None else []).append)
     return api, order, pushed
 
@@ -106,12 +105,12 @@ def test_this_computer_is_offered_only_once_it_has_a_vm(tmp_path):
     assert api.start_connect("codex", "local")["ok"] is False
 
 
-def test_codex_local_runs_vm_setup_first(tmp_path):
+def test_codex_local_checks_its_sign_in_in_the_vm_before_trusting_the_folder(tmp_path):
     api, order, pushed = _api(tmp_path)
 
     started, rows, end = _run(api, pushed, "codex", "local")
 
-    assert order == [("setup", "codex"), ("connect", "codex")]
+    assert order[-2:] == [("vm", "codex login status"), ("connect", "codex")]
     assert started["rows"] == ["access", "agent", "entry"]
     assert rows == [("access", "running"), ("access", "done"), ("agent", "running"),
                     ("agent", "done"), ("entry", "running"), ("entry", "done")]
@@ -119,8 +118,8 @@ def test_codex_local_runs_vm_setup_first(tmp_path):
     assert end["steps"][0]["title"] == "Run Codex in WSL"
 
 
-def test_a_failed_vm_setup_fails_the_agent_row(tmp_path):
-    api, order, pushed = _api(tmp_path, client_error=ApiUnavailableError("the VM is not answering"))
+def test_a_vm_that_does_not_answer_fails_the_agent_row(tmp_path):
+    api, order, pushed = _api(tmp_path, vm_error=VmUnresponsive("the VM is not answering"))
 
     _, rows, end = _run(api, pushed, "codex", "local")
 

@@ -48,6 +48,10 @@ _FROZEN = object()
 QUIT_STOP_TIMEOUT = 60.0
 
 
+# The confirm's name for the VM when the provider couldn't say which one switches;
+# then the default read next can't be told apart from the VM's own.
+_UNKNOWN_VM = "Eggie’s machine"
+
 class DesktopApi:
     def __init__(self, provider, state, *, push,
                  probe_fn=probe, steps_factory=None,
@@ -321,7 +325,7 @@ class DesktopApi:
         except Exception as e:
             # Asking is the safe side: nothing changes without the click.
             log.warning("checking the default for %s failed: %s", agent_id, e)
-            return "Eggie’s machine"
+            return _UNKNOWN_VM
 
     def start_connect(self, agent_id: str, kitchen_id: str, confirmed: bool = False) -> dict:
         """`confirmed`: the person agreed to the default the connection switches."""
@@ -410,7 +414,7 @@ class DesktopApi:
             log.warning("reading the current default failed: %s", e)
             return
         # An unreadable default keeps the one saved before.
-        if current and current != switching_to:
+        if current and switching_to != _UNKNOWN_VM and current != switching_to:
             self._settings.set_text(PREVIOUS_DEFAULT, current)
 
     def _switch_back(self) -> str:

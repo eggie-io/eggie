@@ -19,7 +19,7 @@
     "windows": {
       "local": [
         {"title": "Run Codex in WSL", "body": "<ol><li>Open the Codex app and sign in. If it was already open, quit it and open it again.</li><li>Open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
-        {"title": "Open the projects folder", "body": "<ol><li>Click <b>Add new project</b>.</li><li>Paste <code>\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
+        {"title": "Open the projects folder", "body": "<p>Click <b>Open Codex</b> below: it opens a new chat in the projects folder.</p><p>If the folder isn’t there:</p><ol><li>Click <b>Add new project</b>.</li><li>Paste <code>\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
         {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
       ],
       "cloud": [

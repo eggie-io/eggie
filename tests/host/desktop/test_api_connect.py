@@ -39,7 +39,7 @@ class WindowsLike:
 
     def connect_agent(self, agent_id):
         self.order.append(("connect", agent_id))
-        return "eggie-vm is now your default WSL distro."
+        return "Codex trusts the projects folder."
 
     def computer_name(self):
         return "Ihor's PC"

@@ -106,6 +106,8 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   app's Connect an agent (see `desktop/CLAUDE.md`). On Lima, `claude-code` refreshes `Host eggie` and adds an
   `"Eggie"` entry (id `eggie`) to `sshConfigs` in `~/.claude/settings.json`
   (`providers/claude_ssh.py`); a file it cannot parse is never rewritten. `destroy()` removes it.
-  On WSL, `codex` runs `wsl --set-default <distro>` (Codex on Windows runs only in the default
-  distro); it counts as connected when `wsl -l -v` marks the distro with `*` (plain `-l`'s
-  "(Default)" is translated). Nothing to undo on `destroy()`: unregistering moves the default on.
+  On WSL, `codex` marks the projects folder trusted in Codex's `config.toml`
+  (`providers/codex_trust.py`, append-only; an unreadable file is left alone) and counts as
+  connected while those entries are there. `open_agent(id, local=True)` opens Codex through
+  `codex://threads/new?path=` on `\\wsl.localhost\<distro>\opt\eggie\projects`. Nothing to undo
+  on `destroy()`.

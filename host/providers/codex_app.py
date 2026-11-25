@@ -24,7 +24,7 @@ def default_codex_home(env: Mapping[str, str], home: Path) -> Path:
 
 def _load(path: Path) -> dict:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         text = ""
     if not text.strip():
@@ -53,7 +53,7 @@ def _is(conn, alias: str) -> bool:
 
 def _save(path: Path, data: dict) -> None:
     ssh_alias._write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-                     mode=0o600)
+                     mode=0o600, encoding="utf-8")
 
 
 def has(codex_home: Path, alias: str) -> bool:

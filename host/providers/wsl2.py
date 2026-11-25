@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import socket
@@ -7,13 +8,16 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from ..core.images import WSL_IMAGES
 from ..core.provider import (Access, AccessField, Completed, Diagnosis, ProviderError,
                              VmUnresponsive)
-from . import registry
+from . import codex_app, codex_trust, registry
 from .wsl_encoding import decode_wsl
 from .wsl_checks import diagnose_wsl2, preflight_checks
+
+log = logging.getLogger(__name__)
 
 RUNONCE_KEY = r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
@@ -50,6 +54,11 @@ def _default_spawner(argv):
     # after the window closes. `wsl --terminate` in stop() ends it.
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, creationflags=_NO_WINDOW)
+
+
+def _default_opener(target: str) -> None:
+    # ShellExecute, as Start-Process does: the only way to hand Windows an app's own link.
+    os.startfile(target)  # type: ignore[attr-defined]
 
 
 def _default_facts() -> dict:
@@ -195,7 +204,7 @@ class Wsl2Provider:
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=registry.write_value, arch=None,
-                 spawner=_default_spawner,
+                 spawner=_default_spawner, opener=_default_opener,
                  sleep=time.sleep, clock=time.monotonic,
                  env=os.environ, which=shutil.which):
         self.distro = distro
@@ -204,6 +213,7 @@ class Wsl2Provider:
         self.wsl = wsl
         self._run = runner
         self._spawn = spawner
+        self._open = opener
         self._facts = facts
         self._elevate = elevator
         self._write_registry = registry_writer
@@ -504,8 +514,8 @@ class Wsl2Provider:
         """None: the distro runs no sshd, so there is no host to name."""
         return None
 
-    # The agents reach the distro through WSL itself. Codex on Windows runs
-    # only in the default distro, so connecting it makes this one the default.
+    # The agents reach the distro through WSL itself; for Codex, Eggie marks
+    # the projects folder trusted so Codex opens it without asking.
     agent_connections = ("codex",)
     # No sshd in the distro: the agents reach it through WSL.
     local_ssh_alias = None
@@ -513,14 +523,27 @@ class Wsl2Provider:
     def connect_agent(self, agent_id: str) -> str:
         if agent_id not in self.agent_connections:
             raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
-        self._require(self._meta(["--set-default", self.distro]),
-                      f"'{self.distro}' could not be made the default WSL distro",
-                      "vm_configure_failed")
-        return f"{self.distro} is now your default WSL distro."
+        try:
+            codex_trust.trust(self._codex_home(), self._codex_folders())
+        except (OSError, ValueError) as e:
+            # Codex still works; it asks to trust the folder itself.
+            log.warning("could not mark the projects folder trusted in Codex: %s", e)
+            return "Codex will ask you to trust the projects folder."
+        return "Codex trusts the projects folder."
+
+    def _codex_home(self) -> Path:
+        return codex_app.default_codex_home(self._env, Path.home())
+
+    def _codex_folders(self) -> list[str]:
+        # The keys Codex itself writes: its lowercased Windows path, and the
+        # Linux path when Codex runs in WSL.
+        return [rf"\\?\unc\wsl.localhost\{self.distro}\opt\eggie\projects".lower(),
+                "/opt/eggie/projects"]
 
     def agent_connected(self, agent_id: str) -> bool:
-        """Whether this distro is the default, so the guide can skip the button."""
-        return agent_id == "codex" and self._default_distro() == self.distro
+        """Whether connect_agent's trust entries are in Codex's config."""
+        return agent_id == "codex" and codex_trust.trusted(self._codex_home(),
+                                                           self._codex_folders())
 
     def agent_app(self, agent_id: str) -> str | None:
         """The agent's app, to open it from the app; None for a CLI-only install."""
@@ -532,10 +555,19 @@ class Wsl2Provider:
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
 
-    def open_agent(self, agent_id: str) -> bool:
+    def open_agent(self, agent_id: str, local: bool = False) -> bool:
+        """`local`: open it on this computer's kitchen, which only Codex can be told."""
         app = self.agent_app(agent_id)
         if app is None:
             return False
+        if local and agent_id == "codex":
+            folder = rf"\\wsl.localhost\{self.distro}\opt\eggie\projects"
+            try:
+                self._open("codex://threads/new?path=" + quote(folder, safe=""))
+                return True
+            except OSError as e:
+                # A Codex build without the codex:// handler still opens, without the folder.
+                log.warning("opening Codex on the projects folder failed: %s", e)
         self._spawn([app])
         return True
 
@@ -545,17 +577,6 @@ class Wsl2Provider:
     def computer_name(self) -> str:
         return socket.gethostname()
 
-    def _default_distro(self) -> str | None:
-        # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",
-        # which Windows translates. Neither boots a distro.
-        out = self._meta(["-l", "-v"])
-        if not out.ok:
-            return None
-        for line in out.stdout.replace("\x00", "").splitlines():
-            fields = line.split()
-            if len(fields) >= 2 and fields[0] == "*":
-                return fields[1]
-        return None
 
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs

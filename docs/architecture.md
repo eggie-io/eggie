@@ -180,7 +180,7 @@ the console shows for a cloud kitchen; the desktop app ships its own). Agents us
 |---|---|---|
 | VM | WSL2 distro `eggie-vm`, imported from an Ubuntu 24.04 rootfs | Lima VM `eggie-vm` (`host/providers/eggie.yaml`) |
 | Port forwarding | WSL `localhostForwarding` | Lima `portForwards`, loopback |
-| Agent access | WSL distro (Codex needs `eggie-vm` as the default distro) | SSH on `39022` |
+| Agent access | WSL distro (Codex opens `\\wsl.localhost\eggie-vm\opt\eggie\projects`) | SSH on `39022` |
 | Status | Primary, tested | Mostly unverified |
 
 ## Trust boundary

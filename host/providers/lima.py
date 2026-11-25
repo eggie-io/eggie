@@ -462,7 +462,7 @@ class LimaProvider:
         return cli is not None and (self.agent_app(agent_id) is not None
                                     or self._which(cli) is not None)
 
-    def open_agent(self, agent_id: str) -> bool:
+    def open_agent(self, agent_id: str, local: bool = False) -> bool:
         app = self.agent_app(agent_id)
         if app is None:
             return False

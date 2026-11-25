@@ -1191,7 +1191,7 @@ function stepBody(html) {
   return body;
 }
 
-ACTIONS['open-agent'] = () => api().open_agent(ready.agent.id);
+ACTIONS['open-agent'] = () => api().open_agent(ready.agent.id, ready.kitchen.id);
 ACTIONS['connect-done'] = async () => {
   await api().mark_done(ready.agent.id, ready.kitchen.id);
   return refresh();

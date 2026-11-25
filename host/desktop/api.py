@@ -372,10 +372,10 @@ class DesktopApi:
         self._settings.add_member(AGENTS_DONE, done_flag(agent_id, kitchen_id))
         return {"ok": True}
 
-    def open_agent(self, agent_id: str) -> dict:
+    def open_agent(self, agent_id: str, kitchen_id: str = "") -> dict:
         if self._manifest(agent_id) is None:
             return {"ok": False}
-        return {"ok": bool(self._provider.open_agent(agent_id))}
+        return {"ok": bool(self._provider.open_agent(agent_id, local=kitchen_id == "local"))}
 
     def open_agent_download(self, agent_id: str) -> dict:
         manifest = self._manifest(agent_id)

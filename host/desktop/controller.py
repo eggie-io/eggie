@@ -30,8 +30,9 @@ class Controller:
         self._exiting = False
         self._background = None
         self.login_launched = threading.Event()
-        # Set by run() once the bridge exists: hands it a link's kitchen.
-        self.link_to = lambda kitchen: None
+        # Replaced by run() once the bridge exists; a link before that waits here.
+        self.early_link = ""
+        self.link_to = lambda kitchen: setattr(self, "early_link", kitchen)
 
     def on_closing(self) -> bool:
         # destroy() and macOS terminate: both arrive here too; only a real

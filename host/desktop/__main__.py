@@ -123,8 +123,11 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
-    api.linked = kitchen_from_link(link) or ""
     controller.link_to = lambda kitchen: setattr(api, "linked", kitchen)
+    api.linked = kitchen_from_link(link) or controller.early_link
+    if api.linked:
+        # A link asks for the window, even on a login launch.
+        mode = WINDOW
     api.start_app_update_check()
 
     # Started before the window exists: a tray that cannot load (missing

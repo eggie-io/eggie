@@ -119,7 +119,7 @@ function AppPanel() {
   const onSite = typeof site === "string";
   const { data } = useQuery({ ...instancesQuery, staleTime: Infinity, enabled: onSite });
   const kitchen = onSite ? data?.instances.find((instance) => instance.current)?.id : "local";
-  const link = `eggie://connect/${kitchen ? encodeURIComponent(kitchen) : ""}`;
+  const link = kitchen ? `eggie://connect/${encodeURIComponent(kitchen)}` : null;
   return (
     <section className={s.appPanel}>
       <span className={s.appMark}><BrandMark size={30} /></span>
@@ -132,7 +132,8 @@ function AppPanel() {
           The Eggie app on your computer connects your agent to this kitchen in one click. Nothing to copy or paste.
         </p>
         <div className={s.appActions}>
-          <Button variant="primary" size="lg" iconRight="external" onClick={() => { window.location.href = link; }}>
+          <Button variant="primary" size="lg" iconRight="external" disabled={link === null}
+            onClick={() => { if (link) window.location.href = link; }}>
             Open Eggie
           </Button>
           {webApp && (

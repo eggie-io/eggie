@@ -388,11 +388,15 @@ async function fromTray(go) {
   }
 }
 
+const JOB_SCREENS = new Set(['install:running', 'runtime-update:running', 'connect:running',
+  'connect:sign-in', 'app-update:running', 'quitting']);
+
 const ROUTES = {
   'settings': () => fromTray(ACTIONS.settings),
   'quit': () => fromTray(() => startQuit(false)),
   // An eggie:// link: Home reads its kitchen (view.screen_for) and shows the picker.
-  'link': () => refresh(),
+  // Never over a job's screen: the job would carry on with nothing showing it.
+  'link': () => (JOB_SCREENS.has(document.getElementById('screen').dataset.screen) ? null : refresh()),
 };
 
 // A route that lands before start() waits for it: two refresh() calls racing

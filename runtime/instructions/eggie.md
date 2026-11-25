@@ -36,6 +36,8 @@ they ask you to be more or less technical, or tell you how they like to work, up
 At every level the rules below hold, and always give them the project's URL.
 
 - Start with `eggie status` to see what exists and what is running.
+- `eggie` talks to a service in this VM. If your commands run in a sandbox, run `eggie`
+  outside it, with network access, from the first call.
 - Run projects only with `eggie up` — never `docker compose up` directly,
   or the project gets no URL.
 - Never start a server yourself: no `npm run dev`, `vite`, `python -m http.server`,

@@ -588,9 +588,13 @@ class Wsl2Provider:
             return False
         if local and agent_id == "codex":
             folder = rf"\\wsl.localhost\{self.distro}\opt\eggie\projects"
-            self._open("codex://threads/new?path=" + quote(folder, safe=""))
-        else:
-            self._spawn([app])
+            try:
+                self._open("codex://threads/new?path=" + quote(folder, safe=""))
+                return True
+            except OSError as e:
+                # A Codex build without the codex:// handler still opens, without the folder.
+                log.warning("opening Codex on the projects folder failed: %s", e)
+        self._spawn([app])
         return True
 
     # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.

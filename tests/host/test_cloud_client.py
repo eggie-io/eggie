@@ -204,6 +204,9 @@ def test_connect_without_sign_in_still_connects_this_computer(tmp_path, monkeypa
             self.connected.append(agent_id)
             return "ok"
 
+        def switches_default(self, agent_id):
+            return None
+
     provider = Provider()
     monkeypatch.setattr(
         cli, "_connector_factory",

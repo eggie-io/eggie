@@ -143,9 +143,20 @@ def test_codex_never_switches_the_default_distro_without_the_click(tmp_path):
     card = next(c for c in api.agents("local")["cards"] if c["id"] == "codex")
     assert card["switches"] == "eggie-vm"
     assert card["confirm"]["button"] == "Make eggie-vm the default"
-    assert api.start_connect("codex", "local")["ok"] is False
+    refused = api.start_connect("codex", "local")
+    assert refused["ok"] is False and refused["switches"] == "eggie-vm"
     assert api.start_connect("codex", "local", "yes")["ok"] is False
     assert not api.jobs.running() and order == []
+
+
+def test_an_unreadable_default_keeps_the_one_saved_before(tmp_path):
+    api, _, pushed = _api(tmp_path)
+    api._provider.default = None
+    Settings(tmp_path / "settings.json").set_text("previous_default", "Ubuntu")
+
+    _, _, end = _run(api, pushed, "codex", "local", confirmed=True)
+
+    assert end["switch_back"] == "Ubuntu"
 
 
 def test_the_replaced_default_is_offered_back_until_it_is_restored(tmp_path):

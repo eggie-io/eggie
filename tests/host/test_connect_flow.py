@@ -124,9 +124,13 @@ class FakeLogin:
 
 
 class FakeProvider:
-    def __init__(self, local_ssh_alias=None):
+    def __init__(self, local_ssh_alias=None, switches=None):
         self.local_ssh_alias = local_ssh_alias
         self.connected = []
+        self.switches = switches
+
+    def switches_default(self, agent_id):
+        return self.switches
 
     def connect_agent(self, agent_id):
         self.connected.append(agent_id)
@@ -329,6 +333,15 @@ def test_local_wsl_connects_codex_and_explains_claude(tmp_path):
     claude = [line for line in lines if line.agent == "Claude Code"]
     assert claude[0].text == "On Windows, pick eggie-vm under WSL in Claude Code."
     assert all(line.ok for line in lines)
+
+
+def test_the_cli_never_switches_another_distro_out_of_the_default(tmp_path):
+    w = World(tmp_path, FakeClient([]), FakeProvider(switches="eggie-vm"))
+
+    lines = w.connector().connect({"codex"}, [], local=True)
+
+    assert w.provider.connected == []
+    assert "Eggie app" in lines[0].text
 
 
 def test_local_lima_adds_codex_on_the_vm_alias_and_remove_keeps_its_host(tmp_path):

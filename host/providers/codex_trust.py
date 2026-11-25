@@ -21,7 +21,8 @@ def trust(codex_home: Path, folders: list[str]) -> bool:
     if path.exists():
         path = path.resolve()  # write through a dotfiles symlink
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8", newline="") as f:
+            text = f.read()
     except FileNotFoundError:
         text = ""
     projects = tomllib.loads(text).get("projects", {})
@@ -32,9 +33,10 @@ def trust(codex_home: Path, folders: list[str]) -> bool:
         return False
     if any("'" in f or "\n" in f for f in missing):
         raise ValueError("a folder name can't be written as a TOML key")
-    added = "".join(f"\n[projects.'{f}']\ntrust_level = \"trusted\"\n" for f in missing)
-    result = text + ("\n" if text and not text.endswith("\n") else "") + added
+    eol = "\r\n" if "\r\n" in text else "\n"
+    added = "".join(f"{eol}[projects.'{f}']{eol}trust_level = \"trusted\"{eol}" for f in missing)
+    result = text + (eol if text and not text.endswith("\n") else "") + added
     # An inline `projects = {...}` can't take a [projects.x] table after it.
     tomllib.loads(result)
-    ssh_alias._write(path, result, mode=0o600, encoding="utf-8")
+    ssh_alias._write(path, result, mode=0o600, encoding="utf-8", newline="")
     return True

@@ -1021,7 +1021,10 @@ function pickedAgent(node) {
 // One that would switch this computer's default WSL distro asks first.
 ACTIONS['pick-agent'] = (node) => {
   const agent = pickedAgent(node);
-  if (!agent.switches) return startConnect(agent, picker.kitchen);
+  return agent.switches ? showConfirm(agent) : startConnect(agent, picker.kitchen);
+};
+
+function showConfirm(agent) {
   confirming = agent;
   show('connect:confirm', { agent: agent.name, kitchen: picker.kitchen.title, distro: agent.switches });
   // The guide's own words for this OS, when it has them.
@@ -1030,13 +1033,16 @@ ACTIONS['pick-agent'] = (node) => {
     document.querySelector('[data-confirm-button]').textContent = agent.confirm.button;
     document.querySelector('[data-confirm-body]').replaceChildren(...stepBody(agent.confirm.body).childNodes);
   }
-  return undefined;
-};
+}
 ACTIONS['connect-confirm'] = () => startConnect(confirming, picker.kitchen, true);
 ACTIONS['get-agent'] = (node) => api().open_agent_download(node.dataset.agent || ready.agent.id);
 
 async function startConnect(agent, kitchen, confirmed = false) {
   const started = await api().start_connect(agent.id, kitchen.id, confirmed);
+  // The default changed since the picker drew: ask now.
+  if (!started.ok && started.switches) {
+    return showConfirm(Object.assign({}, agent, { switches: started.switches, confirm: started.confirm }));
+  }
   if (!started.ok) return showNotice(started.message);
   connecting = {
     agent, kitchen, confirmed, job: started.job, rows: started.rows,
@@ -1218,7 +1224,10 @@ ACTIONS['switch-default-back'] = async () => {
   const result = await api().switch_default_back();
   if (!result.ok) return showNotice(result.message);
   const screen = document.getElementById('screen').dataset.screen || '';
-  return screen === 'connect:ready' ? showPicker(ready.kitchen.id) : ACTIONS.settings();
+  if (screen === 'connect:ready') return showPicker(ready.kitchen.id);
+  // A parked 3c would still offer the switch back.
+  stash = null;
+  return ACTIONS.settings();
 };
 ACTIONS['connect-done'] = async () => {
   await api().mark_done(ready.agent.id, ready.kitchen.id);

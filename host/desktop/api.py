@@ -334,10 +334,12 @@ class DesktopApi:
         local = kitchen_id == "local"
         switches = self._switches(manifest.id) if local else ""
         if switches and confirmed is not True:
-            return {"ok": False, "message": f"{manifest.name} needs your OK to change "
-                                            "the default WSL distro first."}
+            confirm = manifest.confirm.get(self._provider.guide_os)
+            return {"ok": False, "switches": switches,
+                    "confirm": dataclasses.asdict(confirm) if confirm else None,
+                    "message": f"{manifest.name} needs your OK to change the default first."}
         if switches:
-            self._remember_default()
+            self._remember_default(switches)
         cancel = self._connect_cancel = threading.Event()
         instance_id = None if local else kitchen_id
         # The job's emit, once it runs; the connector is made first for its rows.
@@ -401,13 +403,15 @@ class DesktopApi:
 
     # --- the default the connection switched --------------------------------
 
-    def _remember_default(self) -> None:
+    def _remember_default(self, switching_to: str) -> None:
         try:
             current = self._provider.current_default()
         except Exception as e:
             log.warning("reading the current default failed: %s", e)
             return
-        self._settings.set_text(PREVIOUS_DEFAULT, current or "")
+        # An unreadable default keeps the one saved before.
+        if current and current != switching_to:
+            self._settings.set_text(PREVIOUS_DEFAULT, current)
 
     def _switch_back(self) -> str:
         """The default to offer back: saved, still installed, and Eggie's VM is

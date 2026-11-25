@@ -124,3 +124,27 @@ def test_trust_keeps_text_that_is_not_ascii(tmp_path):
     config.write_bytes('# Ігор’s settings\n'.encode("utf-8"))
     codex_trust.trust(tmp_path, FOLDERS)
     assert config.read_bytes().startswith('# Ігор’s settings\n'.encode("utf-8"))
+
+
+def test_codex_still_opens_when_its_link_has_no_handler(tmp_path):
+    app = tmp_path / "Microsoft" / "WindowsApps" / "OpenAI.Codex_2p2nqsd0c76g0" / "chatgpt-desktop.exe"
+    app.parent.mkdir(parents=True)
+    app.write_bytes(b"")
+    spawned = []
+
+    def no_handler(url):
+        raise OSError("[WinError 1155] No application is associated")
+
+    provider = Wsl2Provider(distro="eggie-vm", runner=Wsl("eggie-vm", ["eggie-vm"]),
+                            opener=no_handler, spawner=spawned.append,
+                            env={"LOCALAPPDATA": str(tmp_path), "CODEX_HOME": "/dev/null/codex"})
+    assert provider.open_agent("codex", local=True) is True
+    assert spawned == [[str(app)]]
+
+
+def test_trust_keeps_windows_line_endings(tmp_path):
+    config = tmp_path / "config.toml"
+    config.write_bytes(b'model = "gpt-5"\r\n')
+    codex_trust.trust(tmp_path, FOLDERS)
+    raw = config.read_bytes()
+    assert raw.startswith(b'model = "gpt-5"\r\n') and b"\n" not in raw.replace(b"\r\n", b"")

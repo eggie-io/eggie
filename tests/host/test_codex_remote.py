@@ -175,6 +175,27 @@ def test_a_sign_in_address_off_openai_is_never_opened():
         assert opened == [] and proc.killed
 
 
+def test_a_login_killed_on_a_host_without_hang_up_is_stopped_there():
+    proc = FakeProc(["https://auth.openai.com/x\n"], hang=True)
+    scripts = []
+    host = codex_remote.Host(lambda s: scripts.append(s), ["vm", "codex login"],
+                             stop=codex_remote.STOP_LOGIN)
+    probe = codex_remote.sign_in(host, popen=lambda a: proc, open_url=lambda u: None,
+                                 port_free=lambda p: True, cancelled=lambda: True)
+    assert probe == codex_remote.Probe(False, "Cancelled")
+    assert proc.killed and scripts == [codex_remote.STOP_LOGIN]
+
+
+def test_a_finished_login_stops_nothing():
+    proc = FakeProc(["https://auth.openai.com/x\n", None])
+    scripts = []
+    host = codex_remote.Host(lambda s: scripts.append(s), ["vm", "codex login"],
+                             stop=codex_remote.STOP_LOGIN)
+    assert codex_remote.sign_in(host, popen=lambda a: proc, open_url=lambda u: None,
+                                port_free=lambda p: True).ok
+    assert scripts == []
+
+
 def test_cancel_while_waiting_for_the_browser_kills_the_tunnel():
     proc = FakeProc(["https://auth.openai.com/x\n"], hang=True)
     opened = []

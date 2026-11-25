@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import queue
 import re
 import socket
@@ -16,6 +17,8 @@ from dataclasses import dataclass
 from ..provider import Completed
 from . import ssh
 from .ssh import Probe
+
+log = logging.getLogger(__name__)
 
 CALLBACK_PORT = 1455
 # The instance's runtime says how Codex installs there, so a change to it needs no host release.
@@ -36,6 +39,12 @@ class Host:
     `codex login` whose callback port reaches this computer's 1455."""
     shell: Callable[[str], Completed]
     login: list[str]
+    # Ends a `codex login` its killed process left running; ssh's hang-up does that itself.
+    stop: str = ""
+
+
+# [c]: the pattern matches codex login, never the shell that runs pkill.
+STOP_LOGIN = "pkill -f '[c]odex login' || true"
 
 
 def over_ssh(run, alias: str) -> Host:
@@ -112,6 +121,11 @@ def sign_in(host: Host, *, popen=_popen, open_url=webbrowser.open,
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
+            if host.stop:
+                try:
+                    host.shell(host.stop)
+                except Exception as e:
+                    log.warning("could not stop codex login: %s", e)
 
 
 def _wait(proc, deadline: float, cancelled) -> int | None:

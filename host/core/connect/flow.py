@@ -518,7 +518,8 @@ class Connector:
         # No ssh host: the VM's own shell. Its localhost forwarding brings the
         # sign-in's callback port to this computer.
         return codex_remote.Host(lambda script: self._provider.exec(["bash", "-lc", script]),
-                                 self._provider.shell_argv("codex login"))
+                                 self._provider.shell_argv("codex login"),
+                                 stop=codex_remote.STOP_LOGIN)
 
     def _codex_ready(self, host: codex_remote.Host, label: str) -> None:
         installed = codex_remote.ensure_installed(host)

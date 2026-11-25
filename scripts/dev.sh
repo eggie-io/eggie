@@ -148,8 +148,10 @@ fi
 if (( window )); then
   say "Opening the desktop window from this checkout (Ctrl-C to close)"
   cd "$ROOT"
-  if [[ -n "$service" && "$service" != prod && -z "${EGGIE_EVENTS_URL:-}" ]]; then
-    export EGGIE_EVENTS_URL="$service/api"
+  if [[ -n "$service" && "$service" != prod ]]; then
+    export EGGIE_WEB_APP_URL="${EGGIE_WEB_APP_URL:-$service}"
+    export EGGIE_SERVICE_API_URL="${EGGIE_SERVICE_API_URL:-$service/api}"
+    export EGGIE_EVENTS_URL="${EGGIE_EVENTS_URL:-$service/api}"
   fi
   exec "$PY" -m host.desktop
 fi

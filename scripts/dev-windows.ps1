@@ -199,8 +199,10 @@ echo $TAG > /opt/eggie/runtime.version
     # --- window --------------------------------------------------------------
     if (-not $NoWindow) {
         Say "Opening the desktop window from this checkout (close it, or Ctrl-C, to stop)"
-        if ($Service -and $Service -ne 'prod' -and -not $env:EGGIE_EVENTS_URL) {
-            $env:EGGIE_EVENTS_URL = "$Service/api"
+        if ($Service -and $Service -ne 'prod') {
+            if (-not $env:EGGIE_WEB_APP_URL) { $env:EGGIE_WEB_APP_URL = $Service }
+            if (-not $env:EGGIE_SERVICE_API_URL) { $env:EGGIE_SERVICE_API_URL = "$Service/api" }
+            if (-not $env:EGGIE_EVENTS_URL) { $env:EGGIE_EVENTS_URL = "$Service/api" }
         }
         & $py -m host.desktop
         exit $LASTEXITCODE

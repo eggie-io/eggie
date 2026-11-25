@@ -17,12 +17,21 @@ BAKERY = {"id": "k1", "name": "bakery", "display_name": "Bakery", "status": "run
           "is_owner": True, "console_hostname": "bakery.eggie.app"}
 
 
+ALL = ("claude-code", "codex", "cursor")
+
+
 class MacLike:
     local_ssh_alias = "eggie"
     agent_connections = ("claude-code",)
 
+    def __init__(self, installed=ALL):
+        self._installed = installed
+
     def agent_installed(self, agent_id):
-        return False
+        return agent_id in self._installed
+
+    def agent_app(self, agent_id):
+        return None
 
 
 class WindowsLike:
@@ -33,7 +42,7 @@ class WindowsLike:
         self._default, self._error = default, error
 
     def agent_installed(self, agent_id):
-        return False
+        return True
 
     def agent_connected(self, agent_id):
         if self._error:
@@ -71,7 +80,18 @@ def test_mac_local_counts_each_agents_own_entry(tmp_path):
     _block(home, "eggie")
     claude_ssh.install(home / ".claude")
     codex_app.add(home / ".codex", "eggie", "/opt/eggie/projects", "Eggie · This computer")
-    assert _chips(_api(tmp_path, MacLike()))["local"] == ["Claude Code", "Codex"]
+    assert _chips(_api(tmp_path, MacLike()))["local"] == ["Claude Code", "ChatGPT (Codex)"]
+
+
+def test_an_agent_whose_app_is_gone_is_not_connected_whatever_it_left_behind(tmp_path):
+    home = tmp_path / "home"
+    _block(home, "eggie")
+    claude_ssh.install(home / ".claude")
+    codex_app.add(home / ".codex", "eggie", "/opt/eggie/projects", "Eggie · This computer")
+    api = _api(tmp_path, MacLike(installed=("claude-code",)))
+    assert _chips(api)["local"] == ["Claude Code"]
+    codex = next(c for c in api.agents("local")["cards"] if c["id"] == "codex")
+    assert codex["state"] == "missing"
 
 
 def test_an_entry_without_its_host_block_is_not_connected(tmp_path):
@@ -100,7 +120,7 @@ def test_cursor_needs_its_host_block_and_done_for_that_kitchen(tmp_path):
 
 def test_windows_local_asks_the_provider_for_codex_and_done_for_the_rest(tmp_path):
     Settings(tmp_path / "settings.json").add_member(AGENTS_DONE, done_flag("claude-code", "local"))
-    assert _chips(_api(tmp_path, WindowsLike(default=True)))["local"] == ["Claude Code", "Codex"]
+    assert _chips(_api(tmp_path, WindowsLike(default=True)))["local"] == ["Claude Code", "ChatGPT (Codex)"]
     assert _chips(_api(tmp_path, WindowsLike(default=False)))["local"] == ["Claude Code"]
 
 

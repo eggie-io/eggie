@@ -171,7 +171,6 @@ def _default_arch() -> str:
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
 
 
-_AGENT_CLIS = {"claude-code": "claude", "codex": "codex", "cursor": "cursor"}
 
 
 def _agent_apps(env, agent_id: str) -> list[Path]:
@@ -206,7 +205,7 @@ class Wsl2Provider:
                  registry_writer=registry.write_value, arch=None,
                  spawner=_default_spawner, opener=_default_opener,
                  sleep=time.sleep, clock=time.monotonic,
-                 env=os.environ, which=shutil.which):
+                 env=os.environ):
         self.distro = distro
         self.install_dir = Path(install_dir) if install_dir else None
         self.rootfs = Path(rootfs) if rootfs else None
@@ -222,7 +221,6 @@ class Wsl2Provider:
         self._arch = arch or _default_arch()
         self._features_enabled = False
         self._env = env
-        self._which = which
 
     # --- wsl.exe's own output is UTF-16LE ---
     def _meta(self, args: list[str]) -> Completed:
@@ -541,23 +539,28 @@ class Wsl2Provider:
                 "/opt/eggie/projects"]
 
     def agent_connected(self, agent_id: str) -> bool:
-        """Whether connect_agent's trust entries are in Codex's config."""
-        return agent_id == "codex" and codex_trust.trusted(self._codex_home(),
-                                                           self._codex_folders())
+        """Whether connect_agent's trust entries are in Codex's config and Codex is
+        signed in inside the VM, where its WSL mode runs it."""
+        if agent_id != "codex" or not codex_trust.trusted(self._codex_home(),
+                                                          self._codex_folders()):
+            return False
+        # Asking a stopped VM would boot it (any `wsl -d` does): trust the entries.
+        if not self.running():
+            return True
+        return self.exec(["test", "-s", ".codex/auth.json"]).ok
 
     def shell_argv(self, script: str) -> list[str]:
         """A login shell in the VM as its user, for a process the caller reads as it runs."""
         return [self.wsl, "-d", self.distro, "--cd", "~", "--", "bash", "-lc", script]
 
     def agent_app(self, agent_id: str) -> str | None:
-        """The agent's app, to open it from the app; None for a CLI-only install."""
+        """The agent's app, to open it from Eggie; None when it isn't installed."""
         # exists(), not is_file(): a Store alias is a reparse point.
         return next((str(p) for p in _agent_apps(self._env, agent_id) if p.exists()), None)
 
     def agent_installed(self, agent_id: str) -> bool:
-        cli = _AGENT_CLIS.get(agent_id)
-        return cli is not None and (self.agent_app(agent_id) is not None
-                                    or self._which(cli) is not None)
+        # The app, never a CLI on PATH: every guide and Open button needs the app.
+        return self.agent_app(agent_id) is not None
 
     def open_agent(self, agent_id: str, local: bool = False) -> bool:
         """`local`: open it on this computer's kitchen, which only Codex can be told."""

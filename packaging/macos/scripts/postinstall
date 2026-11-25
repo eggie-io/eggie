@@ -1,13 +1,14 @@
 #!/bin/bash
 # Runs as root, once the app is in /Applications.
 #
-# It puts `eggie` on PATH and stops there. It must not run setup: setup builds
-# a Lima VM, and Lima keeps VMs per user under ~/.lima — one created by root
-# would be invisible to the person who installed it, and would leave a VM this
-# app can never find or delete.
+# It puts `eggie` on PATH and opens the app for the person at the screen. It
+# must not run setup: setup builds a Lima VM, and Lima keeps VMs per user under
+# ~/.lima — one created by root would be invisible to the person who installed
+# it, and would leave a VM this app can never find or delete.
 set -euo pipefail
 
-app="/Applications/Eggie.app/Contents/MacOS/eggie"
+bundle="/Applications/Eggie.app"
+app="$bundle/Contents/MacOS/eggie"
 bindir="/usr/local/bin"
 
 [ -x "$app" ] || { echo "Eggie.app is missing its command-line tool" >&2; exit 1; }
@@ -16,5 +17,19 @@ bindir="/usr/local/bin"
 # the default PATH whether or not it exists.
 mkdir -p "$bindir"
 ln -sfn "$app" "$bindir/eggie"
+
+# The counterpart of the Windows "Open Eggie" checkbox. `installer -pkg` from a
+# terminal sets COMMAND_LINE_INSTALL and gets no app, like Inno's skipifsilent.
+# loginwindow owns the console while nobody is logged in.
+open_for_console_user() {
+    [ -z "${COMMAND_LINE_INSTALL:-}" ] || return 0
+    local user uid
+    user=$(stat -f%Su /dev/console) || return 0
+    case "$user" in ""|root|loginwindow) return 0 ;; esac
+    uid=$(id -u "$user") || return 0
+    # Started as root, the app would keep its sign-in and VM in root's home.
+    launchctl asuser "$uid" sudo -u "$user" open "$bundle"
+}
+open_for_console_user || echo "Could not open Eggie; open it from Applications." >&2
 
 exit 0

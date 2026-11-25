@@ -41,10 +41,10 @@ sudo installer -pkg dist/EggieSetup-<version>-<arch>.pkg -target /
 
 - **Native architecture only.** An Apple Silicon build refuses to install on Intel; an Intel Mac
   needs its own build.
-- The package installs `Eggie.app` into `/Applications` and links `eggie` into your PATH, and
-  does nothing else. Open the app, or run `eggie setup --headless`, to build the VM. The
-  package's scripts run as root, but Lima keeps VMs per user, so the installer can't build the
-  VM itself.
+- The package installs `Eggie.app` into `/Applications`, links `eggie` into your PATH and opens
+  the app as the logged-in user (not for `sudo installer -pkg` from a terminal). The app, or
+  `eggie setup --headless`, builds the VM. The package's scripts run as root, but Lima keeps VMs
+  per user, so the installer can't build the VM itself.
 - You don't need to install Lima yourself. Setup downloads a checksum-verified copy into
   `~/.local/share/eggie/lima/`.
 - To remove everything, including the VM and its projects, run

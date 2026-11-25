@@ -79,9 +79,11 @@ def _default_start(**kwargs):
 
 def run(provider, state, *, desktop, create=_default_create, start=_default_start,
         resumed: bool = False, background: bool = False, steps_factory=None,
-        app_update_fn=None, settings=None, log_path=None, events=None) -> int:
+        app_update_fn=None, settings=None, log_path=None, events=None,
+        link: str = "") -> int:
     from .api import DesktopApi
     from .controller import Controller
+    from .links import kitchen_from_link
     from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
     from .settings import Settings
     from .shell import Shell, guarded
@@ -101,7 +103,8 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
              constants.APP_VERSION, resumed, background)
     shell = Shell()
     controller = Controller(provider, desktop, settings, shell, push=shell.push)
-    if not desktop.single_instance(controller.show, announce=not background):
+    if not desktop.single_instance(controller.show, announce=not background, link=link,
+                                   on_link=controller.follow_link):
         return 0
     try:
         telemetry.report_launch(events, settings, background=background,
@@ -120,6 +123,8 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
+    api.linked = kitchen_from_link(link) or ""
+    controller.link_to = lambda kitchen: setattr(api, "linked", kitchen)
     api.start_app_update_check()
 
     # Started before the window exists: a tray that cannot load (missing
@@ -170,6 +175,10 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
         controller.start_vm_in_background()
     elif not resumed and tray is not None:
         desktop.watch_login_launch(controller.on_login_launch)
+    try:
+        desktop.watch_links(controller.follow_link)
+    except Exception:
+        log.exception("could not watch for eggie:// links")
 
     try:
         start(debug=False)
@@ -192,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--background", action="store_true")
+    # An eggie:// link; the installer registers the app as its handler.
+    parser.add_argument("--open", default="")
     args = parser.parse_args(argv)
 
     root = default_install_dir().parent
@@ -211,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
 
     desktop = get_desktop()
     return run(provider, state, desktop=desktop, steps_factory=build_steps,
-               resumed=args.resume, background=args.background,
+               resumed=args.resume, background=args.background, link=args.open,
                log_path=logfile.log_file(root),
                events=start_sender(desktop, frozen=getattr(sys, "frozen", False),
                                    env=os.environ))

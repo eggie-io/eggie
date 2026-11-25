@@ -76,8 +76,10 @@ a bare `docker build runtime/web` fails. Release versioning is in `runtime/CLAUD
     connection" last step. `onboarding/onboarding.ts` decides: shown only on a site, when no agent is connected,
     the counter is empty and this browser's localStorage has no done/skipped mark. On this computer it never shows. Mock: `?scenario=fresh` (a site with nothing yet).
   - `/agents` and `/agents/:id` — the agent guide (the "Agents" tab), on a site only: on this computer the
-    tab, the routes (they redirect to `/`) and the handoff card's "Switch agent" are gone. The picker's
-    top line links the web app (`<web_app>`, via `openExternal`) to the desktop app. All content is in
+    tab, the routes (they redirect to `/`) and the handoff card's "Switch agent" are gone. The picker
+    leads with **Open Eggie** (`eggie://connect/<current instance id>`, handled by the desktop app) and a
+    link to the web app (`<web_app>`, via `openExternal`) to get it; the guides sit below as compact
+    "Connect by hand" rows. Inside the desktop window the panel is gone and the guides are cards. All content is in
     `runtime/agents/` (served at `/agent-guides/`; the Dockerfile copies it, a Vite plugin serves it in dev): `index.json` for order,
     `<id>/agent.json` with a `cloud` block (the only one read), an optional `card` of fields to copy, steps with an HTML
     `body` and a `media` list (screenshots and videos; more than one makes a slider).

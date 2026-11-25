@@ -317,7 +317,8 @@ def connect(claude: bool = typer.Option(False, "--claude", help="Only Claude Cod
 @app.command()
 def setup(resume: bool = typer.Option(False, "--resume"),
           headless: bool = typer.Option(False, "--headless"),
-          background: bool = typer.Option(False, "--background")):
+          background: bool = typer.Option(False, "--background"),
+          open_link: str = typer.Option("", "--open", hidden=True)):
     """Set up everything: check the host, create the VM, install Docker."""
     import sys as _sys
     from host.core import constants
@@ -353,7 +354,8 @@ def setup(resume: bool = typer.Option(False, "--resume"),
         raise typer.Exit(code=run(provider, state, desktop=desktop,
                                   steps_factory=build_steps,
                                   resumed=resume, background=background,
-                                  log_path=log_file(root), events=events))
+                                  log_path=log_file(root), events=events,
+                                  link=open_link))
 
     steps = build_steps()
     # A provider names its own step's words -- "Installing Lima 2.2.0" is

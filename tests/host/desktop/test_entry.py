@@ -49,9 +49,10 @@ class FakeDesktop:
         self.announce, self.session_end = None, None
         self.styled = []
 
-    def single_instance(self, on_show, *, announce):
-        self.announce = announce
+    def single_instance(self, on_show, *, announce, link="", on_link=None):
+        self.announce, self.link = announce, link
         return self._primary
+    def watch_links(self, on_link): self.link_watch = on_link
     def watch_login_launch(self, on_login): self.login_watch = on_login
     def let_session_end_close(self, on_session_end): self.session_end = on_session_end
     def on_window_shown(self, visible): pass

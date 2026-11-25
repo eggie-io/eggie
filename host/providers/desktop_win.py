@@ -97,7 +97,8 @@ class WindowsDesktop:
         return WinTray(icons=icons, theme=self._theme, on_open=on_open,
                        on_settings=on_settings, on_quit=on_quit)
 
-    def single_instance(self, on_show, *, announce: bool) -> bool:
+    def single_instance(self, on_show, *, announce: bool, link: str = "",
+                        on_link=None) -> bool:
         from . import instance
         try:
             user = getpass.getuser()
@@ -107,7 +108,11 @@ class WindowsDesktop:
         # Eggie would answer and show its window instead.
         address = rf"\\.\pipe\eggie-{user}"
         return instance.claim(address, "AF_PIPE", on_show, announce=announce,
-                              before_show=_allow_any_foreground)
+                              before_show=_allow_any_foreground, link=link, on_link=on_link)
+
+    def watch_links(self, on_link) -> None:
+        """Windows starts a new process per eggie:// link (the installer's handler);
+        single_instance hands it over."""
 
     def autostart_enabled(self, exe_path: str) -> bool:
         if self._read_registry(RUN_KEY, AUTOSTART_VALUE_NAME) != run_value(_gui_exe(exe_path)):

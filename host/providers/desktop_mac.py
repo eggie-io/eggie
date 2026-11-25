@@ -55,10 +55,16 @@ class MacDesktop:
         return MacTray(icon=icons.on_light, on_open=on_open, on_settings=on_settings,
                        on_quit=on_quit)
 
-    def single_instance(self, on_show, *, announce: bool) -> bool:
+    def single_instance(self, on_show, *, announce: bool, link: str = "",
+                        on_link=None) -> bool:
         """LaunchServices keeps one instance of a .app; a second open arrives
         as the reopen event, which the tray turns into Open Eggie."""
         return True
+
+    def watch_links(self, on_link) -> None:
+        """eggie:// links arrive as Apple events, the one that launched the app too."""
+        from .links_mac import watch_links
+        watch_links(on_link)
 
     def system_info(self) -> dict[str, str]:
         return {"os": "macos",

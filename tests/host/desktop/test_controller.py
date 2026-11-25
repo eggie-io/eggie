@@ -111,6 +111,37 @@ def test_a_route_from_the_console_reloads_the_local_ui(tmp_path):
     assert ("load", LOCAL + "#quit") in window.calls
 
 
+def _linked(controller):
+    kitchens = []
+    controller.link_to = kitchens.append
+    return kitchens
+
+
+def test_a_link_hands_its_kitchen_over_and_redraws_the_local_ui(tmp_path):
+    controller, window = _controller(tmp_path)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/k1")
+    assert kitchens == ["k1"]
+    assert ("js", 'window.eggie.route("link")') in window.calls
+
+
+def test_a_link_before_the_page_loads_only_shows_the_window(tmp_path):
+    controller, window = _controller(tmp_path, url=None)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/k1")
+    assert kitchens == ["k1"]
+    assert window.calls == ["show"]
+
+
+def test_a_link_naming_no_kitchen_just_shows_the_app(tmp_path):
+    controller, window = _controller(tmp_path)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/../k1")
+    assert kitchens == []
+    assert "show" in window.calls
+    assert not any(isinstance(c, tuple) and c[0] == "js" and "route" in c[1] for c in window.calls)
+
+
 def test_a_failed_background_start_is_announced(tmp_path):
     provider = FakeProvider(start_error=RuntimeError("wsl.exe failed"))
     controller, _ = _controller(tmp_path, provider=provider)

@@ -195,7 +195,44 @@
 .navPair { display: flex; gap: var(--space-2); }
 .checkProblem { flex: 1 1 200px; margin-right: auto; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--danger); text-wrap: pretty; }
 
-.appLine { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
-.appLine a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-.appLine a:hover { color: var(--ink-2); }
-.appLine a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+/* The Eggie app first; connecting by hand is the smaller, advanced way below it. */
+.appPanel {
+  display: flex; gap: var(--space-5); align-items: flex-start; padding: var(--space-6);
+  background: var(--tile); border: 1px solid var(--tile-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+}
+.appMark {
+  flex: none; width: 56px; height: 56px; display: grid; place-content: center;
+  border-radius: 14px; background: var(--gold); color: var(--on-gold);
+}
+.appText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.appTitleRow { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.appTitle {
+  margin: 0; font-size: 20px; line-height: 26px; font-weight: 500; letter-spacing: -.01em;
+  font-variation-settings: var(--font-wide); color: var(--ink);
+}
+.appSub { margin: 0; max-width: 560px; font-size: 14px; line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
+.appActions { margin-top: var(--space-2); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.appGet { font-size: 13px; line-height: 18px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.appGet:hover { color: var(--ink); }
+.appGet:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+@media (max-width: 560px) { .appPanel { flex-direction: column; padding: var(--space-5); } }
+
+.manual { display: flex; flex-direction: column; gap: var(--space-2); }
+.manualHead { display: flex; align-items: center; gap: var(--space-2); }
+.manualTitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--ink-2); }
+.manualSub { margin: 0 0 var(--space-1); font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.manualList {
+  margin: 0; padding: 0; list-style: none;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2);
+}
+@media (max-width: 900px) { .manualList { grid-template-columns: minmax(0, 1fr); } }
+.manualRow {
+  height: 100%; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.manualRow:hover { color: var(--ink); text-decoration: none; border-color: var(--line-strong); background: var(--raised); }
+.manualRow:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.manualRow .mark { width: 28px; height: 28px; border-radius: 7px; }
+.manualRow .cardName { font-size: 14px; line-height: 20px; }
+.manualRow .cardTagline { font-size: 12px; line-height: 16px; }

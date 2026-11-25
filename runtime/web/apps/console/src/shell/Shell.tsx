@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { BrandMark, Icon, StatusDot, cx } from "@eggie/ui";
+import { Badge, BrandMark, Icon, cx } from "@eggie/ui";
 import { useDesktopHome } from "../desktop/DesktopContext";
 import { instancesQuery } from "../instances/query";
 import { instancePage } from "../site/signIn";
@@ -35,7 +35,7 @@ export function Shell({
           ) : null}
           <span className={s.mark}><BrandMark size={18} /></span>
           {signedIn ? <InstanceSwitcher /> : <span className={s.brand}>Eggie</span>}
-          {signedIn && <span className={s.open}><StatusDot status="running" label="Open" /></span>}
+          {signedIn && <span className={s.open}><Badge tone="success" icon="check">Running</Badge></span>}
           {trailing && <div className={s.end}>{trailing}</div>}
         </div>
         {nav && <nav className={s.nav}>{nav}</nav>}

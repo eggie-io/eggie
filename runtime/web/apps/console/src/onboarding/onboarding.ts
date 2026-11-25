@@ -7,14 +7,17 @@ const KEY = "eggie.onboarded";
 // A query that hasn't answered is undefined; one that failed is null.
 export function decide({
   marked,
+  onSite,
   statuses,
   counterItems,
 }: {
   marked: boolean;
+  // The desktop app onboards on its own; the console only does for a cloud kitchen.
+  onSite: boolean;
   statuses: AgentStatuses | null | undefined;
   counterItems: number | null | undefined;
 }): Phase {
-  if (marked) return "off";
+  if (marked || !onSite) return "off";
   // Either answer alone is enough to skip; neither failing is a reason to onboard.
   if (statuses && Object.values(statuses.agents).some((agent) => agent?.connected)) return "off";
   if (counterItems) return "off";

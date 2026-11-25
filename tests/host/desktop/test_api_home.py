@@ -1,7 +1,6 @@
 """The bridge's answer to "what should I draw".
 
-The first-run rule is carried over from host/setup_app/app.py and is the one
-piece of routing that is not a function of Readiness alone.
+Routing is view.screen_for; this checks the bridge feeds it the probe.
 """
 from __future__ import annotations
 
@@ -25,24 +24,12 @@ def _api(tmp_path, readiness):
                       probe_fn=lambda provider: readiness)
 
 
-def test_a_virgin_machine_is_first_run(tmp_path):
-    assert _api(tmp_path, Readiness()).home()["screen"] == "first-run"
+def test_a_virgin_machine_with_no_account_kitchens_asks_where(tmp_path):
+    assert _api(tmp_path, Readiness()).home()["screen"] == "where"
 
 
-def test_a_machine_that_got_partway_is_not_first_run(tmp_path):
-    # The loop this guards: create_vm failing forever leaves vm_exists False
-    # on every relaunch. Without the state check the app would re-enter the
-    # wizard every time and the user could never reach Home's Doctor button.
-    state = InstallState(tmp_path / "install-state.json")
-    state.mark("preflight")
-    api = DesktopApi(FakeProvider(), state, push=lambda event: None,
-                     probe_fn=lambda provider: Readiness())
-    home = api.home()
-    assert home["screen"] == "home:not_installed"
-
-
-def test_a_ready_machine_is_never_first_run(tmp_path):
-    assert _api(tmp_path, READY).home()["screen"] != "first-run"
+def test_a_machine_with_a_vm_goes_home(tmp_path):
+    assert _api(tmp_path, READY).home()["screen"] == "home"
 
 
 def test_home_carries_the_versions_the_odds_and_ends_row_shows(tmp_path):
@@ -115,20 +102,9 @@ def test_home_never_declares_to_a_vm_that_is_not_answering(tmp_path):
     assert provider.execs == []
 
 
-def test_a_hidden_tray_launch_keeps_the_console_entry_for_the_first_visible_home(tmp_path):
-    """A login launch draws Home in a window nobody sees, while the VM boots.
-    That call must not spend the one-shot, or the user opens a running Eggie
-    and is never taken into the console. Once used, it stays used."""
-    shown = {"yet": False}
-    state = InstallState(tmp_path / "install-state.json")
-    api = DesktopApi(FakeProvider(), state, push=lambda event: None,
-                     probe_fn=lambda provider: READY,
-                     window_shown_once=lambda: shown["yet"])
-    assert api.home()["action"] == ""
-    assert api.home()["action"] == ""
-    shown["yet"] = True
-    assert api.home()["action"] == "enter_console"
-    assert api.home()["action"] == ""
+def _local(home):
+    card = next(c for c in home["home"]["cards"] if c["kind"] == "local")
+    return card["state"], card["repair"], card["repair_message"]
 
 
 OLD_API = Readiness(vm_exists=True, vm_reachable=True,
@@ -150,8 +126,8 @@ def test_a_runtime_update_is_started_once_per_launch_and_then_shows_why_it_faile
     api.start_runtime_update()
     api.jobs.join(timeout=5)
     again = api.home()
-    assert again["action"] == ""
-    assert (again["screen"], again["message"]) == ("runtime-update:failed", "ghcr timed out")
+    assert (again["screen"], again["action"]) == ("home", "")
+    assert _local(again) == ("failed", "runtime-update:failed", "ghcr timed out")
 
 
 def test_a_retry_that_runs_clean_does_not_show_the_earlier_attempts_error(tmp_path, monkeypatch):
@@ -163,10 +139,10 @@ def test_a_retry_that_runs_clean_does_not_show_the_earlier_attempts_error(tmp_pa
     monkeypatch.setattr("host.core.install.connect_with_updates", failing_update)
     api = _api(tmp_path, OLD_API)
     api.start_runtime_update(); api.jobs.join(timeout=5)
-    assert api.home()["message"] == "ghcr timed out"
+    assert _local(api.home())[2] == "ghcr timed out"
     monkeypatch.setattr("host.core.install.connect_with_updates", lambda provider: None)
     api.start_runtime_update(); api.jobs.join(timeout=5)
-    assert api.home()["message"] == ""
+    assert _local(api.home())[2] == ""
 
 
 def test_an_update_refused_by_a_busy_registry_is_still_owed(tmp_path):
@@ -184,3 +160,33 @@ def test_an_update_refused_by_a_busy_registry_is_still_owed(tmp_path):
     finally:
         release.set()
         api.jobs.join(timeout=5)
+
+
+class Kitchens:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def instances(self):
+        return self.rows
+
+
+class SignedIn:
+    signed_in = True
+    pending = None
+    email = "a@b.c"
+
+
+def test_open_cloud_console_uses_the_switcher_page(tmp_path, monkeypatch):
+    # Not owned on purpose: the switcher page opens an org kitchen too.
+    monkeypatch.delenv("EGGIE_WEB_APP_URL", raising=False)
+    opened = []
+    monkeypatch.setattr("host.desktop.api.webbrowser.open", opened.append)
+    api = DesktopApi(FakeProvider(), InstallState(tmp_path / "s.json"), push=lambda e: None,
+                     probe_fn=lambda p: READY,
+                     cloud=(SignedIn(), Kitchens([{"id": "k1", "is_owner": False,
+                                                   "status": "running",
+                                                   "console_hostname": "ihor.eggie.io"}])))
+    api.load_kitchens()
+    assert api.open_cloud_console("k1") == {"ok": True}
+    assert api.open_cloud_console("gone") == {"ok": False}
+    assert opened == ["https://app.eggie.io/kitchens/open?host=ihor.eggie.io"]

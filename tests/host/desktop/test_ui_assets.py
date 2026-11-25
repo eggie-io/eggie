@@ -53,20 +53,14 @@ def test_the_page_forbids_remote_origins_at_runtime():
     assert "default-src 'self'" in head
 
 
-def test_every_home_state_has_a_template():
+def _home() -> str:
     markup = (UI / "index.html").read_text()
-    for screen in ("home:not_installed", "home:stopped", "home:running",
-                   "home:wrong", "unreachable", "first-run",
-                   "updates"):
-        assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
+    start = markup.index('data-screen="home"')
+    return markup[start:markup.index("</template>", start)]
 
 
-def test_every_home_state_can_offer_the_app_update():
-    markup = (UI / "index.html").read_text()
-    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
-        start = markup.index(f'data-screen="{screen}"')
-        end = markup.index("</template>", start)
-        assert 'data-when="app_update"' in markup[start:end], screen
+def test_home_can_offer_the_app_update():
+    assert 'data-when="app_update"' in _home()
 
 
 def test_no_template_renders_a_separator_with_nothing_after_it():
@@ -112,9 +106,8 @@ def test_the_version_tiles_bind_fields_desktop_api_home_actually_returns():
     lines = [l for l in markup.splitlines() if 'data-field="app_version"' in l]
     assert lines, "no version tile found"
     gated = [l for l in lines if 'data-when="runtime_version"' in l]
-    # home:not_installed's tile shows app_version alone -- there is no runtime
-    # yet to name -- so only the tiles gated on the runtime being present are
-    # required to bind a data-field for it.
+    # The updates screen shows app_version alone, so only the tiles gated on
+    # the runtime being present are required to bind a data-field for it.
     assert gated, "no version tile is gated on runtime_version"
     for line in lines:
         fields = re.findall(r'data-field="([a-zA-Z_]+)"', line)
@@ -129,11 +122,16 @@ def test_the_version_tiles_bind_fields_desktop_api_home_actually_returns():
 
 
 def test_nothing_installed_offers_no_uninstall():
-    """There is no VM to remove; the button could only error or no-op."""
+    """With no VM the button could only error or no-op; Settings gates it on vm_exists."""
     markup = (UI / "index.html").read_text()
-    start = markup.index('data-screen="home:not_installed"')
-    end = markup.index("</template>", start)
-    assert 'data-action="uninstall"' not in markup[start:end]
+    start = markup.index('data-screen="settings"')
+    screen = markup[start:markup.index("</template>", start)]
+    button = screen.index('data-action="uninstall"')
+    gates = re.findall(r'data-when="([^"]*)"', screen[:button])
+    assert gates and gates[-1] == "vm_exists"
+    for name in ("home", "kitchen:setup", "where"):
+        start = markup.index(f'data-screen="{name}"')
+        assert 'data-action="uninstall"' not in markup[start:markup.index("</template>", start)]
 
 
 def test_no_user_facing_copy_names_one_platform():
@@ -215,7 +213,7 @@ def test_only_a_dead_end_removes_the_retry_button():
 
 def test_the_utility_screens_have_templates():
     markup = (UI / "index.html").read_text()
-    for screen in ("doctor", "uninstall-confirm", "unresponsive", "recover-confirm"):
+    for screen in ("doctor", "uninstall-confirm", "unresponsive", "recover-confirm", "updates"):
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
@@ -307,12 +305,8 @@ def test_the_tray_screens_have_templates():
         assert f'data-screen="{screen}"' in markup, f"no template for {screen}"
 
 
-def test_every_home_state_can_open_settings():
-    markup = (UI / "index.html").read_text()
-    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
-        start = markup.index(f'data-screen="{screen}"')
-        end = markup.index("</template>", start)
-        assert 'data-action="settings"' in markup[start:end], screen
+def test_home_can_open_settings():
+    assert 'data-action="settings"' in _home()
 
 
 def test_the_page_answers_the_routes_the_tray_sends():
@@ -334,33 +328,37 @@ def test_the_page_handles_the_events_the_controller_pushes():
 
 def test_every_home_tile_has_an_icon():
     # A tile without an --icon rule renders its ::before mask as a solid square.
-    markup = (UI / "index.html").read_text()
+    home = _home()
     css = (UI / "app.css").read_text()
-    actions = set()
-    for screen in ("home:not_installed", "home:stopped", "home:running", "home:wrong"):
-        start = markup.index(f'data-screen="{screen}"')
-        tiles = markup.index('class="tiles"', start)
-        end = markup.index("</div>", tiles)
-        actions.update(re.findall(r'data-action="([^"]+)"', markup[tiles:end]))
-    assert actions, "no tiles found on the home screens"
+    tiles = home.index('class="tiles"')
+    actions = set(re.findall(r'data-action="([^"]+)"', home[tiles:home.index("</div>", tiles)]))
+    assert actions, "no tiles found on Home"
     missing = [a for a in sorted(actions)
                if f'.tiles [data-action="{a}"] {{ --icon:' not in css]
     assert not missing, f"home tiles without an icon: {missing}"
 
 
-def test_every_connectable_agent_has_words_on_the_connect_screen():
-    from host.desktop.view import CONNECTABLE_AGENTS
-    markup = (UI / "index.html").read_text()
-    start = markup.index('data-screen="agent-connect"')
-    screen = markup[start:markup.index("</template>", start)]
-    assert CONNECTABLE_AGENTS, "nothing to check"
-    for agent in CONNECTABLE_AGENTS:
-        assert f'data-when="{agent}"' in screen, agent
-    assert 'data-screen="agent-connect:failed"' in markup
-
-
-def test_the_connect_route_is_handled_and_its_actions_exist():
+def test_the_page_never_parses_markup_into_itself():
+    """Manifest bodies and job messages are data; the page builds elements from
+    them. One innerHTML is a hole a bad guide or a VM's error text walks through."""
     script = (UI / "app.js").read_text()
-    assert "params.has('connect')" in script
-    for action in ("connect-agent", "connect-back"):
-        assert f"ACTIONS['{action}']" in script, action
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
+        assert sink not in script, sink
+
+
+def test_every_button_in_the_markup_has_an_action():
+    """wire() calls ACTIONS[name] on click; a name with no entry throws, and
+    the button does nothing at all."""
+    markup = (UI / "index.html").read_text()
+    script = (UI / "app.js").read_text()
+    used = set(re.findall(r'data-action="([^"]+)"', markup))
+    defined = set(re.findall(r"ACTIONS\['([^']+)'\]\s*=", script))
+    defined |= set(re.findall(r"^  '([a-z-]+)':", script, re.MULTILINE))
+    assert used and defined
+    assert used <= defined, sorted(used - defined)
+
+
+def test_the_vendored_code_licence_ships_with_it():
+    # qr.js is MIT, which requires its notice to travel with the binary.
+    assert (UI / "qr.js").is_file()
+    assert "qr.js" in (UI / "LICENSES.txt").read_text()

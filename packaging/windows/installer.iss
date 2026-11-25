@@ -46,6 +46,15 @@ Filename: "{app}\eggie.exe"; Parameters: "uninstall --purge"; \
   Flags: runhidden; RunOnceId: "PurgeVm"
 
 [Registry]
+; eggie:// links: a kitchen's console in the browser opens the app on it.
+Root: HKCU; Subkey: "Software\Classes\eggie"; ValueType: string; ValueName: ""; \
+  ValueData: "URL:Eggie"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\eggie"; ValueType: string; ValueName: "URL Protocol"; \
+  ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\eggie\DefaultIcon"; ValueType: string; ValueName: ""; \
+  ValueData: "{app}\eggie-app.exe,0"
+Root: HKCU; Subkey: "Software\Classes\eggie\shell\open\command"; ValueType: string; \
+  ValueName: ""; ValueData: """{app}\eggie-app.exe"" setup --open ""%1"""
 ; {app} stays in Path after uninstall on purpose: surgically removing it
 ; risks corrupting PATH, and Windows ignores PATH entries that don't exist.
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \

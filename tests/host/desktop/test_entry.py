@@ -49,9 +49,10 @@ class FakeDesktop:
         self.announce, self.session_end = None, None
         self.styled = []
 
-    def single_instance(self, on_show, *, announce):
-        self.announce = announce
+    def single_instance(self, on_show, *, announce, link="", on_link=None):
+        self.announce, self.link = announce, link
         return self._primary
+    def watch_links(self, on_link): self.link_watch = on_link
     def watch_login_launch(self, on_login): self.login_watch = on_login
     def let_session_end_close(self, on_session_end): self.session_end = on_session_end
     def on_window_shown(self, visible): pass
@@ -209,6 +210,19 @@ def test_a_login_launch_with_a_vm_stays_in_the_tray(tmp_path):
     assert code == 0
     assert captured["hidden"] is True
     assert desktop.tray_made[1].started is True
+
+
+class LinkDuringStartup(FakeDesktop):
+    def single_instance(self, on_show, *, announce, link="", on_link=None):
+        # The listener is up before the bridge: a second launch's link can land now.
+        on_link("eggie://connect/k1")
+        return True
+
+
+def test_a_link_that_lands_while_the_app_starts_opens_the_window(tmp_path):
+    _, captured, _ = _run(tmp_path, FakeProvider(exists=True), LinkDuringStartup(),
+                          background=True)
+    assert captured["hidden"] is False
 
 
 def test_a_login_launch_before_setup_opens_the_window(tmp_path):

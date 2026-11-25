@@ -60,3 +60,6 @@ API_UNCONFIGURED = "api_unconfigured"
 
 # Base of the Eggie service API that receives anonymous onboarding events.
 SERVICE_API_URL = "https://app.eggie.io/api"
+
+# Origin of the Eggie web app, where the sign-in page and checkout live.
+WEB_APP_URL = "https://app.eggie.io"

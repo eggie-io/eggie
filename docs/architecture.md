@@ -29,8 +29,9 @@ has the detail.
 ```
 
 - **Host** (`host/`) is the desktop app: one PyInstaller-frozen binary per platform. It creates
-  and starts the VM, runs one bootstrap command in it, reads the API token, and talks to the
-  API over HTTP. It holds no guest files and knows nothing about what the runtime installs.
+  and starts the VM, runs one bootstrap command in it, reads the API token, talks to the
+  API over HTTP, and talks to the Eggie service directly for sign-in, kitchens and agent keys. It
+  holds no guest files and knows nothing about what the runtime installs.
 - **Runtime** (`runtime/`) is everything inside the VM: Docker, the Traefik + API + console
   stack, the in-VM `eggie` CLI, coding-agent instructions and agent manifests. It is released
   as `runtime-vX.Y.Z` tags. The same `get.sh` would provision a cloud VM.
@@ -65,7 +66,8 @@ Shared constants are declared on each side and kept equal by `tests/test_constan
 | `host/core/install.py` | Setup steps: preflight → (Mac) install Lima → (Win) enable WSL, reboot gate → fetch image → create VM → (Mac) SSH alias → bootstrap → connect → verify → finish |
 | `host/core/bootstrap.py` | The host's whole share of provisioning: run `get.sh` unless the marker exists |
 | `host/client.py` | `ApiClient` (stdlib `urllib`), the only way the host reaches project logic |
-| `host/desktop/` | pywebview window and tray. Shows local setup screens, then the VM's console in the same window |
+| `host/core/cloud/` | The app's Eggie account and `CloudClient` (service calls from the host) |
+| `host/desktop/` | pywebview window and tray. Signs in first, then local screens (home, setup, connect an agent), then the VM's console in the same window |
 | `host/cli.py` | `eggie setup / doctor / vm / up / …`: support and packaging tool, shrinking over time |
 
 ## Runtime: inside the VM
@@ -146,7 +148,7 @@ under `/opt/eggie/`, and a systemd path unit runs a root script:
 Agents run as a login account in the VM. On Windows they open the VM's WSL distro; on macOS
 they connect over SSH (`Host eggie` in `~/.ssh/config`). Each agent is a manifest folder in
 `runtime/agents/` (where its instructions go, how to detect it, its setup command, and the guide
-the console shows). Agents use the in-VM `eggie` CLI to start and inspect projects, and read
+the console shows for a cloud kitchen; the desktop app ships its own). Agents use the in-VM `eggie` CLI to start and inspect projects, and read
 `runtime/instructions/eggie.md`.
 
 ## Outside services
@@ -156,8 +158,9 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 | GitHub (`eggie-io/eggie`) | `get.sh` on `main`, `runtime-v*` tags, `app-v*` releases | VM, host |
 | ghcr.io | `eggie-api` and `eggie-web` images (amd64 + arm64) | VM |
 | Eggie service (`app.eggie.io`) | Sign-in, project sync, public-URL tunnels | API |
+| Eggie service (`app.eggie.io`), app side | The app's own sign-in, kitchens, agent keys; needs internet, no offline mode | host |
 | GitHub OAuth (Device Flow) | Connecting the user's GitHub account | API |
-| Eggie service (`app.eggie.io`) | Anonymous onboarding events, see [desktop-events.md](desktop-events.md) | host, API |
+| Eggie service (`app.eggie.io`), events | Anonymous onboarding events, see [desktop-events.md](desktop-events.md) | host, API |
 
 ## Updates
 
@@ -177,7 +180,7 @@ the console shows). Agents use the in-VM `eggie` CLI to start and inspect projec
 |---|---|---|
 | VM | WSL2 distro `eggie-vm`, imported from an Ubuntu 24.04 rootfs | Lima VM `eggie-vm` (`host/providers/eggie.yaml`) |
 | Port forwarding | WSL `localhostForwarding` | Lima `portForwards`, loopback |
-| Agent access | WSL distro (Codex needs `eggie-vm` as the default distro) | SSH on `39022` |
+| Agent access | WSL distro (Codex opens `\\wsl.localhost\eggie-vm\opt\eggie\projects`) | SSH on `39022` |
 | Status | Primary, tested | Mostly unverified |
 
 ## Trust boundary

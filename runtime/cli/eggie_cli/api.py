@@ -20,6 +20,7 @@ JOB_TIMEOUT = 1800.0
 JOB_POLL_INTERVAL = 1.0
 BUSY_RETRY_TIMEOUT = 60.0
 BUSY_RETRY_INTERVAL = 1.0
+NET_DEV = "/proc/self/net/dev"
 
 
 def start_stack() -> str:
@@ -36,6 +37,27 @@ def start_stack() -> str:
 def restart_api() -> str:
     # The API reads its token once, at startup, so only a recreate picks up a new one.
     return f"{start_stack()} --force-recreate api"
+
+
+def _sandboxed(reason: object) -> bool:
+    # Coding agents run commands in a sandbox: a seccomp filter refuses the socket
+    # (EPERM), or bwrap gives a network namespace whose 127.0.0.1 is not the VM's.
+    if isinstance(reason, PermissionError):
+        return True
+    try:
+        rows = Path(NET_DEV).read_text().splitlines()[2:]
+    except OSError:
+        return False
+    return [row.split(":", 1)[0].strip() for row in rows] == ["lo"]
+
+
+def _unreachable(reason: object) -> EggieError:
+    if _sandboxed(reason):
+        return EggieError("This command ran in a sandbox without network access, so it "
+                          "can't reach the Eggie service in this VM. Run it again outside "
+                          "the sandbox, with network access.")
+    return EggieError("The Eggie service in this VM is not answering. "
+                      f"Start it with: {start_stack()}")
 
 
 _RESTART_CODES = frozenset({"unauthorized", API_UNCONFIGURED})
@@ -94,9 +116,10 @@ class ApiClient:
                 return response.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
             raise _api_error(e) from None
-        except (urllib.error.URLError, OSError):
-            raise EggieError("The Eggie service in this VM is not answering. "
-                              f"Start it with: {start_stack()}") from None
+        except urllib.error.URLError as e:
+            raise _unreachable(e.reason) from None
+        except OSError as e:
+            raise _unreachable(e) from None
 
     def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
         body = self._open(method, path, payload=payload)

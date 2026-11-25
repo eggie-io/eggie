@@ -45,11 +45,14 @@ in `runtime/`, not here. Tests: `tests/host/`, plus the top-level `tests/test_*_
   `provider.exec()`; maps every non-2xx body to `ApiError(code, message, status)`, a refused
   connection to `ApiUnavailableError`, a failed job to `JobFailedError` carrying the guest's stderr.
   The host checks `/health`'s `api` against `constants.SUPPORTED_API`.
+- `core/cloud/` — the app's own Eggie account (`account.py`: device-code sign-in, `account.json`
+  0600 next to `settings.json`, one refresh at a time) and `client.py` (`CloudClient`: kitchens,
+  catalogs, agent keys), both straight to the service, not through the VM.
 - `core/install.py`, `core/status.py`, `core/diagnose.py` — the setup steps, readiness probe and
   doctor, shared by the CLI and the desktop app.
-- `core/connect/` — `eggie connect`: `flow.Connector` (the desktop app's entry point later) joins
-  this computer's key (`keys.py`), ssh probes (`ssh.py`) and Codex install/sign-in on a remote
-  (`codex_remote.py`) with the file writers in `providers/` (`ssh_alias`, `claude_ssh`,
+- `core/connect/` — `eggie connect` and the desktop app's Connect an agent (signed in with the app's account): `flow.Connector` joins
+  this computer's key (`keys.py`), ssh probes (`ssh.py`) and Codex install/sign-in over ssh or,
+  for a VM with no ssh host, its `shell_argv` (`codex_remote.py`) with the file writers in `providers/` (`ssh_alias`, `claude_ssh`,
   `codex_app`).
 - `cli.py` — the typer app (`eggie setup|doctor|vm|port|up|status|logs|down|destroy|uninstall|
   connect|selfcheck`). `setup` launches the desktop GUI; `--headless` bypasses it for a machine with no
@@ -99,10 +102,14 @@ output. Nothing may spawn `wsl.exe`/`limactl`.
   (`providers/ssh_alias.py`). `Host eggie` is written into `~/.ssh/config` itself, because
   Cursor's host list ignores `Include`.
 - Setup never touches a coding agent's own settings: the agent may be installed later. The
-  provider's `agent_connections` / `connect_agent(id)` / `agent_connected(id)` do it when the user asks from the console's
-  guide (see `desktop/CLAUDE.md`). On Lima, `claude-code` refreshes `Host eggie` and adds an
+  provider's `agent_connections` / `connect_agent(id)` / `agent_connected(id)` (plus `agent_app` / `agent_installed`) do it when the user asks from the desktop
+  app's Connect an agent (see `desktop/CLAUDE.md`). On Lima, `claude-code` refreshes `Host eggie` and adds an
   `"Eggie"` entry (id `eggie`) to `sshConfigs` in `~/.claude/settings.json`
   (`providers/claude_ssh.py`); a file it cannot parse is never rewritten. `destroy()` removes it.
-  On WSL, `codex` runs `wsl --set-default <distro>` (Codex on Windows runs only in the default
-  distro); it counts as connected when `wsl -l -v` marks the distro with `*` (plain `-l`'s
-  "(Default)" is translated). Nothing to undo on `destroy()`: unregistering moves the default on.
+  On WSL, Codex is first installed and signed in inside the VM (Codex's WSL mode reads the VM's
+  `~/.codex`; the `codex login` callback reaches port 1455 through WSL's localhost forwarding),
+  then `codex` marks the projects folder trusted in Codex's `config.toml`
+  (`providers/codex_trust.py`, append-only; an unreadable file is left alone) and counts as
+  connected while those entries are there. `open_agent(id, local=True)` opens Codex through
+  `codex://threads/new?path=` on `\\wsl.localhost\<distro>\opt\eggie\projects`. Nothing to undo
+  on `destroy()`.

@@ -1,7 +1,8 @@
-"""Codex on a remote instance: install it, then sign in through the browser here."""
+"""Codex on a kitchen: install it, then sign in through the browser here."""
 
 from __future__ import annotations
 
+import logging
 import queue
 import re
 import socket
@@ -10,9 +11,14 @@ import threading
 import time
 import urllib.parse
 import webbrowser
+from collections.abc import Callable
+from dataclasses import dataclass
 
+from ..provider import Completed
 from . import ssh
 from .ssh import Probe
+
+log = logging.getLogger(__name__)
 
 CALLBACK_PORT = 1455
 # The instance's runtime says how Codex installs there, so a change to it needs no host release.
@@ -22,32 +28,56 @@ READ_SETUP = ("python3 -c 'import json;print(json.load(open("
 _URL = re.compile(r"https://\S+")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _SIGN_IN_ORIGIN = ("https", "auth.openai.com")
+# How often a wait looks at `cancelled`.
+_TICK = 0.5
+CANCELLED = "Cancelled"
 
 
-def ensure_installed(run, alias: str) -> Probe:
-    if ssh.login_shell(run, alias, "command -v codex").ok:
+@dataclass(frozen=True)
+class Host:
+    """Where Codex runs: a login-shell script runner, and the argv of a
+    `codex login` whose callback port reaches this computer's 1455."""
+    shell: Callable[[str], Completed]
+    login: list[str]
+    # Ends a `codex login` its killed process left running; ssh's hang-up does that itself.
+    stop: str = ""
+
+
+# [c]: the pattern matches codex login, never the shell that runs pkill.
+STOP_LOGIN = "pkill -f '[c]odex login' || true"
+
+
+def over_ssh(run, alias: str) -> Host:
+    return Host(lambda script: ssh.login_shell(run, alias, script),
+                ["ssh", "-T", "-o", "ExitOnForwardFailure=yes",
+                 "-L", f"{CALLBACK_PORT}:127.0.0.1:{CALLBACK_PORT}",
+                 alias, "bash -lc 'codex login'"])
+
+
+def ensure_installed(host: Host) -> Probe:
+    if host.shell("command -v codex").ok:
         return Probe(True, "")
-    read = ssh.login_shell(run, alias, READ_SETUP)
+    read = host.shell(READ_SETUP)
     # The last line: a login shell's profile may print above it.
     setup = read.stdout.strip().splitlines()[-1:] if read.ok else []
     if not setup:
         return Probe(False, "This Eggie can't install Codex; update Eggie and try again.")
-    installed = ssh.login_shell(run, alias, setup[0])
+    installed = host.shell(setup[0])
     if not installed.ok:
         lines = (installed.stderr or installed.stdout).splitlines()
         return Probe(False, lines[-1] if lines else f"install exited {installed.returncode}")
-    if ssh.login_shell(run, alias, "command -v codex").ok:
+    if host.shell("command -v codex").ok:
         return Probe(True, "")
     return Probe(False, "Codex was installed but is not on the PATH")
 
 
-def signed_in(run, alias: str) -> bool:
-    return ssh.login_shell(run, alias, "codex login status").ok
+def signed_in(host: Host) -> bool:
+    return host.shell("codex login status").ok
 
 
-def sandbox_works(run, alias: str) -> Probe:
+def sandbox_works(host: Host) -> Probe:
     # Only bwrap's own complaint fails it: a Codex whose CLI has changed proves nothing.
-    result = ssh.login_shell(run, alias, "codex sandbox -- true")
+    result = host.shell("codex sandbox -- true")
     if result.ok:
         return Probe(True, "")
     lines = [line for line in (result.stderr + "\n" + result.stdout).splitlines()
@@ -56,8 +86,10 @@ def sandbox_works(run, alias: str) -> Probe:
 
 
 def _popen(argv):
+    # The Windows app has no console, so a console program would open its own window.
     return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1)
+                            encoding="utf-8", errors="replace", bufsize=1,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
 def _port_free(port: int) -> bool:
@@ -69,21 +101,19 @@ def _port_free(port: int) -> bool:
     return True
 
 
-def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
+def sign_in(host: Host, *, popen=_popen, open_url=webbrowser.open,
             port_free=_port_free, timeout: float = 600,
-            url_timeout: float = 60) -> Probe:
+            url_timeout: float = 60, cancelled=lambda: False) -> Probe:
     if not port_free(CALLBACK_PORT):
         return Probe(False, f"Port {CALLBACK_PORT} on this computer is in use; "
                             "close what uses it (often another Codex sign-in) "
                             "and run this again.")
     try:
-        proc = popen(["ssh", "-T", "-o", "ExitOnForwardFailure=yes",
-                      "-L", f"{CALLBACK_PORT}:127.0.0.1:{CALLBACK_PORT}",
-                      alias, "bash -lc 'codex login'"])
+        proc = popen(host.login)
     except OSError as e:
         return Probe(False, str(e))
     try:
-        return _await_login(proc, open_url, timeout, url_timeout)
+        return _await_login(proc, open_url, timeout, url_timeout, cancelled)
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -91,9 +121,27 @@ def sign_in(alias: str, *, popen=_popen, open_url=webbrowser.open,
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
+            if host.stop:
+                try:
+                    host.shell(host.stop)
+                except Exception as e:
+                    log.warning("could not stop codex login: %s", e)
 
 
-def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
+def _wait(proc, deadline: float, cancelled) -> int | None:
+    """The exit code, or None once `cancelled` says so; TimeoutExpired at the deadline."""
+    while not cancelled():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise subprocess.TimeoutExpired("ssh", 0)
+        try:
+            return proc.wait(timeout=min(left, _TICK))
+        except subprocess.TimeoutExpired:
+            continue
+    return None
+
+
+def _await_login(proc, open_url, timeout: float, url_timeout: float, cancelled) -> Probe:
     lines: queue.Queue = queue.Queue()
 
     def pump():
@@ -104,20 +152,19 @@ def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
     threading.Thread(target=pump, daemon=True).start()
 
     start = time.monotonic()
-
-    def remaining() -> float:
-        return max(timeout - (time.monotonic() - start), 1)
-
+    deadline = start + max(timeout, 1)
     last = ""
     url = None
     while url is None:
+        if cancelled():
+            return Probe(False, CANCELLED)
         left = url_timeout - (time.monotonic() - start)
-        try:
-            if left <= 0:
-                raise queue.Empty
-            line = lines.get(timeout=left)
-        except queue.Empty:
+        if left <= 0:
             return Probe(False, last or "No sign-in link appeared")
+        try:
+            line = lines.get(timeout=min(left, _TICK))
+        except queue.Empty:
+            continue
         if line is None:
             break
         line = _ANSI.sub("", line).strip()
@@ -128,12 +175,14 @@ def _await_login(proc, open_url, timeout: float, url_timeout: float) -> Probe:
             url = found.group(0).rstrip(".,)")
     try:
         if url is None:
-            code = proc.wait(timeout=remaining())
-            return Probe(False, last or f"codex login exited {code}")
+            code = _wait(proc, deadline, cancelled)
+            return Probe(False, CANCELLED if code is None else last or f"codex login exited {code}")
         if urllib.parse.urlsplit(url)[:2] != _SIGN_IN_ORIGIN:
             return Probe(False, "Codex printed an unexpected sign-in address; nothing was opened.")
         open_url(url)
-        code = proc.wait(timeout=remaining())
+        code = _wait(proc, deadline, cancelled)
     except subprocess.TimeoutExpired:
         return Probe(False, "Sign-in was not finished in time")
+    if code is None:
+        return Probe(False, CANCELLED)
     return Probe(True, "") if code == 0 else Probe(False, last or f"codex login exited {code}")

@@ -40,7 +40,6 @@ export const SCENARIOS = [
   "agents-connected",
   "agents-installing",
   "agents-failed",
-  "windows",
   "secrets",
   "site",
   "site-signed-out",
@@ -125,7 +124,7 @@ const notFound = (id: string) => refuse("project_not_found", `no project called 
 const busy = () => refuse("project_busy", "this project is busy with another job", 409);
 
 export function handlersFor(scenario: Scenario) {
-  const onSite = scenario.startsWith("site") || scenario.startsWith("domains-");
+  const onSite = scenario.startsWith("site") || scenario.startsWith("domains-") || scenario === "fresh";
   let signedIn = !["expired", "handoff-spent", "site-signed-out", "down", "wrong-host"].includes(scenario);
   const MOCK_CODE = "WDJB-MJHT";
   const pendingAccount = () => ({
@@ -134,7 +133,7 @@ export function handlersFor(scenario: Scenario) {
     url: `https://eggie.example/device?user_code=${MOCK_CODE}`,
     expires_at: nowSec() + 600,
   });
-  let account: Record<string, unknown> = scenario.startsWith("account-") || scenario === "fresh"
+  let account: Record<string, unknown> = scenario.startsWith("account-")
     ? scenario === "account-pending"
       ? pendingAccount()
       : { state: "signed_out", error: scenario === "account-revoked" ? "revoked" : null }
@@ -144,7 +143,6 @@ export function handlersFor(scenario: Scenario) {
   // for "approved in the browser" counts from a click, not from the code.
   let pressed = false;
   if (typeof document !== "undefined") document.addEventListener("click", () => { pressed = true; });
-  let agentsConnectAt = 0;
   const GH_CODE = "C0DE-F00D";
   const ghConnected = (setup: string, setup_error: string | null = null) =>
     ({ state: "connected", login: "ada", name: "Ada", email: "1+ada@users.noreply.github.com", setup, setup_error });
@@ -802,14 +800,6 @@ export function handlersFor(scenario: Scenario) {
       if (scenario === "handoff-new" || scenario === "handoff-github") return HttpResponse.json({ agents: { "claude-code": { connected: true, setup: null } } });
       if (scenario === "agents-installing") return HttpResponse.json({ agents: { codex: { connected: false, setup: "installing" } } });
       if (scenario === "agents-failed") return HttpResponse.json({ agents: { codex: { connected: false, setup: "failed" } } });
-      if (scenario === "fresh") {
-        // Long enough to pick an agent and see "not connected yet" before it connects.
-        if (agentsConnectAt === 0) agentsConnectAt = Date.now() + 20_000;
-        if (Date.now() >= agentsConnectAt) {
-          const on = { connected: true, setup: null };
-          return HttpResponse.json({ agents: { "claude-code": on, codex: on, cursor: on } });
-        }
-      }
       return HttpResponse.json({ agents: {} });
     }),
     http.post("/api/agents/:id/setup", () => HttpResponse.json({ requested: true })),
@@ -1131,7 +1121,6 @@ export function handlersFor(scenario: Scenario) {
     http.get("/api/connect", () => {
       const denied = guard();
       if (denied) return denied;
-      if (scenario === "windows") return HttpResponse.json({ vm: "wsl", ssh: null });
       if (onSite) return HttpResponse.json({ vm: "site", ssh: { host: "foo.eggie.io", port: 22, user: "ada", key_file: null } });
       return HttpResponse.json({ vm: "lima", ssh: { host: "127.0.0.1", port: 39022, user: "ada", key_file: "~/.lima/_config/user" } });
     }),

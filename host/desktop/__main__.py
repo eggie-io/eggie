@@ -79,20 +79,23 @@ def _default_start(**kwargs):
 
 def run(provider, state, *, desktop, create=_default_create, start=_default_start,
         resumed: bool = False, background: bool = False, steps_factory=None,
-        app_update_fn=None, settings=None, log_path=None, events=None) -> int:
+        app_update_fn=None, settings=None, log_path=None, events=None,
+        link: str = "") -> int:
     from .api import DesktopApi
     from .controller import Controller
+    from .links import kitchen_from_link
     from .lifecycle import TRAY_ONLY, WINDOW, launch_mode
     from .settings import Settings
     from .shell import Shell, guarded
     from . import telemetry
     from host.core import constants
+    from host.core.cloud.client import default_cloud
     from host.core.events import EventSender
+    from host.providers import default_install_dir
 
     events = events or EventSender(None, {})
 
     if settings is None:
-        from host.providers import default_install_dir
         settings = Settings(default_install_dir().parent / "settings.json")
 
     logfile.setup(log_path)
@@ -100,7 +103,8 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
              constants.APP_VERSION, resumed, background)
     shell = Shell()
     controller = Controller(provider, desktop, settings, shell, push=shell.push)
-    if not desktop.single_instance(controller.show, announce=not background):
+    if not desktop.single_instance(controller.show, announce=not background, link=link,
+                                   on_link=controller.follow_link):
         return 0
     try:
         telemetry.report_launch(events, settings, background=background,
@@ -113,11 +117,17 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
     api = DesktopApi(provider, state, push=shell.push, steps_factory=steps_factory,
                      local_url=shell.local_url, app_update_fn=app_update_fn,
                      quit_app=controller.exit, settings=settings,
-                     window_shown_once=lambda: controller.shown_once,
-                     log_path=log_path, desktop=desktop, events=events)
+                     log_path=log_path, desktop=desktop, events=events,
+                     cloud=default_cloud(default_install_dir().parent / "account.json"),
+                     ui_dir=ui_dir())
     # Surfaced by a later task: the install screen reads this to show
     # host.core.install.RESUME_NOTICE when RunOnce reopened the window.
     api.resumed = resumed
+    controller.link_to = lambda kitchen: setattr(api, "linked", kitchen)
+    api.linked = kitchen_from_link(link) or controller.early_link
+    if api.linked:
+        # A link asks for the window, even on a login launch.
+        mode = WINDOW
     api.start_app_update_check()
 
     # Started before the window exists: a tray that cannot load (missing
@@ -164,11 +174,14 @@ def run(provider, state, *, desktop, create=_default_create, start=_default_star
         window.events.closing += controller.on_closing
         controller.tray = tray
     if mode == TRAY_ONLY:
-        controller.mark_hidden_launch()
         desktop.on_window_shown(False)
         controller.start_vm_in_background()
     elif not resumed and tray is not None:
         desktop.watch_login_launch(controller.on_login_launch)
+    try:
+        desktop.watch_links(controller.follow_link)
+    except Exception:
+        log.exception("could not watch for eggie:// links")
 
     try:
         start(debug=False)
@@ -191,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     # must keep working or a restarted machine never finishes setup.
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--background", action="store_true")
+    # An eggie:// link; the installer registers the app as its handler.
+    parser.add_argument("--open", default="")
     args = parser.parse_args(argv)
 
     root = default_install_dir().parent
@@ -210,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
 
     desktop = get_desktop()
     return run(provider, state, desktop=desktop, steps_factory=build_steps,
-               resumed=args.resume, background=args.background,
+               resumed=args.resume, background=args.background, link=args.open,
                log_path=logfile.log_file(root),
                events=start_sender(desktop, frozen=getattr(sys, "frozen", False),
                                    env=os.environ))

@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { takeHandoff } from "./boot/boot";
 import { setEventContext, takeDesktopEvents } from "./desktop/events";
-import { takeDesktopAdded, takeDesktopConnect, takeDesktopHome } from "./desktop/desktop";
+import { takeDesktopHome } from "./desktop/desktop";
 
 function sessionStore(): Storage | null {
   try {
@@ -19,8 +19,6 @@ function sessionStore(): Storage | null {
 // Both read before anything renders or awaits: takeHandoff() clears the
 // fragment, so a reload never resends the code.
 const home = takeDesktopHome(window.location, sessionStore());
-const connect = home ? takeDesktopConnect(window.location, sessionStore()) : [];
-const added = home ? takeDesktopAdded(window.location, sessionStore()) : [];
 setEventContext(takeDesktopEvents(window.location));
 const handoff = takeHandoff(window.location, window.history);
 
@@ -31,7 +29,7 @@ async function start() {
   }
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App handoff={handoff} home={home} connect={connect} added={added} />
+      <App handoff={handoff} home={home} />
     </StrictMode>,
   );
 }

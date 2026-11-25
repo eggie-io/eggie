@@ -32,6 +32,17 @@ def test_a_background_second_instance_does_not_show_the_first(address):
     assert not shown.wait(timeout=0.5)
 
 
+def test_a_second_instance_hands_its_link_to_the_first(address):
+    links = []
+    got = threading.Event()
+    claim(address, "AF_UNIX", lambda: None, announce=True,
+          on_link=lambda url: (links.append(url), got.set()))
+    assert claim(address, "AF_UNIX", lambda: None, announce=False,
+                 link="eggie://connect/k1") is False
+    assert got.wait(timeout=5)
+    assert links == ["eggie://connect/k1"]
+
+
 def test_with_no_first_instance_startup_proceeds(address):
     assert claim(address, "AF_UNIX", lambda: None, announce=True) is True
 
@@ -86,7 +97,7 @@ def test_the_wsl_pipe_name_survives_an_unreadable_user_name(monkeypatch):
 
     seen = {}
 
-    def fake_claim(address, family, on_show, *, announce, before_show=None):
+    def fake_claim(address, family, on_show, *, announce, before_show=None, link="", on_link=None):
         seen["address"] = address
         return True
 

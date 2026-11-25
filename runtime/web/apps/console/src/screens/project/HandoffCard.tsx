@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Badge, Button, Card, COPY_REFUSED, cx, useCopy } from "@eggie/ui";
 import type { CurrentAgent } from "../../agents/current";
+import { useSite } from "../../site/SiteContext";
 import s from "./ProjectPage.module.css";
 
 export interface HandoffSteps {
@@ -36,6 +37,7 @@ export function StepText({ title, hint, action }: { title: ReactNode; hint?: Rea
 
 export function HandoffCard({ title, agent, steps }: { title: string; agent: CurrentAgent; steps: HandoffSteps }) {
   const { prompt, extra } = steps;
+  const onSite = typeof useSite() === "string";
   const { copied, refused, copy, target } = useCopy<HTMLDivElement>(prompt);
   const head = extra && prompt.endsWith(extra) ? prompt.slice(0, -extra.length).trimEnd() : prompt;
 
@@ -45,7 +47,7 @@ export function HandoffCard({ title, agent, steps }: { title: string; agent: Cur
         <h2 className={s.handoffTitle}>{title}</h2>
         <div className={s.handoffAside}>
           {agent.connected ? <Badge tone="success" icon="check-circle">Connected</Badge> : <Badge>Not connected</Badge>}
-          <Link to="/agents" className={s.switchAgent}>Switch agent</Link>
+          {onSite && <Link to="/agents" className={s.switchAgent}>Switch agent</Link>}
         </div>
       </header>
       <ol className={s.steps}>

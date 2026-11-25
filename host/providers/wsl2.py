@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import logging
+import os
 import shutil
 import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from ..core.images import WSL_IMAGES
 from ..core.provider import (Access, AccessField, Completed, Diagnosis, ProviderError,
                              VmUnresponsive)
-from . import registry
+from . import codex_app, codex_trust, registry
 from .wsl_encoding import decode_wsl
 from .wsl_checks import diagnose_wsl2, preflight_checks
+
+log = logging.getLogger(__name__)
 
 RUNONCE_KEY = r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
 # Docker's own shutdown-timeout is 15 s; this leaves systemd room for the rest.
@@ -49,6 +54,11 @@ def _default_spawner(argv):
     # after the window closes. `wsl --terminate` in stop() ends it.
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, creationflags=_NO_WINDOW)
+
+
+def _default_opener(target: str) -> None:
+    # ShellExecute, as Start-Process does: the only way to hand Windows an app's own link.
+    os.startfile(target)  # type: ignore[attr-defined]
 
 
 def _default_facts() -> dict:
@@ -161,6 +171,29 @@ def _default_arch() -> str:
     return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
 
 
+
+
+def _agent_apps(env, agent_id: str) -> list[Path]:
+    """Where each coding agent's Windows app lands, by runtime/agents/ id."""
+    local = env.get("LOCALAPPDATA")
+    programs = env.get("ProgramFiles")
+    found = []
+    if local:
+        # Store apps' execution aliases, one folder per package.
+        aliases = Path(local) / "Microsoft" / "WindowsApps"
+        found += {
+            "claude-code": [aliases / "Claude_pzs8sxrjxfjjc" / "claude-desktop.exe",
+                            # The older installer's app; not seen on a real machine.
+                            Path(local) / "AnthropicClaude" / "claude.exe"],
+            "codex": [aliases / "OpenAI.Codex_2p2nqsd0c76g0" / "chatgpt-desktop.exe"],
+            "cursor": [Path(local) / "Programs" / "cursor" / "Cursor.exe"],
+        }.get(agent_id, [])
+    if programs and agent_id == "cursor":
+        # Cursor's all-users install; not seen on a real machine.
+        found.append(Path(programs) / "cursor" / "Cursor.exe")
+    return found
+
+
 class RootfsMissing(FileNotFoundError):
     code = "rootfs_missing"
 
@@ -170,14 +203,16 @@ class Wsl2Provider:
                  rootfs: Path | None = None, wsl="wsl.exe", runner=_default_runner,
                  facts=_default_facts, elevator=_default_elevator,
                  registry_writer=registry.write_value, arch=None,
-                 spawner=_default_spawner,
-                 sleep=time.sleep, clock=time.monotonic):
+                 spawner=_default_spawner, opener=_default_opener,
+                 sleep=time.sleep, clock=time.monotonic,
+                 env=os.environ):
         self.distro = distro
         self.install_dir = Path(install_dir) if install_dir else None
         self.rootfs = Path(rootfs) if rootfs else None
         self.wsl = wsl
         self._run = runner
         self._spawn = spawner
+        self._open = opener
         self._facts = facts
         self._elevate = elevator
         self._write_registry = registry_writer
@@ -185,6 +220,7 @@ class Wsl2Provider:
         self._clock = clock
         self._arch = arch or _default_arch()
         self._features_enabled = False
+        self._env = env
 
     # --- wsl.exe's own output is UTF-16LE ---
     def _meta(self, args: list[str]) -> Completed:
@@ -476,8 +512,8 @@ class Wsl2Provider:
         """None: the distro runs no sshd, so there is no host to name."""
         return None
 
-    # The agents reach the distro through WSL itself. Codex on Windows runs
-    # only in the default distro, so connecting it makes this one the default.
+    # The agents reach the distro through WSL itself; for Codex, Eggie marks
+    # the projects folder trusted so Codex opens it without asking.
     agent_connections = ("codex",)
     # No sshd in the distro: the agents reach it through WSL.
     local_ssh_alias = None
@@ -485,29 +521,69 @@ class Wsl2Provider:
     def connect_agent(self, agent_id: str) -> str:
         if agent_id not in self.agent_connections:
             raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
-        self._require(self._meta(["--set-default", self.distro]),
-                      f"'{self.distro}' could not be made the default WSL distro",
-                      "vm_configure_failed")
-        return f"{self.distro} is now your default WSL distro."
+        try:
+            codex_trust.trust(self._codex_home(), self._codex_folders())
+        except (OSError, ValueError) as e:
+            # Codex still works; it asks to trust the folder itself.
+            log.warning("could not mark the projects folder trusted in Codex: %s", e)
+            return "Codex will ask you to trust the projects folder."
+        return "Codex trusts the projects folder."
+
+    def _codex_home(self) -> Path:
+        return codex_app.default_codex_home(self._env, Path.home())
+
+    def _codex_folders(self) -> list[str]:
+        # The keys Codex itself writes: its lowercased Windows path, and the
+        # Linux path when Codex runs in WSL.
+        return [rf"\\?\unc\wsl.localhost\{self.distro}\opt\eggie\projects".lower(),
+                "/opt/eggie/projects"]
 
     def agent_connected(self, agent_id: str) -> bool:
-        """Whether this distro is the default, so the guide can skip the button."""
-        return agent_id == "codex" and self._default_distro() == self.distro
+        """Whether connect_agent's trust entries are in Codex's config and Codex is
+        signed in inside the VM, where its WSL mode runs it."""
+        if agent_id != "codex" or not codex_trust.trusted(self._codex_home(),
+                                                          self._codex_folders()):
+            return False
+        # Asking a stopped VM would boot it (any `wsl -d` does): trust the entries.
+        if not self.running():
+            return True
+        return self.exec(["test", "-s", ".codex/auth.json"]).ok
+
+    def shell_argv(self, script: str) -> list[str]:
+        """A login shell in the VM as its user, for a process the caller reads as it runs."""
+        return [self.wsl, "-d", self.distro, "--cd", "~", "--", "bash", "-lc", script]
+
+    def agent_app(self, agent_id: str) -> str | None:
+        """The agent's app, to open it from Eggie; None when it isn't installed."""
+        # exists(), not is_file(): a Store alias is a reparse point.
+        return next((str(p) for p in _agent_apps(self._env, agent_id) if p.exists()), None)
+
+    def agent_installed(self, agent_id: str) -> bool:
+        # The app, never a CLI on PATH: every guide and Open button needs the app.
+        return self.agent_app(agent_id) is not None
+
+    def open_agent(self, agent_id: str, local: bool = False) -> bool:
+        """`local`: open it on this computer's kitchen, which only Codex can be told."""
+        app = self.agent_app(agent_id)
+        if app is None:
+            return False
+        if local and agent_id == "codex":
+            folder = rf"\\wsl.localhost\{self.distro}\opt\eggie\projects"
+            try:
+                self._open("codex://threads/new?path=" + quote(folder, safe=""))
+                return True
+            except OSError as e:
+                # A Codex build without the codex:// handler still opens, without the folder.
+                log.warning("opening Codex on the projects folder failed: %s", e)
+        self._spawn([app])
+        return True
+
+    # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.
+    guide_os = "windows"
 
     def computer_name(self) -> str:
         return socket.gethostname()
 
-    def _default_distro(self) -> str | None:
-        # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",
-        # which Windows translates. Neither boots a distro.
-        out = self._meta(["-l", "-v"])
-        if not out.ok:
-            return None
-        for line in out.stdout.replace("\x00", "").splitlines():
-            fields = line.split()
-            if len(fields) >= 2 and fields[0] == "*":
-                return fields[1]
-        return None
 
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs

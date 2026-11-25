@@ -24,7 +24,7 @@ VERSION = os.environ.get("EGGIE_VERSION", "0.0.0")
 # frozen build.
 HIDDEN = ["host.desktop.__main__", "host.desktop.api", "host.desktop.view",
           "host.desktop.jobs", "host.desktop.controller", "host.desktop.lifecycle",
-          "host.desktop.settings", "host.providers.tray_win",
+          "host.desktop.settings", "host.desktop.links", "host.providers.tray_win",
           "host.providers.instance", "pystray._win32", "PIL.Image",
           "webview", "webview.platforms.edgechromium"]
 

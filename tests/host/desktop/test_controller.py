@@ -111,6 +111,37 @@ def test_a_route_from_the_console_reloads_the_local_ui(tmp_path):
     assert ("load", LOCAL + "#quit") in window.calls
 
 
+def _linked(controller):
+    kitchens = []
+    controller.link_to = kitchens.append
+    return kitchens
+
+
+def test_a_link_hands_its_kitchen_over_and_redraws_the_local_ui(tmp_path):
+    controller, window = _controller(tmp_path)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/k1")
+    assert kitchens == ["k1"]
+    assert ("js", 'window.eggie.route("link")') in window.calls
+
+
+def test_a_link_before_the_page_loads_only_shows_the_window(tmp_path):
+    controller, window = _controller(tmp_path, url=None)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/k1")
+    assert kitchens == ["k1"]
+    assert window.calls == ["show"]
+
+
+def test_a_link_naming_no_kitchen_just_shows_the_app(tmp_path):
+    controller, window = _controller(tmp_path)
+    kitchens = _linked(controller)
+    controller.follow_link("eggie://connect/../k1")
+    assert kitchens == []
+    assert "show" in window.calls
+    assert not any(isinstance(c, tuple) and c[0] == "js" and "route" in c[1] for c in window.calls)
+
+
 def test_a_failed_background_start_is_announced(tmp_path):
     provider = FakeProvider(start_error=RuntimeError("wsl.exe failed"))
     controller, _ = _controller(tmp_path, provider=provider)
@@ -254,13 +285,6 @@ def test_open_route_does_not_push_window_shown(tmp_path):
     assert "show" in window.calls
 
 
-def test_open_route_still_counts_as_the_first_show(tmp_path):
-    controller, _ = _controller(tmp_path)
-    controller.mark_hidden_launch()
-    controller.open_route("settings")
-    assert controller.shown_once is True
-
-
 def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):
     controller, window = _controller(tmp_path)
 
@@ -270,12 +294,3 @@ def test_a_failing_push_does_not_stop_the_window_showing(tmp_path, capsys):
     controller._push = broken
     controller.show()
     assert window.calls[-1] == "show"
-
-
-def test_the_window_counts_as_shown_once_it_has_been_shown_after_a_hidden_launch(tmp_path):
-    controller, _ = _controller(tmp_path)
-    assert controller.shown_once is True
-    controller.mark_hidden_launch()
-    assert controller.shown_once is False
-    controller.show()
-    assert controller.shown_once is True

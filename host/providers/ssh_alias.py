@@ -107,7 +107,8 @@ def _first_host(lines: list[str]) -> int:
     return len(lines)
 
 
-def _write(path: Path, text: str, *, mode: int = 0o600) -> None:
+def _write(path: Path, text: str, *, mode: int = 0o600, encoding: str | None = None,
+           newline: str | None = None) -> None:
     """Replace the file in one step, so a crash never leaves it half written.
     Keeps the existing file's mode; a new file gets `mode`."""
     import os
@@ -118,7 +119,7 @@ def _write(path: Path, text: str, *, mode: int = 0o600) -> None:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding=encoding, newline=newline) as f:
             f.write(text)
         os.chmod(tmp, mode)
         os.replace(tmp, path)

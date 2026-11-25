@@ -19,8 +19,12 @@ class FakeRunner:
         return R()
 
 
+# A CODEX_HOME nothing can be written under, so no test reaches the real ~/.codex.
+_NO_CODEX = {"CODEX_HOME": "/dev/null/codex"}
+
+
 def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"),
-         spawner=None):
+         spawner=None, env=None):
     return Wsl2Provider(
         distro="eggie-vm",
         install_dir=install_dir,
@@ -28,6 +32,7 @@ def make(runner, install_dir=Path("/tmp/inst"), rootfs=Path("/tmp/ubuntu.tar.gz"
         wsl="wsl.exe",
         runner=runner,
         spawner=spawner if spawner is not None else [].append,
+        env=_NO_CODEX if env is None else env,
     )
 
 
@@ -403,56 +408,62 @@ def test_stop_terminates_when_the_hung_wsl_rejects_the_running_poll():
     assert runner.calls[-1] == ["wsl.exe", "--terminate", "eggie-vm"]
 
 
-# --- Connecting Codex: it runs only in the default WSL distro ---------------
+# --- Connecting Codex: Eggie marks the projects folder trusted --------------
 
-def _listing(*rows: str) -> bytes:
-    header = "  NAME            STATE           VERSION"
-    return "\r\n".join((header, *rows)).encode("utf-16-le")
+UNC_KEY = r"\\?\unc\wsl.localhost\eggie-vm\opt\eggie\projects"
 
 
-def test_connecting_codex_makes_this_distro_the_default():
+def test_connecting_codex_trusts_the_projects_folder_and_runs_no_wsl(tmp_path):
+    import tomllib
     r = FakeRunner()
-    message = make(r).connect_agent("codex")
-    assert r.calls == [["wsl.exe", "--set-default", "eggie-vm"]]
-    assert "eggie-vm" in message
+    provider = make(r, env={"CODEX_HOME": str(tmp_path)})
+
+    assert provider.agent_connected("codex") is False
+    provider.connect_agent("codex")
+
+    assert r.calls == []
+    projects = tomllib.loads((tmp_path / "config.toml").read_text())["projects"]
+    assert projects == {UNC_KEY: {"trust_level": "trusted"},
+                        "/opt/eggie/projects": {"trust_level": "trusted"}}
 
 
-def test_connecting_codex_reports_a_failed_set_default():
-    import pytest
-    r = FakeRunner(stderr="There is no distribution with the supplied name.".encode("utf-16-le"),
-                   returncode=1)
-    with pytest.raises(RuntimeError, match="default WSL distro.*no distribution"):
-        make(r).connect_agent("codex")
+LIST_RUNNING = ("wsl.exe", "-l", "--running")
+IN_VM = ("wsl.exe", "-d", "eggie-vm")
+
+
+@pytest.mark.parametrize("signed_in", [True, False])
+def test_codex_counts_as_connected_only_while_signed_in_inside_the_vm(tmp_path, signed_in):
+    r = PrefixRunner({LIST_RUNNING: (0, RUNNING),
+                      IN_VM: (0 if signed_in else 1, b"")})
+    provider = make(r, env={"CODEX_HOME": str(tmp_path)})
+    provider.connect_agent("codex")
+
+    assert provider.agent_connected("codex") is signed_in
+    assert r.calls[-1][-3:] == ["test", "-s", ".codex/auth.json"]
+
+
+def test_a_stopped_vm_is_never_booted_to_check_codex_sign_in(tmp_path):
+    r = PrefixRunner({LIST_RUNNING: (1, b"")})
+    provider = make(r, env={"CODEX_HOME": str(tmp_path)})
+    provider.connect_agent("codex")
+
+    assert provider.agent_connected("codex") is True
+    assert not any(tuple(call[:3]) == IN_VM for call in r.calls)
+
+
+def test_a_codex_config_eggie_cannot_read_does_not_fail_the_connection(tmp_path):
+    (tmp_path / "config.toml").write_text("model = \n")
+    provider = make(FakeRunner(), env={"CODEX_HOME": str(tmp_path)})
+
+    assert "ask" in provider.connect_agent("codex")
+    assert (tmp_path / "config.toml").read_text() == "model = \n"
+    assert provider.agent_connected("codex") is False
 
 
 def test_connecting_any_other_agent_runs_nothing():
-    import pytest
     r = FakeRunner()
     with pytest.raises(ValueError):
         make(r).connect_agent("claude-code")
-    assert r.calls == []
-
-
-def test_codex_is_connected_when_this_distro_is_the_default():
-    r = FakeRunner(stdout=_listing("  Ubuntu          Stopped         2",
-                                   "* eggie-vm        Running         2"))
-    assert make(r).agent_connected("codex") is True
-    assert r.calls == [["wsl.exe", "-l", "-v"]]
-
-
-def test_codex_is_not_connected_when_another_distro_is_the_default():
-    r = FakeRunner(stdout=_listing("* Ubuntu          Stopped         2",
-                                   "  eggie-vm        Running         2"))
-    assert make(r).agent_connected("codex") is False
-
-
-def test_codex_is_not_connected_when_wsl_cannot_list():
-    assert make(FakeRunner(returncode=1)).agent_connected("codex") is False
-
-
-def test_only_codex_is_ever_connected_here():
-    r = FakeRunner(stdout=_listing("* eggie-vm        Running         2"))
-    assert make(r).agent_connected("claude-code") is False
     assert r.calls == []
 
 

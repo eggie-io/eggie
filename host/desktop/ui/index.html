@@ -33,178 +33,480 @@
      re-probes the VM through several wsl.exe/limactl calls. -->
 <div id="busy" hidden></div>
 
-<template data-screen="first-run">
-  <section class="install first-run">
-    <div class="brand-panel" aria-hidden="true">
-      <span class="brand-word"><span class="brand-mark"></span>eggie</span>
-      <div class="brand-art"><span class="art-egg"></span><span class="art-dot art-periwinkle"></span>
-        <span class="art-dot art-coral"></span><span class="art-dot art-orchid"></span>
-        <span class="art-pill">ubuntu 24.04</span></div>
+<template data-screen="account">
+  <section class="welcome">
+    <div class="welcome-side">
+      <span class="welcome-lockup" role="img" aria-label="eggie"><span class="brand-mark"></span>eggie</span>
+      <p class="welcome-tag"><b>Let’s get you cooking</b>
+        <span>One free account, then your kitchen lives on this computer.</span></p>
     </div>
-    <div class="install-main">
-      <div class="install-head">
-        <h1 class="display">Welcome to Eggie</h1>
-        <p class="lede">Eggie sets up a tiny private computer inside your computer,
-          so you can build real, working web apps just by chatting with it.</p>
+    <div class="welcome-main">
+      <div class="welcome-body">
+        <div class="welcome-head">
+          <h1 class="display">Create your free Eggie account</h1>
+          <p class="lede">An Eggie account keeps track of your projects. It’s free, takes about a
+            minute, and you only set it up once on this computer.</p>
+        </div>
+        <div class="alert alert-warning" data-when="reason">
+          <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+          <p data-field="reason"></p>
+        </div>
+        <div class="welcome-actions">
+          <div class="row">
+            <button class="btn-primary btn-lg" data-action="create-account">Create free account<span class="ic ic-external" aria-hidden="true"></span></button>
+            <button class="btn-secondary btn-lg" data-action="existing-account">I already have an account</button>
+          </div>
+          <p class="hint">Both open app.eggie.io in your browser. This window waits for you.</p>
+        </div>
       </div>
-      <ol class="steps">
-        <li><b>We build you a kitchen</b><span>A small Linux machine in a sealed box.
-          Your own files stay exactly where they are.</span></li>
-        <li><b>We hire the cook</b><span>A coding agent moves in. It writes the code
-          and runs it in there, never out here.</span></li>
-        <li><b>You start ordering</b><span>Describe what you want. Watch it get made.
-          Change your mind as often as you like.</span></li>
+    </div>
+  </section>
+</template>
+
+<template data-screen="account:waiting">
+  <section class="welcome">
+    <div class="welcome-side">
+      <span class="welcome-lockup" role="img" aria-label="eggie"><span class="brand-mark"></span>eggie</span>
+      <p class="welcome-tag"><b>Let’s get you cooking</b>
+        <span>One free account, then your kitchen lives on this computer.</span></p>
+    </div>
+    <div class="welcome-main welcome-wait">
+      <div class="welcome-back">
+        <button class="btn-icon" data-action="sign-in-back" aria-label="Back" title="Back"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      </div>
+      <div class="welcome-head">
+        <span class="wait-status"><span class="spinner spinner-sm" aria-hidden="true"></span>Waiting for you in the browser</span>
+        <h1 class="display">Finish in your browser</h1>
+        <p class="lede">We opened <span class="mono">app.eggie.io</span> for you. Do these three
+          things there. This window carries on by itself when you’re done.</p>
+      </div>
+      <ol class="wait-steps">
+        <li data-when="create"><span class="wait-num">1</span>
+          <p><b>Create your account</b><span>With your email and a password. It’s free.</span></p></li>
+        <li data-when="existing"><span class="wait-num">1</span>
+          <p><b>Sign in</b><span>Use the account you already have.</span></p></li>
+        <li class="wait-code-step"><span class="wait-num">2</span>
+          <p><b>Check the page shows this code</b><span>If the codes match, it’s really this computer asking.</span></p>
+          <span class="wait-code" data-field="user_code"></span></li>
+        <li><span class="wait-num">3</span>
+          <p><b>Press Approve</b><span>The page asks “Approve this device?”. After that, Eggie opens here by itself.</span></p></li>
       </ol>
-      <div class="row">
-        <button class="btn-primary" data-action="start-install">Warm up the kitchen</button>
-        <span class="hint">About 4 minutes. You can quit and come back.</span>
+      <div class="wait-phone">
+        <span class="wait-qr"><canvas data-qr role="img" aria-label="QR code that opens the same page on a phone"></canvas></span>
+        <p><b>Or use your phone</b><span>Scan the code and do the same three steps there. The code
+          works for <span data-field="minutes"></span>.</span></p>
+        <button class="btn-secondary" data-action="open-sign-in-page">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
       </div>
     </div>
   </section>
 </template>
 
-<template data-screen="home:running">
-  <section class="pad pad-home">
-    <div class="home-main">
-      <div class="hero">
-        <div class="pan pan-hot" aria-hidden="true"><span class="pan-white"></span>
-          <span class="pan-bubble"></span><span class="pan-bubble"></span><span class="pan-bubble"></span></div>
-        <div class="hero-text">
-          <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Running</span>
-          <h1 class="display">The kitchen is open</h1>
-          <p class="lede">Your machine is up and the cook is at the counter.</p>
-        </div>
+<template data-screen="where">
+  <div class="shell">
+    <header class="shell-head"><span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body where">
+      <div class="where-head">
+        <span class="signed-in" data-when="email"><span class="ic ic-check-circle" aria-hidden="true"></span><span>Signed in as <span data-field="email"></span></span></span>
+        <h1 class="where-title">Where should your projects live?</h1>
+        <p class="lede">Pick one to start. You can add the other one any time.</p>
       </div>
+      <div class="where-tiles">
+        <article class="where-tile">
+          <div class="where-art where-art-cloud" aria-hidden="true">
+            <span class="where-kind"><span class="ic ic-cloud"></span>Cloud</span>
+            <span class="where-lockup"><span class="brand-mark"></span>eggie</span>
+            <dl class="where-facts"><dt>region</dt><dd>Europe</dd><dt>size</dt><dd>Small</dd></dl>
+          </div>
+          <div class="where-text">
+            <div><h2>In the cloud</h2>
+              <p>Your own small server. Open projects from any device and share links that keep
+                working when this computer is off.</p></div>
+            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Nothing else to install here</li>
+              <li data-from-price hidden><span class="ic ic-check" aria-hidden="true"></span><span>From <span data-field="from_price"></span> a month</span></li></ul>
+            <div class="where-cta"><button class="btn-primary" data-action="new-kitchen">Create a cloud kitchen</button></div>
+          </div>
+        </article>
+        <article class="where-tile">
+          <div class="where-art where-art-local" aria-hidden="true">
+            <span class="where-kind"><span class="ic ic-terminal"></span>This computer</span>
+            <span class="where-lockup"><span class="brand-mark"></span>eggie</span>
+            <dl class="where-facts"><dt>runs on</dt><dd>this computer</dd><dt>storage</dt><dd>your own disk</dd>
+              <dt>price</dt><dd>$0 forever</dd></dl>
+          </div>
+          <div class="where-text">
+            <div><h2>On this computer</h2>
+              <p>A small Linux computer inside this one. Free.</p></div>
+            <ul class="checks"><li><span class="ic ic-check" aria-hidden="true"></span>Free</li>
+              <li><span class="ic ic-check" aria-hidden="true"></span>About 10 GB and 5–10 minutes to set up</li></ul>
+            <div class="where-cta"><button class="btn-secondary" data-action="start-install">Set up on this computer</button></div>
+          </div>
+        </article>
+      </div>
+      <p class="hint">Made a cloud kitchen on app.eggie.io already? It shows up here by itself.</p>
+    </section>
+  </div>
+</template>
+
+<template data-screen="home">
+  <div class="shell">
+    <header class="shell-head"><span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body home">
+      <div class="home-head">
+        <h1 class="home-title">Your kitchens</h1>
+        <p class="home-sub">Connect your coding agent to a kitchen, then prompt from the agent as usual.</p>
+      </div>
+      <div class="home-offline" data-when="cloud_error">
+        <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+        <p data-field="cloud_error"></p>
+        <button class="btn-secondary btn-sm" data-action="retry-kitchens"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+      </div>
+      <div class="kcards" data-cards></div>
       <div class="update-note" data-when="app_update">
         <span class="ic ic-info" aria-hidden="true"></span>
         <p><b>Eggie <span data-field="app_update"></span> is ready</b>
           <span>A fresh version of the app is waiting.</span></p>
         <button class="btn-update" data-action="app-update">Update now</button>
       </div>
-      <div class="row">
-        <button class="btn-primary" data-action="enter-console">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
-        <button class="btn-secondary" data-action="stop-vm"><span class="ic ic-stop" aria-hidden="true"></span>Stop the kitchen</button>
-      </div>
-    </div>
-    <footer class="odds">
-      <div class="tiles">
-        <button data-action="doctor">Doctor</button>
-        <button data-action="check-updates">Check for updates</button>
-        <button data-action="settings">Settings</button>
-        <button class="tile-danger" data-action="uninstall">Uninstall</button>
-      </div>
-      <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
-    </footer>
-  </section>
+      <footer class="odds">
+        <div class="odds-head"><span class="overline">Odds and ends</span>
+          <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span></div>
+        <div class="tiles">
+          <button data-action="doctor" data-when="show_doctor">Doctor</button>
+          <button data-action="check-updates">Check for updates</button>
+          <button data-action="settings">Settings</button>
+        </div>
+      </footer>
+    </section>
+  </div>
 </template>
 
-<template data-screen="home:stopped">
-  <section class="pad pad-home">
-    <div class="home-main">
-      <div class="hero">
-        <div class="pan pan-asleep" aria-hidden="true"></div>
-        <div class="hero-text">
-          <span class="badge badge-cold">Stopped</span>
-          <h1 class="display">The pan is cold</h1>
-          <p class="lede">Everything is saved and waiting. Starting up takes about 20 seconds.</p>
+<!-- Home's cards, cloned once per kitchen. [data-kitchen] gets the card's id. -->
+<template data-card="cloud">
+  <article class="kcard">
+    <div class="kcard-head">
+      <span class="kcard-icon kcard-icon-cloud" aria-hidden="true"><span class="ic ic-globe"></span></span>
+      <div class="kcard-text">
+        <div class="kcard-name">
+          <button class="kcard-title kcard-open" data-action="kitchen-setup" data-kitchen data-when="opens_setup" data-field="title"></button>
+          <span class="kcard-title" data-when="plain_title" data-field="title"></span>
+          <span class="badge badge-running" data-when="badge"><span class="ic ic-check-circle" aria-hidden="true"></span><span data-field="badge"></span></span>
+          <span class="badge badge-warm" data-when="getting_ready">Getting ready</span>
+          <span class="badge badge-cold" data-when="stopped">Stopped</span>
+          <span class="badge badge-bad" data-when="failed"><span class="ic ic-x-circle" aria-hidden="true"></span>Didn’t start</span>
         </div>
+        <span class="kcard-line kcard-mono" data-when="getting_ready"><span data-field="steps_done"></span> of 5 done</span>
+        <span class="kcard-line kcard-mono" data-when="host_line" data-field="line"></span>
       </div>
-      <div class="update-note" data-when="app_update">
-        <span class="ic ic-info" aria-hidden="true"></span>
-        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-          <span>A fresh version of the app is waiting.</span></p>
-        <button class="btn-update" data-action="app-update">Update now</button>
-      </div>
-      <div class="row">
-        <button class="btn-primary" data-action="start-vm"><span class="ic ic-play" aria-hidden="true"></span>Start the kitchen</button>
-        <button class="btn-secondary" disabled>Open Eggie</button>
-        <span class="hint">Opens by itself once the pan is hot.</span>
+      <div class="kcard-actions">
+        <button class="btn-secondary btn-sm" data-action="open-cloud-console" data-kitchen data-when="running">Open console<span class="ic ic-external" aria-hidden="true"></span></button>
       </div>
     </div>
-    <footer class="odds">
-      <div class="tiles">
-        <button data-action="doctor">Doctor</button>
-        <button data-action="check-updates">Check for updates</button>
-        <button data-action="settings">Settings</button>
-        <button class="tile-danger" data-action="uninstall">Uninstall</button>
-      </div>
-      <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
-    </footer>
-  </section>
+    <div class="kcard-agents" data-when="agents_row">
+      <span data-when="no_agents">No coding agent connected yet</span>
+      <span data-when="has_agents">Agents</span>
+      <div class="chips" data-chips></div>
+      <button class="btn-secondary btn-sm" data-action="connect-kitchen" data-kitchen data-when="can_connect"><span class="ic ic-terminal" aria-hidden="true"></span>Connect an agent</button>
+    </div>
+  </article>
 </template>
 
-<template data-screen="home:not_installed">
-  <section class="pad pad-home">
-    <div class="home-main">
-      <div class="hero">
-        <div class="pan pan-empty" aria-hidden="true"></div>
-        <div class="hero-text">
-          <span class="badge badge-empty">Not installed</span>
-          <h1 class="display">No kitchen yet</h1>
-          <p class="lede">There's nothing cooking on this computer. Setting one up takes
-            about four minutes and 6 GB of space.</p>
+<template data-card="local">
+  <article class="kcard">
+    <div class="kcard-head">
+      <span class="kcard-pan" aria-hidden="true">
+        <span class="pan pan-hot" data-when="running"><span class="pan-white"></span></span>
+        <span class="pan pan-asleep" data-when="stopped"></span>
+        <span class="pan pan-burnt" data-when="failed"><span class="pan-flag"><span class="ic ic-alert-triangle"></span></span></span>
+      </span>
+      <div class="kcard-text">
+        <div class="kcard-name">
+          <span class="kcard-title">This computer</span>
+          <span class="badge badge-running" data-when="running"><span class="ic ic-check-circle" aria-hidden="true"></span>Running</span>
+          <span class="badge badge-cold" data-when="stopped">Stopped</span>
+          <span class="badge badge-bad" data-when="failed"><span class="ic ic-x-circle" aria-hidden="true"></span>Didn’t start</span>
         </div>
+        <span class="kcard-line kcard-mono" data-when="running">Ubuntu 24.04</span>
+        <span class="kcard-line" data-when="stopped">The pan is cold. Everything is saved and waiting.</span>
+        <span class="kcard-line" data-when="failed">It stopped while warming up. Your projects are safe.</span>
       </div>
-      <div class="update-note" data-when="app_update">
-        <span class="ic ic-info" aria-hidden="true"></span>
-        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-          <span>A fresh version of the app is waiting.</span></p>
-        <button class="btn-update" data-action="app-update">Update now</button>
-      </div>
-      <div class="row">
-        <button class="btn-primary" data-action="start-install"><span class="ic ic-play" aria-hidden="true"></span>Set up the kitchen</button>
+      <div class="kcard-actions">
+        <button class="btn-ghost btn-sm" data-action="stop-vm" data-when="running"><span class="ic ic-stop" aria-hidden="true"></span>Stop</button>
+        <button class="btn-secondary btn-sm" data-action="enter-console" data-when="running">Open Eggie<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary btn-sm" data-action="start-vm" data-when="stopped"><span class="ic ic-play" aria-hidden="true"></span>Start</button>
+        <button class="btn-ghost btn-sm" data-action="doctor" data-when="failed"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
+        <button class="btn-secondary btn-sm" data-action="restart-vm" data-when="restart"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        <button class="btn-secondary btn-sm" data-action="open-repair" data-when="repair"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
       </div>
     </div>
-    <footer class="odds">
-      <div class="tiles">
-        <button data-action="doctor">Doctor</button>
-        <button data-action="check-updates">Check for updates</button>
-        <button data-action="settings">Settings</button>
-      </div>
-      <span class="odds-version">App version <span data-field="app_version"></span> &middot; nothing installed on this computer</span>
-    </footer>
-  </section>
+    <div class="kcard-error" data-when="error">
+      <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+      <span class="kcard-error-text" data-copy-source data-field="problem"></span>
+      <button class="btn-copy" data-action="copy-details">Copy details</button>
+    </div>
+    <div class="kcard-agents" data-when="agents_row">
+      <span data-when="no_agents">No coding agent connected yet</span>
+      <span data-when="has_agents">Agents</span>
+      <div class="chips" data-chips></div>
+      <button class="btn-secondary btn-sm" data-action="connect-kitchen" data-kitchen data-when="can_connect"><span class="ic ic-terminal" aria-hidden="true"></span>Connect an agent</button>
+    </div>
+  </article>
 </template>
 
-<template data-screen="home:wrong">
-  <section class="pad pad-home">
-    <div class="home-main">
-      <div class="hero">
-        <div class="pan pan-burnt" aria-hidden="true">
-          <span class="pan-flag"><span class="ic ic-alert-triangle"></span></span>
-        </div>
-        <div class="hero-text">
-          <span class="badge badge-bad"><span class="ic ic-x-circle" aria-hidden="true"></span>Needs a look</span>
-          <h1 class="display">Something's off in here</h1>
-          <p class="lede">The kitchen started but one of its parts didn't. Your projects
-            are safe — Doctor can usually sort this out on its own.</p>
-        </div>
+<template data-card="add-local">
+  <article class="kcard kcard-add">
+    <div class="kcard-head">
+      <span class="kcard-icon kcard-icon-local" aria-hidden="true"><span class="ic ic-terminal"></span></span>
+      <div class="kcard-text">
+        <div class="kcard-name"><span class="kcard-title">This computer</span><span class="badge badge-cold">Not set up</span></div>
+        <span class="kcard-line">Run projects here too, for free. Takes 5–10 minutes.</span>
       </div>
-      <div class="update-note" data-when="app_update">
-        <span class="ic ic-info" aria-hidden="true"></span>
-        <p><b>Eggie <span data-field="app_update"></span> is ready</b>
-          <span>A fresh version of the app is waiting.</span></p>
-        <button class="btn-update" data-action="app-update">Update now</button>
-      </div>
-      <div class="error-card" data-when="problem">
-        <pre data-field="problem"></pre>
-        <button class="btn-copy" data-action="copy-log">Copy log</button>
-      </div>
-      <div class="row">
-        <button class="btn-primary" data-action="doctor"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
-        <button class="btn-secondary" data-action="restart-vm"><span class="ic ic-refresh" aria-hidden="true"></span>Restart the kitchen</button>
+      <div class="kcard-actions">
+        <button class="btn-secondary btn-sm" data-action="start-install">Set up on this computer</button>
       </div>
     </div>
-    <footer class="odds">
-      <div class="tiles">
-        <button data-action="doctor">Doctor</button>
-        <button data-action="check-updates">Check for updates</button>
-        <button data-action="settings">Settings</button>
-        <button class="tile-danger" data-action="uninstall">Uninstall</button>
+  </article>
+</template>
+
+<template data-card="add-cloud">
+  <article class="kcard kcard-add">
+    <div class="kcard-head">
+      <span class="kcard-icon kcard-icon-cloud" aria-hidden="true"><span class="ic ic-globe"></span></span>
+      <div class="kcard-text">
+        <div class="kcard-name"><span class="kcard-title">Cloud</span><span class="badge badge-cold">Not set up</span></div>
+        <span class="kcard-line">Open projects from any device and share links that work when this computer is off.<span data-from-price hidden> From <span data-field="from_price"></span> a month.</span></span>
       </div>
-      <span class="odds-version">Version <span data-field="app_version"></span><span data-when="runtime_version"> &middot; <span data-field="runtime_version"></span></span></span>
-    </footer>
-  </section>
+      <div class="kcard-actions">
+        <button class="btn-secondary btn-sm" data-action="new-kitchen">Create a cloud kitchen</button>
+      </div>
+    </div>
+  </article>
+</template>
+
+<template data-screen="kitchen:new">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="kitchen-back" aria-label="Back" title="Back"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body kitchen">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Make a cloud kitchen</h1>
+        <p class="lede">A server of your own. You can change the size later.</p>
+      </div>
+      <div class="alert alert-warning" data-when="error">
+        <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+        <p data-field="error"></p>
+        <button class="btn-secondary" data-action="new-kitchen" data-when="retry">Try again</button>
+      </div>
+      <div class="kitchen-form" data-when="ready">
+        <div class="field field-name">
+          <label for="kitchen-name">Name</label>
+          <input id="kitchen-name" data-kitchen-name maxlength="100" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <span class="field-label" id="kitchen-size">Size</span>
+          <div class="picks" role="radiogroup" aria-labelledby="kitchen-size" data-sizes></div>
+        </div>
+        <div class="field">
+          <span class="field-label" id="kitchen-region">Where</span>
+          <div class="picks" role="radiogroup" aria-labelledby="kitchen-region" data-regions></div>
+          <p class="hint">We put it in the best data centre on that continent.</p>
+        </div>
+        <div class="kitchen-foot">
+          <button class="btn-primary btn-lg" data-action="continue-to-payment">Continue to payment<span class="ic ic-external" aria-hidden="true"></span></button>
+          <span class="hint">Payment opens in your browser once. This window carries on by itself when it’s done.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- Two states: waiting for the payment to make the kitchen, then its setup rows. -->
+<template data-screen="kitchen:setup">
+  <div class="shell">
+    <header class="shell-head"><span class="brand-mark" aria-hidden="true"></span>Eggie</header>
+    <section class="shell-body kitchen" data-when="waiting">
+      <div class="kitchen-head">
+        <span class="wait-status"><span class="spinner spinner-sm" aria-hidden="true"></span>Waiting for you in the browser</span>
+        <h1 class="kitchen-title">Finish paying in your browser</h1>
+        <p class="lede">We opened <span class="mono">app.eggie.io</span> for you. This window carries on
+          by itself when the payment is done.</p>
+      </div>
+      <div class="row">
+        <button class="btn-secondary" data-action="open-checkout-page">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary" data-action="checkout-back">Back</button>
+      </div>
+    </section>
+    <section class="shell-body kitchen kitchen-setup" data-when="setting_up">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Getting <span data-field="title"></span> ready</h1>
+        <p class="lede">About two minutes. When it’s ready we ask which coding agent you use.</p>
+      </div>
+      <div class="setup-col">
+        <p class="setup-paid" data-when="paid_price"><span class="ic ic-check-circle" aria-hidden="true"></span>
+          <span>Paid · <span data-field="paid_size"></span> · <span data-field="paid_price"></span> a month</span></p>
+        <div class="setup-card">
+          <div class="setup-card-head"><span data-setup-current></span>
+            <span class="setup-count"><span data-field="steps_done"></span> of 5 done</span></div>
+          <div class="bar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="5"><span data-setup-bar></span></div>
+          <ol class="rows setup-rows" data-setup-rows>
+            <li class="row-step"><span class="mark"></span><span class="label">Issuing certificate</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Creating server</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Waiting for an address</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Publishing DNS</span><span class="state"></span></li>
+            <li class="row-step"><span class="mark"></span><span class="label">Starting Eggie</span><span class="state"></span></li>
+          </ol>
+        </div>
+      </div>
+      <p class="hint" data-field="offline"></p>
+      <div class="setup-foot">
+        <span class="hint"><span data-when="where_line"><span data-field="where_line"></span> · </span>You can close this window.</span>
+        <span class="row">
+          <button class="btn-primary" data-action="open-kitchen-page" data-when="failed">Open in the web app<span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-secondary" data-action="go-home">Back to kitchens</button>
+        </span>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- 3a: one picker for every agent and kitchen. Cards come from agents(kitchen_id). -->
+<template data-screen="connect">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="go-home" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span>Connect an agent</header>
+    <section class="shell-body picker">
+      <div class="picker-head">
+        <div class="picker-title">
+          <h1 class="home-title">Which agent do you use?</h1>
+          <p class="home-sub">Pick one. We set everything up and tell you the one thing left to do in the agent.</p>
+        </div>
+        <label class="picker-target"><span>Connect to</span>
+          <span class="select"><select data-targets></select><span class="ic ic-chevron-down" aria-hidden="true"></span></span></label>
+      </div>
+      <div class="home-offline" data-when="not_running">
+        <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+        <p><span data-field="kitchen"></span> isn’t running. Start it from your kitchens, or pick another one.</p>
+      </div>
+      <div class="acards" data-agent-cards></div>
+      <p class="picker-more"><span class="ic ic-info" aria-hidden="true"></span>More agents are coming. Each one shows up here as a new card, and connects the same way.</p>
+      <div class="picker-foot">
+        <span class="hint">Works the same for a cloud kitchen and for this computer. We only use agents installed here.</span>
+        <button class="btn-ghost" data-action="go-home">Cancel</button>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- One 3a card. [data-agent] gets the agent's id. -->
+<template data-card="agent">
+  <article class="acard">
+    <button class="acard-main" data-action="pick-agent" data-agent>
+      <span class="acard-top">
+        <img class="acard-icon" data-icon alt="">
+        <span class="badge badge-running" data-when="connected"><span class="ic ic-check-circle" aria-hidden="true"></span>Connected</span>
+        <span class="ic ic-chevron-right acard-go" aria-hidden="true"></span>
+      </span>
+      <span class="acard-text">
+        <span class="acard-name" data-field="name"></span>
+        <span class="acard-line" data-when="connected">Connected to <span data-field="kitchen"></span></span>
+        <span class="acard-line" data-when="installed">On this computer<span data-when="signed_in"> · signed in</span></span>
+        <span class="acard-line" data-when="missing">Not on this computer</span>
+      </span>
+    </button>
+    <span class="acard-get" data-when="missing"><button class="btn-ghost btn-sm" data-action="get-agent" data-agent><span>Get <span data-field="name"></span></span><span class="ic ic-external" aria-hidden="true"></span></button></span>
+  </article>
+</template>
+
+<!-- 3b: the rows start_connect() names are shown; the rest stay hidden. -->
+<template data-screen="connect:running">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="connect-leave" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body kitchen connecting">
+      <div class="kitchen-head">
+        <h1 class="kitchen-title">Connecting <span data-field="agent"></span> to <span data-field="kitchen"></span></h1>
+        <p class="lede" data-when="working">Nothing to do here. We’ll tell you when it’s ready.</p>
+        <p class="lede" data-when="failed">It stopped at the step marked below. Nothing else was changed.</p>
+      </div>
+      <div class="setup-card">
+        <div class="setup-card-head"><span data-connect-current></span>
+          <span class="setup-count"><span data-field="done"></span> of <span data-field="total"></span> done</span></div>
+        <div class="bar" role="progressbar" aria-label="Progress" aria-valuemin="0"><span data-connect-bar></span></div>
+        <ol class="rows setup-rows connect-rows">
+          <li class="row-step" data-row="access"><span class="mark"></span><span class="row-text">
+            <span class="label">Let this computer into the kitchen</span>
+            <span class="sub" data-when="cloud">A key made just for this computer. You can remove it from the kitchen’s page in the web app.</span>
+            <span class="sub" data-when="local">Done when this computer was set up.</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="agent"><span class="mark"></span><span class="row-text">
+            <span class="label" data-when="ssh">Sign <span data-field="agent"></span> in on the kitchen</span>
+            <span class="label" data-when="no_ssh">Install <span data-field="agent"></span> on the kitchen</span>
+            <span class="sub" data-when="ssh">If it asks, you sign in to ChatGPT in your browser. It goes straight to the kitchen, not through Eggie.</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="entry"><span class="mark"></span><span class="row-text">
+            <span class="label">Add the kitchen to <span data-field="agent"></span></span>
+            <span class="sub">So it’s in the <span data-field="agent"></span> project list</span></span><span class="state"></span></li>
+          <li class="row-step" data-row="check"><span class="mark"></span><span class="row-text">
+            <span class="label">Check it works</span>
+            <span class="sub">We open a test connection from here</span></span><span class="state"></span></li>
+        </ol>
+      </div>
+      <div class="connect-foot">
+        <details class="log" data-when="lines"><summary>Technical details</summary><pre data-field="lines"></pre></details>
+        <span class="row">
+          <button class="btn-secondary" data-action="connect-cancel" data-when="working">Cancel</button>
+          <button class="btn-secondary" data-action="connect-back" data-when="failed">Back</button>
+          <button class="btn-primary" data-action="connect-retry" data-when="failed"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+        </span>
+      </div>
+    </section>
+  </div>
+</template>
+
+<!-- 3c: the agent's own steps from its guide, with the picture of the one picked. -->
+<template data-screen="connect:ready">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="go-home" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body ready">
+      <div class="ready-side">
+        <div class="ready-head">
+          <span class="badge badge-running"><span class="ic ic-check-circle" aria-hidden="true"></span>Connected</span>
+          <h1 class="kitchen-title"><span data-field="agent"></span> is ready</h1>
+          <p class="lede"><span data-field="count"></span> in <span data-field="agent"></span> and you can start prompting.</p>
+        </div>
+        <ol class="ready-steps" data-ready-steps></ol>
+        <div class="row">
+          <button class="btn-primary btn-lg" data-action="open-agent" data-when="has_app"><span>Open <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-primary btn-lg" data-action="get-agent" data-when="missing"><span>Get <span data-field="agent"></span></span><span class="ic ic-external" aria-hidden="true"></span></button>
+          <button class="btn-ghost btn-lg" data-action="connect-done">Done</button>
+        </div>
+      </div>
+      <div class="ready-media" data-ready-media></div>
+    </section>
+  </div>
+</template>
+
+<!-- 3d: Codex signs in on the kitchen through this computer's browser. -->
+<template data-screen="connect:sign-in">
+  <div class="shell">
+    <header class="shell-head">
+      <button class="btn-icon" data-action="connect-leave" aria-label="Back to kitchens" title="Back to kitchens"><span class="ic ic-chevron-left" aria-hidden="true"></span></button>
+      <span class="brand-mark" aria-hidden="true"></span><span data-field="kitchen"></span></header>
+    <section class="shell-body kitchen">
+      <div class="kitchen-head">
+        <span class="paused"><span class="ic ic-alert-triangle" aria-hidden="true"></span><span>Paused at step <span data-field="step"></span> of <span data-field="total"></span></span></span>
+        <h1 class="kitchen-title">Sign in to <span data-field="agent"></span> in your browser</h1>
+        <p class="lede">We opened the ChatGPT sign-in for <span data-field="kitchen"></span>. Finish it there; this screen carries on by itself.</p>
+      </div>
+      <div class="alert alert-danger" data-when="error"><span class="ic ic-x-circle" aria-hidden="true"></span><p data-field="error"></p></div>
+      <div class="row">
+        <button class="btn-primary btn-lg" data-action="open-connect-page" data-when="waiting">Open the page again<span class="ic ic-external" aria-hidden="true"></span></button>
+        <button class="btn-secondary btn-lg" data-action="connect-retry" data-when="error"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
+      </div>
+    </section>
+  </div>
 </template>
 
 <template data-screen="unreachable">
@@ -291,6 +593,7 @@
       <div class="row">
         <button class="btn-primary" data-action="retry-runtime-update"><span class="ic ic-refresh" aria-hidden="true"></span>Try again</button>
         <button class="btn-secondary" data-action="doctor"><span class="ic ic-activity" aria-hidden="true"></span>Run Doctor</button>
+        <button class="btn-ghost" data-action="go-home">Back</button>
       </div>
       <details class="log"><summary>Show logs</summary>
         <pre data-field="message"></pre>
@@ -351,32 +654,24 @@
     </label>
     <p class="hint" data-when="unavailable">Only an installed Eggie can open when you sign in.</p>
     <p class="hint" data-field="error"></p>
+    <div class="setting-account" data-when="signed_in">
+      <p><span data-when="email">Signed in as <b data-field="email"></b></span>
+        <span data-when="no_email">Signed in to Eggie</span></p>
+      <button class="btn-secondary" data-action="sign-out-ask">Sign out</button>
+    </div>
+    <div class="alert alert-warning" data-sign-out hidden>
+      <span class="ic ic-alert-triangle" aria-hidden="true"></span>
+      <p>Your agents lose access to your cloud kitchens until you sign in again.</p>
+      <div class="row">
+        <button class="btn-secondary" data-action="sign-out-cancel">Cancel</button>
+        <button class="btn-danger" data-action="sign-out">Sign out</button>
+      </div>
+    </div>
+    <div class="setting-account" data-when="vm_exists">
+      <p>Removes the Linux machine on this computer and every project in it.</p>
+      <button class="btn-secondary" data-action="uninstall"><span class="ic ic-trash" aria-hidden="true"></span>Uninstall Eggie…</button>
+    </div>
     <div class="row"><button class="btn-secondary" data-action="settings-back">Back</button></div>
-  </section>
-</template>
-
-<template data-screen="agent-connect">
-  <section class="pad centered">
-    <span class="spinner" aria-hidden="true"></span>
-    <div data-when="claude-code">
-      <h2 class="title">Adding Eggie to Claude Code…</h2>
-      <p class="lede">You'll be back in the guide in a moment.</p>
-    </div>
-    <div data-when="codex">
-      <h2 class="title">Making eggie-vm your default WSL distro…</h2>
-      <p class="lede">You'll be back in the guide in a moment.</p>
-    </div>
-  </section>
-</template>
-
-<template data-screen="agent-connect:failed">
-  <section class="pad centered">
-    <h2 class="title">Couldn't add the connection</h2>
-    <p class="lede" data-field="message"></p>
-    <div class="row">
-      <button class="btn-primary" data-action="connect-agent">Try again</button>
-      <button class="btn-secondary" data-action="connect-back">Back to the guide</button>
-    </div>
   </section>
 </template>
 
@@ -503,6 +798,7 @@
   </section>
 </template>
 
+<script src="qr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

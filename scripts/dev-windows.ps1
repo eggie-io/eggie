@@ -59,6 +59,14 @@ if ($Service) {
     }
 }
 
+# .NET Framework opens a redirected stdin as a StreamWriter in the console's
+# input encoding and writes that encoding's preamble at once. With Windows'
+# system-wide UTF-8 (code page 65001) that is a BOM in front of every script
+# and tarball sent to the VM. Same code page, no preamble.
+if ([Console]::InputEncoding.GetPreamble().Length) {
+    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
+}
+
 # Runs argv in the VM as root with $Stdin (a stream) as its stdin. Not a
 # PowerShell pipe: Windows PowerShell re-encodes piped bytes as text, and
 # CRLF in a script, or one byte changed in a tarball, breaks it in the VM.

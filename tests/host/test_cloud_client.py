@@ -204,6 +204,13 @@ def test_connect_without_sign_in_still_connects_this_computer(tmp_path, monkeypa
             self.connected.append(agent_id)
             return "ok"
 
+        def exec(self, argv, *, root=False):
+            from host.core.provider import Completed
+            return Completed(0, "", "")
+
+        def shell_argv(self, script):
+            return ["vm", script]
+
     provider = Provider()
     monkeypatch.setattr(
         cli, "_connector_factory",

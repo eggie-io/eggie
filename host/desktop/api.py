@@ -327,14 +327,10 @@ class DesktopApi:
             self._connect_url = url
             self._open_url(url)
 
-        def setup(agent):
-            self._client_factory(self._provider).agent_setup(agent)
-
         connector = self._connector_factory(
             progress=lambda step, status, message: sink["emit"](
                 {"type": "step", "step": step, "status": status, "message": message}),
-            cancelled=cancel.is_set, open_url=opened,
-            local_setup=setup if local else None)
+            cancelled=cancel.is_set, open_url=opened)
         rows = connector.rows(manifest.connect, instance_id)
 
         def work(emit):

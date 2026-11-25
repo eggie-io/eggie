@@ -93,8 +93,7 @@ class Connector:
                  env: Mapping[str, str] = os.environ, computer_name: str,
                  say: Callable[[str], None] = lambda text: None,
                  progress: Callable[[str, str, str], None] = lambda step, status, message: None,
-                 cancelled: Callable[[], bool] = lambda: False,
-                 local_setup: Callable[[str], object] | None = None):
+                 cancelled: Callable[[], bool] = lambda: False):
         self._client_factory = client
         self._provider = provider
         self._run = run
@@ -113,9 +112,6 @@ class Connector:
         self._say = say
         self._progress = progress
         self._cancelled = cancelled
-        # Asks this computer's VM to install an agent itself (the desktop app's
-        # bearer route); connect_one calls it before Codex's own step.
-        self._local_setup = local_setup
 
     # -- entry points --------------------------------------------------------
 
@@ -175,13 +171,8 @@ class Connector:
             target, alias = where["target"], where["alias"]
 
             def prepare() -> str:
-                # With an ssh host the install runs over ssh below; the VM's own would race it.
-                if local and self._local_setup is not None and not alias:
-                    self._local_setup("codex")
-                if alias:
-                    self._codex_ready(alias, f"Eggie · {target}")
-                    return "installed there and signed in"
-                return "asked this computer's kitchen to install it"
+                self._codex_ready(self._codex_host(alias), f"Eggie · {target}")
+                return "installed there and signed in"
 
             return self._agent(target, CODEX, prepare)
 
@@ -471,7 +462,7 @@ class Connector:
                 lines += self._agent(LOCAL, CODEX,
                                      lambda: self._codex(alias, f"Eggie · {LOCAL}"))
             else:
-                lines += self._agent(LOCAL, CODEX, lambda: self._provider.connect_agent("codex"))
+                lines += self._agent(LOCAL, CODEX, self._codex_in_vm)
         if alias:
             lines.append(self._check(LOCAL, alias))
         return lines
@@ -510,26 +501,38 @@ class Connector:
         had = codex_app.has(self._codex_home, alias)
         codex_app.add(self._codex_home, alias, REMOTE_PATH, label)
         try:
-            self._codex_ready(alias, label)
+            self._codex_ready(self._codex_host(alias), label)
         except Exception:
             if not had:
                 codex_app.remove(self._codex_home, alias)
             raise
         return f"listed as “{label}”, signed in"
 
-    def _codex_ready(self, alias: str, label: str) -> None:
-        installed = codex_remote.ensure_installed(self._run, alias)
+    def _codex_in_vm(self) -> str:
+        self._codex_ready(self._codex_host(None), f"Eggie · {LOCAL}")
+        return f"signed in. {self._provider.connect_agent('codex')}"
+
+    def _codex_host(self, alias: str | None) -> codex_remote.Host:
+        if alias:
+            return codex_remote.over_ssh(self._run, alias)
+        # No ssh host: the VM's own shell. Its localhost forwarding brings the
+        # sign-in's callback port to this computer.
+        return codex_remote.Host(lambda script: self._provider.exec(["bash", "-lc", script]),
+                                 self._provider.shell_argv("codex login"))
+
+    def _codex_ready(self, host: codex_remote.Host, label: str) -> None:
+        installed = codex_remote.ensure_installed(host)
         if not installed.ok:
             raise _Failed(f"Codex could not be installed there: {installed.reason}")
         # Before sign-in, so nobody signs in to a Codex that cannot run anything.
-        sandbox = codex_remote.sandbox_works(self._run, alias)
+        sandbox = codex_remote.sandbox_works(host)
         if not sandbox.ok:
             raise _Failed(f"Codex can't run commands there ({sandbox.reason}). "
                           "Update Eggie on it, then try again.")
-        if not codex_remote.signed_in(self._run, alias):
+        if not codex_remote.signed_in(host):
             self._say(f"Sign in to Codex for {label} in your browser…")
             self._progress("agent", "running", "sign_in")
-            signed = codex_remote.sign_in(alias, popen=self._popen, open_url=self._open_url,
+            signed = codex_remote.sign_in(host, popen=self._popen, open_url=self._open_url,
                                           port_free=self._port_free, cancelled=self._cancelled)
             if not signed.ok:
                 raise _Failed(f"Codex sign-in did not finish: {signed.reason}")

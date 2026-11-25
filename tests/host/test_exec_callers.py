@@ -13,13 +13,15 @@ HOST = Path(__file__).resolve().parents[2] / "host"
 # facts the probe must establish itself, before there is a client to ask
 # anything of. Every other use is project logic reaching across the boundary
 # by shelling into the guest, which is what Phase 1 moved into the API. A new
-# entry here is a design decision, not a formality.
+# entry here is a design decision, not a formality. The one since: Codex's
+# install and sign-in in a VM with no ssh host, which a kitchen gets over ssh.
 ALLOWED_CALLERS = {
     ("core/bootstrap.py", "_run"),
     ("core/bootstrap.py", "_installed"),
     ("core/runtime_update.py", "declare_supported"),
     ("client.py", "read_token"),
     ("core/status.py", "probe"),
+    ("core/connect/flow.py", "_codex_host"),
 }
 
 

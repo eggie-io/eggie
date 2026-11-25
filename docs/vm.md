@@ -105,8 +105,8 @@ the web app to approve it, then writes a `Host eggie-<name>` block in `~/.ssh/co
 `Eggie · <kitchen>` entry in `~/.claude/settings.json` and a connection in
 `~/.codex/codex-app/config.json` (`$CODEX_HOME` when set). Codex is installed on the kitchen if
 missing and signed in through this computer's browser (port 1455 must be free). On a Mac the VM
-gets the same through `Host eggie`; on Windows only Codex needs a step (Eggie marks the projects
-folder trusted in Codex's `config.toml`). Quit and reopen both apps afterwards. `--remove` also asks the service to drop this
+gets the same through `Host eggie`; on Windows only Codex needs a step (Eggie installs and signs in
+Codex inside the VM, then marks the projects folder trusted in Codex's `config.toml`). Quit and reopen both apps afterwards. `--remove` also asks the service to drop this
 computer's key; a Codex connection already imported stays in Codex Settings → Connections until
 removed there.
 

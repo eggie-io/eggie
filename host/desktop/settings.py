@@ -15,8 +15,6 @@ FIRST_LAUNCH_SENT = "first_launch_sent"
 # Agents with no entry of their own (Cursor; Claude Code on Windows' own VM)
 # count as connected once the person pressed Done for that kitchen.
 AGENTS_DONE = "agents_done"
-# The WSL default distro that connecting Codex replaced, to offer it back.
-PREVIOUS_DEFAULT = "previous_default"
 
 
 def done_flag(agent_id: str, kitchen_id: str) -> str:
@@ -46,18 +44,6 @@ class Settings:
     def set(self, key: str, value: bool) -> None:
         data = self._read()
         data[key] = bool(value)
-        self._write(data)
-
-    def text(self, key: str) -> str:
-        value = self._read().get(key)
-        return value if isinstance(value, str) else ""
-
-    def set_text(self, key: str, value: str) -> None:
-        data = self._read()
-        if value:
-            data[key] = value
-        else:
-            data.pop(key, None)
         self._write(data)
 
     def members(self, key: str) -> set[str]:

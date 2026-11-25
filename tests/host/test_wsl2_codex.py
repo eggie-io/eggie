@@ -1,5 +1,5 @@
-"""Codex makes eggie-vm the default WSL distro; the app asks first, can put the
-old default back, and opens Codex on the projects folder."""
+"""Codex on this computer's kitchen: Eggie opens it on the projects folder and
+marks that folder trusted in Codex's config.toml."""
 from __future__ import annotations
 
 import tomllib
@@ -10,63 +10,15 @@ from host.providers import codex_trust
 from host.providers.wsl2 import Wsl2Provider
 
 
-class Wsl:
-    """wsl.exe with a default and a list of distros; --set-default changes it."""
-
-    def __init__(self, default, distros):
-        self.default, self.distros, self.calls = default, distros, []
-
-    def __call__(self, argv):
-        self.calls.append(argv)
-        args = argv[1:]
-        out = ""
-        if args == ["-l", "-v"]:
-            out = "\r\n".join(["  NAME   STATE   VERSION"]
-                              + [f"{'*' if d == self.default else ' '} {d}   Stopped   2"
-                                 for d in self.distros])
-        elif args == ["-l", "-q"]:
-            out = "\r\n".join(self.distros)
-        elif args[0] == "--set-default":
-            self.default = args[1]
-
-        class R:
-            returncode, stdout, stderr = 0, out.encode("utf-16-le"), b""
-        return R()
+def _no_wsl(argv):
+    raise AssertionError(f"ran {argv}")
 
 
-def make(wsl, opened=None, spawned=None, env=None):
-    return Wsl2Provider(distro="eggie-vm", runner=wsl,
+def make(opened=None, spawned=None, env=None):
+    return Wsl2Provider(distro="eggie-vm", runner=_no_wsl,
                         opener=(opened if opened is not None else []).append,
                         spawner=(spawned if spawned is not None else []).append,
                         env=env or {"CODEX_HOME": "/dev/null/codex"})
-
-
-def test_only_codex_switches_the_default_and_only_while_it_is_another_distro():
-    assert make(Wsl("Ubuntu", ["Ubuntu", "eggie-vm"])).switches_default("codex") == "eggie-vm"
-    assert make(Wsl(None, ["eggie-vm"])).switches_default("codex") == "eggie-vm"
-    assert make(Wsl("eggie-vm", ["Ubuntu", "eggie-vm"])).switches_default("codex") is None
-    assert make(Wsl("Ubuntu", ["Ubuntu", "eggie-vm"])).switches_default("cursor") is None
-
-
-def test_the_old_default_goes_back_only_while_eggie_vm_is_the_default():
-    wsl = Wsl("eggie-vm", ["Ubuntu", "eggie-vm"])
-    provider = make(wsl)
-
-    assert provider.can_restore_default("Ubuntu") is True
-    provider.restore_default("Ubuntu")
-
-    assert wsl.default == "Ubuntu"
-    assert provider.can_restore_default("Ubuntu") is False
-    with pytest.raises(ValueError):
-        provider.restore_default("Ubuntu")
-
-
-@pytest.mark.parametrize("name", ["Debian", "eggie-vm", ""])
-def test_a_distro_that_is_gone_or_is_eggie_vm_is_never_made_the_default(name):
-    wsl = Wsl("eggie-vm", ["Ubuntu", "eggie-vm"])
-    with pytest.raises(ValueError):
-        make(wsl).restore_default(name)
-    assert not any(argv[1] == "--set-default" for argv in wsl.calls)
 
 
 def test_codex_opens_on_the_projects_folder_only_for_this_computers_kitchen(tmp_path):
@@ -74,7 +26,7 @@ def test_codex_opens_on_the_projects_folder_only_for_this_computers_kitchen(tmp_
     app.parent.mkdir(parents=True)
     app.write_bytes(b"")
     opened, spawned = [], []
-    provider = make(Wsl("eggie-vm", ["eggie-vm"]), opened, spawned,
+    provider = make(opened, spawned,
                     env={"LOCALAPPDATA": str(tmp_path), "CODEX_HOME": "/dev/null/codex"})
 
     assert provider.open_agent("codex", local=True) is True
@@ -135,7 +87,7 @@ def test_codex_still_opens_when_its_link_has_no_handler(tmp_path):
     def no_handler(url):
         raise OSError("[WinError 1155] No application is associated")
 
-    provider = Wsl2Provider(distro="eggie-vm", runner=Wsl("eggie-vm", ["eggie-vm"]),
+    provider = Wsl2Provider(distro="eggie-vm", runner=_no_wsl,
                             opener=no_handler, spawner=spawned.append,
                             env={"LOCALAPPDATA": str(tmp_path), "CODEX_HOME": "/dev/null/codex"})
     assert provider.open_agent("codex", local=True) is True

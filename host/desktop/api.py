@@ -10,7 +10,6 @@ window.
 """
 from __future__ import annotations
 
-import dataclasses
 import logging
 import os
 import sys
@@ -33,7 +32,7 @@ from host.providers import claude_ssh, codex_app, ssh_alias
 from . import agents
 from .jobs import JobBusy, JobRegistry
 from .lifecycle import turn_on_autostart_once
-from .settings import AGENTS_DONE, PREVIOUS_DEFAULT, Settings, done_flag
+from .settings import AGENTS_DONE, Settings, done_flag
 from .telemetry import app_error, who
 from .vm_sign_in import sign_in_vm
 from .view import (agent_cards, checkout_url, checkout_wait, cloud_card, connect_targets,
@@ -46,11 +45,6 @@ log = logging.getLogger(__name__)
 _FROZEN = object()
 # Past WSL's own 30 s poweroff wait; a hung wsl.exe must not keep Quit from quitting.
 QUIT_STOP_TIMEOUT = 60.0
-
-
-# The confirm's name for the VM when the provider couldn't say which one switches;
-# then the default read next can't be told apart from the VM's own.
-_UNKNOWN_VM = "Eggie’s machine"
 
 
 class DesktopApi:
@@ -314,38 +308,17 @@ class DesktopApi:
                        for m in manifests if m.connect == "codex"})
         for card, m in zip(cards, manifests):
             card["has_app"] = self._provider.agent_app(m.id) is not None
-            card["switches"] = self._switches(m.id) if kind == "local" else ""
-            confirm = m.confirm.get(self._provider.guide_os) if card["switches"] else None
-            card["confirm"] = dataclasses.asdict(confirm) if confirm else None
         return {"ok": True, "kitchen": kitchen, "targets": targets, "cards": cards}
 
-    def _switches(self, agent_id: str) -> str:
-        """The VM connecting the agent would make this computer's default, if any."""
-        try:
-            return self._provider.switches_default(agent_id) or ""
-        except Exception as e:
-            # Asking is the safe side: nothing changes without the click.
-            log.warning("checking the default for %s failed: %s", agent_id, e)
-            return _UNKNOWN_VM
-
-    def start_connect(self, agent_id: str, kitchen_id: str, confirmed: bool = False) -> dict:
-        """`confirmed`: the person agreed to the default the connection switches."""
+    def start_connect(self, agent_id: str, kitchen_id: str) -> dict:
         manifest = self._manifest(agent_id)
         kitchen = next((t for t in self._targets() if t["id"] == kitchen_id), None)
         if manifest is None or kitchen is None or not kitchen["enabled"]:
             return {"ok": False, "message": "That kitchen can't take an agent right now."}
         if self.jobs.running():
             return {"ok": False, "message": "Wait for the current job to finish first."}
-        local = kitchen_id == "local"
-        switches = self._switches(manifest.id) if local else ""
-        if switches and confirmed is not True:
-            confirm = manifest.confirm.get(self._provider.guide_os)
-            return {"ok": False, "switches": switches,
-                    "confirm": dataclasses.asdict(confirm) if confirm else None,
-                    "message": f"{manifest.name} needs your OK to change the default first."}
-        if switches:
-            self._remember_default(switches)
         cancel = self._connect_cancel = threading.Event()
+        local = kitchen_id == "local"
         instance_id = None if local else kitchen_id
         # The job's emit, once it runs; the connector is made first for its rows.
         sink = {}
@@ -377,9 +350,7 @@ class DesktopApi:
                 return {"type": "signed_out"}
             if failed:
                 return {"type": "failed", "message": failed.text, "lines": lines}
-            return {"type": "done", "lines": lines, "steps": self._guide(manifest, kitchen),
-                    "switch_back": self._switch_back() if local and manifest.id in
-                    getattr(self._provider, "agent_connections", ()) else ""}
+            return {"type": "done", "lines": lines, "steps": self._guide(manifest, kitchen)}
 
         self._connect_url = ""
         return {"ok": True, "job": self.jobs.start("connect", work), "rows": rows}
@@ -405,41 +376,6 @@ class DesktopApi:
         if self._manifest(agent_id) is None:
             return {"ok": False}
         return {"ok": bool(self._provider.open_agent(agent_id, local=kitchen_id == "local"))}
-
-    # --- the default the connection switched --------------------------------
-
-    def _remember_default(self, switching_to: str) -> None:
-        try:
-            current = self._provider.current_default()
-        except Exception as e:
-            log.warning("reading the current default failed: %s", e)
-            return
-        # An unreadable default keeps the one saved before.
-        if current and switching_to != _UNKNOWN_VM and current != switching_to:
-            self._settings.set_text(PREVIOUS_DEFAULT, current)
-
-    def _switch_back(self) -> str:
-        """The default to offer back: saved, still installed, and Eggie's VM is
-        still the default (switched back by hand, there is nothing to offer)."""
-        previous = self._settings.text(PREVIOUS_DEFAULT)
-        try:
-            return previous if previous and self._provider.can_restore_default(previous) else ""
-        except Exception as e:
-            log.warning("checking the default to switch back to failed: %s", e)
-            return ""
-
-    def switch_default_back(self) -> dict:
-        previous = self._switch_back()
-        if not previous:
-            return {"ok": False, "message": "There is no other default to go back to."}
-        if self.jobs.running():
-            return {"ok": False, "message": "Wait for the current job to finish first."}
-        try:
-            self._provider.restore_default(previous)
-        except Exception as e:
-            return {"ok": False, "message": str(e)}
-        self._settings.set_text(PREVIOUS_DEFAULT, "")
-        return {"ok": True}
 
     def open_agent_download(self, agent_id: str) -> dict:
         manifest = self._manifest(agent_id)
@@ -928,7 +864,7 @@ class DesktopApi:
         return {"autostart": available and self._desktop.autostart_enabled(self._autostart_exe),
                 "autostart_available": available,
                 "signed_in": signed_in, "email": self._account.email if signed_in else "",
-                "vm_exists": vm_exists, "switch_back": self._switch_back() if vm_exists else ""}
+                "vm_exists": vm_exists}
 
     def set_autostart(self, on: bool) -> dict:
         if self._autostart_exe is None:

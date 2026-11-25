@@ -302,7 +302,6 @@ ACTIONS['settings'] = async () => {
   show('settings', {
     unavailable: settings.autostart_available ? '' : 'yes', error: '',
     signed_in: settings.signed_in, email: settings.email, vm_exists: settings.vm_exists,
-    switch_back: settings.switch_back,
     no_email: settings.signed_in && !settings.email,
   });
   const box = document.querySelector('[data-setting="autostart"]');
@@ -966,7 +965,6 @@ async function watchForKitchens() {
 
 // The picker's last agents() reply, the connect job it started, and 3c's guide.
 let picker = null;
-let confirming = null;
 let connecting = null;
 let ready = null;
 // Events can beat start_connect()'s reply here; held until it names the job.
@@ -1018,34 +1016,14 @@ function pickedAgent(node) {
 }
 
 // A connected card connects again too: the kitchen may have dropped this computer's key.
-// One that would switch this computer's default WSL distro asks first.
-ACTIONS['pick-agent'] = (node) => {
-  const agent = pickedAgent(node);
-  return agent.switches ? showConfirm(agent) : startConnect(agent, picker.kitchen);
-};
-
-function showConfirm(agent) {
-  confirming = agent;
-  show('connect:confirm', { agent: agent.name, kitchen: picker.kitchen.title, distro: agent.switches });
-  // The guide's own words for this OS, when it has them.
-  if (agent.confirm) {
-    document.querySelector('[data-confirm-title]').textContent = agent.confirm.title;
-    document.querySelector('[data-confirm-button]').textContent = agent.confirm.button;
-    document.querySelector('[data-confirm-body]').replaceChildren(...stepBody(agent.confirm.body).childNodes);
-  }
-}
-ACTIONS['connect-confirm'] = () => startConnect(confirming, picker.kitchen, true);
+ACTIONS['pick-agent'] = (node) => startConnect(pickedAgent(node), picker.kitchen);
 ACTIONS['get-agent'] = (node) => api().open_agent_download(node.dataset.agent || ready.agent.id);
 
-async function startConnect(agent, kitchen, confirmed = false) {
-  const started = await api().start_connect(agent.id, kitchen.id, confirmed);
-  // The default changed since the picker drew: ask now.
-  if (!started.ok && started.switches) {
-    return showConfirm(Object.assign({}, agent, { switches: started.switches, confirm: started.confirm }));
-  }
+async function startConnect(agent, kitchen) {
+  const started = await api().start_connect(agent.id, kitchen.id);
   if (!started.ok) return showNotice(started.message);
   connecting = {
-    agent, kitchen, confirmed, job: started.job, rows: started.rows,
+    agent, kitchen, job: started.job, rows: started.rows,
     status: {}, message: {}, ended: '', error: '', lines: [], signIn: false,
   };
   const early = connectEarly.filter((event) => event.job === started.job);
@@ -1077,9 +1055,7 @@ function onConnectEvent(event) {
   }
   if (event.type === 'done') {
     const screen = document.getElementById('screen').dataset.screen || '';
-    if (screen === 'connect' || screen.startsWith('connect:')) {
-      showReady(c.agent, c.kitchen, event.steps, event.switch_back || '');
-    }
+    if (screen === 'connect' || screen.startsWith('connect:')) showReady(c.agent, c.kitchen, event.steps);
     else connecting = null;
     return;
   }
@@ -1143,21 +1119,20 @@ ACTIONS['connect-cancel'] = () => leaveConnecting(() => showPicker(picker.kitche
 ACTIONS['connect-leave'] = () => leaveConnecting(refresh);
 ACTIONS['connect-back'] = () => leaveConnecting(() => showPicker(picker.kitchen.id));
 ACTIONS['connect-retry'] = () => {
-  const { agent, kitchen, confirmed } = connecting;
+  const { agent, kitchen } = connecting;
   connecting = null;
-  return startConnect(agent, kitchen, confirmed);
+  return startConnect(agent, kitchen);
 };
 ACTIONS['open-connect-page'] = () => api().open_connect_page();
 
 const COUNTS = ['', 'One step', 'Two steps', 'Three steps', 'Four steps', 'Five steps', 'Six steps'];
 
-function showReady(agent, kitchen, steps, switchBack) {
+function showReady(agent, kitchen, steps) {
   connecting = null;
   ready = { agent, kitchen, steps };
   show('connect:ready', {
     agent: agent.name, kitchen: kitchen.title, count: COUNTS[steps.length] || `${steps.length} steps`,
     has_app: agent.has_app, missing: !agent.has_app && agent.state === 'missing',
-    switch_back: switchBack,
   });
   const list = document.querySelector('[data-ready-steps]');
   steps.forEach((step, i) => {
@@ -1217,18 +1192,6 @@ function stepBody(html) {
 }
 
 ACTIONS['open-agent'] = () => api().open_agent(ready.agent.id, ready.kitchen.id);
-
-// From 3c back to the picker, whose card then shows the agent as not connected;
-// from Settings, Settings again without the offer.
-ACTIONS['switch-default-back'] = async () => {
-  const result = await api().switch_default_back();
-  if (!result.ok) return showNotice(result.message);
-  const screen = document.getElementById('screen').dataset.screen || '';
-  if (screen === 'connect:ready') return showPicker(ready.kitchen.id);
-  // A parked 3c would still offer the switch back.
-  stash = null;
-  return ACTIONS.settings();
-};
 ACTIONS['connect-done'] = async () => {
   await api().mark_done(ready.agent.id, ready.kitchen.id);
   return refresh();

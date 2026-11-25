@@ -257,11 +257,8 @@ class Wsl2Provider:
         return diagnose_wsl2(self._run, self.wsl)
 
     def exists(self) -> bool:
-        return self.distro in self._distros()
-
-    def _distros(self) -> list[str]:
         out = self._meta(["-l", "-q"]).stdout
-        return [line.strip() for line in out.splitlines() if line.strip()]
+        return self.distro in [line.strip() for line in out.splitlines()]
 
     def running(self) -> bool:
         # Not exec(): any `wsl -d` boots the distro. With nothing running this
@@ -517,9 +514,8 @@ class Wsl2Provider:
         """None: the distro runs no sshd, so there is no host to name."""
         return None
 
-    # The agents reach the distro through WSL itself. Codex on Windows runs
-    # only in the default distro, so connecting it makes this one the default
-    # for every WSL app: the app asks first, and can put the old one back.
+    # The agents reach the distro through WSL itself; for Codex, Eggie marks
+    # the projects folder trusted so Codex opens it without asking.
     agent_connections = ("codex",)
     # No sshd in the distro: the agents reach it through WSL.
     local_ssh_alias = None
@@ -527,16 +523,16 @@ class Wsl2Provider:
     def connect_agent(self, agent_id: str) -> str:
         if agent_id not in self.agent_connections:
             raise ValueError(f"Eggie can't connect '{agent_id}' on this computer")
-        self._require(self._meta(["--set-default", self.distro]),
-                      f"'{self.distro}' could not be made the default WSL distro",
-                      "vm_configure_failed")
         try:
-            codex_trust.trust(codex_app.default_codex_home(self._env, Path.home()),
-                              self._codex_folders())
+            codex_trust.trust(self._codex_home(), self._codex_folders())
         except (OSError, ValueError) as e:
-            # Only spares the person Codex's Trust folder question.
+            # Codex still works; it asks to trust the folder itself.
             log.warning("could not mark the projects folder trusted in Codex: %s", e)
-        return f"{self.distro} is now your default WSL distro."
+            return "Codex will ask you to trust the projects folder."
+        return "Codex trusts the projects folder."
+
+    def _codex_home(self) -> Path:
+        return codex_app.default_codex_home(self._env, Path.home())
 
     def _codex_folders(self) -> list[str]:
         # The keys Codex itself writes: its lowercased Windows path, and the
@@ -545,31 +541,9 @@ class Wsl2Provider:
                 "/opt/eggie/projects"]
 
     def agent_connected(self, agent_id: str) -> bool:
-        """Whether this distro is the default, so the guide can skip the button."""
-        return agent_id == "codex" and self._default_distro() == self.distro
-
-    def switches_default(self, agent_id: str) -> str | None:
-        """The distro connecting `agent_id` would make every WSL app's default;
-        None when it is already, or when connecting changes nothing outside Eggie."""
-        if agent_id != "codex" or self._default_distro() == self.distro:
-            return None
-        return self.distro
-
-    def current_default(self) -> str | None:
-        return self._default_distro()
-
-    def can_restore_default(self, name: str) -> bool:
-        """Whether `name` is another installed distro and this one is still the default."""
-        return (bool(name) and name != self.distro
-                and self._default_distro() == self.distro and name in self._distros())
-
-    def restore_default(self, name: str) -> str:
-        if not self.can_restore_default(name):
-            raise ValueError(f"'{name}' can't be made the default WSL distro")
-        self._require(self._meta(["--set-default", name]),
-                      f"'{name}' could not be made the default WSL distro",
-                      "vm_configure_failed")
-        return f"{name} is your default WSL distro again."
+        """Whether connect_agent's trust entries are in Codex's config."""
+        return agent_id == "codex" and codex_trust.trusted(self._codex_home(),
+                                                           self._codex_folders())
 
     def agent_app(self, agent_id: str) -> str | None:
         """The agent's app, to open it from the app; None for a CLI-only install."""
@@ -603,17 +577,6 @@ class Wsl2Provider:
     def computer_name(self) -> str:
         return socket.gethostname()
 
-    def _default_distro(self) -> str | None:
-        # `-l -v` marks the default with `*`. Plain `-l` says "(Default)",
-        # which Windows translates. Neither boots a distro.
-        out = self._meta(["-l", "-v"])
-        if not out.ok:
-            return None
-        for line in out.stdout.replace("\x00", "").splitlines():
-            fields = line.split()
-            if len(fields) >= 2 and fields[0] == "*":
-                return fields[1]
-        return None
 
     def runtime(self):
         """Nothing to install: wsl.exe ships with Windows, and what it needs

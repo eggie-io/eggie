@@ -34,7 +34,7 @@ HOME_STATES = ("not_installed", "stopped", "running", "wrong")
 # Every name screen_for() can return; each must have a template.
 SCREENS = frozenset([
     "account", "account:waiting", "where", "home", "kitchen:new", "kitchen:setup",
-    "connect", "connect:confirm", "connect:running", "connect:ready", "connect:sign-in",
+    "connect", "connect:running", "connect:ready", "connect:sign-in",
     "install:running", "unreachable", "unresponsive",
     "runtime-update:running", "runtime-update:failed"])
 

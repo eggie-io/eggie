@@ -3,13 +3,6 @@
   "icon": "icon.webp",
   "get_url": "https://chatgpt.com/codex",
   "connect": "codex",
- "confirm": {
-  "windows": {
-   "title": "Make eggie-vm the default",
-   "body": "<p>Because of a limitation in <b>Codex</b> on Windows, it takes a few more steps to set up than the other agents: <b>eggie-vm</b> has to become your default WSL distro.</p><p>If you don't know what WSL is, or you don't use any other WSL distro, you can safely ignore this.</p>",
-   "button": "Make eggie-vm the default"
-  }
- },
   "steps": {
     "mac": {
       "local": [

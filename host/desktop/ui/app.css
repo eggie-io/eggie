@@ -1001,16 +1001,6 @@ button[aria-busy="true"]:disabled { opacity:1; }
   padding:0 4px; border-radius:var(--radius-xs); word-break:break-all;
 }
 .ready-side .row { gap:8px; }
-.confirm-body p { margin:0 0 8px; }
-.confirm-body p:last-child { margin-bottom:0; }
-.switch-back {
-  display:flex; flex-direction:column; align-items:flex-start; gap:6px;
-  padding:12px 14px; border-radius:var(--radius-md); background:var(--raised);
-  box-shadow:inset 0 0 0 1px var(--line);
-}
-.switch-back p { margin:0; font:350 13px/18px var(--font-sans); color:var(--ink-2); }
-.switch-back p b { color:var(--ink); }
-.switch-back .btn-sm { margin-left:-14px; }
 .ready-media {
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:20px; min-width:0;
   background:var(--tile); border:1px solid var(--tile-line); border-radius:var(--radius-md); box-shadow:var(--shadow-sm);

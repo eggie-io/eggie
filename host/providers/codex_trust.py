@@ -14,17 +14,30 @@ def config_path(codex_home: Path) -> Path:
     return codex_home / "config.toml"
 
 
+def _read(path: Path) -> str:
+    try:
+        with path.open(encoding="utf-8", newline="") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+
+def trusted(codex_home: Path, folders: list[str]) -> bool:
+    """Whether config.toml has an entry for each folder; an unreadable file has none."""
+    try:
+        projects = tomllib.loads(_read(config_path(codex_home))).get("projects", {})
+    except (OSError, ValueError):
+        return False
+    return isinstance(projects, dict) and all(f in projects for f in folders)
+
+
 def trust(codex_home: Path, folders: list[str]) -> bool:
     """Mark each folder trusted unless config.toml already has an entry for it
     (an "untrusted" one is the person's choice). True when the file changed."""
     path = config_path(codex_home)
     if path.exists():
         path = path.resolve()  # write through a dotfiles symlink
-    try:
-        with path.open(encoding="utf-8", newline="") as f:
-            text = f.read()
-    except FileNotFoundError:
-        text = ""
+    text = _read(path)
     projects = tomllib.loads(text).get("projects", {})
     if not isinstance(projects, dict):
         raise ValueError(f"'projects' in {path} is not a table")

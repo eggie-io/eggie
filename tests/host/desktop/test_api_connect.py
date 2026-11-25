@@ -27,7 +27,6 @@ class WindowsLike:
 
     def __init__(self, order):
         self.order = order
-        self.default = "Ubuntu"
 
     def agent_installed(self, agent_id):
         return agent_id == "codex"
@@ -40,24 +39,7 @@ class WindowsLike:
 
     def connect_agent(self, agent_id):
         self.order.append(("connect", agent_id))
-        self.default = "eggie-vm"
-        return "eggie-vm is now your default WSL distro."
-
-    def exists(self):
-        return True
-
-    def switches_default(self, agent_id):
-        return "eggie-vm" if agent_id == "codex" and self.default != "eggie-vm" else None
-
-    def current_default(self):
-        return self.default
-
-    def can_restore_default(self, name):
-        return self.default == "eggie-vm" and name == "Ubuntu"
-
-    def restore_default(self, name):
-        self.order.append(("restore", name))
-        self.default = name
+        return "Codex trusts the projects folder."
 
     def computer_name(self):
         return "Ihor's PC"
@@ -100,8 +82,8 @@ def _api(tmp_path, *, cloud=None, readiness=READY, client_error=None, opened=Non
     return api, order, pushed
 
 
-def _run(api, pushed, agent, kitchen, confirmed=False):
-    started = api.start_connect(agent, kitchen, confirmed)
+def _run(api, pushed, agent, kitchen):
+    started = api.start_connect(agent, kitchen)
     assert started["ok"], started
     api.jobs.join(5)
     events = [e for e in pushed if e["kind"] == "connect"]
@@ -127,7 +109,7 @@ def test_this_computer_is_offered_only_once_it_has_a_vm(tmp_path):
 def test_codex_local_runs_vm_setup_first(tmp_path):
     api, order, pushed = _api(tmp_path)
 
-    started, rows, end = _run(api, pushed, "codex", "local", confirmed=True)
+    started, rows, end = _run(api, pushed, "codex", "local")
 
     assert order == [("setup", "codex"), ("connect", "codex")]
     assert started["rows"] == ["access", "agent", "entry"]
@@ -137,47 +119,10 @@ def test_codex_local_runs_vm_setup_first(tmp_path):
     assert end["steps"][0]["title"] == "Run Codex in WSL"
 
 
-def test_codex_never_switches_the_default_distro_without_the_click(tmp_path):
-    api, order, _ = _api(tmp_path)
-
-    card = next(c for c in api.agents("local")["cards"] if c["id"] == "codex")
-    assert card["switches"] == "eggie-vm"
-    assert card["confirm"]["button"] == "Make eggie-vm the default"
-    refused = api.start_connect("codex", "local")
-    assert refused["ok"] is False and refused["switches"] == "eggie-vm"
-    assert api.start_connect("codex", "local", "yes")["ok"] is False
-    assert not api.jobs.running() and order == []
-
-
-def test_an_unreadable_default_keeps_the_one_saved_before(tmp_path):
-    api, _, pushed = _api(tmp_path)
-    api._provider.default = None
-    Settings(tmp_path / "settings.json").set_text("previous_default", "Ubuntu")
-
-    _, _, end = _run(api, pushed, "codex", "local", confirmed=True)
-
-    assert end["switch_back"] == "Ubuntu"
-
-
-def test_the_replaced_default_is_offered_back_until_it_is_restored(tmp_path):
-    api, order, pushed = _api(tmp_path)
-
-    _, _, end = _run(api, pushed, "codex", "local", confirmed=True)
-    assert end["switch_back"] == "Ubuntu"
-    assert api.get_settings()["switch_back"] == "Ubuntu"
-    # Connected now: picking Codex again connects without asking.
-    assert next(c for c in api.agents("local")["cards"] if c["id"] == "codex")["switches"] == ""
-
-    assert api.switch_default_back() == {"ok": True}
-    assert order[-1] == ("restore", "Ubuntu")
-    assert api.get_settings()["switch_back"] == ""
-    assert api.switch_default_back()["ok"] is False
-
-
 def test_a_failed_vm_setup_fails_the_agent_row(tmp_path):
     api, order, pushed = _api(tmp_path, client_error=ApiUnavailableError("the VM is not answering"))
 
-    _, rows, end = _run(api, pushed, "codex", "local", confirmed=True)
+    _, rows, end = _run(api, pushed, "codex", "local")
 
     assert rows[-1] == ("agent", "failed")
     assert end["type"] == "failed" and end["message"] == "the VM is not answering"

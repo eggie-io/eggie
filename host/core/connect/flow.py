@@ -470,12 +470,6 @@ class Connector:
             if alias:
                 lines += self._agent(LOCAL, CODEX,
                                      lambda: self._codex(alias, f"Eggie · {LOCAL}"))
-            elif self._provider.switches_default("codex"):
-                # It changes every WSL app's default; only the app asks first.
-                lines.append(Line(LOCAL, _AGENT_NAMES[CODEX], True,
-                                  "Skipped: it needs eggie-vm as your default WSL distro. "
-                                  "Connect it from the Eggie app, which asks first.",
-                                  neutral=True))
             else:
                 lines += self._agent(LOCAL, CODEX, lambda: self._provider.connect_agent("codex"))
         if alias:

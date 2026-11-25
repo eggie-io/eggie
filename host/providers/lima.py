@@ -468,19 +468,6 @@ class LimaProvider:
             return False
         return self._spawn(["open", app]).ok
 
-    # Connecting an agent changes nothing outside Eggie here: no default to switch.
-    def switches_default(self, agent_id: str) -> str | None:
-        return None
-
-    def current_default(self) -> str | None:
-        return None
-
-    def can_restore_default(self, name: str) -> bool:
-        return False
-
-    def restore_default(self, name: str) -> str:
-        raise ValueError("Nothing to switch back on this computer")
-
     # Which of the app's agent guides (`ui/agents/*/agent.json` steps) apply here.
     guide_os = "mac"
 

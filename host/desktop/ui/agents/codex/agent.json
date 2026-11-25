@@ -7,28 +7,27 @@
     "mac": {
       "local": [
         {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "ChatGPT app, opened again"},
-        {"title": "Switch to Codex", "body": "<p>In the ChatGPT app, switch to <b>Codex</b>.</p>", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
-        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
+        {"title": "Switch to Codex", "body": "<p>In the ChatGPT app, switch to <b>Codex</b>.</p>", "alt": "Screenshot · Switching the ChatGPT app to Codex", "media": ["media/mac-chatgpt-1.png"]},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>This computer</b> above the prompt box, then <b>SSH</b> → <b>{ssh_host}</b>.</li><li>Click <b>Choose project</b> and select <b>Eggie · {kitchen}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · SSH host {ssh_host} in the Work in list", "media": ["media/mac-chatgpt-2.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-3.png"]}
       ],
       "cloud": [
         {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "ChatGPT app, opened again"},
-        {"title": "Switch to Codex", "body": "<p>In the ChatGPT app, switch to <b>Codex</b>.</p>", "alt": "Screenshot · Codex start screen", "media": ["media/mac-chatgpt-0.png"]},
-        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-6.png"]}
+        {"title": "Switch to Codex", "body": "<p>In the ChatGPT app, switch to <b>Codex</b>.</p>", "alt": "Screenshot · Switching the ChatGPT app to Codex", "media": ["media/mac-chatgpt-1.png"]},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>This computer</b> above the prompt box, then <b>SSH</b> → <b>{ssh_host}</b>.</li><li>Click <b>Choose project</b> and select <b>Eggie · {kitchen}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · SSH host {ssh_host} in the Work in list", "media": ["media/mac-chatgpt-2.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt in a project on Eggie", "media": ["media/mac-chatgpt-3.png"]}
       ]
     },
     "windows": {
       "local": [
-        {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "ChatGPT app, opened again"},
-        {"title": "Run Codex in WSL", "body": "<ol><li>In the ChatGPT app, open <b>Settings</b>.</li><li>Switch the agent from <b>Windows native</b> to <b>WSL</b>.</li></ol>", "alt": "Screenshot · Codex settings with WSL", "media": ["media/win-chatgpt-1.png", "media/win-chatgpt-2.png"]},
-        {"title": "Open the projects folder", "body": "<p>Click <b>Open ChatGPT (Codex)</b> below: it opens a new chat in the projects folder.</p><p>If the folder isn’t there:</p><ol><li>Click <b>Add new project</b>.</li><li>Paste <code>\\\\wsl.localhost\\eggie-vm\\opt\\eggie\\projects</code> into the address bar and select the folder.</li><li>Click <b>Create</b>, then <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · Adding the projects folder from eggie-vm", "media": ["media/win-chatgpt-3.png", "media/win-chatgpt-4.png", "media/win-chatgpt-5.png"]},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
+        {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "Screenshot · File menu with Quit ChatGPT", "media": ["media/win-chatgpt-0.png"]},
+        {"title": "Run Codex in eggie-vm", "body": "<p>Click <b>This computer</b> above the prompt box, then <b>Remote</b> → <b>WSL: eggie-vm</b>.</p>", "alt": "Screenshot · WSL: eggie-vm in the Work in list", "media": ["media/win-chatgpt-1.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt on WSL: eggie-vm", "media": ["media/win-chatgpt-2.png"]}
       ],
       "cloud": [
-        {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "ChatGPT app, opened again"},
-        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>Choose project</b> above the prompt box.</li><li>Select <b>Eggie · {kitchen}</b> on <b>{ssh_host}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Choose project, with Eggie · {kitchen} in the list"},
-        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex chat, connected to the kitchen", "media": ["media/win-chatgpt-6.png"]}
+        {"title": "Restart ChatGPT", "body": "<p>Quit the ChatGPT app completely, not just its window, and open it again. It picks up what Eggie just set up only when it starts.</p><p>Sign in if it asks.</p>", "alt": "Screenshot · File menu with Quit ChatGPT", "media": ["media/win-chatgpt-0.png"]},
+        {"title": "Open your kitchen's project", "body": "<ol><li>Click <b>This computer</b> above the prompt box, then <b>SSH</b> → <b>{ssh_host}</b>.</li><li>Click <b>Choose project</b> and select <b>Eggie · {kitchen}</b>.</li><li>Click <b>Trust folder</b> if asked.</li></ol>", "alt": "Screenshot · SSH host {ssh_host} in the Work in list", "media": ["media/cloud-codex-1.png"]},
+        {"title": "Start prompting", "body": "Describe your idea and let Codex build it.", "alt": "Screenshot · Codex prompt on the kitchen's SSH host", "media": ["media/cloud-codex-3.png"]}
       ]
     }
   }

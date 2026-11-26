@@ -81,6 +81,7 @@ class DesktopApi:
         self.linked = ""
         self._signup_shown = False
         self._sign_in_url = ""
+        self._sign_in_method = ""
         self._vm_sign_in_url = ""
         # What 1d last offered, so start_checkout accepts only those picks.
         self._picks: dict[str, set[str]] = {}
@@ -435,10 +436,10 @@ class DesktopApi:
         else:
             url = sign_in.url
         self._sign_in_url = url
+        # The service's events name the new-account method "new".
+        self._sign_in_method = "new" if mode == "create" else "existing"
         if fresh:
-            # The service's event names the new-account method "new".
-            self._events.send("signup_started",
-                              {"method": "new" if mode == "create" else "existing"})
+            self._events.send("signup_started", {"method": self._sign_in_method})
         return {"ok": True, "url": url, "user_code": sign_in.user_code,
                 "expires_in": max(0, int(sign_in.expires_at - time.time()))}
 
@@ -461,7 +462,12 @@ class DesktopApi:
             if outcome == "signed_in":
                 self._kitchens, self._kitchens_error = None, ""
                 self._just_signed_in = True
+                self._events.send("signup_completed", {"method": self._sign_in_method})
             self._push({"kind": "account", "type": outcome})
+
+    def place_chosen(self, place: str) -> None:
+        if place in ("cloud", "computer"):
+            self._events.send("place_chosen", {"place": place})
 
     def open_sign_in_page(self) -> dict:
         if not self._sign_in_url:

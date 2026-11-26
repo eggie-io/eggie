@@ -163,7 +163,13 @@ window.eggie.handlers.app_update = (event) => {
 // when a fresh install starts, never on a screen swap.
 let rowsByName = {};
 
+// Only the first-run choice counts; the same buttons on Home add the other place.
+function reportPlace(place) {
+  if (document.getElementById('screen').dataset.screen === 'where') api().place_chosen(place);
+}
+
 ACTIONS['start-install'] = async (node, data) => {
+  reportPlace('computer');
   const started = await api().start_install();
   rowsByName = {};
   show('install:running', Object.assign({ counter: '' }, data));
@@ -738,7 +744,10 @@ function pollWhileShowing(firstDelay, tick) {
   next(firstDelay);
 }
 
-ACTIONS['new-kitchen'] = () => newKitchen(null);
+ACTIONS['new-kitchen'] = () => {
+  reportPlace('cloud');
+  return newKitchen(null);
+};
 ACTIONS['kitchen-back'] = () => refresh();
 
 ACTIONS['continue-to-payment'] = async () => {

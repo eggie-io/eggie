@@ -29,7 +29,9 @@ and only from the installed app. A source run sends nothing unless `EGGIE_EVENTS
 | `env_setup_succeeded` | `duration_sec` |
 | `signup_screen_shown` | none (sent by the VM on behalf of the console) |
 | `signup_started` | `method`: `new` or `existing` (same) |
-| `app_error` | `error_code` prefixed with the job (`vm`, `recover`, `repair`, `runtime_update`, `uninstall`, `app_update`; `install` only for a failure outside any setup step), and a cleaned `message` |
+| `signup_completed` | `method`: `new` or `existing`; the app's sign-in was approved |
+| `place_chosen` | `place`: `cloud` or `computer`, pressed on "Where should your projects live?" |
+| `app_error` | `error_code` prefixed with the job (`connect`, `vm`, `recover`, `repair`, `runtime_update`, `uninstall`, `app_update`; `install` only for a failure outside any setup step), and a cleaned `message` |
 
 `step` is one of `preflight`, `install_runtime` (macOS), `remediate`, `reboot_gate` (Windows),
 `fetch_image` (Windows), `create_vm`, `ssh_alias` (macOS), `bootstrap`, `connect`, `verify`,

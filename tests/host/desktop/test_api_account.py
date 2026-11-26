@@ -94,7 +94,7 @@ def test_signup_events_are_sent_once(tmp_path, events):
                                        ("signup_started", {"method": "new"})]
 
 
-def test_approved_sign_in_reports_the_method_of_the_last_button(tmp_path, events):
+def test_approved_sign_in_keeps_the_method_that_started_it(tmp_path, events):
     pushed = []
     account = FakeAccount(signed_in=False, outcomes=[])
     api = _api(tmp_path, account, events=events, pushed=pushed)
@@ -102,7 +102,7 @@ def test_approved_sign_in_reports_the_method_of_the_last_button(tmp_path, events
     api.start_sign_in("existing")
     account.outcomes.append("signed_in")
     _wait_for(pushed)
-    assert events.sent(at_least=2)[-1] == ("signup_completed", {"method": "existing"})
+    assert events.sent(at_least=2)[-1] == ("signup_completed", {"method": "new"})
 
 
 def test_denied_sign_in_is_not_reported_as_completed(tmp_path, events):

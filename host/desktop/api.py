@@ -436,9 +436,10 @@ class DesktopApi:
         else:
             url = sign_in.url
         self._sign_in_url = url
+        # A reload re-asks with "existing" for the same code; the button that minted it wins.
         # The service's events name the new-account method "new".
-        self._sign_in_method = "new" if mode == "create" else "existing"
         if fresh:
+            self._sign_in_method = "new" if mode == "create" else "existing"
             self._events.send("signup_started", {"method": self._sign_in_method})
         return {"ok": True, "url": url, "user_code": sign_in.user_code,
                 "expires_in": max(0, int(sign_in.expires_at - time.time()))}
